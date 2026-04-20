@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+
+  settings       UserSettings?
+  subscription   Subscription?
+  lifePlans      LifePlan[]
+  allocations    Allocation[]
+  expenses       Expense[]
+  planDeposits   PlanDeposit[]
+  monthlyBudgets MonthlyBudget[]
+  sentInvites    PartnerInvite[] @relation("SentInvites")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  stripeCustomerId     String    @unique
+  stripeSubscriptionId String?   @unique
+  plan                 String    @default("free")   // "free" | "premium"
+  status               String?                       // active | past_due | cancelled | trialing | ...
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserSettings {
+  id            String  @id @default(cuid())
+  userId        String  @unique
+  monthlyIncome Float   @default(0)
+  darkMode      Boolean @default(false)
+  language      String  @default("en")
+  linkedUserId  String? // Points to primary user's id when this is a linked (partner) account
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LifePlan {
+  id                  String    @id @default(cuid())
+  userId              String
+  title               String
+  description         String    @default("")
+  goalClass           String    @default("savings") // "savings" | "investment"
+  type                String    @default("other")
+  icon                String    @default("🎯")
+  color               String    @default("#1E3A8A")
+  targetAmount        Float
+  currentAmount       Float     @default(0)
+  monthlyContribution Float     @default(0)
+  deadline            DateTime?
+  milestones          String    @default("[]") // JSON array of milestone amounts (investment plans)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deposits    PlanDeposit[]
+  allocations Allocation[]
+}
+
+model Allocation {
+  id              String  @id @default(cuid())
+  userId          String
+  name            String
+  icon            String  @default("💰")
+  type            String  @default("flexible") // fixed | flexible | plan
+  lifePlanId      String?
+  allocatedAmount Float   @default(0)
+  actualAmount    Float   @default(0)
+  sortOrder       Int     @default(0)
+  isDefault       Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lifePlan       LifePlan?       @relation(fields: [lifePlanId], references: [id], onDelete: SetNull)
+  expenses       Expense[]
+  monthlyBudgets MonthlyBudget[]
+}
+
+model Expense {
+  id           String   @id @default(cuid())
+  userId       String
+  allocationId String?
+  amount       Float
+  description  String   @default("")
+  date         DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  allocation Allocation? @relation(fields: [allocationId], references: [id], onDelete: SetNull)
+}
+
+
+model PlanDeposit {
+  id      String @id @default(cuid())
+  userId  String
+  planId  String
+  amount  Float
+  month   String // "2026-04"
+  note    String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan LifePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, month])
+}
+
+model MonthlyBudget {
+  id             String @id @default(cuid())
+  userId         String
+  allocationId   String
+  month          String // "2026-04"
+  allocatedAmount Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  allocation Allocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+
+  @@unique([allocationId, month])
+}
+
+model PartnerInvite {
+  id           String   @id @default(cuid())
+  senderId     String
+  invitedEmail String
+  token        String   @unique
+  status       String   @default("pending") // pending | accepted
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  sender User @relation("SentInvites", fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+model OtpToken {
+  id        String   @id @default(cuid())
+  email     String
+  tokenHash String
+  type      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email, type])
+}
