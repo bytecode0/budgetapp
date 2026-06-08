@@ -4,6 +4,7 @@ import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { normalizeMerchant } from "../lib/normalizeMerchant.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { categorize, learnFromCorrection } from "../lib/categorize.js";
+import { findDuplicateGroups } from "../lib/dedupe.js";
 
 export const expensesRouter = Router();
 
@@ -111,6 +112,64 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
     return res.json(serializeMoney({ expense }));
   } catch (err) {
     console.error("[expenses/POST]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/expenses/duplicates  — groups of likely duplicate expenses
+expensesRouter.get("/duplicates", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const expenses = await prisma.expense.findMany({
+      where: { userId: req.userId! },
+      include: {
+        allocation: { select: { id: true, name: true, icon: true, type: true } },
+        account: { select: { id: true, name: true, type: true } },
+      },
+      orderBy: { date: "desc" },
+    });
+
+    const groups = findDuplicateGroups(expenses);
+    return res.json(serializeMoney({ groups }));
+  } catch (err) {
+    console.error("[expenses/duplicates]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/expenses/merge  — keep one expense, delete the duplicates
+// Body: { keepId, removeIds: string[] }
+expensesRouter.post("/merge", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { keepId, removeIds } = req.body as { keepId: string; removeIds: string[] };
+    if (!keepId || !Array.isArray(removeIds) || removeIds.length === 0) {
+      return res.status(400).json({ error: "keepId and removeIds are required" });
+    }
+    if (removeIds.includes(keepId)) {
+      return res.status(400).json({ error: "keepId cannot be in removeIds" });
+    }
+
+    // Only operate on the user's own expenses.
+    const toRemove = await prisma.expense.findMany({
+      where: { id: { in: removeIds }, userId: req.userId! },
+      include: { allocation: { select: { type: true, lifePlanId: true } } },
+    });
+    const keep = await prisma.expense.findFirst({ where: { id: keepId, userId: req.userId! } });
+    if (!keep) return res.status(404).json({ error: "Expense to keep not found" });
+
+    // Reverse any plan contributions before deleting, mirroring DELETE /:id.
+    for (const e of toRemove) {
+      if (e.allocation?.type === "plan" && e.allocation.lifePlanId) {
+        await prisma.lifePlan.update({
+          where: { id: e.allocation.lifePlanId },
+          data: { currentAmount: { decrement: e.amount } },
+        });
+      }
+    }
+    await prisma.expense.deleteMany({ where: { id: { in: toRemove.map(e => e.id) }, userId: req.userId! } });
+
+    return res.json({ success: true, removed: toRemove.length });
+  } catch (err) {
+    console.error("[expenses/merge]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

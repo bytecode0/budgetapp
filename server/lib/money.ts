@@ -48,6 +48,7 @@ const MONEY_KEYS = new Set([
   "currentBalance",
   "netWorth",
   "income",
+  "avgAmount",
 ]);
 
 /**

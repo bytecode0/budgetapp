@@ -584,6 +584,37 @@
       "other": "Other"
     }
   },
+  "recurring": {
+    "manageButton": "Recurring",
+    "title": "Recurring commitments",
+    "subtitle": "Subscriptions and bills detected from your history. Confirm to track them, or ignore.",
+    "rescan": "Rescan",
+    "detected": "Detected",
+    "confirmed": "Confirmed",
+    "monthly": "monthly",
+    "confirm": "Confirm",
+    "ignore": "Ignore",
+    "noLink": "No linked allocation",
+    "confirmedOk": "Commitment confirmed",
+    "ignoredOk": "Commitment ignored",
+    "restoredOk": "Commitment restored",
+    "emptyTitle": "Nothing recurring yet",
+    "emptyDesc": "Once you have a few months of history, repeating merchants show up here."
+  },
+  "duplicates": {
+    "title": "Possible duplicates",
+    "subtitle": "Same amount within 2 days. Keep one and merge the rest.",
+    "bannerTitle": "{{count}} possible duplicate group(s)",
+    "bannerDesc": "Review and merge to clean up your activity",
+    "review": "Review",
+    "copies": "{{count}} entries",
+    "merge": "Merge",
+    "keepHint": "Choose which entry to keep:",
+    "keptLabel": "kept",
+    "mergedOk": "Merged — {{count}} removed",
+    "emptyTitle": "No duplicates found",
+    "emptyDesc": "Your activity looks clean."
+  },
   "monthlyReview": {
     "title": "Budget Review",
     "subtitle": "Compare what you budgeted vs what you actually spent",

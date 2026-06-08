@@ -4,7 +4,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useTranslation } from 'react-i18next';
 import {
   DollarSign, TrendingUp, CheckCircle2, Plus, Trash2,
-  Pencil, X, Check, Loader2, CalendarCheck, GripVertical,
+  Pencil, X, Check, Loader2, CalendarCheck, GripVertical, Repeat,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -12,6 +12,7 @@ import { useAllocations } from '../hooks/useAllocations';
 import { usePlans } from '../hooks/usePlans';
 import { useMonthlyBudget, useMonthlyReview } from '../hooks/useMonthlyBudget';
 import { AddExpense } from './AddExpense';
+import { RecurringManager } from './RecurringManager';
 import { useLanguage } from '../context/LanguageContext';
 import { useMonth, monthLabel } from '../context/MonthContext';
 
@@ -242,6 +243,7 @@ export function AllocationFlow() {
       })();
 
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [showRecurring, setShowRecurring] = useState(false);
 
   const handleSaveMonthlyBudget = async () => {
     const entries = local.map(a => ({ allocationId: a.id, allocatedAmount: a.allocatedAmount }));
@@ -264,9 +266,17 @@ export function AllocationFlow() {
   return (
     <DndProvider backend={HTML5Backend}>
     <div className="space-y-6 pb-8">
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
-        <h1 className="text-4xl tracking-tight">{t('allocation.title')}</h1>
-        <p className="text-muted-foreground">{t('allocation.subtitle')}</p>
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          <h1 className="text-4xl tracking-tight">{t('allocation.title')}</h1>
+          <p className="text-muted-foreground">{t('allocation.subtitle')}</p>
+        </div>
+        <button
+          onClick={() => setShowRecurring(true)}
+          className="px-4 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors text-sm flex items-center gap-2 shrink-0"
+        >
+          <Repeat className="w-4 h-4" /> {t('recurring.manageButton')}
+        </button>
       </motion.div>
 
       {/* ── Income Overview Card ── */}
@@ -748,6 +758,8 @@ export function AllocationFlow() {
         onClose={() => setShowAddExpense(false)}
         defaultDate={expenseDefaultDate}
       />
+
+      <RecurringManager isOpen={showRecurring} onClose={() => setShowRecurring(false)} />
     </div>
     </DndProvider>
   );

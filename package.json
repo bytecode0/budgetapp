@@ -12,6 +12,7 @@
     "prisma:migrate": "prisma migrate dev",
     "backfill:merchant": "tsx server/scripts/backfillMerchant.ts",
     "backfill:accounts": "tsx server/scripts/backfillAccounts.ts",
+    "seed:phasef": "tsx server/scripts/seedPhaseF.ts",
     "test": "tsx --test \"server/**/*.test.ts\""
   },
   "dependencies": {

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, TrendingDown, TrendingUp, Filter, Trash2, Loader2, Receipt, Pencil, Wand2 } from 'lucide-react';
+import { Plus, TrendingDown, TrendingUp, Filter, Trash2, Loader2, Receipt, Pencil, Wand2, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -8,10 +8,12 @@ import { useIncome, type Income } from '../hooks/useIncome';
 import { useAllocations } from '../hooks/useAllocations';
 import { useLanguage } from '../context/LanguageContext';
 import { useMonth, monthLabel } from '../context/MonthContext';
+import { useDuplicates } from '../hooks/useDuplicates';
 import { AddExpense } from './AddExpense';
 import { AddIncome } from './AddIncome';
 import { EditExpense } from './EditExpense';
 import { RulesManager } from './RulesManager';
+import { Duplicates } from './Duplicates';
 
 type Movement =
   | { kind: 'expense'; id: string; date: string; amount: number; expense: Expense }
@@ -38,6 +40,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [showRules, setShowRules] = useState(false);
+  const [showDuplicates, setShowDuplicates] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [showAddIncome, setShowAddIncome] = useState(false);
   const [editingIncome, setEditingIncome] = useState<Income | null>(null);
@@ -45,6 +48,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
   const { expenses, loading, totalSpent, totalByAllocation, deleteExpense, updateExpense, fetchExpenses } =
     useExpenses(currentMonth);
   const { incomes, totalIncome, deleteIncome, fetchIncomes } = useIncome(currentMonth);
+  const { groups: duplicateGroups, loading: duplicatesLoading, merge: mergeDuplicates, fetchDuplicates } = useDuplicates();
   const { allocations, monthlyIncome } = useAllocations();
 
   const formatDateLabel = (dateStr: string) => {
@@ -262,6 +266,26 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
         </motion.div>
       )}
 
+      {/* Possible duplicates banner */}
+      {duplicateGroups.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-5 py-4"
+        >
+          <Copy className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-amber-800 dark:text-amber-300">{t('duplicates.bannerTitle', { count: duplicateGroups.length })}</p>
+            <p className="text-sm text-amber-700/70 dark:text-amber-400/70">{t('duplicates.bannerDesc')}</p>
+          </div>
+          <button
+            onClick={() => setShowDuplicates(true)}
+            className="text-xs text-amber-700 dark:text-amber-400 hover:underline shrink-0"
+          >
+            {t('duplicates.review')}
+          </button>
+        </motion.div>
+      )}
+
       {/* Movements list (expenses + income) */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -467,6 +491,15 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
       />
 
       <RulesManager isOpen={showRules} onClose={() => setShowRules(false)} />
+
+      <Duplicates
+        isOpen={showDuplicates}
+        onClose={() => setShowDuplicates(false)}
+        groups={duplicateGroups}
+        loading={duplicatesLoading}
+        onMerge={mergeDuplicates}
+        onMerged={() => { fetchExpenses(currentMonth); fetchDuplicates(); }}
+      />
     </div>
   );
 }

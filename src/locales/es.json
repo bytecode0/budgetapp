@@ -584,6 +584,37 @@
       "other": "Otro"
     }
   },
+  "recurring": {
+    "manageButton": "Recurrentes",
+    "title": "Compromisos recurrentes",
+    "subtitle": "Suscripciones y recibos detectados en tu histórico. Confírmalos para seguirlos, o ignóralos.",
+    "rescan": "Reanalizar",
+    "detected": "Detectados",
+    "confirmed": "Confirmados",
+    "monthly": "mensual",
+    "confirm": "Confirmar",
+    "ignore": "Ignorar",
+    "noLink": "Sin asignación enlazada",
+    "confirmedOk": "Compromiso confirmado",
+    "ignoredOk": "Compromiso ignorado",
+    "restoredOk": "Compromiso restaurado",
+    "emptyTitle": "Aún no hay recurrentes",
+    "emptyDesc": "Cuando tengas varios meses de histórico, los comercios que se repiten aparecerán aquí."
+  },
+  "duplicates": {
+    "title": "Posibles duplicados",
+    "subtitle": "Mismo importe en 2 días. Conserva uno y fusiona el resto.",
+    "bannerTitle": "{{count}} grupo(s) de posibles duplicados",
+    "bannerDesc": "Revisa y fusiona para limpiar tu actividad",
+    "review": "Revisar",
+    "copies": "{{count}} registros",
+    "merge": "Fusionar",
+    "keepHint": "Elige qué registro conservar:",
+    "keptLabel": "conservado",
+    "mergedOk": "Fusionado — {{count}} eliminados",
+    "emptyTitle": "Sin duplicados",
+    "emptyDesc": "Tu actividad está limpia."
+  },
   "monthlyReview": {
     "title": "Revisión del Presupuesto",
     "subtitle": "Compara lo que presupuestaste con lo que realmente gastaste",

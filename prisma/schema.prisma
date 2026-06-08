@@ -25,6 +25,7 @@ model User {
   categorizationRules CategorizationRule[]
   accounts       Account[]
   incomes        Income[]
+  recurringCommitments RecurringCommitment[]
   sentInvites    PartnerInvite[] @relation("SentInvites")
 
   createdAt DateTime @default(now())
@@ -104,6 +105,26 @@ model Allocation {
   expenses       Expense[]
   monthlyBudgets MonthlyBudget[]
   categorizationRules CategorizationRule[]
+  recurringCommitments RecurringCommitment[]
+}
+
+model RecurringCommitment {
+  id               String    @id @default(cuid())
+  userId           String
+  merchant         String    // normalized merchant the commitment recurs on
+  avgAmount        Int       // cents
+  cadence          String    @default("monthly") // monthly (only cadence detected today)
+  allocationId     String?   // linked fixed allocation once confirmed
+  nextExpectedDate DateTime?
+  status           String    @default("detected") // detected | confirmed | ignored
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  allocation Allocation? @relation(fields: [allocationId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, merchant]) // one commitment per merchant; enables upsert on re-detection
 }
 
 model Expense {
