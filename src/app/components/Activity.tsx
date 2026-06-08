@@ -1,12 +1,15 @@
 import { useState, useMemo } from 'react';
-import { Plus, TrendingDown, Filter, Trash2, Loader2, Receipt, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, TrendingDown, Filter, Trash2, Loader2, Receipt, Pencil, Wand2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
-import { useExpenses } from '../hooks/useExpenses';
+import { useExpenses, type Expense } from '../hooks/useExpenses';
 import { useAllocations } from '../hooks/useAllocations';
 import { useLanguage } from '../context/LanguageContext';
+import { useMonth, monthLabel } from '../context/MonthContext';
 import { AddExpense } from './AddExpense';
+import { EditExpense } from './EditExpense';
+import { RulesManager } from './RulesManager';
 
 function getTypeColor(type: string) {
   switch (type) {
@@ -17,27 +20,20 @@ function getTypeColor(type: string) {
   }
 }
 
-function monthKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function monthLabel(key: string, locale: string) {
-  const [y, m] = key.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString(locale, { month: 'long', year: 'numeric' });
-}
 
 export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () => void }) {
   const { t } = useTranslation();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
 
-  const today = new Date();
-  const [currentMonth, setCurrentMonth] = useState(monthKey(today));
+  const { selectedMonth: currentMonth, isCurrentMonth, isFutureMonth } = useMonth();
   const [filterAllocationId, setFilterAllocationId] = useState<string | 'all'>('all');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState<Expense | null>(null);
+  const [showRules, setShowRules] = useState(false);
 
-  const { expenses, loading, totalSpent, totalByAllocation, deleteExpense, fetchExpenses } =
+  const { expenses, loading, totalSpent, totalByAllocation, deleteExpense, updateExpense, fetchExpenses } =
     useExpenses(currentMonth);
   const { allocations, monthlyIncome } = useAllocations();
 
@@ -50,14 +46,6 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
     if (date.toDateString() === yesterday.toDateString()) return t('activity.yesterday');
     return date.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' });
   };
-
-  // Navigate months
-  const changeMonth = (delta: number) => {
-    const [y, m] = currentMonth.split('-').map(Number);
-    const d = new Date(y, m - 1 + delta, 1);
-    setCurrentMonth(monthKey(d));
-  };
-  const isCurrentMonth = currentMonth === monthKey(today);
 
   // Filter by allocation
   const filtered = useMemo(() => {
@@ -108,30 +96,30 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
   return (
     <div className="space-y-6 pb-24">
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
-        <h1 className="text-4xl tracking-tight">{t('activity.title')}</h1>
-        <p className="text-muted-foreground">{t('activity.subtitle')}</p>
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          <h1 className="text-4xl tracking-tight">{t('activity.title')}</h1>
+          <p className="text-muted-foreground">{t('activity.subtitle')}</p>
+        </div>
+        <button
+          onClick={() => setShowRules(true)}
+          className="px-4 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors text-sm flex items-center gap-2 shrink-0"
+        >
+          <Wand2 className="w-4 h-4" /> {t('rules.manageButton')}
+        </button>
       </motion.div>
 
-      {/* Month navigation */}
+      {/* Month display */}
       <motion.div
         initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-        className="flex items-center justify-between bg-card border border-border rounded-2xl px-5 py-3"
+        className="flex items-center justify-center gap-3 bg-card border border-border rounded-2xl px-5 py-3"
       >
-        <button
-          onClick={() => changeMonth(-1)}
-          className="w-8 h-8 flex items-center justify-center hover:bg-muted rounded-lg transition-colors"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-        <p className="font-display text-sm">{monthLabel(currentMonth, locale)}</p>
-        <button
-          onClick={() => changeMonth(1)}
-          disabled={isCurrentMonth}
-          className="w-8 h-8 flex items-center justify-center hover:bg-muted rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <ChevronRight className="w-4 h-4" />
-        </button>
+        <p className="font-display text-sm capitalize">{monthLabel(currentMonth, locale)}</p>
+        {isFutureMonth && (
+          <span className="text-xs text-violet-600 bg-violet-100 dark:bg-violet-900/30 dark:text-violet-400 px-2 py-0.5 rounded-full">
+            {t('monthlyReview.nextMonth')}
+          </span>
+        )}
       </motion.div>
 
       {/* Stats */}
@@ -311,8 +299,14 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
                         <p className="text-lg font-display">€{expense.amount.toFixed(2)}</p>
+                        <button
+                          onClick={() => setEditing(expense)}
+                          className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => handleDelete(expense.id)}
                           disabled={deletingId === expense.id}
@@ -347,6 +341,16 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
         onClose={() => setShowAdd(false)}
         onSaved={() => fetchExpenses(currentMonth)}
       />
+
+      <EditExpense
+        isOpen={!!editing}
+        expense={editing}
+        allocations={allocations}
+        onClose={() => setEditing(null)}
+        onSave={(payload) => updateExpense(editing!.id, payload)}
+      />
+
+      <RulesManager isOpen={showRules} onClose={() => setShowRules(false)} />
     </div>
   );
 }

@@ -10,10 +10,13 @@
     "tagline": "Planificador Financiero de Vida",
     "planTagline": "Planifica tu futuro, no solo registres el pasado",
     "planStatus": "Estado del Plan",
+    "aligned": "En Seguimiento",
     "mostlyAligned": "Mayormente Alineado",
+    "offTrack": "Fuera de Seguimiento",
     "onTrackPct": "{{pct}}% en seguimiento con el plan de gastos",
     "planningTip": "Consejo de Planificación",
-    "planningTipBody": "Registra los gastos semanalmente para detectar desviaciones a tiempo y mantenerte alineado con tu plan financiero de vida."
+    "planningTipBody": "Registra los gastos semanalmente para detectar desviaciones a tiempo y mantenerte alineado con tu plan financiero de vida.",
+    "workingMonth": "Mes de trabajo"
   },
   "settings": {
     "title": "Ajustes",
@@ -84,6 +87,18 @@
     "accountsUnlinked": "Cuentas desvinculadas",
     "inviteFallback": "Invitación creada — email no enviado (sin dominio verificado). Copia el enlace a continuación."
   },
+  "analytics": {
+    "title": "Tendencias",
+    "subtitle": "Últimos {{count}} meses",
+    "spendingTrend": "Gasto mes a mes",
+    "savingsTrend": "Tendencia de ahorro",
+    "avgByCategory": "Gasto medio por categoría",
+    "avgHint": "Promedio de los últimos {{count}} meses",
+    "spent": "Gastado",
+    "saved": "Ahorrado",
+    "emptyTitle": "Aún no hay datos para analizar",
+    "emptyDesc": "Registra algunos gastos y aportaciones para ver tus tendencias aquí."
+  },
   "home": {
     "greetingMorning": "Buenos días",
     "greetingAfternoon": "Buenas tardes",
@@ -108,6 +123,9 @@
     "noExpenses": "Sin gastos registrados este mes",
     "startTracking": "Empieza a registrar tus gastos para ver cómo vas contra tu presupuesto",
     "noExpenseDataPeriod": "No se registraron datos de gastos para este período",
+    "missedPlanContribs_one": "{{count}} plan de vida no ha recibido aportación este mes",
+    "missedPlanContribs_other": "{{count}} planes de vida no han recibido aportación este mes",
+    "reviewPlans": "Revisar planes",
     "addExpense": "Añadir gasto",
     "financialTips": "Consejos Financieros",
     "principlesOptimize": "Principios para optimizar tu plan",
@@ -249,7 +267,26 @@
     "goalReachedIn": "Objetivo alcanzado en {{time}}",
     "months_one": "{{count}} mes",
     "months_other": "{{count}} meses",
-    "years": "años"
+    "years": "años",
+    "monthContributed": "✓ €{{amount}} registrados este mes",
+    "monthMissed": "No realizaste la aportación de este mes",
+    "monthPending": "€{{amount}} pendientes para este mes",
+    "registerContrib": "Registrar aportación",
+    "registerThisMonth": "Registrar este mes",
+    "catchUpAmount": "Importe",
+    "contribRegistered": "¡Aportación registrada!",
+    "recoveryTitle": "Vas por detrás del plan",
+    "recoverySubtitle": "Tu ahorro se ha quedado atrás. Aquí tienes dos formas de recuperarte:",
+    "optionCatchUp": "Ponerse al día este mes",
+    "optionCatchUpDesc": "Haz un depósito extra ahora para cubrir el déficit",
+    "optionAdjustQuota": "Ajustar la cuota mensual",
+    "optionAdjustQuotaDesc": "Sube tu aportación mensual para seguir llegando a la meta en el plazo",
+    "newQuotaLabel": "Nueva cuota sugerida",
+    "adjustQuotaBtn": "Actualizar a €{{amount}}/mes",
+    "quotaUpdated": "Cuota mensual actualizada a €{{amount}}/mes",
+    "syncAllocationBanner": "Tu asignación mensual ya no está sincronizada (€{{current}}/mes). ¿Sincronizar?",
+    "syncAllocationBtn": "Sincronizar asignación",
+    "allocationSynced": "Asignación sincronizada a €{{amount}}/mes"
   },
   "createPlan": {
     "title": "Crear Plan de Vida",
@@ -329,6 +366,12 @@
     "targetDate": "Fecha Objetivo",
     "safetyProjectionNote": "Tu plan de seguridad seguirá los ahorros líquidos con proyecciones sin riesgo. Perfecto para fondos de emergencia y reservas.",
     "savingsProjectionNote": "Tu plan será creado y podrás actualizar las contribuciones y el progreso en cualquier momento desde tu panel.",
+    "autoAllocationTitle": "Añadir a asignaciones mensuales",
+    "autoAllocationDesc": "Se creará automáticamente una asignación de €{{amount}}/mes vinculada a este plan",
+    "autoAllocationDescNoAmount": "Establece una cuota mensual para añadirla automáticamente a tus asignaciones",
+    "autoAllocationOn": "Activado",
+    "autoAllocationOff": "Desactivado",
+    "allocationLinked": "Asignación creada y vinculada a este plan",
     "investmentProjectionNote": "Tu plan de inversión mostrará proyecciones de crecimiento compuesto con 3 escenarios. Puedes ajustar la contribución mensual en cualquier momento.",
     "wealthProjectionNote": "Tu estrategia de riqueza sigue el crecimiento activo con escenarios de mayor riesgo (5–25%). Ajusta las contribuciones para explorar resultados.",
     "creating": "Creando...",
@@ -424,6 +467,37 @@
     "note": "Nota",
     "addExpense": "Añadir Gasto"
   },
+  "editExpense": {
+    "title": "Editar gasto",
+    "amount": "Importe",
+    "category": "Categoría",
+    "note": "Nota",
+    "date": "Fecha",
+    "save": "Guardar cambios",
+    "saved": "Gasto actualizado",
+    "invalidAmount": "Introduce un importe válido"
+  },
+  "rules": {
+    "title": "Reglas de categorización",
+    "subtitle": "Asigna gastos automáticamente por su descripción",
+    "manageButton": "Reglas",
+    "newRule": "Nueva regla",
+    "patternPlaceholder": "p. ej. MERCADONA",
+    "chooseCategory": "Elige categoría…",
+    "add": "Añadir",
+    "match": {
+      "contains": "contiene",
+      "equals": "es igual a",
+      "regex": "regex"
+    },
+    "learned": "aprendida",
+    "emptyTitle": "Aún no hay reglas",
+    "emptyDesc": "Crea una regla, o reasigna un gasto y se aprenderá una automáticamente.",
+    "created": "Regla creada",
+    "deleted": "Regla eliminada",
+    "patternRequired": "El patrón es obligatorio",
+    "categoryRequired": "Elige una categoría"
+  },
   "activity": {
     "title": "Actividad",
     "subtitle": "Sigue tus gastos según tu plan",
@@ -446,6 +520,7 @@
     "title": "Revisión del Presupuesto",
     "subtitle": "Compara lo que presupuestaste con lo que realmente gastaste",
     "currentMonth": "Mes actual",
+    "nextMonth": "Planificando por adelantado",
     "noData": "Sin datos para este mes",
     "totalBudgeted": "Total Presupuestado",
     "acrossCategories": "en todas las categorías",
@@ -465,7 +540,8 @@
     "underBy": "€{{amount}} bajo el presupuesto ({{pct}}% sin usar)",
     "exactlyOnBudget": "Exactamente en el presupuesto",
     "unassignedNote": "€{{amount}} fue gastado sin asignarse a ninguna categoría.",
-    "currentMonthNote": "Estás viendo el mes actual en progreso. Ve a Asignar → Gastos Mensuales para guardar una instantánea del presupuesto de este mes."
+    "currentMonthNote": "Estás viendo el mes actual en progreso. Ve a Asignar → Gastos Mensuales para guardar una instantánea del presupuesto de este mes.",
+    "nextMonthNote": "Estás planificando el mes que viene. Ve a Asignar → Gastos Mensuales para establecer el presupuesto de cada categoría antes de que empiece el mes."
   },
   "partnerInvite": {
     "title": "Invitación a finanzas compartidas",

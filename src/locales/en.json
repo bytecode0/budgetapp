@@ -10,10 +10,13 @@
     "tagline": "Financial Life Planner",
     "planTagline": "Plan your future, not just track your past",
     "planStatus": "Plan Status",
+    "aligned": "On Track",
     "mostlyAligned": "Mostly Aligned",
+    "offTrack": "Off Track",
     "onTrackPct": "{{pct}}% on track with spending plan",
     "planningTip": "Planning Tip",
-    "planningTipBody": "Track expenses weekly to catch deviations early and stay aligned with your financial life plan."
+    "planningTipBody": "Track expenses weekly to catch deviations early and stay aligned with your financial life plan.",
+    "workingMonth": "Working month"
   },
   "settings": {
     "title": "Settings",
@@ -84,6 +87,18 @@
     "accountsUnlinked": "Accounts unlinked",
     "inviteFallback": "Invite created — email not sent (no verified domain). Copy the link below."
   },
+  "analytics": {
+    "title": "Trends",
+    "subtitle": "Last {{count}} months",
+    "spendingTrend": "Spending month over month",
+    "savingsTrend": "Savings trend",
+    "avgByCategory": "Average spend per category",
+    "avgHint": "Averaged over the last {{count}} months",
+    "spent": "Spent",
+    "saved": "Saved",
+    "emptyTitle": "No data to analyze yet",
+    "emptyDesc": "Track a few expenses and contributions to see your trends here."
+  },
   "home": {
     "greetingMorning": "Good morning",
     "greetingAfternoon": "Good afternoon",
@@ -109,6 +124,9 @@
     "startTracking": "Start tracking your spending to see how you're doing against your budget",
     "noExpenseDataPeriod": "No expense data was recorded for this period",
     "addExpense": "Add expense",
+    "missedPlanContribs_one": "{{count}} life plan missed its contribution this month",
+    "missedPlanContribs_other": "{{count}} life plans missed their contributions this month",
+    "reviewPlans": "Review plans",
     "financialTips": "Financial Tips",
     "principlesOptimize": "Principles to optimize your plan",
     "tip5030Badge": "strategy",
@@ -249,7 +267,26 @@
     "goalReachedIn": "Goal reached in {{time}}",
     "months_one": "{{count}} month",
     "months_other": "{{count}} months",
-    "years": "years"
+    "years": "years",
+    "monthContributed": "✓ €{{amount}} registered this month",
+    "monthMissed": "You missed this month's contribution",
+    "monthPending": "€{{amount}} pending for this month",
+    "registerContrib": "Register contribution",
+    "registerThisMonth": "Register this month",
+    "catchUpAmount": "Amount",
+    "contribRegistered": "Contribution registered!",
+    "recoveryTitle": "You're behind schedule",
+    "recoverySubtitle": "Your savings are lagging. Here are two ways to get back on track:",
+    "optionCatchUp": "Catch up this month",
+    "optionCatchUpDesc": "Make an extra deposit now to cover the gap",
+    "optionAdjustQuota": "Adjust monthly quota",
+    "optionAdjustQuotaDesc": "Increase your monthly contribution to still reach your goal by the deadline",
+    "newQuotaLabel": "New suggested quota",
+    "adjustQuotaBtn": "Update to €{{amount}}/mo",
+    "quotaUpdated": "Monthly quota updated to €{{amount}}/mo",
+    "syncAllocationBanner": "Your monthly budget allocation is now out of sync (€{{current}}/mo). Sync it?",
+    "syncAllocationBtn": "Sync allocation",
+    "allocationSynced": "Allocation synced to €{{amount}}/mo"
   },
   "createPlan": {
     "title": "Create Life Plan",
@@ -329,6 +366,12 @@
     "targetDate": "Target Date",
     "safetyProjectionNote": "Your safety plan will track liquid savings with no-risk projections. Perfect for emergency funds and reserves.",
     "savingsProjectionNote": "Your plan will be created and you can update contributions and progress anytime from your dashboard.",
+    "autoAllocationTitle": "Add to monthly allocations",
+    "autoAllocationDesc": "A €{{amount}}/mo allocation will be created automatically and linked to this plan",
+    "autoAllocationDescNoAmount": "Set a monthly contribution to automatically add it to your budget allocations",
+    "autoAllocationOn": "On",
+    "autoAllocationOff": "Off",
+    "allocationLinked": "Allocation created and linked to this plan",
     "investmentProjectionNote": "Your investment plan will show compound growth projections with 3 scenarios. You can adjust the monthly contribution at any time.",
     "wealthProjectionNote": "Your wealth strategy tracks active growth with higher risk scenarios (5–25%). Adjust contributions any time to explore outcomes.",
     "creating": "Creating...",
@@ -424,6 +467,37 @@
     "note": "Note",
     "addExpense": "Add Expense"
   },
+  "editExpense": {
+    "title": "Edit expense",
+    "amount": "Amount",
+    "category": "Category",
+    "note": "Note",
+    "date": "Date",
+    "save": "Save changes",
+    "saved": "Expense updated",
+    "invalidAmount": "Enter a valid amount"
+  },
+  "rules": {
+    "title": "Categorization rules",
+    "subtitle": "Auto-assign expenses by description",
+    "manageButton": "Rules",
+    "newRule": "New rule",
+    "patternPlaceholder": "e.g. MERCADONA",
+    "chooseCategory": "Choose category…",
+    "add": "Add",
+    "match": {
+      "contains": "contains",
+      "equals": "equals",
+      "regex": "regex"
+    },
+    "learned": "learned",
+    "emptyTitle": "No rules yet",
+    "emptyDesc": "Create a rule, or re-assign an expense and one is learned automatically.",
+    "created": "Rule created",
+    "deleted": "Rule deleted",
+    "patternRequired": "Pattern is required",
+    "categoryRequired": "Choose a category"
+  },
   "activity": {
     "title": "Activity",
     "subtitle": "Track your spending against your plan",
@@ -446,6 +520,7 @@
     "title": "Budget Review",
     "subtitle": "Compare what you budgeted vs what you actually spent",
     "currentMonth": "Current month",
+    "nextMonth": "Planning ahead",
     "noData": "No data for this month",
     "totalBudgeted": "Total Budgeted",
     "acrossCategories": "across all categories",
@@ -465,7 +540,8 @@
     "underBy": "€{{amount}} under budget ({{pct}}% unused)",
     "exactlyOnBudget": "Exactly on budget",
     "unassignedNote": "€{{amount}} was spent without being assigned to any category.",
-    "currentMonthNote": "You're viewing the current month in progress. Go to Allocate → Monthly Expenses to save a budget snapshot for this month."
+    "currentMonthNote": "You're viewing the current month in progress. Go to Allocate → Monthly Expenses to save a budget snapshot for this month.",
+    "nextMonthNote": "You're planning ahead for next month. Go to Allocate → Monthly Expenses to set your budget for each category before the month starts."
   },
   "partnerInvite": {
     "title": "Shared finances invite",

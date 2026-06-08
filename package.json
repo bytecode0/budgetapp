@@ -9,7 +9,9 @@
     "dev:server": "tsx watch server/index.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\"",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "backfill:merchant": "tsx server/scripts/backfillMerchant.ts",
+    "test": "tsx --test \"server/**/*.test.ts\""
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

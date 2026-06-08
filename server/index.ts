@@ -8,6 +8,8 @@ import { allocationsRouter } from "./routes/allocations.js";
 import { expensesRouter } from "./routes/expenses.js";
 import { planDepositsRouter } from "./routes/planDeposits.js";
 import { monthlyBudgetsRouter } from "./routes/monthlyBudgets.js";
+import { rulesRouter } from "./routes/rules.js";
+import { analyticsRouter } from "./routes/analytics.js";
 import { partnerRouter } from "./routes/partner.js";
 import { stripeRouter } from "./routes/stripe.js";
 
@@ -33,6 +35,8 @@ app.use("/api/allocations", allocationsRouter);
 app.use("/api/expenses", expensesRouter);
 app.use("/api/plan-deposits", planDepositsRouter);
 app.use("/api/monthly-budgets", monthlyBudgetsRouter);
+app.use("/api/rules", rulesRouter);
+app.use("/api/analytics", analyticsRouter);
 app.use("/api/partner", partnerRouter);
 app.use("/api/stripe", stripeRouter);
 

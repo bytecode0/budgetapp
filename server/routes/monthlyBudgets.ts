@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
+import { toCents, serializeMoney } from "../lib/money.js";
 
 export const monthlyBudgetsRouter = Router();
 
@@ -26,7 +27,7 @@ monthlyBudgetsRouter.get("/", requireAuth, async (req: AuthRequest, res: Respons
         where: { userId: req.userId! },
         orderBy: { sortOrder: "asc" },
       });
-      return res.json({
+      return res.json(serializeMoney({
         budgets: allocations.map(a => ({
           allocationId: a.id,
           month,
@@ -34,10 +35,10 @@ monthlyBudgetsRouter.get("/", requireAuth, async (req: AuthRequest, res: Respons
           allocation: { id: a.id, name: a.name, icon: a.icon, type: a.type, sortOrder: a.sortOrder },
           saved: false, // flag: not yet saved for this specific month
         })),
-      });
+      }));
     }
 
-    return res.json({ budgets: saved.map(b => ({ ...b, saved: true })) });
+    return res.json(serializeMoney({ budgets: saved.map(b => ({ ...b, saved: true })) }));
   } catch (err) {
     console.error("[monthly-budgets/GET]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -72,12 +73,12 @@ monthlyBudgetsRouter.post("/save", requireAuth, async (req: AuthRequest, res: Re
       budgets.map(b =>
         prisma.monthlyBudget.upsert({
           where: { allocationId_month: { allocationId: b.allocationId, month } },
-          update: { allocatedAmount: b.allocatedAmount },
+          update: { allocatedAmount: toCents(b.allocatedAmount) },
           create: {
             userId: req.userId!,
             allocationId: b.allocationId,
             month,
-            allocatedAmount: b.allocatedAmount,
+            allocatedAmount: toCents(b.allocatedAmount),
           },
         })
       )
@@ -92,7 +93,7 @@ monthlyBudgetsRouter.post("/save", requireAuth, async (req: AuthRequest, res: Re
       },
     });
 
-    return res.json({ budgets: updated.map(b => ({ ...b, saved: true })) });
+    return res.json(serializeMoney({ budgets: updated.map(b => ({ ...b, saved: true })) }));
   } catch (err) {
     console.error("[monthly-budgets/save]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -159,7 +160,7 @@ monthlyBudgetsRouter.get("/review", requireAuth, async (req: AuthRequest, res: R
     const totalActual   = review.reduce((s, r) => s + r.actual,   0);
     const unassigned    = actualByAllocation["__unassigned__"] ?? 0;
 
-    return res.json({ review, totalBudgeted, totalActual, unassigned, month });
+    return res.json(serializeMoney({ review, totalBudgeted, totalActual, unassigned, month }));
   } catch (err) {
     console.error("[monthly-budgets/review]", err);
     return res.status(500).json({ error: "Internal server error" });

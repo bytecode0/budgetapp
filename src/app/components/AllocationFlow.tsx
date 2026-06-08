@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useTranslation } from 'react-i18next';
 import {
   DollarSign, TrendingUp, CheckCircle2, Plus, Trash2,
-  Pencil, X, Check, Loader2, CalendarCheck,
-  ChevronLeft, ChevronRight,
+  Pencil, X, Check, Loader2, CalendarCheck, GripVertical,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -12,15 +13,8 @@ import { usePlans } from '../hooks/usePlans';
 import { useMonthlyBudget, useMonthlyReview } from '../hooks/useMonthlyBudget';
 import { AddExpense } from './AddExpense';
 import { useLanguage } from '../context/LanguageContext';
+import { useMonth, monthLabel } from '../context/MonthContext';
 
-function currentMonthKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-function monthLabel(key: string, locale: string) {
-  const [y, m] = key.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString(locale, { month: 'long', year: 'numeric' });
-}
 
 const ALLOCATION_ICONS = [
   '🏠','🛡️','🎯','💰','🚗','✈️','🎓','💊','🍔','☕',
@@ -52,6 +46,54 @@ function getTypeColor(type: string) {
 
 const FREE_COLOR = 'rgba(255,255,255,0.2)';
 
+// ── Drag-and-drop ────────────────────────────────────────────────────────────
+
+const DRAG_TYPE = 'ALLOCATION_ROW';
+
+interface DragItem { id: string; index: number }
+
+function DraggableRow({
+  id, index, moveRow, onDragEnd, children,
+}: {
+  id: string;
+  index: number;
+  moveRow: (from: number, to: number) => void;
+  onDragEnd: () => void;
+  children: (handleRef: React.RefObject<HTMLDivElement | null>) => React.ReactNode;
+}) {
+  const rowRef  = useRef<HTMLDivElement>(null);
+  const handleRef = useRef<HTMLDivElement>(null);
+
+  const [{ isDragging }, drag] = useDrag<DragItem, void, { isDragging: boolean }>({
+    type: DRAG_TYPE,
+    item: () => ({ id, index }),
+    collect: monitor => ({ isDragging: monitor.isDragging() }),
+    end: () => onDragEnd(),
+  });
+
+  const [{ isOver }, drop] = useDrop<DragItem, void, { isOver: boolean }>({
+    accept: DRAG_TYPE,
+    collect: monitor => ({ isOver: monitor.isOver() }),
+    hover(draggedItem) {
+      if (draggedItem.index === index) return;
+      moveRow(draggedItem.index, index);
+      draggedItem.index = index;
+    },
+  });
+
+  drop(rowRef);
+  drag(handleRef);
+
+  return (
+    <div
+      ref={rowRef}
+      className={`transition-opacity rounded-xl ${isDragging ? 'opacity-40' : 'opacity-100'} ${isOver ? 'ring-2 ring-primary/20' : ''}`}
+    >
+      {children(handleRef)}
+    </div>
+  );
+}
+
 interface LocalAllocation {
   id: string; name: string; icon: string; type: string;
   lifePlanId: string | null;
@@ -65,7 +107,7 @@ export function AllocationFlow() {
 
   const {
     allocations: rawAllocations, monthlyIncome, loading,
-    updateIncome, createAllocation, updateAllocation, deleteAllocation,
+    updateIncome, createAllocation, updateAllocation, deleteAllocation, reorderAllocations,
   } = useAllocations();
 
   const { plans: rawPlans, loading: plansLoading } = usePlans();
@@ -167,9 +209,26 @@ export function AllocationFlow() {
 
   const hasDirtyAllocations = local.some(a => a.dirty);
 
+  // Keep a ref in sync so handleDragEnd always reads latest state
+  const localRef = useRef(local);
+  localRef.current = local;
+
+  const moveRow = useCallback((from: number, to: number) => {
+    setLocal(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    const order = localRef.current.map((item, index) => ({ id: item.id, sortOrder: index }));
+    reorderAllocations(order);
+  }, [reorderAllocations]);
+
   // ── Selected month (hero header + expenses) ────────────────────
-  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
-  const isCurrentMonth = selectedMonth === currentMonthKey();
+  const { selectedMonth, isCurrentMonth, isFutureMonth } = useMonth();
   const { saving: savingMonthlyBudget, isSaved: isBudgetSaved, saveBudgets } =
     useMonthlyBudget(selectedMonth);
   const { review: monthReview } = useMonthlyReview(selectedMonth);
@@ -183,16 +242,6 @@ export function AllocationFlow() {
       })();
 
   const [showAddExpense, setShowAddExpense] = useState(false);
-
-  const navigateMonth = (dir: -1 | 1) => {
-    setSelectedMonth(prev => {
-      const [y, m] = prev.split('-').map(Number);
-      const d = new Date(y, m - 1 + dir, 1);
-      const next = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (next > currentMonthKey()) return prev;
-      return next;
-    });
-  };
 
   const handleSaveMonthlyBudget = async () => {
     const entries = local.map(a => ({ allocationId: a.id, allocatedAmount: a.allocatedAmount }));
@@ -213,6 +262,7 @@ export function AllocationFlow() {
   const hasPlanAllocs = local.some(a => normalizeType(a.type) === 'plan');
 
   return (
+    <DndProvider backend={HTML5Backend}>
     <div className="space-y-6 pb-8">
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
         <h1 className="text-4xl tracking-tight">{t('allocation.title')}</h1>
@@ -227,23 +277,11 @@ export function AllocationFlow() {
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-32 -mt-32" />
         <div className="relative z-10">
 
-          {/* Month navigator row */}
+          {/* Month label + Add expense */}
           <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2 bg-white/15 rounded-xl p-1">
-              <button onClick={() => navigateMonth(-1)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors">
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="px-2 text-sm font-medium min-w-[130px] text-center">
-                {monthLabel(selectedMonth, locale)}
-                {isCurrentMonth && <span className="ml-1.5 text-xs opacity-60">{t('dashboard.currentLabel')}</span>}
-              </span>
-              <button
-                onClick={() => navigateMonth(1)}
-                disabled={isCurrentMonth}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors disabled:opacity-30"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+            <div className="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-1.5">
+              <span className="text-sm font-medium capitalize">{monthLabel(selectedMonth, locale)}</span>
+              {isFutureMonth && <span className="text-xs opacity-70">{t('monthlyReview.nextMonth')}</span>}
             </div>
             <button
               onClick={() => setShowAddExpense(true)}
@@ -322,31 +360,31 @@ export function AllocationFlow() {
             <div className="grid grid-cols-3 gap-4 pt-6 border-t border-white/20">
               <div>
                 <p className="text-xs opacity-75 mb-1">{t('allocation.budgeted')}</p>
-                <p className="text-xl font-display">€{(monthReview?.totalBudgeted ?? totalAllocated).toLocaleString()}</p>
+                <p className="text-xl font-display">€{totalAllocated.toLocaleString()}</p>
                 <p className="text-xs opacity-60">{t('allocation.plannedForMonth')}</p>
               </div>
               <div>
                 <p className="text-xs opacity-75 mb-1">{t('allocation.actuallySpent')}</p>
-                <p className={`text-xl font-display ${monthReview && monthReview.totalActual > monthReview.totalBudgeted ? 'text-red-300' : 'text-emerald-300'}`}>
+                <p className={`text-xl font-display ${monthReview && monthReview.totalActual > totalAllocated ? 'text-red-300' : 'text-emerald-300'}`}>
                   €{(monthReview?.totalActual ?? 0).toLocaleString()}
                 </p>
                 <p className="text-xs opacity-60">
                   {monthReview
-                    ? `${Math.round((monthReview.totalActual / Math.max(monthReview.totalBudgeted, 1)) * 100)}% ${t('allocation.pctOfBudget')}`
+                    ? `${Math.round((monthReview.totalActual / Math.max(totalAllocated, 1)) * 100)}% ${t('allocation.pctOfBudget')}`
                     : t('allocation.noData')}
                 </p>
               </div>
               <div>
                 <p className="text-xs opacity-75 mb-1">
-                  {monthReview && monthReview.totalActual > monthReview.totalBudgeted
+                  {monthReview && monthReview.totalActual > totalAllocated
                     ? t('allocation.overBudgetLabel')
                     : t('allocation.savedVsBudget')}
                 </p>
-                <p className={`text-xl font-display ${monthReview && monthReview.totalActual > monthReview.totalBudgeted ? 'text-red-300' : 'text-emerald-300'}`}>
-                  {monthReview ? `€${Math.abs(monthReview.totalActual - monthReview.totalBudgeted).toLocaleString()}` : '—'}
+                <p className={`text-xl font-display ${monthReview && monthReview.totalActual > totalAllocated ? 'text-red-300' : 'text-emerald-300'}`}>
+                  {monthReview ? `€${Math.abs(monthReview.totalActual - totalAllocated).toLocaleString()}` : '—'}
                 </p>
                 <p className="text-xs opacity-60">
-                  {monthReview && monthReview.totalActual > monthReview.totalBudgeted
+                  {monthReview && monthReview.totalActual > totalAllocated
                     ? t('allocation.abovePlan')
                     : t('allocation.underPlan')}
                 </p>
@@ -402,17 +440,9 @@ export function AllocationFlow() {
         initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
         className="bg-card border border-border rounded-2xl p-6 md:p-8 space-y-6"
       >
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h2 className="text-2xl font-display mb-1">{t('allocation.monthlyAllocations')}</h2>
-            <p className="text-muted-foreground text-sm">{t('allocation.assignIncome')}</p>
-          </div>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors text-sm"
-          >
-            <Plus className="w-4 h-4" /> {t('allocation.addCategory')}
-          </button>
+        <div>
+          <h2 className="text-2xl font-display mb-1">{t('allocation.monthlyAllocations')}</h2>
+          <p className="text-muted-foreground text-sm">{t('allocation.assignIncome')}</p>
         </div>
 
         {isBudgetSaved && (
@@ -435,14 +465,22 @@ export function AllocationFlow() {
                 : 0;
 
               return (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
-                  transition={{ delay: index * 0.04 }}
-                  className="space-y-3 pb-5 border-b border-border last:border-0 last:pb-0"
-                >
+                <DraggableRow key={item.id} id={item.id} index={index} moveRow={moveRow} onDragEnd={handleDragEnd}>
+                  {(handleRef) => (
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+                    transition={{ delay: index * 0.04 }}
+                    className="space-y-3 pb-5 border-b border-border last:border-0 last:pb-0"
+                  >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div
+                        ref={handleRef}
+                        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors shrink-0 touch-none select-none"
+                        title="Drag to reorder"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </div>
                       <span className="text-2xl shrink-0 w-10 h-10 flex items-center justify-center">{item.icon}</span>
                       <div className="min-w-0">
                         {editingNameId === item.id ? (
@@ -527,7 +565,9 @@ export function AllocationFlow() {
                       </div>
                     </div>
                   )}
-                </motion.div>
+                  </motion.div>
+                  )}
+                </DraggableRow>
               );
             })}
           </AnimatePresence>
@@ -692,6 +732,16 @@ export function AllocationFlow() {
         )}
       </AnimatePresence>
 
+      {/* FAB — Add category */}
+      <motion.button
+        initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
+        onClick={() => setShowAdd(true)}
+        whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+        className="fixed right-6 bottom-6 w-16 h-16 bg-gradient-to-br from-primary to-secondary text-white rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center z-40 group"
+      >
+        <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform" />
+      </motion.button>
+
       {/* Add Expense modal */}
       <AddExpense
         isOpen={showAddExpense}
@@ -699,5 +749,6 @@ export function AllocationFlow() {
         defaultDate={expenseDefaultDate}
       />
     </div>
+    </DndProvider>
   );
 }

@@ -120,11 +120,22 @@ export function useAllocations() {
     return {};
   };
 
+  const reorderAllocations = async (order: { id: string; sortOrder: number }[]) => {
+    const res = await fetch('/api/allocations/reorder', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order }),
+    });
+    if (!res.ok) return { error: 'Failed to reorder' };
+    return {};
+  };
+
   const totalAllocated = allocations.reduce((s, a) => s + a.allocatedAmount, 0);
   const unallocated = Math.max(0, monthlyIncome - totalAllocated);
 
   return {
     allocations, monthlyIncome, darkMode, dbLanguage, loading, error, totalAllocated, unallocated,
-    fetchAllocations, updateIncome, updateDarkMode, updateLanguage, createAllocation, updateAllocation, deleteAllocation,
+    fetchAllocations, updateIncome, updateDarkMode, updateLanguage, createAllocation, updateAllocation, deleteAllocation, reorderAllocations,
   };
 }

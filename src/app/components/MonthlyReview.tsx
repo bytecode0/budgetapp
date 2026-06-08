@@ -1,25 +1,9 @@
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, Loader2, Info } from 'lucide-react';
+import { TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, Loader2, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { useMonthlyReview } from '../hooks/useMonthlyBudget';
 import { useLanguage } from '../context/LanguageContext';
-
-function monthKeyOffset(base: string, offset: number): string {
-  const [y, m] = base.split('-').map(Number);
-  const d = new Date(y, m - 1 + offset, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function monthLabel(key: string, locale: string) {
-  const [y, m] = key.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString(locale, { month: 'long', year: 'numeric' });
-}
-
-function currentMonthKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
+import { useMonth, monthLabel } from '../context/MonthContext';
 
 function normalizeType(type: string): string {
   if (type === 'essential') return 'fixed';
@@ -45,31 +29,12 @@ function getTypeBg(type: string) {
   }
 }
 
-interface MonthlyReviewProps {
-  defaultMonth?: string;
-  selectedMonth?: string;
-  onMonthChange?: (month: string) => void;
-}
-
-export function MonthlyReview({ defaultMonth, selectedMonth: controlledMonth, onMonthChange }: MonthlyReviewProps = {}) {
+export function MonthlyReview() {
   const { t } = useTranslation();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
-
-  const current = currentMonthKey();
-  const [internalMonth, setInternalMonth] = useState(defaultMonth ?? monthKeyOffset(current, -1));
-
-  const selectedMonth = controlledMonth ?? internalMonth;
-  const isCurrentMonth = selectedMonth === current;
-
+  const { selectedMonth, isCurrentMonth, isFutureMonth } = useMonth();
   const { review, loading } = useMonthlyReview(selectedMonth);
-
-  const navigate = (dir: -1 | 1) => {
-    const next = monthKeyOffset(selectedMonth, dir);
-    if (next > current) return;
-    if (onMonthChange) onMonthChange(next);
-    else setInternalMonth(next);
-  };
 
   return (
     <div className="space-y-6 pb-8">
@@ -78,29 +43,17 @@ export function MonthlyReview({ defaultMonth, selectedMonth: controlledMonth, on
         <p className="text-muted-foreground">{t('monthlyReview.subtitle')}</p>
       </motion.div>
 
-      {/* Month navigator */}
+      {/* Month label */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-        className="flex items-center justify-between bg-card border border-border rounded-2xl p-4"
+        className="flex items-center gap-3 bg-card border border-border rounded-2xl p-4"
       >
-        <button
-          onClick={() => navigate(-1)}
-          className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-muted transition-colors"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <div className="text-center">
-          <p className="font-display text-xl">{monthLabel(selectedMonth, locale)}</p>
-          {isCurrentMonth && (
-            <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">{t('monthlyReview.currentMonth')}</span>
-          )}
-        </div>
-        <button
-          onClick={() => navigate(1)}
-          disabled={isCurrentMonth}
-          className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <ChevronRight className="w-5 h-5" />
-        </button>
+        <p className="font-display text-xl capitalize flex-1">{monthLabel(selectedMonth, locale)}</p>
+        {isCurrentMonth && (
+          <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">{t('monthlyReview.currentMonth')}</span>
+        )}
+        {isFutureMonth && (
+          <span className="text-xs text-violet-600 bg-violet-100 dark:bg-violet-900/30 dark:text-violet-400 px-2 py-0.5 rounded-full">{t('monthlyReview.nextMonth')}</span>
+        )}
       </motion.div>
 
       {loading ? (
@@ -165,7 +118,7 @@ export function MonthlyReview({ defaultMonth, selectedMonth: controlledMonth, on
                 <p className={`text-3xl font-display ${
                   review.totalActual > review.totalBudgeted ? 'text-red-500' : 'text-emerald-500'
                 }`}>
-                  {review.totalActual > review.totalBudgeted ? '+' : '-'}€{Math.abs(review.totalActual - review.totalBudgeted).toLocaleString()}
+                  {review.totalActual > review.totalBudgeted ? '-' : '+'}€{Math.abs(review.totalActual - review.totalBudgeted).toLocaleString()}
                 </p>
                 {review.unassigned > 0 && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
@@ -294,6 +247,18 @@ export function MonthlyReview({ defaultMonth, selectedMonth: controlledMonth, on
                 <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
                 <p className="text-muted-foreground">
                   {t('monthlyReview.currentMonthNote')}
+                </p>
+              </motion.div>
+            )}
+
+            {/* Tip for next month planning */}
+            {isFutureMonth && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}
+                className="bg-violet-500/5 border border-violet-500/20 rounded-xl px-5 py-4 flex items-start gap-3 text-sm"
+              >
+                <Info className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
+                <p className="text-muted-foreground">
+                  {t('monthlyReview.nextMonthNote')}
                 </p>
               </motion.div>
             )}

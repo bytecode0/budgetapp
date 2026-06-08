@@ -13,6 +13,9 @@ export interface Expense {
   allocationId: string | null;
   amount: number;
   description: string;
+  merchant: string;
+  source: string; // "manual" | "import"
+  externalId: string | null;
   date: string;
   allocation: ExpenseAllocation | null;
 }

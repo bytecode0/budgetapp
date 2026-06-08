@@ -1,6 +1,9 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
+import { normalizeMerchant } from "../lib/normalizeMerchant.js";
+import { toCents, serializeMoney } from "../lib/money.js";
+import { categorize, learnFromCorrection } from "../lib/categorize.js";
 
 export const expensesRouter = Router();
 
@@ -29,7 +32,7 @@ expensesRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
       orderBy: { date: "desc" },
     });
 
-    return res.json({ expenses });
+    return res.json(serializeMoney({ expenses }));
   } catch (err) {
     console.error("[expenses/GET]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -45,14 +48,23 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
       return res.status(400).json({ error: "Valid amount is required" });
     }
 
-    const parsedAmount = parseFloat(amount);
+    const amountCents = toCents(amount);
+    const merchant = normalizeMerchant(description);
+
+    // Auto-categorize: when the user didn't pick an allocation, let the rules decide.
+    let resolvedAllocationId: string | null = allocationId || null;
+    if (!resolvedAllocationId) {
+      resolvedAllocationId = await categorize(req.userId!, description ?? "", merchant);
+    }
 
     const expense = await prisma.expense.create({
       data: {
         userId: req.userId!,
-        amount: parsedAmount,
+        amount: amountCents,
         description: description ?? "",
-        allocationId: allocationId || null,
+        merchant,
+        source: "manual",
+        allocationId: resolvedAllocationId,
         date: date ? new Date(date) : new Date(),
       },
       include: { allocation: { select: { id: true, name: true, icon: true, type: true, lifePlanId: true } } },
@@ -62,11 +74,11 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
     if (expense.allocation?.type === "plan" && expense.allocation.lifePlanId) {
       await prisma.lifePlan.update({
         where: { id: expense.allocation.lifePlanId },
-        data: { currentAmount: { increment: parsedAmount } },
+        data: { currentAmount: { increment: amountCents } },
       });
     }
 
-    return res.json({ expense });
+    return res.json(serializeMoney({ expense }));
   } catch (err) {
     console.error("[expenses/POST]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -91,7 +103,7 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
       where: { id: newAllocId },
       select: { type: true, lifePlanId: true },
     }) : null;
-    const newAmount = amount !== undefined ? parseFloat(amount) : existing.amount;
+    const newAmount = amount !== undefined ? toCents(amount) : existing.amount;
 
     // Reverse old plan contribution
     if (existing.allocation?.type === "plan" && existing.allocation.lifePlanId) {
@@ -112,14 +124,21 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
       where: { id },
       data: {
         ...(amount !== undefined && { amount: newAmount }),
-        ...(description !== undefined && { description }),
+        ...(description !== undefined && { description, merchant: normalizeMerchant(description) }),
         ...(allocationId !== undefined && { allocationId: allocationId || null }),
         ...(date !== undefined && { date: new Date(date) }),
       },
       include: { allocation: { select: { id: true, name: true, icon: true, type: true, lifePlanId: true } } },
     });
 
-    return res.json({ expense });
+    // Learn from manual re-assignment: when the user moves an expense to a (real)
+    // allocation, remember the merchant -> allocation mapping for next time.
+    if (allocationId !== undefined && newAllocId && newAllocId !== existing.allocationId) {
+      const effectiveMerchant = description !== undefined ? normalizeMerchant(description) : existing.merchant;
+      await learnFromCorrection(req.userId!, effectiveMerchant, newAllocId);
+    }
+
+    return res.json(serializeMoney({ expense }));
   } catch (err) {
     console.error("[expenses/PATCH]", err);
     return res.status(500).json({ error: "Internal server error" });

@@ -22,6 +22,7 @@ model User {
   expenses       Expense[]
   planDeposits   PlanDeposit[]
   monthlyBudgets MonthlyBudget[]
+  categorizationRules CategorizationRule[]
   sentInvites    PartnerInvite[] @relation("SentInvites")
 
   createdAt DateTime @default(now())
@@ -47,7 +48,7 @@ model Subscription {
 model UserSettings {
   id            String  @id @default(cuid())
   userId        String  @unique
-  monthlyIncome Float   @default(0)
+  monthlyIncome Int     @default(0) // cents
   darkMode      Boolean @default(false)
   language      String  @default("en")
   linkedUserId  String? // Points to primary user's id when this is a linked (partner) account
@@ -67,9 +68,9 @@ model LifePlan {
   type                String    @default("other")
   icon                String    @default("🎯")
   color               String    @default("#1E3A8A")
-  targetAmount        Float
-  currentAmount       Float     @default(0)
-  monthlyContribution Float     @default(0)
+  targetAmount        Int                  // cents
+  currentAmount       Int       @default(0) // cents
+  monthlyContribution Int       @default(0) // cents
   deadline            DateTime?
   milestones          String    @default("[]") // JSON array of milestone amounts (investment plans)
 
@@ -88,8 +89,8 @@ model Allocation {
   icon            String  @default("💰")
   type            String  @default("flexible") // fixed | flexible | plan
   lifePlanId      String?
-  allocatedAmount Float   @default(0)
-  actualAmount    Float   @default(0)
+  allocatedAmount Int     @default(0) // cents
+  actualAmount    Int     @default(0) // cents
   sortOrder       Int     @default(0)
   isDefault       Boolean @default(false)
 
@@ -100,14 +101,18 @@ model Allocation {
   lifePlan       LifePlan?       @relation(fields: [lifePlanId], references: [id], onDelete: SetNull)
   expenses       Expense[]
   monthlyBudgets MonthlyBudget[]
+  categorizationRules CategorizationRule[]
 }
 
 model Expense {
   id           String   @id @default(cuid())
   userId       String
   allocationId String?
-  amount       Float
+  amount       Int // cents
   description  String   @default("")
+  merchant     String   @default("") // normalized form of description (see server/lib/normalizeMerchant.ts)
+  source       String   @default("manual") // "manual" | "import"
+  externalId   String? // idempotency key for future bank import; null for manual entries
   date         DateTime @default(now())
 
   createdAt DateTime @default(now())
@@ -115,6 +120,28 @@ model Expense {
 
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   allocation Allocation? @relation(fields: [allocationId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, externalId]) // dedupe imported rows; multiple NULLs allowed in Postgres
+  @@index([userId, merchant])
+}
+
+model CategorizationRule {
+  id           String @id @default(cuid())
+  userId       String
+  matchType    String @default("contains") // "contains" | "equals" | "regex"
+  pattern      String // matched against the expense merchant (contains/equals) or description (regex)
+  allocationId String
+  priority     Int    @default(0) // higher wins on conflict
+  source       String @default("manual") // "manual" | "learned" (auto-created from a user correction)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  allocation Allocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, matchType, pattern]) // one rule per (matchType, pattern); enables upsert on learning
+  @@index([userId, priority])
 }
 
 
@@ -122,7 +149,7 @@ model PlanDeposit {
   id      String @id @default(cuid())
   userId  String
   planId  String
-  amount  Float
+  amount  Int // cents
   month   String // "2026-04"
   note    String @default("")
 
@@ -140,7 +167,7 @@ model MonthlyBudget {
   userId         String
   allocationId   String
   month          String // "2026-04"
-  allocatedAmount Float
+  allocatedAmount Int // cents
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
