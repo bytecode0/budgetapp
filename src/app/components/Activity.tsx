@@ -1,15 +1,21 @@
 import { useState, useMemo } from 'react';
-import { Plus, TrendingDown, Filter, Trash2, Loader2, Receipt, Pencil, Wand2 } from 'lucide-react';
+import { Plus, TrendingDown, TrendingUp, Filter, Trash2, Loader2, Receipt, Pencil, Wand2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useExpenses, type Expense } from '../hooks/useExpenses';
+import { useIncome, type Income } from '../hooks/useIncome';
 import { useAllocations } from '../hooks/useAllocations';
 import { useLanguage } from '../context/LanguageContext';
 import { useMonth, monthLabel } from '../context/MonthContext';
 import { AddExpense } from './AddExpense';
+import { AddIncome } from './AddIncome';
 import { EditExpense } from './EditExpense';
 import { RulesManager } from './RulesManager';
+
+type Movement =
+  | { kind: 'expense'; id: string; date: string; amount: number; expense: Expense }
+  | { kind: 'income'; id: string; date: string; amount: number; income: Income };
 
 function getTypeColor(type: string) {
   switch (type) {
@@ -32,9 +38,13 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [showRules, setShowRules] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
+  const [showAddIncome, setShowAddIncome] = useState(false);
+  const [editingIncome, setEditingIncome] = useState<Income | null>(null);
 
   const { expenses, loading, totalSpent, totalByAllocation, deleteExpense, updateExpense, fetchExpenses } =
     useExpenses(currentMonth);
+  const { incomes, totalIncome, deleteIncome, fetchIncomes } = useIncome(currentMonth);
   const { allocations, monthlyIncome } = useAllocations();
 
   const formatDateLabel = (dateStr: string) => {
@@ -54,16 +64,27 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
     return expenses.filter(e => e.allocationId === filterAllocationId);
   }, [expenses, filterAllocationId]);
 
-  // Group by date
+  // Unified movements (expenses + income). Income only shows in the unfiltered
+  // view, since the chips filter expenses by category.
+  const movements = useMemo<Movement[]>(() => {
+    const incForView = filterAllocationId === 'all' ? incomes : [];
+    return [
+      ...filtered.map((e): Movement => ({ kind: 'expense', id: e.id, date: e.date, amount: e.amount, expense: e })),
+      ...incForView.map((i): Movement => ({ kind: 'income', id: i.id, date: i.date, amount: i.amount, income: i })),
+    ];
+  }, [filtered, incomes, filterAllocationId]);
+
+  // Group movements by date (newest day first, newest within the day first)
   const grouped = useMemo(() => {
-    const map: Record<string, typeof filtered> = {};
-    for (const e of filtered) {
-      const day = e.date.slice(0, 10);
-      if (!map[day]) map[day] = [];
-      map[day].push(e);
+    const map: Record<string, Movement[]> = {};
+    for (const m of movements) {
+      const day = m.date.slice(0, 10);
+      (map[day] ??= []).push(m);
     }
-    return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
-  }, [filtered]);
+    return Object.entries(map)
+      .map(([day, items]) => [day, items.sort((a, b) => b.date.localeCompare(a.date))] as [string, Movement[]])
+      .sort(([a], [b]) => b.localeCompare(a));
+  }, [movements]);
 
   // Stats
   const topAllocation = useMemo(() => {
@@ -90,7 +111,15 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
     const result = await deleteExpense(id);
     setDeletingId(null);
     if ('error' in result) toast.error(result.error as string);
-    else toast.success('Expense removed');
+    else toast.success(t('activity.expenseRemoved'));
+  };
+
+  const handleDeleteIncome = async (id: string) => {
+    setDeletingId(id);
+    const result = await deleteIncome(id);
+    setDeletingId(null);
+    if ('error' in result) toast.error(result.error as string);
+    else toast.success(t('activity.incomeRemoved'));
   };
 
   return (
@@ -136,6 +165,9 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
           </div>
           <p className="text-3xl font-display">€{totalSpent.toFixed(2)}</p>
           <p className="text-sm opacity-75 mt-1">{t('activity.avgPerDay', { amount: avgPerDay.toFixed(2) })}</p>
+          {totalIncome > 0 && (
+            <p className="text-sm opacity-75 mt-0.5">{t('activity.incomeThisMonth', { amount: totalIncome.toFixed(2) })}</p>
+          )}
           {monthlyIncome > 0 && (
             <div className="mt-3">
               <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
@@ -230,21 +262,21 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
         </motion.div>
       )}
 
-      {/* Expense list */}
+      {/* Movements list (expenses + income) */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-7 h-7 animate-spin text-primary" />
         </div>
-      ) : filtered.length === 0 ? (
+      ) : movements.length === 0 ? (
         <motion.div
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
           className="bg-card border border-dashed border-border rounded-2xl p-12 text-center"
         >
           <Receipt className="w-12 h-12 mx-auto mb-4 opacity-20" />
-          <p className="font-display text-lg mb-1">{t('activity.noExpenses')}</p>
+          <p className="font-display text-lg mb-1">{t('activity.noMovements')}</p>
           <p className="text-sm text-muted-foreground mb-6">
             {filterAllocationId === 'all'
-              ? t('activity.addFirstExpense')
+              ? t('activity.addFirstMovement')
               : t('activity.noExpensesInCategory')}
           </p>
           {filterAllocationId === 'all' && (
@@ -261,90 +293,169 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
           className="space-y-6"
         >
-          {grouped.map(([day, dayExpenses], groupIdx) => (
+          {grouped.map(([day, dayItems], groupIdx) => {
+            const net = dayItems.reduce((s, m) => m.kind === 'income' ? s + m.amount : s - m.amount, 0);
+            return (
             <div key={day}>
               <div className="flex items-center justify-between mb-2 px-1">
                 <p className="text-sm font-medium text-muted-foreground">{formatDateLabel(day)}</p>
-                <p className="text-sm text-muted-foreground">€{dayExpenses.reduce((s, e) => s + e.amount, 0).toFixed(2)}</p>
+                <p className={`text-sm ${net > 0 ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                  {net > 0 ? '+' : ''}€{net.toFixed(2)}
+                </p>
               </div>
               <div className="bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border">
                 <AnimatePresence initial={false}>
-                  {dayExpenses.map((expense, idx) => (
+                  {dayItems.map((m, idx) => (
                     <motion.div
-                      key={expense.id}
+                      key={m.id}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 20, height: 0 }}
                       transition={{ delay: groupIdx * 0.04 + idx * 0.02 }}
                       className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors gap-3"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-11 h-11 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-xl flex items-center justify-center text-xl shrink-0">
-                          {expense.allocation?.icon ?? '❓'}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm truncate">
-                            {expense.description || expense.allocation?.name || t('activity.expense')}
-                          </p>
-                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                            {expense.allocation ? (
-                              <span className={`text-xs px-2 py-0.5 rounded-full ${getTypeColor(expense.allocation.type)}`}>
-                                {expense.allocation.name}
-                              </span>
-                            ) : (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                                {t('addExpense.unassigned')}
-                              </span>
-                            )}
-                            {expense.account && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                                {expense.account.name}
-                              </span>
-                            )}
+                      {m.kind === 'expense' ? (
+                        <>
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-11 h-11 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-xl flex items-center justify-center text-xl shrink-0">
+                              {m.expense.allocation?.icon ?? '❓'}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">
+                                {m.expense.description || m.expense.allocation?.name || t('activity.expense')}
+                              </p>
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                {m.expense.allocation ? (
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${getTypeColor(m.expense.allocation.type)}`}>
+                                    {m.expense.allocation.name}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                                    {t('addExpense.unassigned')}
+                                  </span>
+                                )}
+                                {m.expense.account && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                                    {m.expense.account.name}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <p className="text-lg font-display">€{expense.amount.toFixed(2)}</p>
-                        <button
-                          onClick={() => setEditing(expense)}
-                          className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(expense.id)}
-                          disabled={deletingId === expense.id}
-                          className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50"
-                        >
-                          {deletingId === expense.id
-                            ? <Loader2 className="w-4 h-4 animate-spin" />
-                            : <Trash2 className="w-4 h-4" />}
-                        </button>
-                      </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <p className="text-lg font-display">€{m.amount.toFixed(2)}</p>
+                            <button
+                              onClick={() => setEditing(m.expense)}
+                              className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(m.id)}
+                              disabled={deletingId === m.id}
+                              className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              {deletingId === m.id
+                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                : <Trash2 className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-11 h-11 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
+                              <TrendingUp className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">
+                                {m.income.description || t(`addIncome.cat.${m.income.category}`)}
+                              </p>
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                  {t(`addIncome.cat.${m.income.category}`)}
+                                </span>
+                                {m.income.account && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                                    {m.income.account.name}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <p className="text-lg font-display text-emerald-600">+€{m.amount.toFixed(2)}</p>
+                            <button
+                              onClick={() => setEditingIncome(m.income)}
+                              className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteIncome(m.id)}
+                              disabled={deletingId === m.id}
+                              className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              {deletingId === m.id
+                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                : <Trash2 className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </motion.div>
                   ))}
                 </AnimatePresence>
               </div>
             </div>
-          ))}
+            );
+          })}
         </motion.div>
       )}
 
-      {/* FAB */}
-      <motion.button
-        initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
-        onClick={() => setShowAdd(true)}
-        whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-        className="fixed right-6 bottom-6 w-16 h-16 bg-gradient-to-br from-primary to-secondary text-white rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center z-40 group"
-      >
-        <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform" />
-      </motion.button>
+      {/* FAB speed-dial: choose expense or income */}
+      <div className="fixed right-6 bottom-6 z-40 flex flex-col items-end gap-3">
+        <AnimatePresence>
+          {fabOpen && (
+            <>
+              <motion.button
+                initial={{ opacity: 0, y: 10, scale: 0.8 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.8 }}
+                onClick={() => { setFabOpen(false); setShowAddIncome(true); }}
+                className="flex items-center gap-2 pl-4 pr-5 py-3 bg-emerald-600 text-white rounded-full shadow-xl hover:bg-emerald-600/90 transition-colors text-sm"
+              >
+                <TrendingUp className="w-5 h-5" /> {t('activity.addIncome')}
+              </motion.button>
+              <motion.button
+                initial={{ opacity: 0, y: 10, scale: 0.8 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.8 }}
+                onClick={() => { setFabOpen(false); setShowAdd(true); }}
+                className="flex items-center gap-2 pl-4 pr-5 py-3 bg-primary text-primary-foreground rounded-full shadow-xl hover:bg-primary/90 transition-colors text-sm"
+              >
+                <TrendingDown className="w-5 h-5" /> {t('activity.addExpense')}
+              </motion.button>
+            </>
+          )}
+        </AnimatePresence>
+        <motion.button
+          initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
+          onClick={() => setFabOpen(v => !v)}
+          whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+          className="w-16 h-16 bg-gradient-to-br from-primary to-secondary text-white rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center"
+        >
+          <Plus className={`w-7 h-7 transition-transform ${fabOpen ? 'rotate-45' : ''}`} />
+        </motion.button>
+      </div>
 
       <AddExpense
         isOpen={showAdd}
         onClose={() => setShowAdd(false)}
         onSaved={() => fetchExpenses(currentMonth)}
+      />
+
+      <AddIncome
+        isOpen={showAddIncome || !!editingIncome}
+        editing={editingIncome}
+        onClose={() => { setShowAddIncome(false); setEditingIncome(null); }}
+        onSaved={() => fetchIncomes(currentMonth)}
       />
 
       <EditExpense

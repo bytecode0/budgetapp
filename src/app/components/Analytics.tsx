@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
 import { TrendingUp, BarChart3, PiggyBank } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -34,6 +34,7 @@ export function Analytics() {
   const fmtEuro = (v: number) => `€${Math.round(v).toLocaleString()}`;
 
   const hasSpending = !!analytics && analytics.months.some(m => m.total > 0);
+  const hasIncome = !!analytics && analytics.months.some(m => (m.income ?? 0) > 0);
   const hasSavings = !!analytics && analytics.savings.some(s => s.cumulative > 0);
   const hasCategories = !!analytics && analytics.byCategory.length > 0;
 
@@ -46,7 +47,7 @@ export function Analytics() {
     );
   }
 
-  if (!analytics || (!hasSpending && !hasSavings && !hasCategories)) {
+  if (!analytics || (!hasSpending && !hasIncome && !hasSavings && !hasCategories)) {
     return (
       <div className="bg-card border border-border rounded-2xl p-6">
         <div className="text-center py-10 space-y-3">
@@ -80,7 +81,7 @@ export function Analytics() {
         <div className="bg-card border border-border rounded-2xl p-6">
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 className="w-4 h-4 text-muted-foreground" />
-            <h3 className="font-display text-lg">{t('analytics.spendingTrend')}</h3>
+            <h3 className="font-display text-lg">{t('analytics.cashflow')}</h3>
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -88,7 +89,12 @@ export function Analytics() {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={12} />
                 <YAxis stroke="var(--muted-foreground)" fontSize={12} tickFormatter={fmtEuro} width={56} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [fmtEuro(v), t('analytics.spent')]} />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(v: number, name: string) => [fmtEuro(v), name === 'income' ? t('analytics.income') : t('analytics.spent')]}
+                />
+                <Legend formatter={(name) => name === 'income' ? t('analytics.income') : t('analytics.spent')} />
+                <Bar dataKey="income" fill="var(--secondary)" radius={[8, 8, 0, 0]} />
                 <Bar dataKey="total" fill="var(--primary)" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>

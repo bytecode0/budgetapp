@@ -47,6 +47,7 @@ const MONEY_KEYS = new Set([
   "cumulative",
   "currentBalance",
   "netWorth",
+  "income",
 ]);
 
 /**

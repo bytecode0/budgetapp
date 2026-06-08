@@ -7,6 +7,7 @@ import { MonthlyReview } from './MonthlyReview';
 import { Analytics } from './Analytics';
 import { usePlans } from '../hooks/usePlans';
 import { useAllocations } from '../hooks/useAllocations';
+import { useIncome } from '../hooks/useIncome';
 import { useMonthlyReview } from '../hooks/useMonthlyBudget';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -32,8 +33,12 @@ export function Home({ onNavigate }: HomeProps) {
   const { selectedMonth, isCurrentMonth } = useMonth();
   const { plans } = usePlans();
   const { monthlyIncome } = useAllocations();
+  const { incomes, totalIncome } = useIncome(selectedMonth);
   const { review } = useMonthlyReview(selectedMonth);
   const month = selectedMonth;
+
+  // Actual income for the month when recorded; otherwise the planned baseline.
+  const displayIncome = incomes.length > 0 ? totalIncome : monthlyIncome;
 
   const totalPlans    = plans.length;
   const completedPlans = plans.filter(p => p.currentAmount >= p.targetAmount).length;
@@ -80,7 +85,8 @@ export function Home({ onNavigate }: HomeProps) {
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-6 pt-6 border-t border-white/20">
             <div>
               <p className="text-xs opacity-70 mb-1">{t('home.monthlyIncome')}</p>
-              <p className="text-2xl font-display">€{monthlyIncome.toLocaleString()}</p>
+              <p className="text-2xl font-display">€{displayIncome.toLocaleString()}</p>
+              {incomes.length > 0 && <p className="text-xs opacity-60">{t('home.actualIncome')}</p>}
             </div>
             <div>
               <p className="text-xs opacity-70 mb-1">{t('home.spentSoFar')}</p>

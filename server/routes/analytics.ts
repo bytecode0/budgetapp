@@ -59,10 +59,14 @@ analyticsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
 
     const userId = req.userId!;
 
-    const [expenses, allocations, depositsInRange, baselineAgg] = await Promise.all([
+    const [expenses, incomes, allocations, depositsInRange, baselineAgg] = await Promise.all([
       prisma.expense.findMany({
         where: { userId, date: { gte: rangeStart, lt: rangeEnd } },
         select: { allocationId: true, amount: true, date: true },
+      }),
+      prisma.income.findMany({
+        where: { userId, date: { gte: rangeStart, lt: rangeEnd } },
+        select: { amount: true, date: true },
       }),
       prisma.allocation.findMany({
         where: { userId },
@@ -92,7 +96,14 @@ analyticsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
       }
     }
 
-    const monthsSeries = months.map(m => ({ month: m, total: spentByMonth[m] }));
+    // ── Income month over month (cashflow alongside spending) ──
+    const incomeByMonth: Record<string, number> = Object.fromEntries(months.map(m => [m, 0]));
+    for (const inc of incomes) {
+      const mKey = dateToMonthKey(inc.date);
+      if (mKey in incomeByMonth) incomeByMonth[mKey] += inc.amount;
+    }
+
+    const monthsSeries = months.map(m => ({ month: m, total: spentByMonth[m], income: incomeByMonth[m] }));
 
     const allocMap = Object.fromEntries(allocations.map(a => [a.id, a]));
     const byCategory = Object.entries(totalByAllocation)

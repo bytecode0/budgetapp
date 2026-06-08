@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 
 export interface MonthSpending {
   month: string; // "2026-04"
-  total: number; // euros
+  total: number; // euros spent
+  income: number; // euros received
 }
 
 export interface CategoryAvg {
