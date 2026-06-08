@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LayoutDashboard, Sparkles, Wallet, Target, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Sparkles, Wallet, Target, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight, Landmark } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster } from 'sonner';
 import { Home } from './components/Home';
@@ -10,6 +10,7 @@ import { PlanDetail } from './components/PlanDetail';
 import { AllocationFlow } from './components/AllocationFlow';
 import { PlanningSettings } from './components/PlanningSettings';
 import { Activity } from './components/Activity';
+import { Accounts } from './components/Accounts';
 import { AddExpense } from './components/AddExpense';
 import { AuthFlow } from './components/auth/AuthFlow';
 import { PartnerInviteAccept } from './components/PartnerInviteAccept';
@@ -20,7 +21,7 @@ import { useAllocations } from './hooks/useAllocations';
 import { useAnalytics } from './hooks/useAnalytics';
 import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/usePartner';
 
-type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'settings';
+type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'settings';
 
 function AppInner() {
   const { user, loading, logout, refreshUser } = useAuth();
@@ -78,6 +79,7 @@ function AppInner() {
     { id: 'dashboard' as Screen,  label: t('nav.lifePlans'), icon: Sparkles },
     { id: 'activity' as Screen,   label: t('nav.activity'),  icon: ActivityIcon },
     { id: 'allocation' as Screen, label: t('nav.allocate'),  icon: Wallet },
+    { id: 'accounts' as Screen,   label: t('nav.accounts'),  icon: Landmark },
     { id: 'settings' as Screen,   label: t('nav.settings'),  icon: Settings },
   ];
 
@@ -104,6 +106,8 @@ function AppInner() {
         );
       case 'allocation':
         return <AllocationFlow />;
+      case 'accounts':
+        return <Accounts />;
       case 'settings':
         return <PlanningSettings darkMode={darkMode} onToggleDarkMode={() => updateDarkMode(!darkMode)} onLanguageChange={updateLanguage} onLogout={() => logout()} />;
       default:

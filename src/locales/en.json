@@ -4,6 +4,7 @@
     "lifePlans": "Life Plans",
     "activity": "Activity",
     "allocate": "Allocate",
+    "accounts": "Accounts",
     "settings": "Settings"
   },
   "sidebar": {
@@ -464,8 +465,45 @@
     "summary": "Summary",
     "amount": "Amount",
     "category": "Category",
+    "account": "Account",
     "note": "Note",
     "addExpense": "Add Expense"
+  },
+  "accounts": {
+    "title": "Accounts",
+    "subtitle": "Your bank accounts and net worth",
+    "netWorth": "Net worth",
+    "netWorthHint": "across {{count}} active account(s)",
+    "emptyTitle": "No accounts yet",
+    "emptyDesc": "Add your first account with the + button.",
+    "newTitle": "New account",
+    "editTitle": "Edit account",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. BBVA checking",
+    "typeLabel": "Type",
+    "balanceLabel": "Current balance",
+    "createAction": "Create account",
+    "nameRequired": "Name is required",
+    "createdOk": "Account created",
+    "savedOk": "Account saved",
+    "archivedOk": "Account archived",
+    "restoredOk": "Account restored",
+    "deletedOk": "Account deleted",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "archive": "Archive",
+    "restore": "Restore",
+    "showArchived": "Show archived ({{count}})",
+    "hideArchived": "Hide archived",
+    "dragToReorder": "Drag to reorder",
+    "type": {
+      "checking": "Checking",
+      "savings": "Savings",
+      "cash": "Cash",
+      "investment": "Investment",
+      "card": "Card"
+    }
   },
   "editExpense": {
     "title": "Edit expense",

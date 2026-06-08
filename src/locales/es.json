@@ -4,6 +4,7 @@
     "lifePlans": "Planes de Vida",
     "activity": "Actividad",
     "allocate": "Asignar",
+    "accounts": "Cuentas",
     "settings": "Ajustes"
   },
   "sidebar": {
@@ -464,8 +465,45 @@
     "summary": "Resumen",
     "amount": "Importe",
     "category": "Categoría",
+    "account": "Cuenta",
     "note": "Nota",
     "addExpense": "Añadir Gasto"
+  },
+  "accounts": {
+    "title": "Cuentas",
+    "subtitle": "Tus cuentas bancarias y patrimonio neto",
+    "netWorth": "Patrimonio neto",
+    "netWorthHint": "en {{count}} cuenta(s) activa(s)",
+    "emptyTitle": "Aún no hay cuentas",
+    "emptyDesc": "Añade tu primera cuenta con el botón +.",
+    "newTitle": "Nueva cuenta",
+    "editTitle": "Editar cuenta",
+    "nameLabel": "Nombre",
+    "namePlaceholder": "p. ej. Cuenta BBVA",
+    "typeLabel": "Tipo",
+    "balanceLabel": "Saldo actual",
+    "createAction": "Crear cuenta",
+    "nameRequired": "El nombre es obligatorio",
+    "createdOk": "Cuenta creada",
+    "savedOk": "Cuenta guardada",
+    "archivedOk": "Cuenta archivada",
+    "restoredOk": "Cuenta restaurada",
+    "deletedOk": "Cuenta eliminada",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "save": "Guardar",
+    "archive": "Archivar",
+    "restore": "Restaurar",
+    "showArchived": "Ver archivadas ({{count}})",
+    "hideArchived": "Ocultar archivadas",
+    "dragToReorder": "Arrastra para reordenar",
+    "type": {
+      "checking": "Corriente",
+      "savings": "Ahorro",
+      "cash": "Efectivo",
+      "investment": "Inversión",
+      "card": "Tarjeta"
+    }
   },
   "editExpense": {
     "title": "Editar gasto",

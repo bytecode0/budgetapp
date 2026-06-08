@@ -45,6 +45,8 @@ const MONEY_KEYS = new Set([
   "avg",
   "deposited",
   "cumulative",
+  "currentBalance",
+  "netWorth",
 ]);
 
 /**

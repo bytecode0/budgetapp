@@ -7,6 +7,25 @@ import { categorize, learnFromCorrection } from "../lib/categorize.js";
 
 export const expensesRouter = Router();
 
+// Validate a requested accountId belongs to the user; if none given, fall back
+// to the user's default account (lowest sortOrder, non-archived). Returns null
+// only when the user has no accounts at all.
+async function resolveAccountId(userId: string, accountId?: string | null): Promise<string | null> {
+  if (accountId) {
+    const owned = await prisma.account.findFirst({
+      where: { id: accountId, userId },
+      select: { id: true },
+    });
+    if (owned) return owned.id;
+  }
+  const fallback = await prisma.account.findFirst({
+    where: { userId, isArchived: false },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true },
+  });
+  return fallback?.id ?? null;
+}
+
 // GET /api/expenses?month=2026-04&allocationId=xxx
 expensesRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
@@ -28,7 +47,10 @@ expensesRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
 
     const expenses = await prisma.expense.findMany({
       where,
-      include: { allocation: { select: { id: true, name: true, icon: true, type: true } } },
+      include: {
+        allocation: { select: { id: true, name: true, icon: true, type: true } },
+        account: { select: { id: true, name: true, type: true } },
+      },
       orderBy: { date: "desc" },
     });
 
@@ -42,7 +64,7 @@ expensesRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
 // POST /api/expenses
 expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { amount, description, allocationId, date } = req.body;
+    const { amount, description, allocationId, accountId, date } = req.body;
 
     if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
       return res.status(400).json({ error: "Valid amount is required" });
@@ -57,6 +79,10 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
       resolvedAllocationId = await categorize(req.userId!, description ?? "", merchant);
     }
 
+    // Resolve the account: validate ownership if given, else fall back to the
+    // user's default (lowest sortOrder, non-archived) account.
+    const resolvedAccountId = await resolveAccountId(req.userId!, accountId);
+
     const expense = await prisma.expense.create({
       data: {
         userId: req.userId!,
@@ -65,9 +91,13 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
         merchant,
         source: "manual",
         allocationId: resolvedAllocationId,
+        accountId: resolvedAccountId,
         date: date ? new Date(date) : new Date(),
       },
-      include: { allocation: { select: { id: true, name: true, icon: true, type: true, lifePlanId: true } } },
+      include: {
+        allocation: { select: { id: true, name: true, icon: true, type: true, lifePlanId: true } },
+        account: { select: { id: true, name: true, type: true } },
+      },
     });
 
     // Auto-contribute to linked life plan if this is a plan allocation
@@ -95,7 +125,17 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     });
     if (!existing) return res.status(404).json({ error: "Expense not found" });
 
-    const { amount, description, allocationId, date } = req.body;
+    const { amount, description, allocationId, accountId, date } = req.body;
+
+    // Validate a re-assigned account belongs to the user (ignore invalid ids).
+    let accountUpdate: { accountId: string } | undefined;
+    if (accountId !== undefined && accountId) {
+      const owned = await prisma.account.findFirst({
+        where: { id: accountId, userId: req.userId! },
+        select: { id: true },
+      });
+      if (owned) accountUpdate = { accountId: owned.id };
+    }
 
     // Resolve the allocation that will apply after the update
     const newAllocId = allocationId !== undefined ? (allocationId || null) : existing.allocationId;
@@ -126,9 +166,13 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
         ...(amount !== undefined && { amount: newAmount }),
         ...(description !== undefined && { description, merchant: normalizeMerchant(description) }),
         ...(allocationId !== undefined && { allocationId: allocationId || null }),
+        ...(accountUpdate ?? {}),
         ...(date !== undefined && { date: new Date(date) }),
       },
-      include: { allocation: { select: { id: true, name: true, icon: true, type: true, lifePlanId: true } } },
+      include: {
+        allocation: { select: { id: true, name: true, icon: true, type: true, lifePlanId: true } },
+        account: { select: { id: true, name: true, type: true } },
+      },
     });
 
     // Learn from manual re-assignment: when the user moves an expense to a (real)

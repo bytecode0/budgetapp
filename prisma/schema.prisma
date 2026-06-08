@@ -23,6 +23,7 @@ model User {
   planDeposits   PlanDeposit[]
   monthlyBudgets MonthlyBudget[]
   categorizationRules CategorizationRule[]
+  accounts       Account[]
   sentInvites    PartnerInvite[] @relation("SentInvites")
 
   createdAt DateTime @default(now())
@@ -108,6 +109,7 @@ model Expense {
   id           String   @id @default(cuid())
   userId       String
   allocationId String?
+  accountId    String? // bank account this expense was paid from (Phase E)
   amount       Int // cents
   description  String   @default("")
   merchant     String   @default("") // normalized form of description (see server/lib/normalizeMerchant.ts)
@@ -120,9 +122,31 @@ model Expense {
 
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   allocation Allocation? @relation(fields: [allocationId], references: [id], onDelete: SetNull)
+  account    Account?    @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
   @@unique([userId, externalId]) // dedupe imported rows; multiple NULLs allowed in Postgres
   @@index([userId, merchant])
+  @@index([userId, accountId])
+}
+
+model Account {
+  id             String  @id @default(cuid())
+  userId         String  // shared pool (primary user in couples)
+  ownerUserId    String  // real owner (req.authUserId) — per-person attribution
+  name           String
+  type           String  @default("checking") // checking | savings | cash | investment | card
+  currency       String  @default("EUR")
+  currentBalance Int     @default(0) // cents; may be negative (cards/debt)
+  isArchived     Boolean @default(false)
+  sortOrder      Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+
+  @@index([userId, sortOrder])
 }
 
 model CategorizationRule {

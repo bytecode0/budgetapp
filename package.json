@@ -11,6 +11,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "backfill:merchant": "tsx server/scripts/backfillMerchant.ts",
+    "backfill:accounts": "tsx server/scripts/backfillAccounts.ts",
     "test": "tsx --test \"server/**/*.test.ts\""
   },
   "dependencies": {

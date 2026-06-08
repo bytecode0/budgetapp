@@ -7,10 +7,17 @@ export interface ExpenseAllocation {
   type: string;
 }
 
+export interface ExpenseAccount {
+  id: string;
+  name: string;
+  type: string;
+}
+
 export interface Expense {
   id: string;
   userId: string;
   allocationId: string | null;
+  accountId: string | null;
   amount: number;
   description: string;
   merchant: string;
@@ -18,6 +25,7 @@ export interface Expense {
   externalId: string | null;
   date: string;
   allocation: ExpenseAllocation | null;
+  account: ExpenseAccount | null;
 }
 
 export function useExpenses(month?: string) {
@@ -47,6 +55,7 @@ export function useExpenses(month?: string) {
     amount: number;
     description?: string;
     allocationId?: string | null;
+    accountId?: string | null;
     date?: string;
   }) => {
     const res = await fetch('/api/expenses', {

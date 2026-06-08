@@ -296,6 +296,11 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                                 {t('addExpense.unassigned')}
                               </span>
                             )}
+                            {expense.account && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                                {expense.account.name}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>

@@ -24,4 +24,23 @@ export async function createDefaultAllocations(userId: string) {
     update: {},
     create: { userId, monthlyIncome: 0 },
   });
+
+  await createDefaultAccount(userId);
+}
+
+// Seed a default "Main" account so every user has somewhere to attach expenses.
+// Safe to call repeatedly: no-op if the user already has an account.
+export async function createDefaultAccount(userId: string) {
+  const existing = await prisma.account.count({ where: { userId } });
+  if (existing > 0) return;
+
+  await prisma.account.create({
+    data: {
+      userId,
+      ownerUserId: userId,
+      name: "Main account",
+      type: "checking",
+      sortOrder: 0,
+    },
+  });
 }
