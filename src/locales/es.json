@@ -615,6 +615,23 @@
     "emptyTitle": "Sin duplicados",
     "emptyDesc": "Tu actividad está limpia."
   },
+  "import": {
+    "button": "Importar",
+    "title": "Importar extracto",
+    "subtitle": "Sube un extracto bancario (.xlsx o .csv). Lo cotejamos con lo que ya tienes.",
+    "account": "Importar a la cuenta",
+    "dropHint": "Haz clic para elegir un archivo .xlsx o .csv",
+    "reading": "Leyendo archivo…",
+    "newCount": "{{count}} nuevos",
+    "dupCount": "{{count}} ya importados",
+    "expenseCount": "{{count}} gastos",
+    "incomeCount": "{{count}} ingresos",
+    "duplicate": "ya importado",
+    "uncategorized": "Sin categoría",
+    "importSelected": "Importar {{count}} seleccionados",
+    "nothingSelected": "Selecciona al menos una fila",
+    "importedOk": "Importadas {{count}} transacciones"
+  },
   "monthlyReview": {
     "title": "Revisión del Presupuesto",
     "subtitle": "Compara lo que presupuestaste con lo que realmente gastaste",

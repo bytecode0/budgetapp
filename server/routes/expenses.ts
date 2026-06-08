@@ -5,6 +5,7 @@ import { normalizeMerchant } from "../lib/normalizeMerchant.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { categorize, learnFromCorrection } from "../lib/categorize.js";
 import { findDuplicateGroups } from "../lib/dedupe.js";
+import { prepareImport } from "../lib/importStatement.js";
 
 export const expensesRouter = Router();
 
@@ -170,6 +171,102 @@ expensesRouter.post("/merge", requireAuth, async (req: AuthRequest, res: Respons
     return res.json({ success: true, removed: toRemove.length });
   } catch (err) {
     console.error("[expenses/merge]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/expenses/import/preview
+// Body: { filename, dataBase64 }. Parses the statement and returns rows flagged
+// new|duplicate with a suggested category — does NOT write anything.
+expensesRouter.post("/import/preview", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { filename, dataBase64 } = req.body as { filename?: string; dataBase64?: string };
+    if (!filename || !dataBase64) {
+      return res.status(400).json({ error: "filename and dataBase64 are required" });
+    }
+
+    const buffer = Buffer.from(dataBase64, "base64");
+    let preview;
+    try {
+      preview = await prepareImport(req.userId!, buffer, filename);
+    } catch (e: any) {
+      return res.status(422).json({ error: e?.message || "Could not parse the file" });
+    }
+
+    // Resolve suggested allocation names for display.
+    const ids = [...new Set(preview.rows.map(r => r.suggestedAllocationId).filter(Boolean) as string[])];
+    if (ids.length > 0) {
+      const allocs = await prisma.allocation.findMany({
+        where: { id: { in: ids }, userId: req.userId! },
+        select: { id: true, name: true },
+      });
+      const nameById = Object.fromEntries(allocs.map(a => [a.id, a.name]));
+      for (const r of preview.rows) {
+        if (r.suggestedAllocationId) r.suggestedAllocationName = nameById[r.suggestedAllocationId] ?? null;
+      }
+    }
+
+    // NOTE: amounts in `preview` are already euros — do not run serializeMoney.
+    return res.json(preview);
+  } catch (err) {
+    console.error("[expenses/import/preview]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/expenses/import/confirm
+// Body: { accountId?, rows: ImportRow[] }. Inserts debits as expenses and
+// credits as income, both source='import'. Idempotent via @@unique externalId.
+expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { accountId, rows } = req.body as {
+      accountId?: string;
+      rows: { kind: string; externalId: string; date: string; description?: string; merchant?: string; amount: number; allocationId?: string | null; category?: string }[];
+    };
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: "rows are required" });
+    }
+
+    const resolvedAccountId = await resolveAccountId(req.userId!, accountId);
+
+    const expenseRows = rows.filter(r => r.kind === "expense");
+    const incomeRows = rows.filter(r => r.kind === "income");
+
+    const [exp, inc] = await Promise.all([
+      prisma.expense.createMany({
+        data: expenseRows.map(r => ({
+          userId: req.userId!,
+          accountId: resolvedAccountId,
+          allocationId: r.allocationId || null,
+          amount: toCents(r.amount),
+          description: r.description ?? "",
+          merchant: r.merchant || normalizeMerchant(r.description ?? ""),
+          source: "import",
+          externalId: r.externalId,
+          date: new Date(r.date),
+        })),
+        skipDuplicates: true, // re-importing the same file is a no-op
+      }),
+      prisma.income.createMany({
+        data: incomeRows.map(r => ({
+          userId: req.userId!,
+          ownerUserId: req.authUserId!,
+          accountId: resolvedAccountId,
+          amount: toCents(r.amount),
+          description: r.description ?? "",
+          merchant: r.merchant || normalizeMerchant(r.description ?? ""),
+          category: r.category || "other",
+          source: "import",
+          externalId: r.externalId,
+          date: new Date(r.date),
+        })),
+        skipDuplicates: true,
+      }),
+    ]);
+
+    return res.json({ success: true, expenses: exp.count, income: inc.count, inserted: exp.count + inc.count });
+  } catch (err) {
+    console.error("[expenses/import/confirm]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

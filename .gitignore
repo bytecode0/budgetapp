@@ -1,3 +1,7 @@
 node_modules
 .env
 dist
+
+# Bank statements / spreadsheets (never commit financial data)
+*.xlsx
+*.csv

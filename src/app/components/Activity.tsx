@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, TrendingDown, TrendingUp, Filter, Trash2, Loader2, Receipt, Pencil, Wand2, Copy } from 'lucide-react';
+import { Plus, TrendingDown, TrendingUp, Filter, Trash2, Loader2, Receipt, Pencil, Wand2, Copy, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,7 @@ import { AddIncome } from './AddIncome';
 import { EditExpense } from './EditExpense';
 import { RulesManager } from './RulesManager';
 import { Duplicates } from './Duplicates';
+import { ImportStatement } from './ImportStatement';
 
 type Movement =
   | { kind: 'expense'; id: string; date: string; amount: number; expense: Expense }
@@ -41,6 +42,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
   const [editing, setEditing] = useState<Expense | null>(null);
   const [showRules, setShowRules] = useState(false);
   const [showDuplicates, setShowDuplicates] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [showAddIncome, setShowAddIncome] = useState(false);
   const [editingIncome, setEditingIncome] = useState<Income | null>(null);
@@ -134,12 +136,20 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
           <h1 className="text-4xl tracking-tight">{t('activity.title')}</h1>
           <p className="text-muted-foreground">{t('activity.subtitle')}</p>
         </div>
-        <button
-          onClick={() => setShowRules(true)}
-          className="px-4 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors text-sm flex items-center gap-2 shrink-0"
-        >
-          <Wand2 className="w-4 h-4" /> {t('rules.manageButton')}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setShowImport(true)}
+            className="px-4 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors text-sm flex items-center gap-2"
+          >
+            <Upload className="w-4 h-4" /> {t('import.button')}
+          </button>
+          <button
+            onClick={() => setShowRules(true)}
+            className="px-4 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors text-sm flex items-center gap-2"
+          >
+            <Wand2 className="w-4 h-4" /> {t('rules.manageButton')}
+          </button>
+        </div>
       </motion.div>
 
       {/* Month display */}
@@ -499,6 +509,12 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
         loading={duplicatesLoading}
         onMerge={mergeDuplicates}
         onMerged={() => { fetchExpenses(currentMonth); fetchDuplicates(); }}
+      />
+
+      <ImportStatement
+        isOpen={showImport}
+        onClose={() => setShowImport(false)}
+        onImported={() => { fetchExpenses(currentMonth); fetchIncomes(currentMonth); fetchDuplicates(); }}
       />
     </div>
   );

@@ -615,6 +615,23 @@
     "emptyTitle": "No duplicates found",
     "emptyDesc": "Your activity looks clean."
   },
+  "import": {
+    "button": "Import",
+    "title": "Import statement",
+    "subtitle": "Upload a bank statement (.xlsx or .csv). We'll match it against what you already have.",
+    "account": "Import into account",
+    "dropHint": "Click to choose a .xlsx or .csv file",
+    "reading": "Reading file…",
+    "newCount": "{{count}} new",
+    "dupCount": "{{count}} already imported",
+    "expenseCount": "{{count}} expenses",
+    "incomeCount": "{{count}} income",
+    "duplicate": "already imported",
+    "uncategorized": "Uncategorized",
+    "importSelected": "Import {{count}} selected",
+    "nothingSelected": "Select at least one row",
+    "importedOk": "Imported {{count}} transactions"
+  },
   "monthlyReview": {
     "title": "Budget Review",
     "subtitle": "Compare what you budgeted vs what you actually spent",

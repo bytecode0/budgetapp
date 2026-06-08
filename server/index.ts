@@ -29,7 +29,7 @@ app.use(
 // Raw body MUST come before express.json() for Stripe webhook signature verification
 app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
 
-app.use(express.json());
+app.use(express.json({ limit: "12mb" })); // statement uploads arrive base64-encoded in the body
 app.use(cookieParser());
 
 app.use("/api/auth", authRouter);
