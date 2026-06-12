@@ -655,6 +655,17 @@
     "nothingSelected": "Select at least one row",
     "importedOk": "Imported {{count}} transactions"
   },
+  "budgets": {
+    "title": "Suggested budgets",
+    "subtitle": "Based on your spending history",
+    "suggestFromHistory": "Suggest from history",
+    "monthsObserved": "{{count}} months of history",
+    "lowConfidence": "low confidence",
+    "apply": "Apply to {{count}}",
+    "applied": "Updated {{count}} budgets",
+    "none": "Not enough history to suggest budgets yet",
+    "overIncome": "Selected budgets (€{{total}}) exceed your monthly income (€{{income}})"
+  },
   "monthlyReview": {
     "title": "Budget Review",
     "subtitle": "Compare what you budgeted vs what you actually spent",

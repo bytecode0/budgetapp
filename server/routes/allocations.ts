@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { createDefaultAllocations } from "../lib/defaults.js";
 import { toCents, serializeMoney } from "../lib/money.js";
+import { suggestBudgets } from "../lib/suggestBudgets.js";
 
 export const allocationsRouter = Router();
 
@@ -91,6 +92,82 @@ allocationsRouter.patch("/reorder", requireAuth, async (req: AuthRequest, res: R
     return res.json({ success: true });
   } catch (err) {
     console.error("[allocations/reorder]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/allocations/suggested-budgets?months=6
+// Per-category budget suggestion computed from spending history (median of
+// monthly totals). Includes the current allocatedAmount for an "current vs
+// suggested" view. Deterministic — no AI.
+allocationsRouter.get("/suggested-budgets", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const monthsParam = parseInt(String(req.query.months ?? "6"), 10);
+    const months = Number.isFinite(monthsParam) ? Math.min(Math.max(monthsParam, 1), 12) : 6;
+
+    const suggestions = await suggestBudgets(req.userId!, months);
+    if (suggestions.length === 0) return res.json({ suggestions: [] });
+
+    const allocs = await prisma.allocation.findMany({
+      where: { id: { in: suggestions.map(s => s.allocationId) }, userId: req.userId! },
+      select: { id: true, name: true, icon: true, allocatedAmount: true },
+    });
+    const byId = Object.fromEntries(allocs.map(a => [a.id, a]));
+
+    const rows = suggestions
+      .filter(s => byId[s.allocationId])
+      .map(s => ({
+        allocationId: s.allocationId,
+        name: byId[s.allocationId].name,
+        icon: byId[s.allocationId].icon,
+        current: byId[s.allocationId].allocatedAmount,
+        suggested: s.suggested,
+        monthsObserved: s.monthsObserved,
+        confidence: s.confidence,
+      }));
+
+    return res.json(serializeMoney({ suggestions: rows }));
+  } catch (err) {
+    console.error("[allocations/suggested-budgets]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/allocations/budgets
+// Batch-set allocatedAmount for several allocations. Body: { budgets: [{ id, allocatedAmount }] }
+// (amounts in euros). Only the user's own allocations are updated.
+allocationsRouter.patch("/budgets", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const budgets = (req.body?.budgets ?? []) as { id?: string; allocatedAmount?: number }[];
+    if (!Array.isArray(budgets) || budgets.length === 0) {
+      return res.status(400).json({ error: "budgets are required" });
+    }
+
+    const valid = budgets.filter(
+      b => typeof b.id === "string" && b.allocatedAmount != null && !isNaN(Number(b.allocatedAmount)),
+    );
+    if (valid.length === 0) return res.status(400).json({ error: "No valid budgets" });
+
+    const owned = await prisma.allocation.findMany({
+      where: { id: { in: valid.map(b => b.id!) }, userId: req.userId! },
+      select: { id: true },
+    });
+    const ownedIds = new Set(owned.map(a => a.id));
+
+    const updated = await prisma.$transaction(
+      valid
+        .filter(b => ownedIds.has(b.id!))
+        .map(b =>
+          prisma.allocation.update({
+            where: { id: b.id! },
+            data: { allocatedAmount: toCents(b.allocatedAmount!) },
+          }),
+        ),
+    );
+
+    return res.json(serializeMoney({ updated: updated.length, allocations: updated }));
+  } catch (err) {
+    console.error("[allocations/budgets]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

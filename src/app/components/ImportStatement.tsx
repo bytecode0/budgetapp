@@ -7,6 +7,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAccounts } from '../hooks/useAccounts';
 import { useAllocations } from '../hooks/useAllocations';
 import { useImport, type ImportPreview, type ConfirmRow, type AiCategory } from '../hooks/useImport';
+import { BudgetSuggestions } from './BudgetSuggestions';
 
 interface ImportStatementProps {
   isOpen: boolean;
@@ -33,9 +34,10 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const [proposedCats, setProposedCats] = useState<AiCategory[] | null>(null);
   const [acceptedCats, setAcceptedCats] = useState<Set<number>>(new Set());
   const [creatingCats, setCreatingCats] = useState(false);
+  const [postImportBudgets, setPostImportBudgets] = useState(false);
 
   useEffect(() => {
-    if (!isOpen) { setData(null); setSelected(new Set()); setAllocByRow({}); setAiMerchants(new Set()); setProposedCats(null); }
+    if (!isOpen) { setData(null); setSelected(new Set()); setAllocByRow({}); setAiMerchants(new Set()); setProposedCats(null); setPostImportBudgets(false); }
     if (isOpen && !accountId && activeAccounts.length > 0) setAccountId(activeAccounts[0].id);
     if (isOpen) {
       fetch('/api/ai/status', { credentials: 'include' })
@@ -159,12 +161,15 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     if (res.error) { toast.error(res.error); return; }
     toast.success(t('import.importedOk', { count: res.inserted ?? rows.length }));
     onImported?.();
-    onClose();
+    // Offer budget suggestions before closing — the just-imported history now
+    // makes per-category amounts computable (esp. for freshly-created categories).
+    setPostImportBudgets(true);
   };
 
   const selectedCount = data ? data.rows.filter(r => r.status === 'new' && selected.has(r.externalId)).length : 0;
 
   return (
+    <>
     <AnimatePresence>
       {isOpen && (
         <motion.div
@@ -391,5 +396,13 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
         </motion.div>
       )}
     </AnimatePresence>
+
+    {/* After a successful import: offer history-based budget suggestions, then close. */}
+    <BudgetSuggestions
+      isOpen={postImportBudgets}
+      onClose={() => { setPostImportBudgets(false); onClose(); }}
+      onApplied={() => onImported?.()}
+    />
+    </>
   );
 }
