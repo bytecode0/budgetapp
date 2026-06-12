@@ -2,7 +2,7 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { createDefaultAllocations } from "../lib/defaults.js";
-import { toCents, serializeMoney } from "../lib/money.js";
+import { toCents, toEuros, serializeMoney } from "../lib/money.js";
 import { suggestBudgets } from "../lib/suggestBudgets.js";
 
 export const allocationsRouter = Router();
@@ -114,19 +114,20 @@ allocationsRouter.get("/suggested-budgets", requireAuth, async (req: AuthRequest
     });
     const byId = Object.fromEntries(allocs.map(a => [a.id, a]));
 
+    // `current`/`suggested` aren't MONEY_KEYS, so convert cents → euros explicitly.
     const rows = suggestions
       .filter(s => byId[s.allocationId])
       .map(s => ({
         allocationId: s.allocationId,
         name: byId[s.allocationId].name,
         icon: byId[s.allocationId].icon,
-        current: byId[s.allocationId].allocatedAmount,
-        suggested: s.suggested,
+        current: toEuros(byId[s.allocationId].allocatedAmount),
+        suggested: toEuros(s.suggested),
         monthsObserved: s.monthsObserved,
         confidence: s.confidence,
       }));
 
-    return res.json(serializeMoney({ suggestions: rows }));
+    return res.json({ suggestions: rows });
   } catch (err) {
     console.error("[allocations/suggested-budgets]", err);
     return res.status(500).json({ error: "Internal server error" });
