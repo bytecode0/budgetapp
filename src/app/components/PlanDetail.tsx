@@ -3,6 +3,7 @@ import {
   ArrowLeft, Calendar, TrendingUp, DollarSign, Target,
   Pencil, Trash2, CheckCircle2, Loader2, X, Check,
   PlusCircle, ChevronDown, ChevronUp, PiggyBank,
+  AlertTriangle, RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -13,6 +14,8 @@ import { differenceInDays, format } from 'date-fns';
 import { toast } from 'sonner';
 import { usePlans, getPlanStatus } from '../hooks/usePlans';
 import { useTranslation } from 'react-i18next';
+import { currentMonthKey, monthLabel } from '../context/MonthContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const COLOR_OPTIONS = [
   '#1E3A8A','#10B981','#F59E0B','#EF4444','#8B5CF6',
@@ -156,7 +159,9 @@ function ProjectionTooltip({ active, payload, label, target, t }: any) {
 
 export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => void }) {
   const { t } = useTranslation();
-  const { plans, updatePlan, deletePlan, contributeToPlan } = usePlans();
+  const { language } = useLanguage();
+  const locale = language === 'es' ? 'es-ES' : 'en-GB';
+  const { plans, fetchPlans, updatePlan, deletePlan, contributeToPlan } = usePlans();
   const plan = plans.find(p => p.id === planId);
 
   const [editing, setEditing] = useState(false);
@@ -179,6 +184,20 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
   const [milestoneEdit, setMilestoneEdit] = useState<number[] | null>(null);
   const [milestoneInput, setMilestoneInput] = useState('');
   const [savingMilestones, setSavingMilestones] = useState(false);
+
+  // Monthly contribution tracking
+  type MonthlyContribStatus = { status: 'contributed' | 'missed' | 'pending'; expectedAmount: number; depositedAmount: number } | null;
+  const [monthlyStatus, setMonthlyStatus] = useState<MonthlyContribStatus>(null);
+  const [showDepositPanel, setShowDepositPanel] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositing, setDepositing] = useState(false);
+
+  // Allocation sync
+  const [syncAllocationId, setSyncAllocationId] = useState<string | null>(null);
+  const [syncingAllocation, setSyncingAllocation] = useState(false);
+
+  // Recovery flow
+  const [adjustingQuota, setAdjustingQuota] = useState(false);
 
   const openEdit = () => {
     if (!plan) return;
@@ -211,8 +230,12 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
       icon: form.icon,
     });
     setSaving(false);
-    if ('error' in result && result.error) toast.error(result.error as string);
-    else { toast.success(t('planDetail.planUpdated')); setEditing(false); }
+    if ('error' in result && result.error) { toast.error(result.error as string); return; }
+    toast.success(t('planDetail.planUpdated'));
+    setEditing(false);
+    if ('allocationOutOfSync' in result && result.allocationOutOfSync && result.linkedAllocationId) {
+      setSyncAllocationId(result.linkedAllocationId as string);
+    }
   };
 
   const handleDelete = async () => {
@@ -263,6 +286,72 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
     setSavingMilestones(false);
     if ('error' in result && result.error) toast.error(result.error as string);
     else { toast.success(t('planDetail.milestonesSaved')); setMilestoneEdit(null); setMilestoneInput(''); }
+  };
+
+  // Fetch monthly contribution status (only if plan has a linked allocation)
+  const fetchMonthlyStatus = async (pid: string) => {
+    const month = currentMonthKey();
+    const res = await fetch(`/api/plans/monthly-status?month=${month}`, { credentials: 'include' });
+    if (!res.ok) return;
+    const data = await res.json();
+    const entry = data.status.find((s: any) => s.planId === pid);
+    setMonthlyStatus(entry ? { status: entry.status, expectedAmount: entry.expectedAmount, depositedAmount: entry.depositedAmount } : null);
+  };
+
+  useEffect(() => { if (planId) fetchMonthlyStatus(planId); }, [planId]);
+
+  const handleMonthlyDeposit = async () => {
+    if (!plan) return;
+    const amount = parseFloat(depositAmount) || plan.monthlyContribution;
+    if (!amount || amount <= 0) return;
+    setDepositing(true);
+    const month = currentMonthKey();
+    const res = await fetch('/api/plan-deposits/confirm', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ month, deposits: [{ planId: plan.id, amount }] }),
+    });
+    setDepositing(false);
+    if (res.ok) {
+      await fetchPlans();
+      setMonthlyStatus(prev => prev ? { ...prev, status: 'contributed', depositedAmount: amount } : prev);
+      setShowDepositPanel(false);
+      setDepositAmount('');
+      toast.success(t('planDetail.contribRegistered'));
+    } else {
+      toast.error('Failed to register contribution');
+    }
+  };
+
+  const handleSyncAllocation = async () => {
+    if (!plan || !syncAllocationId) return;
+    setSyncingAllocation(true);
+    const res = await fetch(`/api/allocations/${syncAllocationId}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allocatedAmount: plan.monthlyContribution }),
+    });
+    setSyncingAllocation(false);
+    if (res.ok) {
+      setSyncAllocationId(null);
+      toast.success(t('planDetail.allocationSynced', { amount: plan.monthlyContribution.toLocaleString() }));
+    } else {
+      toast.error('Failed to sync allocation');
+    }
+  };
+
+  const handleAdjustQuota = async (newMonthly: number) => {
+    if (!plan) return;
+    setAdjustingQuota(true);
+    const result = await updatePlan(plan.id, { monthlyContribution: newMonthly });
+    setAdjustingQuota(false);
+    if ('error' in result && result.error) { toast.error(result.error as string); return; }
+    toast.success(t('planDetail.quotaUpdated', { amount: newMonthly.toLocaleString() }));
+    if ('allocationOutOfSync' in result && result.allocationOutOfSync && result.linkedAllocationId) {
+      setSyncAllocationId(result.linkedAllocationId);
+    }
   };
 
   const projectionData = useMemo(() => {
@@ -489,6 +578,32 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
         )}
       </AnimatePresence>
 
+      {/* ── Allocation sync banner ── */}
+      <AnimatePresence>
+        {syncAllocationId && plan && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            className="flex items-center gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700 rounded-xl px-4 py-3"
+          >
+            <RefreshCw className="w-4 h-4 text-amber-600 shrink-0" />
+            <p className="text-sm text-amber-700 dark:text-amber-400 flex-1">
+              {t('planDetail.syncAllocationBanner', { current: plan.monthlyContribution.toLocaleString() })}
+            </p>
+            <button
+              onClick={handleSyncAllocation}
+              disabled={syncingAllocation}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+            >
+              {syncingAllocation ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {t('planDetail.syncAllocationBtn')}
+            </button>
+            <button onClick={() => setSyncAllocationId(null)} className="w-7 h-7 flex items-center justify-center text-amber-500 hover:text-amber-700 shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── Hero Card ── */}
       <motion.div
         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
@@ -691,6 +806,152 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
           <p className="text-sm text-muted-foreground mt-1">{t('planDetail.pctToGo', { pct: (100 - Math.min(progress, 100)).toFixed(0) })}</p>
         </motion.div>
       </div>
+
+      {/* ── Monthly Contribution Status ── */}
+      {monthlyStatus !== null && plan.currentAmount < plan.targetAmount && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.38 }}>
+          <div className={`rounded-2xl border-2 p-5 transition-colors ${
+            monthlyStatus.status === 'contributed'
+              ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800'
+              : monthlyStatus.status === 'missed'
+              ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
+              : 'bg-card border-border'
+          }`}>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                {monthlyStatus.status === 'contributed' && <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />}
+                {monthlyStatus.status === 'missed'      && <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />}
+                {monthlyStatus.status === 'pending'     && <div className="w-5 h-5 rounded-full border-2 border-primary/40 shrink-0" />}
+                <div>
+                  <p className="font-medium text-sm">
+                    {monthlyStatus.status === 'contributed' && t('planDetail.monthContributed', { amount: monthlyStatus.depositedAmount.toLocaleString() })}
+                    {monthlyStatus.status === 'missed'      && t('planDetail.monthMissed')}
+                    {monthlyStatus.status === 'pending'     && t('planDetail.monthPending', { amount: monthlyStatus.expectedAmount.toLocaleString() })}
+                  </p>
+                  <p className="text-xs text-muted-foreground capitalize mt-0.5">
+                    {monthLabel(currentMonthKey(), locale)}
+                  </p>
+                </div>
+              </div>
+              {monthlyStatus.status !== 'contributed' && !showDepositPanel && (
+                <button
+                  onClick={() => { setDepositAmount(String(monthlyStatus.expectedAmount)); setShowDepositPanel(true); }}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm hover:bg-primary/90 transition-colors shrink-0"
+                >
+                  {t('planDetail.registerContrib')}
+                </button>
+              )}
+            </div>
+
+            <AnimatePresence>
+              {showDepositPanel && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-4 pt-4 border-t border-border space-y-3">
+                    <p className="text-sm font-medium">{t('planDetail.registerThisMonth')}</p>
+                    <div className="flex gap-3">
+                      <div className="flex items-center gap-2 flex-1 border border-border rounded-xl px-3 py-2 bg-background">
+                        <span className="text-muted-foreground text-sm">€</span>
+                        <input
+                          type="number" min="0" step="10"
+                          className="flex-1 outline-none bg-transparent text-sm font-display"
+                          value={depositAmount}
+                          onChange={e => setDepositAmount(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleMonthlyDeposit(); if (e.key === 'Escape') setShowDepositPanel(false); }}
+                          autoFocus
+                        />
+                      </div>
+                      <button
+                        onClick={handleMonthlyDeposit} disabled={depositing}
+                        className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50 shrink-0"
+                      >
+                        {depositing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                        {t('planDetail.confirm')}
+                      </button>
+                      <button onClick={() => setShowDepositPanel(false)} className="w-10 h-10 border border-border rounded-xl flex items-center justify-center hover:bg-muted transition-colors shrink-0">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      {[monthlyStatus.expectedAmount, Math.round(monthlyStatus.expectedAmount * 1.5), Math.round(monthlyStatus.expectedAmount * 2)]
+                        .filter((v, i, arr) => v > 0 && arr.indexOf(v) === i)
+                        .map(v => (
+                          <button key={v} onClick={() => setDepositAmount(String(v))}
+                            className="px-3 py-1.5 bg-muted hover:bg-muted/80 rounded-lg text-xs transition-colors"
+                          >
+                            €{v.toLocaleString()}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── Recovery Flow (when behind and has allocation) ── */}
+      {status === 'behind' && plan.deadline && monthlyStatus !== null && plan.currentAmount < plan.targetAmount && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.42 }}
+          className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 space-y-4"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-display text-sm text-amber-800 dark:text-amber-300">{t('planDetail.recoveryTitle')}</p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">{t('planDetail.recoverySubtitle')}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Option A: Catch up */}
+            <div className="bg-white dark:bg-amber-950/30 rounded-xl p-4 border border-amber-200 dark:border-amber-700">
+              <p className="font-medium text-sm mb-1">{t('planDetail.optionCatchUp')}</p>
+              <p className="text-xs text-muted-foreground mb-3">{t('planDetail.optionCatchUpDesc')}</p>
+              <button
+                onClick={() => {
+                  const gap = Math.max(0, plan.targetAmount - plan.currentAmount);
+                  const monthsLeft = Math.max(1, Math.ceil((new Date(plan.deadline!).getTime() - Date.now()) / (30 * 24 * 60 * 60 * 1000)));
+                  const catchUp = Math.ceil((gap / monthsLeft) - plan.monthlyContribution + plan.monthlyContribution);
+                  setDepositAmount(String(plan.monthlyContribution));
+                  setShowDepositPanel(true);
+                }}
+                className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-medium transition-colors"
+              >
+                {t('planDetail.registerContrib')}
+              </button>
+            </div>
+
+            {/* Option B: Adjust quota */}
+            {(() => {
+              const monthsLeft = Math.max(1, Math.ceil((new Date(plan.deadline!).getTime() - Date.now()) / (30 * 24 * 60 * 60 * 1000)));
+              const remaining = Math.max(0, plan.targetAmount - plan.currentAmount);
+              const newQuota = Math.ceil(remaining / monthsLeft);
+              return newQuota > plan.monthlyContribution ? (
+                <div className="bg-white dark:bg-amber-950/30 rounded-xl p-4 border border-amber-200 dark:border-amber-700">
+                  <p className="font-medium text-sm mb-1">{t('planDetail.optionAdjustQuota')}</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t('planDetail.optionAdjustQuotaDesc')}</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
+                    {t('planDetail.newQuotaLabel')}: <strong>€{newQuota.toLocaleString()}/mo</strong>
+                  </p>
+                  <button
+                    onClick={() => handleAdjustQuota(newQuota)}
+                    disabled={adjustingQuota}
+                    className="w-full py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    {adjustingQuota ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                    {t('planDetail.adjustQuotaBtn', { amount: newQuota.toLocaleString() })}
+                  </button>
+                </div>
+              ) : null;
+            })()}
+          </div>
+        </motion.div>
+      )}
 
       {/* ── Projection Chart ── */}
       {(plan.monthlyContribution > 0 || (simMonthly ?? 0) > 0) && (

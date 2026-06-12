@@ -2,6 +2,7 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { createDefaultAllocations } from "../lib/defaults.js";
+import { toCents, serializeMoney } from "../lib/money.js";
 
 export const allocationsRouter = Router();
 
@@ -19,12 +20,12 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
       prisma.userSettings.findUnique({ where: { userId: req.userId! } }),
     ]);
 
-    return res.json({
+    return res.json(serializeMoney({
       allocations,
       monthlyIncome: settings?.monthlyIncome ?? 0,
       darkMode: settings?.darkMode ?? false,
       language: settings?.language ?? 'en',
-    });
+    }));
   } catch (err) {
     console.error("[allocations/GET]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -56,16 +57,40 @@ allocationsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response)
         icon: icon ?? "💰",
         type: type ?? "flexible",
         lifePlanId: (type === "plan" && lifePlanId) ? lifePlanId : null,
-        allocatedAmount: allocatedAmount ? parseFloat(allocatedAmount) : 0,
-        actualAmount: actualAmount ? parseFloat(actualAmount) : 0,
+        allocatedAmount: toCents(allocatedAmount),
+        actualAmount: toCents(actualAmount),
         sortOrder: (lastOrder?.sortOrder ?? -1) + 1,
         isDefault: false,
       },
     });
 
-    return res.json({ allocation });
+    return res.json(serializeMoney({ allocation }));
   } catch (err) {
     console.error("[allocations/POST]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/allocations/reorder  — batch update sortOrder (must be before /:id)
+allocationsRouter.patch("/reorder", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { order } = req.body as { order: { id: string; sortOrder: number }[] };
+    if (!Array.isArray(order) || order.length === 0) {
+      return res.status(400).json({ error: "order array is required" });
+    }
+
+    await prisma.$transaction(
+      order.map(({ id, sortOrder }) =>
+        prisma.allocation.updateMany({
+          where: { id, userId: req.userId! },
+          data: { sortOrder },
+        })
+      )
+    );
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("[allocations/reorder]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -97,13 +122,13 @@ allocationsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respo
           ? { lifePlanId: (newType === 'plan' && lifePlanId) ? lifePlanId : null }
           : type === 'plan' ? {} : type !== undefined ? { lifePlanId: null } : {}
         ),
-        ...(allocatedAmount !== undefined && { allocatedAmount: parseFloat(allocatedAmount) }),
-        ...(actualAmount !== undefined && { actualAmount: parseFloat(actualAmount) }),
+        ...(allocatedAmount !== undefined && { allocatedAmount: toCents(allocatedAmount) }),
+        ...(actualAmount !== undefined && { actualAmount: toCents(actualAmount) }),
         ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
       },
     });
 
-    return res.json({ allocation });
+    return res.json(serializeMoney({ allocation }));
   } catch (err) {
     console.error("[allocations/PATCH]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -158,11 +183,11 @@ allocationsRouter.patch("/settings/income", requireAuth, async (req: AuthRequest
 
     const settings = await prisma.userSettings.upsert({
       where: { userId: req.userId! },
-      update: { monthlyIncome: parseFloat(monthlyIncome) },
-      create: { userId: req.userId!, monthlyIncome: parseFloat(monthlyIncome) },
+      update: { monthlyIncome: toCents(monthlyIncome) },
+      create: { userId: req.userId!, monthlyIncome: toCents(monthlyIncome) },
     });
 
-    return res.json({ monthlyIncome: settings.monthlyIncome });
+    return res.json(serializeMoney({ monthlyIncome: settings.monthlyIncome }));
   } catch (err) {
     console.error("[allocations/settings/income]", err);
     return res.status(500).json({ error: "Internal server error" });

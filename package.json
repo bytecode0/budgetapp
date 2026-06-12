@@ -9,9 +9,15 @@
     "dev:server": "tsx watch server/index.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\"",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "db:reset": "prisma db push --force-reset",
+    "backfill:merchant": "tsx server/scripts/backfillMerchant.ts",
+    "backfill:accounts": "tsx server/scripts/backfillAccounts.ts",
+    "seed:phasef": "tsx server/scripts/seedPhaseF.ts",
+    "test": "tsx --test \"server/**/*.test.ts\""
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
     "@mui/icons-material": "7.3.5",
@@ -79,7 +85,8 @@
     "stripe": "^22.0.2",
     "tailwind-merge": "3.2.0",
     "tw-animate-css": "1.3.8",
-    "vaul": "1.1.2"
+    "vaul": "1.1.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",

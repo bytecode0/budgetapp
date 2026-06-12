@@ -8,8 +8,14 @@ import { allocationsRouter } from "./routes/allocations.js";
 import { expensesRouter } from "./routes/expenses.js";
 import { planDepositsRouter } from "./routes/planDeposits.js";
 import { monthlyBudgetsRouter } from "./routes/monthlyBudgets.js";
+import { rulesRouter } from "./routes/rules.js";
+import { accountsRouter } from "./routes/accounts.js";
+import { incomeRouter } from "./routes/income.js";
+import { recurringRouter } from "./routes/recurring.js";
+import { analyticsRouter } from "./routes/analytics.js";
 import { partnerRouter } from "./routes/partner.js";
 import { stripeRouter } from "./routes/stripe.js";
+import { aiRouter } from "./routes/ai.js";
 
 const app = express();
 const PORT = process.env.SERVER_PORT || 3002;
@@ -24,7 +30,7 @@ app.use(
 // Raw body MUST come before express.json() for Stripe webhook signature verification
 app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
 
-app.use(express.json());
+app.use(express.json({ limit: "12mb" })); // statement uploads arrive base64-encoded in the body
 app.use(cookieParser());
 
 app.use("/api/auth", authRouter);
@@ -33,8 +39,14 @@ app.use("/api/allocations", allocationsRouter);
 app.use("/api/expenses", expensesRouter);
 app.use("/api/plan-deposits", planDepositsRouter);
 app.use("/api/monthly-budgets", monthlyBudgetsRouter);
+app.use("/api/rules", rulesRouter);
+app.use("/api/accounts", accountsRouter);
+app.use("/api/income", incomeRouter);
+app.use("/api/recurring", recurringRouter);
+app.use("/api/analytics", analyticsRouter);
 app.use("/api/partner", partnerRouter);
 app.use("/api/stripe", stripeRouter);
+app.use("/api/ai", aiRouter);
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });

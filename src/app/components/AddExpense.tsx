@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useAllocations } from '../hooks/useAllocations';
+import { useAccounts } from '../hooks/useAccounts';
 import { useExpenses } from '../hooks/useExpenses';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -22,28 +23,66 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
 
   const { allocations } = useAllocations();
-  const { createExpense } = useExpenses();
+  const { accounts } = useAccounts();
+  const { createExpense, suggestAllocation } = useExpenses();
+
+  const activeAccounts = accounts.filter(a => !a.isArchived);
 
   const [step, setStep] = useState<Step>('amount');
   const [amount, setAmount] = useState('');
   const [selectedAllocationId, setSelectedAllocationId] = useState<string | null>(null);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(defaultDate ?? new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
+  // Live category suggestion: `allocationTouched` guards against the debounced
+  // suggestion overwriting a category the user picked by hand.
+  const [allocationTouched, setAllocationTouched] = useState(false);
+  const [suggestion, setSuggestion] = useState<{ allocationId: string; name: string; icon: string } | null>(null);
 
   const selectedAllocation = allocations.find(a => a.id === selectedAllocationId) ?? null;
+  const selectedAccount = accounts.find(a => a.id === selectedAccountId) ?? null;
+
+  // Default to the first active account once accounts load.
+  useEffect(() => {
+    if (!selectedAccountId && activeAccounts.length > 0) {
+      setSelectedAccountId(activeAccounts[0].id);
+    }
+  }, [activeAccounts, selectedAccountId]);
 
   // Sync date when defaultDate changes (e.g. user navigates to a different month)
   useEffect(() => {
     if (defaultDate) setDate(defaultDate);
   }, [defaultDate]);
 
+  // Debounced live category suggestion from the description (rules engine).
+  // Applies only while the user hasn't manually chosen a category.
+  useEffect(() => {
+    if (allocationTouched) { setSuggestion(null); return; }
+    const q = description.trim();
+    if (!q) { setSuggestion(null); return; }
+    const handle = setTimeout(async () => {
+      const s = await suggestAllocation(q);
+      if (s) {
+        setSuggestion(s);
+        setSelectedAllocationId(s.allocationId);
+      } else {
+        setSuggestion(null);
+      }
+    }, 300);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [description, allocationTouched]);
+
   const reset = () => {
     setStep('amount');
     setAmount('');
     setSelectedAllocationId(null);
+    setSelectedAccountId(null);
     setDescription('');
     setDate(defaultDate ?? new Date().toISOString().slice(0, 10));
+    setAllocationTouched(false);
+    setSuggestion(null);
   };
 
   const handleClose = () => { reset(); onClose(); };
@@ -56,6 +95,7 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
       amount: parsed,
       description: description.trim(),
       allocationId: selectedAllocationId,
+      accountId: selectedAccountId,
       date,
     });
     setSaving(false);
@@ -167,12 +207,31 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
                     transition={{ duration: 0.2 }}
                     className="space-y-5"
                   >
+                    {/* Description first — drives the live category suggestion */}
+                    <div>
+                      <label className="text-sm text-muted-foreground mb-2 block">{t('addExpense.descriptionFirst')}</label>
+                      <input
+                        type="text"
+                        value={description}
+                        onChange={e => setDescription(e.target.value)}
+                        placeholder={t('addExpense.notePlaceholder')}
+                        autoFocus
+                        className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:border-primary transition-colors text-sm"
+                      />
+                      {suggestion && !allocationTouched && selectedAllocationId === suggestion.allocationId && (
+                        <p className="text-xs text-primary mt-2 flex items-center gap-1">
+                          <span>{suggestion.icon}</span>
+                          {t('addExpense.suggested')}: {suggestion.name}
+                        </p>
+                      )}
+                    </div>
+
                     <p className="text-sm text-muted-foreground">{t('addExpense.whichCategory')}</p>
                     <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
                       {allocations.map(a => (
                         <button
                           key={a.id}
-                          onClick={() => setSelectedAllocationId(a.id)}
+                          onClick={() => { setAllocationTouched(true); setSelectedAllocationId(a.id); }}
                           className={`p-3 rounded-xl border-2 transition-all text-left ${
                             selectedAllocationId === a.id
                               ? 'border-primary bg-primary/5'
@@ -186,7 +245,7 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
                       ))}
                       {/* Unassigned option */}
                       <button
-                        onClick={() => setSelectedAllocationId(null)}
+                        onClick={() => { setAllocationTouched(true); setSelectedAllocationId(null); }}
                         className={`p-3 rounded-xl border-2 transition-all text-left ${
                           selectedAllocationId === null
                             ? 'border-muted-foreground/50 bg-muted'
@@ -215,18 +274,20 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
                     transition={{ duration: 0.2 }}
                     className="space-y-4"
                   >
-                    <div>
-                      <label className="text-sm text-muted-foreground mb-2 block">{t('addExpense.noteOptional')}</label>
-                      <input
-                        type="text"
-                        value={description}
-                        onChange={e => setDescription(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
-                        placeholder={t('addExpense.notePlaceholder')}
-                        autoFocus
-                        className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:border-primary transition-colors text-sm"
-                      />
-                    </div>
+                    {activeAccounts.length > 0 && (
+                      <div>
+                        <label className="text-sm text-muted-foreground mb-2 block">{t('addExpense.account')}</label>
+                        <select
+                          value={selectedAccountId ?? ''}
+                          onChange={e => setSelectedAccountId(e.target.value || null)}
+                          className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:border-primary transition-colors text-sm"
+                        >
+                          {activeAccounts.map(a => (
+                            <option key={a.id} value={a.id}>{a.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     <div>
                       <label className="text-sm text-muted-foreground mb-2 block">{t('addExpense.date')}</label>
                       <input
@@ -251,6 +312,12 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
                           <span className="text-sm font-medium">{selectedAllocation?.name ?? t('addExpense.unassigned')}</span>
                         </div>
                       </div>
+                      {selectedAccount && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">{t('addExpense.account')}</span>
+                          <span className="text-sm font-medium truncate ml-4">{selectedAccount.name}</span>
+                        </div>
+                      )}
                       {description && (
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">{t('addExpense.note')}</span>

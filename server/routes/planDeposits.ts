@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
+import { toCents, serializeMoney } from "../lib/money.js";
 
 export const planDepositsRouter = Router();
 
@@ -16,7 +17,7 @@ planDepositsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response)
       include: { plan: { select: { id: true, title: true, icon: true, color: true, targetAmount: true, currentAmount: true } } },
     });
 
-    return res.json({ deposits });
+    return res.json(serializeMoney({ deposits }));
   } catch (err) {
     console.error("[plan-deposits/GET]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -52,12 +53,12 @@ planDepositsRouter.post("/confirm", requireAuth, async (req: AuthRequest, res: R
       deposits.map(d =>
         prisma.planDeposit.upsert({
           where: { planId_month: { planId: d.planId, month } },
-          update: { amount: d.amount, note: d.note ?? "" },
+          update: { amount: toCents(d.amount), note: d.note ?? "" },
           create: {
             userId: req.userId!,
             planId: d.planId,
             month,
-            amount: d.amount,
+            amount: toCents(d.amount),
             note: d.note ?? "",
           },
         })
@@ -84,7 +85,7 @@ planDepositsRouter.post("/confirm", requireAuth, async (req: AuthRequest, res: R
       include: { plan: { select: { id: true, title: true, icon: true, color: true, targetAmount: true, currentAmount: true } } },
     });
 
-    return res.json({ deposits: updated });
+    return res.json(serializeMoney({ deposits: updated }));
   } catch (err) {
     console.error("[plan-deposits/confirm]", err);
     return res.status(500).json({ error: "Internal server error" });

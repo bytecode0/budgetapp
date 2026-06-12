@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LayoutDashboard, Sparkles, Wallet, Target, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap } from 'lucide-react';
+import { LayoutDashboard, Sparkles, Wallet, Target, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight, Landmark } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster } from 'sonner';
 import { Home } from './components/Home';
@@ -10,21 +10,33 @@ import { PlanDetail } from './components/PlanDetail';
 import { AllocationFlow } from './components/AllocationFlow';
 import { PlanningSettings } from './components/PlanningSettings';
 import { Activity } from './components/Activity';
+import { Accounts } from './components/Accounts';
 import { AddExpense } from './components/AddExpense';
 import { AuthFlow } from './components/auth/AuthFlow';
 import { PartnerInviteAccept } from './components/PartnerInviteAccept';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
+import { MonthProvider, useMonth, monthLabel } from './context/MonthContext';
 import { useAllocations } from './hooks/useAllocations';
+import { useAnalytics } from './hooks/useAnalytics';
 import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/usePartner';
 
-type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'settings';
+type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'settings';
 
 function AppInner() {
   const { user, loading, logout, refreshUser } = useAuth();
   const { t } = useTranslation();
   const { darkMode, updateDarkMode, dbLanguage, updateLanguage } = useAllocations();
-  const { setLanguage } = useLanguage();
+  const { language, setLanguage } = useLanguage();
+  const locale = language === 'es' ? 'es-ES' : 'en-GB';
+  const { selectedMonth, navigate: navigateMonth, isCurrentMonth: isCurrentMonthSelected, isFutureMonth } = useMonth();
+  const { analytics } = useAnalytics(selectedMonth, selectedMonth);
+  const alignmentPct = analytics?.alignment.pct ?? null;
+  const alignmentLabel = alignmentPct === null
+    ? t('sidebar.mostlyAligned')
+    : alignmentPct >= 90 ? t('sidebar.aligned')
+    : alignmentPct >= 60 ? t('sidebar.mostlyAligned')
+    : t('sidebar.offTrack');
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -67,6 +79,7 @@ function AppInner() {
     { id: 'dashboard' as Screen,  label: t('nav.lifePlans'), icon: Sparkles },
     { id: 'activity' as Screen,   label: t('nav.activity'),  icon: ActivityIcon },
     { id: 'allocation' as Screen, label: t('nav.allocate'),  icon: Wallet },
+    { id: 'accounts' as Screen,   label: t('nav.accounts'),  icon: Landmark },
     { id: 'settings' as Screen,   label: t('nav.settings'),  icon: Settings },
   ];
 
@@ -93,6 +106,8 @@ function AppInner() {
         );
       case 'allocation':
         return <AllocationFlow />;
+      case 'accounts':
+        return <Accounts />;
       case 'settings':
         return <PlanningSettings darkMode={darkMode} onToggleDarkMode={() => updateDarkMode(!darkMode)} onLanguageChange={updateLanguage} onLogout={() => logout()} />;
       default:
@@ -167,6 +182,19 @@ function AppInner() {
               className="lg:hidden fixed left-0 top-16 bottom-0 w-64 bg-card border-r border-border z-40 overflow-y-auto"
             >
               <nav className="p-4 space-y-2">
+                {/* Global month selector */}
+                <div className="pb-3 mb-1 border-b border-border">
+                  <p className="text-xs text-muted-foreground mb-2 px-1">{t('sidebar.workingMonth')}</p>
+                  <div className="flex items-center gap-1 bg-muted rounded-xl p-1">
+                    <button onClick={() => navigateMonth(-1)} className="w-8 h-8 flex items-center justify-center hover:bg-background rounded-lg transition-colors shrink-0">
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <p className="flex-1 text-center text-sm font-display capitalize">{monthLabel(selectedMonth, locale)}</p>
+                    <button onClick={() => navigateMonth(1)} disabled={isFutureMonth} className="w-8 h-8 flex items-center justify-center hover:bg-background rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0">
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
                 {navigation.map((item) => {
                   const Icon = item.icon;
                   const isActive = currentScreen === item.id;
@@ -211,6 +239,23 @@ function AppInner() {
           <p className="text-sm text-muted-foreground mt-3">
             {t('sidebar.planTagline')}
           </p>
+        </div>
+        {/* Global month selector */}
+        <div className="px-4 py-3 border-b border-border">
+          <p className="text-xs text-muted-foreground mb-2">{t('sidebar.workingMonth')}</p>
+          <div className="flex items-center gap-1 bg-muted rounded-xl p-1">
+            <button onClick={() => navigateMonth(-1)} className="w-8 h-8 flex items-center justify-center hover:bg-background rounded-lg transition-colors shrink-0">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <div className="flex-1 text-center">
+              <p className="text-sm font-display capitalize leading-tight">{monthLabel(selectedMonth, locale)}</p>
+              {isFutureMonth && <p className="text-xs text-violet-500 leading-tight">{t('monthlyReview.nextMonth')}</p>}
+              {isCurrentMonthSelected && <p className="text-xs text-primary/60 leading-tight">●</p>}
+            </div>
+            <button onClick={() => navigateMonth(1)} disabled={isFutureMonth} className="w-8 h-8 flex items-center justify-center hover:bg-background rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         <nav className="p-4 space-y-2">
           {navigation.map((item) => {
@@ -260,11 +305,14 @@ function AppInner() {
               <div className="w-2 h-2 bg-secondary rounded-full animate-pulse" />
               <p className="text-xs text-muted-foreground">{t('sidebar.planStatus')}</p>
             </div>
-            <p className="text-sm font-display">{t('sidebar.mostlyAligned')}</p>
+            <p className="text-sm font-display">{alignmentLabel}</p>
             <div className="mt-3 h-1.5 bg-muted rounded-full overflow-hidden">
-              <div className="h-full w-[85%] bg-gradient-to-r from-secondary to-primary rounded-full" />
+              <div
+                className="h-full bg-gradient-to-r from-secondary to-primary rounded-full transition-all"
+                style={{ width: `${alignmentPct ?? 0}%` }}
+              />
             </div>
-            <p className="text-xs text-muted-foreground mt-2">{t('sidebar.onTrackPct', { pct: 85 })}</p>
+            <p className="text-xs text-muted-foreground mt-2">{t('sidebar.onTrackPct', { pct: alignmentPct ?? 0 })}</p>
           </div>
 
           <div className="bg-gradient-to-br from-secondary/10 to-primary/10 border border-primary/10 rounded-xl p-4">
@@ -315,8 +363,10 @@ export default function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
-        <Toaster richColors position="top-right" />
-        <AppInner />
+        <MonthProvider>
+          <Toaster richColors position="top-right" />
+          <AppInner />
+        </MonthProvider>
       </AuthProvider>
     </LanguageProvider>
   );

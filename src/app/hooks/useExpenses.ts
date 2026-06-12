@@ -7,14 +7,25 @@ export interface ExpenseAllocation {
   type: string;
 }
 
+export interface ExpenseAccount {
+  id: string;
+  name: string;
+  type: string;
+}
+
 export interface Expense {
   id: string;
   userId: string;
   allocationId: string | null;
+  accountId: string | null;
   amount: number;
   description: string;
+  merchant: string;
+  source: string; // "manual" | "import"
+  externalId: string | null;
   date: string;
   allocation: ExpenseAllocation | null;
+  account: ExpenseAccount | null;
 }
 
 export function useExpenses(month?: string) {
@@ -44,6 +55,7 @@ export function useExpenses(month?: string) {
     amount: number;
     description?: string;
     allocationId?: string | null;
+    accountId?: string | null;
     date?: string;
   }) => {
     const res = await fetch('/api/expenses', {
@@ -56,6 +68,21 @@ export function useExpenses(month?: string) {
     if (!res.ok) return { error: data.error || 'Failed to create expense' };
     setExpenses(prev => [data.expense, ...prev]);
     return { expense: data.expense };
+  };
+
+  // Ask the rules engine which category it would assign for this description.
+  // Returns null when nothing matches. Used for the live suggestion in AddExpense.
+  const suggestAllocation = async (description: string) => {
+    const q = description.trim();
+    if (!q) return null;
+    try {
+      const res = await fetch(`/api/expenses/suggest?description=${encodeURIComponent(q)}`, { credentials: 'include' });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.suggestion as { allocationId: string; name: string; icon: string } | null;
+    } catch {
+      return null;
+    }
   };
 
   const updateExpense = async (id: string, payload: Partial<Omit<Expense, 'id' | 'userId'>>) => {
@@ -93,6 +120,6 @@ export function useExpenses(month?: string) {
   return {
     expenses, loading, error,
     totalSpent, totalByAllocation,
-    fetchExpenses, createExpense, updateExpense, deleteExpense,
+    fetchExpenses, createExpense, updateExpense, deleteExpense, suggestAllocation,
   };
 }

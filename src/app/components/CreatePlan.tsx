@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, CheckCircle2, Loader2, PiggyBank, TrendingUp, Calendar, Sparkles, Shield, Rocket } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Loader2, PiggyBank, TrendingUp, Calendar, Sparkles, Shield, Rocket, Wallet } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { usePlans } from '../hooks/usePlans';
@@ -63,6 +63,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
   const { createPlan } = usePlans();
   const [step, setStep]   = useState(1);
   const [saving, setSaving] = useState(false);
+  const [autoAllocation, setAutoAllocation] = useState(true);
 
   // Shared
   const [goalClass, setGoalClass] = useState<'safety' | 'savings' | 'investment' | 'wealth' | ''>('');
@@ -118,6 +119,8 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
     ];
   })();
 
+  const effectiveMonthly = parseFloat(isCompoundGoal ? invMonthly : monthlyContrib) || 0;
+
   const handleCreate = async () => {
     if (!goalClass) return;
     setSaving(true);
@@ -130,12 +133,17 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
       color,
       targetAmount: parseFloat(isCompoundGoal ? (milestone || '0') : targetAmount) || 0,
       currentAmount: parseFloat(isCompoundGoal ? invCurrent : currentAmount) || 0,
-      monthlyContribution: parseFloat(isCompoundGoal ? invMonthly : monthlyContrib) || 0,
+      monthlyContribution: effectiveMonthly,
       deadline: !isCompoundGoal && deadline ? deadline : undefined,
+      autoCreateAllocation: autoAllocation && effectiveMonthly > 0,
     });
     setSaving(false);
     if ('error' in result && result.error) { toast.error(result.error); return; }
-    toast.success(t('createPlan.planCreated'));
+    if ('allocation' in result && result.allocation) {
+      toast.success(t('createPlan.allocationLinked'));
+    } else {
+      toast.success(t('createPlan.planCreated'));
+    }
     onBack();
   };
 
@@ -709,6 +717,54 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                   {goalClass === 'savings'    && t('createPlan.savingsProjectionNote')}
                 </p>
               </div>
+
+              {/* ── Auto-allocation toggle ── */}
+              <motion.div
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                className={`border-2 rounded-xl p-4 transition-colors ${
+                  autoAllocation && effectiveMonthly > 0
+                    ? 'border-primary/30 bg-primary/5'
+                    : 'border-border bg-card'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      autoAllocation && effectiveMonthly > 0 ? 'bg-primary/15' : 'bg-muted'
+                    }`}>
+                      <Wallet className={`w-4 h-4 ${autoAllocation && effectiveMonthly > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{t('createPlan.autoAllocationTitle')}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {effectiveMonthly > 0
+                          ? t('createPlan.autoAllocationDesc', { amount: effectiveMonthly.toLocaleString() })
+                          : t('createPlan.autoAllocationDescNoAmount')}
+                      </p>
+                    </div>
+                  </div>
+                  {effectiveMonthly > 0 && (
+                    <button
+                      onClick={() => setAutoAllocation(v => !v)}
+                      className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${
+                        autoAllocation ? 'bg-primary' : 'bg-muted'
+                      }`}
+                    >
+                      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                        autoAllocation ? 'translate-x-5' : 'translate-x-0.5'
+                      }`} />
+                    </button>
+                  )}
+                </div>
+                {autoAllocation && effectiveMonthly > 0 && (
+                  <motion.p
+                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                    className="text-xs text-primary mt-2 pl-12"
+                  >
+                    ✓ €{effectiveMonthly.toLocaleString()}/mo · {t('createPlan.autoAllocationOn')}
+                  </motion.p>
+                )}
+              </motion.div>
 
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setStep(s => s - 1)} className="px-6 py-3 border border-border rounded-xl hover:bg-muted transition-colors">

@@ -56,6 +56,7 @@ export function usePlans() {
   const createPlan = async (payload: {
     title: string;
     description?: string;
+    goalClass?: string;
     type: string;
     icon: string;
     color: string;
@@ -63,6 +64,7 @@ export function usePlans() {
     currentAmount?: number;
     monthlyContribution?: number;
     deadline?: string;
+    autoCreateAllocation?: boolean;
   }) => {
     const res = await fetch('/api/plans', {
       method: 'POST',
@@ -73,7 +75,7 @@ export function usePlans() {
     const data = await res.json();
     if (!res.ok) return { error: data.error || 'Failed to create plan' };
     setPlans((p) => [...p, data.plan]);
-    return { plan: data.plan };
+    return { plan: data.plan, allocation: data.allocation ?? null };
   };
 
   const updatePlan = async (id: string, payload: Partial<LifePlan>) => {
@@ -86,7 +88,7 @@ export function usePlans() {
     const data = await res.json();
     if (!res.ok) return { error: data.error || 'Failed to update plan' };
     setPlans((p) => p.map((x) => (x.id === id ? data.plan : x)));
-    return { plan: data.plan };
+    return { plan: data.plan, allocationOutOfSync: data.allocationOutOfSync ?? false, linkedAllocationId: data.linkedAllocationId ?? null };
   };
 
   const deletePlan = async (id: string) => {

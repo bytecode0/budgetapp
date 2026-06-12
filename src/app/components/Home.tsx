@@ -1,17 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useMonth, currentMonthKey } from '../context/MonthContext';
 import { motion } from 'motion/react';
 import { AlertTriangle, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { MonthlyReview } from './MonthlyReview';
+import { Analytics } from './Analytics';
 import { usePlans } from '../hooks/usePlans';
 import { useAllocations } from '../hooks/useAllocations';
+import { useIncome } from '../hooks/useIncome';
 import { useMonthlyReview } from '../hooks/useMonthlyBudget';
 import { useLanguage } from '../context/LanguageContext';
-
-function currentMonthKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
 
 function greeting(t: (key: string) => string) {
   const h = new Date().getHours();
@@ -32,22 +30,43 @@ interface HomeProps {
 export function Home({ onNavigate }: HomeProps) {
   const { t } = useTranslation();
   const { language } = useLanguage();
-  const currentMonth = currentMonthKey();
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const { selectedMonth, isCurrentMonth } = useMonth();
   const { plans } = usePlans();
   const { monthlyIncome } = useAllocations();
+  const { incomes, totalIncome } = useIncome(selectedMonth);
   const { review } = useMonthlyReview(selectedMonth);
   const month = selectedMonth;
+
+  // Actual income for the month when recorded; otherwise the planned baseline.
+  const displayIncome = incomes.length > 0 ? totalIncome : monthlyIncome;
 
   const totalPlans    = plans.length;
   const completedPlans = plans.filter(p => p.currentAmount >= p.targetAmount).length;
   const totalSaved    = plans.reduce((s, p) => s + p.currentAmount, 0);
 
-  const isOverBudget    = review && review.totalActual > review.totalBudgeted;
+  // Missed plan contributions for current month
+  const [missedPlans, setMissedPlans] = useState<{ planId: string; title: string; icon: string }[]>([]);
+  useEffect(() => {
+    if (!isCurrentMonth) { setMissedPlans([]); return; }
+    const month = currentMonthKey();
+    fetch(`/api/plans/monthly-status?month=${month}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) return;
+        setMissedPlans(data.status.filter((s: any) => s.status === 'missed').map((s: any) => ({ planId: s.planId, title: s.title, icon: s.icon })));
+      })
+      .catch(() => {});
+  }, [isCurrentMonth]);
+
+  // Budget comparison uses categorized spending only — uncategorized money has no
+  // budget to compare against (it's surfaced separately by the amber nudge below).
+  // The "spent so far" stat still shows the inclusive total (review.totalActual).
+  const categorizedActual = review ? review.totalActual - review.unassigned : 0;
+  const isOverBudget    = review && categorizedActual > review.totalBudgeted;
   const overBudgetCount = review?.review.filter(r => r.diff > 0.5).length ?? 0;
-  const budgetDiff      = review ? Math.abs(review.totalActual - review.totalBudgeted) : 0;
+  const budgetDiff      = review ? Math.abs(categorizedActual - review.totalBudgeted) : 0;
   const budgetUsedPct   = review && review.totalBudgeted > 0
-    ? Math.round((review.totalActual / review.totalBudgeted) * 100)
+    ? Math.round((categorizedActual / review.totalBudgeted) * 100)
     : 0;
 
   return (
@@ -60,17 +79,18 @@ export function Home({ onNavigate }: HomeProps) {
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-32 -mt-32" />
         <div className="relative z-10">
           <p className="text-sm opacity-75 mb-1">
-            {selectedMonth === currentMonth ? greeting(t) : t('home.reviewingPastMonth')}
+            {isCurrentMonth ? greeting(t) : t('home.reviewingPastMonth')}
           </p>
           <h1 className="text-4xl font-display tracking-tight mb-1">{monthLabel(month, language)}</h1>
           <p className="opacity-75 text-sm">
-            {selectedMonth === currentMonth ? t('home.hereBudgetDoing') : t('home.historicalSummary')}
+            {isCurrentMonth ? t('home.hereBudgetDoing') : t('home.historicalSummary')}
           </p>
 
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-6 pt-6 border-t border-white/20">
             <div>
               <p className="text-xs opacity-70 mb-1">{t('home.monthlyIncome')}</p>
-              <p className="text-2xl font-display">€{monthlyIncome.toLocaleString()}</p>
+              <p className="text-2xl font-display">€{displayIncome.toLocaleString()}</p>
+              {incomes.length > 0 && <p className="text-xs opacity-60">{t('home.actualIncome')}</p>}
             </div>
             <div>
               <p className="text-xs opacity-70 mb-1">{t('home.spentSoFar')}</p>
@@ -112,7 +132,7 @@ export function Home({ onNavigate }: HomeProps) {
                   {t('home.categoriesExceeded', { count: overBudgetCount })}
                 </p>
               </div>
-              {onNavigate && selectedMonth === currentMonth && (
+              {onNavigate && isCurrentMonth && (
                 <button
                   onClick={() => onNavigate('activity')}
                   className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 hover:underline shrink-0"
@@ -126,7 +146,7 @@ export function Home({ onNavigate }: HomeProps) {
               <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
               <div>
                 <p className="font-medium text-emerald-700 dark:text-emerald-400">
-                  {selectedMonth === currentMonth
+                  {isCurrentMonth
                     ? t('home.onTrack', { amount: budgetDiff.toLocaleString() })
                     : t('home.finishedUnder', { amount: budgetDiff.toLocaleString() })}
                 </p>
@@ -141,10 +161,10 @@ export function Home({ onNavigate }: HomeProps) {
               <div>
                 <p className="font-medium">{t('home.noExpenses')}</p>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  {selectedMonth === currentMonth ? t('home.startTracking') : t('home.noExpenseDataPeriod')}
+                  {isCurrentMonth ? t('home.startTracking') : t('home.noExpenseDataPeriod')}
                 </p>
               </div>
-              {onNavigate && selectedMonth === currentMonth && (
+              {onNavigate && isCurrentMonth && (
                 <button
                   onClick={() => onNavigate('activity')}
                   className="text-xs text-primary flex items-center gap-1 hover:underline shrink-0"
@@ -157,11 +177,62 @@ export function Home({ onNavigate }: HomeProps) {
         </motion.div>
       )}
 
+      {/* ── Uncategorized spending nudge ── */}
+      {review && review.unassigned > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+          className="flex items-start gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-5 py-4"
+        >
+          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-medium text-amber-700 dark:text-amber-400">
+              {t('home.unassignedTitle', { amount: review.unassigned.toLocaleString() })}
+            </p>
+            <p className="text-sm text-amber-600/70 dark:text-amber-400/70 mt-0.5">
+              {t('home.unassignedDesc')}
+            </p>
+          </div>
+          {onNavigate && (
+            <button
+              onClick={() => onNavigate('activity')}
+              className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 hover:underline shrink-0"
+            >
+              {t('home.viewExpenses')} <ArrowRight className="w-3 h-3" />
+            </button>
+          )}
+        </motion.div>
+      )}
+
+      {/* ── Missed plan contributions alert ── */}
+      {missedPlans.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+          <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-5 py-4">
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-medium text-amber-800 dark:text-amber-300">
+                {t('home.missedPlanContribs', { count: missedPlans.length })}
+              </p>
+              <p className="text-sm text-amber-700/70 dark:text-amber-400/70 mt-0.5">
+                {missedPlans.map(p => `${p.icon} ${p.title}`).join(' · ')}
+              </p>
+            </div>
+            {onNavigate && (
+              <button
+                onClick={() => onNavigate('dashboard')}
+                className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1 hover:underline shrink-0"
+              >
+                {t('home.reviewPlans')} <ArrowRight className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </motion.div>
+      )}
+
       {/* ── Monthly Review ── */}
-      <MonthlyReview
-        selectedMonth={selectedMonth}
-        onMonthChange={setSelectedMonth}
-      />
+      <MonthlyReview />
+
+      {/* ── Temporal analysis ── */}
+      <Analytics />
 
       {/* ── Financial Tips ── */}
       <motion.div
