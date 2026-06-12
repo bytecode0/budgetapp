@@ -61,6 +61,13 @@ STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxx
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 
+# AI expense classification (optional — Phase J)
+# When set, enables "Classify with AI" during bank-statement import.
+# Without it, the feature is hidden and import works exactly as before.
+ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxx
+# Optional model override (default: claude-haiku-4-5)
+AI_MODEL=claude-haiku-4-5
+
 # Frontend (exposed to browser via Vite)
 VITE_API_URL=http://localhost:3002/api
 ```
@@ -89,6 +96,36 @@ Generate the Prisma client and apply all migrations:
 npm run prisma:generate
 npm run prisma:migrate
 ```
+
+### Reset the database (start from scratch)
+
+To wipe **all data** and rebuild a clean database that matches the Prisma schema —
+useful for testing onboarding / cold-start flows (e.g. a fresh import with no
+categorization rules yet):
+
+```bash
+npm run db:reset
+```
+
+(equivalent to `npx prisma db push --force-reset`.) This drops every table and recreates them directly from `prisma/schema.prisma`,
+then regenerates the Prisma client. After it finishes you have **0 users, 0
+expenses, 0 rules, 0 categories**; the default allocations are re-created on your
+next sign-up/login.
+
+> ⚠️ **Destructive and irreversible** — it deletes the entire database. Only run
+> it against a local/dev database. Take a `pg_dump` first if you need the data.
+
+> 🍪 **Log out afterwards.** The reset wipes the users table, but your browser
+> keeps its session cookie — which now points to a deleted user. Clear the site
+> cookies (DevTools → Application → Cookies) or log out, then register again,
+> before using the app. (The server now returns a clean 401 for such stale
+> tokens instead of erroring, but you still need a fresh login.)
+
+> 📝 **Why `db push` and not `prisma migrate reset`?** The migration history is
+> currently incomplete (some tables are created via `db push` rather than by a
+> migration file), so `migrate reset` fails partway through. `db push` syncs
+> straight from the schema and always works. Regenerating a clean migration
+> baseline is tracked separately.
 
 ---
 
@@ -157,6 +194,7 @@ Copy the displayed webhook signing secret and set it as `STRIPE_WEBHOOK_SECRET` 
 | `npm run build`         | Build the frontend for production                |
 | `npm run prisma:generate` | Generate the Prisma client from the schema     |
 | `npm run prisma:migrate`  | Apply pending database migrations               |
+| `npm run db:reset`        | Wipe all data and rebuild the DB from the schema (dev only) |
 
 ---
 

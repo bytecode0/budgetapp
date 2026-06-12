@@ -36,6 +36,13 @@ export function MonthlyReview() {
   const { selectedMonth, isCurrentMonth, isFutureMonth } = useMonth();
   const { review, loading } = useMonthlyReview(selectedMonth);
 
+  // Budget comparison uses categorized spending only: uncategorized money has no
+  // budget to compare against (it's surfaced separately as an "unassigned" nudge).
+  // The "Total Spent" headline still shows the inclusive total.
+  const categorizedActual = review ? review.totalActual - review.unassigned : 0;
+  const isOver = !!review && categorizedActual > review.totalBudgeted;
+  const budgetDelta = review ? Math.abs(categorizedActual - review.totalBudgeted) : 0;
+
   return (
     <div className="space-y-6 pb-8">
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
@@ -86,25 +93,25 @@ export function MonthlyReview() {
               {/* Total spent */}
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
                 className={`rounded-2xl p-5 border-2 ${
-                  review.totalActual > review.totalBudgeted
+                  isOver
                     ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
                     : 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-2">
-                  {review.totalActual > review.totalBudgeted
+                  {isOver
                     ? <TrendingUp className="w-4 h-4 text-red-500" />
                     : <TrendingDown className="w-4 h-4 text-emerald-500" />
                   }
                   <p className="text-sm text-muted-foreground">{t('monthlyReview.totalSpent')}</p>
                 </div>
                 <p className={`text-3xl font-display ${
-                  review.totalActual > review.totalBudgeted ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
+                  isOver ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
                 }`}>
                   €{review.totalActual.toLocaleString()}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {review.totalActual > review.totalBudgeted ? t('monthlyReview.overBudget') : t('monthlyReview.underBudget')}
+                  {isOver ? t('monthlyReview.overBudget') : t('monthlyReview.underBudget')}
                 </p>
               </motion.div>
 
@@ -113,12 +120,12 @@ export function MonthlyReview() {
                 className="bg-card border border-border rounded-2xl p-5"
               >
                 <p className="text-sm text-muted-foreground mb-2">
-                  {review.totalActual > review.totalBudgeted ? t('monthlyReview.overBudgetBy') : t('monthlyReview.savedVsBudget')}
+                  {isOver ? t('monthlyReview.overBudgetBy') : t('monthlyReview.savedVsBudget')}
                 </p>
                 <p className={`text-3xl font-display ${
-                  review.totalActual > review.totalBudgeted ? 'text-red-500' : 'text-emerald-500'
+                  isOver ? 'text-red-500' : 'text-emerald-500'
                 }`}>
-                  {review.totalActual > review.totalBudgeted ? '-' : '+'}€{Math.abs(review.totalActual - review.totalBudgeted).toLocaleString()}
+                  {isOver ? '-' : '+'}€{budgetDelta.toLocaleString()}
                 </p>
                 {review.unassigned > 0 && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">

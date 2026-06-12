@@ -70,6 +70,21 @@ export function useExpenses(month?: string) {
     return { expense: data.expense };
   };
 
+  // Ask the rules engine which category it would assign for this description.
+  // Returns null when nothing matches. Used for the live suggestion in AddExpense.
+  const suggestAllocation = async (description: string) => {
+    const q = description.trim();
+    if (!q) return null;
+    try {
+      const res = await fetch(`/api/expenses/suggest?description=${encodeURIComponent(q)}`, { credentials: 'include' });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.suggestion as { allocationId: string; name: string; icon: string } | null;
+    } catch {
+      return null;
+    }
+  };
+
   const updateExpense = async (id: string, payload: Partial<Omit<Expense, 'id' | 'userId'>>) => {
     const res = await fetch(`/api/expenses/${id}`, {
       method: 'PATCH',
@@ -105,6 +120,6 @@ export function useExpenses(month?: string) {
   return {
     expenses, loading, error,
     totalSpent, totalByAllocation,
-    fetchExpenses, createExpense, updateExpense, deleteExpense,
+    fetchExpenses, createExpense, updateExpense, deleteExpense, suggestAllocation,
   };
 }

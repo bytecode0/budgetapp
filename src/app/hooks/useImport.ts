@@ -46,9 +46,23 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+export interface AiSuggestion {
+  merchant: string;
+  allocationId: string;
+  name: string | null;
+}
+
+export interface AiCategory {
+  name: string;
+  icon: string;
+  merchants: string[];
+}
+
 export function useImport() {
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [classifying, setClassifying] = useState(false);
+  const [suggestingCats, setSuggestingCats] = useState(false);
 
   const preview = async (file: File): Promise<{ error?: string; preview?: ImportPreview }> => {
     setLoading(true);
@@ -89,5 +103,50 @@ export function useImport() {
     }
   };
 
-  return { loading, confirming, preview, confirm };
+  // AI-classify rule-less merchants. Returns suggestions to merge into the
+  // preview; never throws — degrades to an error string the UI can toast.
+  const classify = async (
+    merchants: string[],
+  ): Promise<{ error?: string; suggestions?: AiSuggestion[] }> => {
+    setClassifying(true);
+    try {
+      const res = await fetch('/api/expenses/import/classify', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ merchants }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { error: data.error || 'AI classification failed' };
+      return { suggestions: (data.suggestions ?? []) as AiSuggestion[] };
+    } catch {
+      return { error: 'Network error' };
+    } finally {
+      setClassifying(false);
+    }
+  };
+
+  // AI proposes a category set from the merchants (cold-start helper).
+  const suggestCategories = async (
+    merchants: string[],
+  ): Promise<{ error?: string; categories?: AiCategory[] }> => {
+    setSuggestingCats(true);
+    try {
+      const res = await fetch('/api/expenses/import/suggest-categories', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ merchants }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { error: data.error || 'AI suggestion failed' };
+      return { categories: (data.categories ?? []) as AiCategory[] };
+    } catch {
+      return { error: 'Network error' };
+    } finally {
+      setSuggestingCats(false);
+    }
+  };
+
+  return { loading, confirming, classifying, suggestingCats, preview, confirm, classify, suggestCategories };
 }

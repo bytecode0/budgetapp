@@ -15,6 +15,16 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
 
     req.authUserId = payload.userId;
 
+    // A token can outlive its user — e.g. after a dev DB reset (`npm run db:reset`)
+    // wipes the users table but the browser keeps the cookie. Verify the user
+    // still exists so a stale token returns a clean 401 instead of crashing
+    // downstream (FK violations on default seeding, etc.).
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { id: true },
+    });
+    if (!user) return res.status(401).json({ error: "Not authenticated" });
+
     // If this user has a linkedUserId, all data queries use that userId instead
     const settings = await prisma.userSettings.findUnique({
       where: { userId: payload.userId },

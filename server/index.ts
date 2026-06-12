@@ -15,6 +15,7 @@ import { recurringRouter } from "./routes/recurring.js";
 import { analyticsRouter } from "./routes/analytics.js";
 import { partnerRouter } from "./routes/partner.js";
 import { stripeRouter } from "./routes/stripe.js";
+import { aiRouter } from "./routes/ai.js";
 
 const app = express();
 const PORT = process.env.SERVER_PORT || 3002;
@@ -45,6 +46,7 @@ app.use("/api/recurring", recurringRouter);
 app.use("/api/analytics", analyticsRouter);
 app.use("/api/partner", partnerRouter);
 app.use("/api/stripe", stripeRouter);
+app.use("/api/ai", aiRouter);
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
