@@ -82,6 +82,23 @@
       "subtitle": "Tendrás que iniciar sesión de nuevo"
     }
   },
+  "household": {
+    "updated": "Hogar actualizado",
+    "owner": "Propietario",
+    "member": "Miembro",
+    "model": "Modelo financiero",
+    "modelIndividual": "Individual",
+    "modelIndividualDesc": "Cada persona gestiona su propio dinero",
+    "modelProportional": "Proporcional",
+    "modelProportionalDesc": "Gastos compartidos repartidos según ingresos",
+    "modelShared": "Hogar",
+    "modelSharedDesc": "Una sola unidad económica combinada",
+    "privacy": "Privacidad",
+    "privacyTransparent": "Transparencia total",
+    "privacyTransparentDesc": "Los miembros ven transacciones, comercios e ingresos del otro",
+    "privacyStats": "Estadísticas compartidas",
+    "privacyStatsDesc": "Los miembros ven totales y ahorro, no transacciones individuales"
+  },
   "toast": {
     "inviteSent": "¡Invitación enviada!",
     "inviteCancelled": "Invitación cancelada",

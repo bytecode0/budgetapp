@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { usePlans } from '../hooks/usePlans';
 import { usePartner } from '../hooks/usePartner';
+import { HouseholdPanel } from './HouseholdPanel';
 import { useLanguage } from '../context/LanguageContext';
 import {
   createCheckoutSession,
@@ -465,6 +466,9 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
         </div>
 
         <div className="p-6 space-y-4">
+          {/* Household settings (Epic H1) — shown when the user belongs to a household */}
+          <HouseholdPanel />
+
           {partnerLoading ? (
             <div className="flex justify-center py-4">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />

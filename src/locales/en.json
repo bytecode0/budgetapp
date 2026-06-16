@@ -82,6 +82,23 @@
       "subtitle": "You'll need to sign in again"
     }
   },
+  "household": {
+    "updated": "Household updated",
+    "owner": "Owner",
+    "member": "Member",
+    "model": "Financial model",
+    "modelIndividual": "Individual",
+    "modelIndividualDesc": "Each person manages their own money",
+    "modelProportional": "Proportional",
+    "modelProportionalDesc": "Shared costs split by income",
+    "modelShared": "Household",
+    "modelSharedDesc": "One combined economic unit",
+    "privacy": "Privacy",
+    "privacyTransparent": "Full transparency",
+    "privacyTransparentDesc": "Members see each other's transactions, merchants and income",
+    "privacyStats": "Shared statistics",
+    "privacyStatsDesc": "Members see totals and savings, not individual transactions"
+  },
   "toast": {
     "inviteSent": "Invitation sent!",
     "inviteCancelled": "Invitation cancelled",
