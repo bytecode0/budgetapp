@@ -22,16 +22,20 @@
 
 ## 1. Épicas
 
-| # | Épica | Objetivo | Depende de |
-|---|---|---|---|
-| **H1** | Hogar y Membresía | Entidad `Household` + miembros + invitaciones; migrar `linkedUserId`. | — |
-| **H2** | Propiedad y tipos de cuenta | Cuentas con propietario + visibilidad + tipo (personal/hogar/ahorro/inversión). | H1 |
-| **H3** | Atribución de transacciones | Separar pagador / beneficiario / distribución; `ExpenseShare`. | H1, H2 |
-| **H4** | Modelos financieros | Individual / Proporcional / Hogar + motor de contribución y **balances**. | H3 |
-| **H5** | Privacidad y visibilidad | 3 niveles (transparente / estadísticas / global) + capa de autorización. | H1 |
-| **H6** | IA familiar | Clasificar scope (personal/familiar/compartido) + detección de ingresos + anomalías + recomendaciones. | H3, H4 |
-| **H7** | Objetivos familiares | Objetivos de hogar + aportación por miembro + proyección. | H1, H4 |
-| **H8** | Dashboard familiar | Salud financiera, por categoría, por persona, objetivos. | H4, H5 |
+Cada épica tiene su ticket de fase (alcance implementable, dependencias, criterios):
+
+| # | Épica | Ticket | MVP/V2 | Depende de |
+|---|---|---|---|---|
+| **H1** | Hogar y Membresía | [H1](./H1-hogar-membresia.md) | MVP | — |
+| **H2** | Propiedad y tipos de cuenta | [H2](./H2-cuentas-propiedad.md) | MVP | H1 |
+| **H3** | Atribución de transacciones | [H3](./H3-atribucion-transacciones.md) | MVP | H1, H2 |
+| **H4** | Modelos financieros + contribución + balances | [H4](./H4-modelos-financieros.md) | MVP | H3 |
+| **H5** | Privacidad y visibilidad | [H5](./H5-privacidad-visibilidad.md) | MVP (parcial) | H1 |
+| **H6** | IA familiar (scope/ingresos/anomalías/recom.) | [H6](./H6-ia-familiar.md) | MVP + V2 | H3, H4 |
+| **H7** | Objetivos familiares | [H7](./H7-objetivos-familiares.md) | V2 | H1, H4 |
+| **H8** | Dashboard familiar | [H8](./H8-dashboard-familiar.md) | MVP | H4, H5 |
+
+**Orden de implementación MVP:** H1 → H2 → H3 → H4 → H5 → H8 (+ H6 scope). H6 (resto), H7 y `global_only`/Settlement → V2.
 
 ---
 
