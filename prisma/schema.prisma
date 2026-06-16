@@ -140,16 +140,38 @@ model Expense {
   externalId   String? // idempotency key for future bank import; null for manual entries
   date         DateTime @default(now())
 
+  // Attribution (Epic H3) — who paid, who benefits, how it's split.
+  payerUserId       String? // who actually paid (real person); null for legacy rows
+  scope             String  @default("personal") // personal | shared
+  beneficiaryUserId String? // when scope=personal and beneficiary ≠ payer
+  scopeConfidence   Float?  // 0..1 when scope was set by AI
+  scopeSource       String  @default("manual") // manual | ai | rule
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   allocation Allocation? @relation(fields: [allocationId], references: [id], onDelete: SetNull)
   account    Account?    @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  shares     ExpenseShare[]
 
   @@unique([userId, externalId]) // dedupe imported rows; multiple NULLs allowed in Postgres
   @@index([userId, merchant])
   @@index([userId, accountId])
+}
+
+// The distribution of a shared expense across household members (Epic H3).
+// Σ shares.amount == expense.amount (rounding residue assigned to the payer).
+model ExpenseShare {
+  id        String @id @default(cuid())
+  expenseId String
+  userId    String
+  amount    Int    // cents
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@unique([expenseId, userId])
+  @@index([userId])
 }
 
 model Account {
