@@ -533,7 +533,15 @@
     "date": "Fecha",
     "save": "Guardar cambios",
     "saved": "Gasto actualizado",
-    "invalidAmount": "Introduce un importe válido"
+    "invalidAmount": "Introduce un importe válido",
+    "attribution": "Quién pagó y cómo se reparte",
+    "scope_personal": "Personal",
+    "scope_shared": "Compartido",
+    "payer": "Pagado por",
+    "splitModel": "Según modelo",
+    "splitCustom": "Personalizado",
+    "splitTotal": "Total €{{total}} de €{{amount}}",
+    "splitMustSum": "El reparto (€{{total}}) debe igualar el importe (€{{amount}})"
   },
   "rules": {
     "title": "Reglas de categorización",
@@ -578,7 +586,9 @@
     "incomeRemoved": "Ingreso eliminado",
     "today": "Hoy",
     "yesterday": "Ayer",
-    "expense": "Gasto"
+    "expense": "Gasto",
+    "shared": "Compartido",
+    "sharedPaidBy": "Compartido · pagó {{name}}"
   },
   "addIncome": {
     "title": "Añadir ingreso",

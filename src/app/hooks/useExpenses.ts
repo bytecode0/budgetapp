@@ -26,6 +26,18 @@ export interface Expense {
   date: string;
   allocation: ExpenseAllocation | null;
   account: ExpenseAccount | null;
+  // Attribution (Epic H3)
+  scope?: string;            // "personal" | "shared"
+  payerUserId?: string | null;
+  payerName?: string | null;
+  shares?: { userId: string; amount: number }[];
+}
+
+export interface AttributionPayload {
+  scope: 'personal' | 'shared';
+  payerUserId?: string;
+  beneficiaryUserId?: string | null;
+  shares?: { userId: string; amount: number }[];
 }
 
 export function useExpenses(month?: string) {
@@ -83,6 +95,21 @@ export function useExpenses(month?: string) {
     return { expense: data.expense };
   };
 
+  // Update an expense's attribution (payer / scope / split). Refetches the month
+  // afterwards so the list reflects the new scope, payer name and shares.
+  const updateAttribution = async (id: string, payload: AttributionPayload) => {
+    const res = await fetch(`/api/expenses/${id}/attribution`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) return { error: data.error || 'Failed to update attribution' };
+    await fetchExpenses(month);
+    return { expense: data.expense };
+  };
+
   const deleteExpense = async (id: string) => {
     const res = await fetch(`/api/expenses/${id}`, {
       method: 'DELETE',
@@ -105,6 +132,6 @@ export function useExpenses(month?: string) {
   return {
     expenses, loading, error,
     totalSpent, totalByAllocation,
-    fetchExpenses, createExpense, updateExpense, deleteExpense,
+    fetchExpenses, createExpense, updateExpense, deleteExpense, updateAttribution,
   };
 }

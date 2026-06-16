@@ -47,7 +47,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
   const [showAddIncome, setShowAddIncome] = useState(false);
   const [editingIncome, setEditingIncome] = useState<Income | null>(null);
 
-  const { expenses, loading, totalSpent, totalByAllocation, deleteExpense, updateExpense, fetchExpenses } =
+  const { expenses, loading, totalSpent, totalByAllocation, deleteExpense, updateExpense, updateAttribution, fetchExpenses } =
     useExpenses(currentMonth);
   const { incomes, totalIncome, deleteIncome, fetchIncomes } = useIncome(currentMonth);
   const { groups: duplicateGroups, loading: duplicatesLoading, merge: mergeDuplicates, fetchDuplicates } = useDuplicates();
@@ -373,6 +373,13 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                                     {m.expense.account.name}
                                   </span>
                                 )}
+                                {m.expense.scope === 'shared' && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                    {m.expense.payerName
+                                      ? t('activity.sharedPaidBy', { name: m.expense.payerName })
+                                      : t('activity.shared')}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -498,6 +505,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
         allocations={allocations}
         onClose={() => setEditing(null)}
         onSave={(payload) => updateExpense(editing!.id, payload)}
+        onSaveAttribution={(payload) => updateAttribution(editing!.id, payload)}
       />
 
       <RulesManager isOpen={showRules} onClose={() => setShowRules(false)} />

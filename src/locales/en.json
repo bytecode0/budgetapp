@@ -533,7 +533,15 @@
     "date": "Date",
     "save": "Save changes",
     "saved": "Expense updated",
-    "invalidAmount": "Enter a valid amount"
+    "invalidAmount": "Enter a valid amount",
+    "attribution": "Who paid & how it's split",
+    "scope_personal": "Personal",
+    "scope_shared": "Shared",
+    "payer": "Paid by",
+    "splitModel": "By model",
+    "splitCustom": "Custom",
+    "splitTotal": "Total €{{total}} of €{{amount}}",
+    "splitMustSum": "Split (€{{total}}) must equal the amount (€{{amount}})"
   },
   "rules": {
     "title": "Categorization rules",
@@ -578,7 +586,9 @@
     "incomeRemoved": "Income removed",
     "today": "Today",
     "yesterday": "Yesterday",
-    "expense": "Expense"
+    "expense": "Expense",
+    "shared": "Shared",
+    "sharedPaidBy": "Shared · paid by {{name}}"
   },
   "addIncome": {
     "title": "Add income",

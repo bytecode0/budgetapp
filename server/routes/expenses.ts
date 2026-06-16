@@ -53,11 +53,20 @@ expensesRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
       include: {
         allocation: { select: { id: true, name: true, icon: true, type: true } },
         account: { select: { id: true, name: true, type: true } },
+        shares: { select: { userId: true, amount: true } },
       },
       orderBy: { date: "desc" },
     });
 
-    return res.json(serializeMoney({ expenses }));
+    // Attach the payer's display name for the attribution UI (Epic H3).
+    const payerIds = [...new Set(expenses.map(e => e.payerUserId).filter(Boolean) as string[])];
+    const payers = payerIds.length
+      ? await prisma.user.findMany({ where: { id: { in: payerIds } }, select: { id: true, name: true, email: true } })
+      : [];
+    const payerName = Object.fromEntries(payers.map(u => [u.id, u.name ?? u.email]));
+    const withPayer = expenses.map(e => ({ ...e, payerName: e.payerUserId ? (payerName[e.payerUserId] ?? null) : null }));
+
+    return res.json(serializeMoney({ expenses: withPayer }));
   } catch (err) {
     console.error("[expenses/GET]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -287,9 +296,82 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
       }),
     ]);
 
+    // Attribution for imported expenses (Epic H3): payer = account owner; split
+    // across the household when the pool belongs to one. Only touch rows not yet
+    // attributed (payerUserId null), so re-imports don't redo work.
+    if (req.householdId && exp.count > 0) {
+      const account = resolvedAccountId
+        ? await prisma.account.findUnique({ where: { id: resolvedAccountId }, select: { ownerUserId: true } })
+        : null;
+      const payerUserId = account?.ownerUserId ?? req.userId!;
+      const created = await prisma.expense.findMany({
+        where: { userId: req.userId!, source: "import", payerUserId: null, externalId: { in: expenseRows.map(r => r.externalId) } },
+        select: { id: true, amount: true },
+      });
+      for (const e of created) {
+        await prisma.expense.update({ where: { id: e.id }, data: { payerUserId, scope: "shared", scopeSource: "manual" } });
+        await rebuildExpenseShares(e.id, e.amount, req.householdId, payerUserId);
+      }
+    }
+
     return res.json({ success: true, expenses: exp.count, income: inc.count, inserted: exp.count + inc.count });
   } catch (err) {
     console.error("[expenses/import/confirm]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/expenses/:id/attribution  (Epic H3)
+// Body: { scope?, payerUserId?, beneficiaryUserId?, shares?: [{userId, amount}] }
+// (amounts in euros). Without explicit shares, a shared expense is re-split from
+// the household model; a personal expense clears its shares.
+expensesRouter.patch("/:id/attribution", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.expense.findFirst({
+      where: { id, userId: req.userId! },
+      select: { id: true, amount: true, payerUserId: true, scope: true },
+    });
+    if (!existing) return res.status(404).json({ error: "Expense not found" });
+
+    const { scope, payerUserId, beneficiaryUserId, shares } = req.body as {
+      scope?: string; payerUserId?: string; beneficiaryUserId?: string; shares?: { userId: string; amount: number }[];
+    };
+    const newScope = scope === "shared" || scope === "personal" ? scope : existing.scope;
+    const newPayer = payerUserId || existing.payerUserId || req.authUserId!;
+
+    await prisma.expense.update({
+      where: { id },
+      data: {
+        scope: newScope,
+        payerUserId: newPayer,
+        beneficiaryUserId: newScope === "personal" ? (beneficiaryUserId || null) : null,
+        scopeSource: "manual",
+      },
+    });
+
+    if (newScope === "shared") {
+      if (Array.isArray(shares) && shares.length > 0) {
+        const data = shares.map(s => ({ expenseId: id, userId: s.userId, amount: toCents(s.amount) }));
+        if (data.reduce((a, b) => a + b.amount, 0) !== existing.amount) {
+          return res.status(400).json({ error: "Shares must sum to the expense amount" });
+        }
+        await prisma.expenseShare.deleteMany({ where: { expenseId: id } });
+        await prisma.expenseShare.createMany({ data });
+      } else {
+        await rebuildExpenseShares(id, existing.amount, req.householdId, newPayer);
+      }
+    } else {
+      await prisma.expenseShare.deleteMany({ where: { expenseId: id } });
+    }
+
+    const updated = await prisma.expense.findUnique({
+      where: { id },
+      include: { shares: true, allocation: { select: { id: true, name: true, icon: true, type: true } } },
+    });
+    return res.json(serializeMoney({ expense: updated }));
+  } catch (err) {
+    console.error("[expenses/attribution]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
