@@ -6,6 +6,7 @@ import { toCents, serializeMoney } from "../lib/money.js";
 import { categorize, learnFromCorrection } from "../lib/categorize.js";
 import { findDuplicateGroups } from "../lib/dedupe.js";
 import { prepareImport } from "../lib/importStatement.js";
+import { rebuildExpenseShares } from "../lib/expenseShares.js";
 
 export const expensesRouter = Router();
 
@@ -66,7 +67,7 @@ expensesRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
 // POST /api/expenses
 expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { amount, description, allocationId, accountId, date } = req.body;
+    const { amount, description, allocationId, accountId, date, payerUserId, scope, beneficiaryUserId } = req.body;
 
     if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
       return res.status(400).json({ error: "Valid amount is required" });
@@ -85,6 +86,19 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
     // user's default (lowest sortOrder, non-archived) account.
     const resolvedAccountId = await resolveAccountId(req.userId!, accountId);
 
+    // Attribution (Epic H3). Default payer = the account's owner, else the
+    // logged-in user. Default scope follows the household model (individual →
+    // personal; shared/proportional → shared). All overridable via the body.
+    const account = resolvedAccountId
+      ? await prisma.account.findUnique({ where: { id: resolvedAccountId }, select: { ownerUserId: true } })
+      : null;
+    const resolvedPayerId: string = payerUserId || account?.ownerUserId || req.authUserId!;
+    let resolvedScope: string = scope === "shared" || scope === "personal" ? scope : "personal";
+    if (!scope && req.householdId) {
+      const hh = await prisma.household.findUnique({ where: { id: req.householdId }, select: { financialModel: true } });
+      resolvedScope = hh && hh.financialModel !== "individual" ? "shared" : "personal";
+    }
+
     const expense = await prisma.expense.create({
       data: {
         userId: req.userId!,
@@ -95,12 +109,21 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
         allocationId: resolvedAllocationId,
         accountId: resolvedAccountId,
         date: date ? new Date(date) : new Date(),
+        payerUserId: resolvedPayerId,
+        scope: resolvedScope,
+        beneficiaryUserId: resolvedScope === "personal" ? (beneficiaryUserId || null) : null,
+        scopeSource: "manual",
       },
       include: {
         allocation: { select: { id: true, name: true, icon: true, type: true, lifePlanId: true } },
         account: { select: { id: true, name: true, type: true } },
       },
     });
+
+    // Shared expenses get split across household members (residue to the payer).
+    if (resolvedScope === "shared" && req.householdId) {
+      await rebuildExpenseShares(expense.id, amountCents, req.householdId, resolvedPayerId);
+    }
 
     // Auto-contribute to linked life plan if this is a plan allocation
     if (expense.allocation?.type === "plan" && expense.allocation.lifePlanId) {
