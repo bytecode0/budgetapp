@@ -10,8 +10,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useAllocations } from '../hooks/useAllocations';
 import { usePlans } from '../hooks/usePlans';
+import { useIncome } from '../hooks/useIncome';
 import { useMonthlyBudget, useMonthlyReview } from '../hooks/useMonthlyBudget';
 import { AddExpense } from './AddExpense';
+import { AddIncome } from './AddIncome';
 import { RecurringManager } from './RecurringManager';
 import { useLanguage } from '../context/LanguageContext';
 import { useMonth, monthLabel } from '../context/MonthContext';
@@ -107,11 +109,19 @@ export function AllocationFlow() {
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
 
   const {
-    allocations: rawAllocations, monthlyIncome, loading,
+    allocations: rawAllocations, monthlyIncome: baseIncome, loading,
     updateIncome, createAllocation, updateAllocation, deleteAllocation, reorderAllocations,
   } = useAllocations();
 
   const { plans: rawPlans, loading: plansLoading } = usePlans();
+
+  const { selectedMonth, isCurrentMonth, isFutureMonth } = useMonth();
+  const { incomes, totalIncome, fetchIncomes } = useIncome(selectedMonth);
+  // Effective income for the month = sum of recorded income transactions,
+  // falling back to the planned baseline (UserSettings.monthlyIncome) when none
+  // exist yet. This makes allocation math dynamic once real income is tracked.
+  const hasRecordedIncome = incomes.length > 0;
+  const monthlyIncome = hasRecordedIncome ? totalIncome : baseIncome;
 
   // ── Local allocation state ──────────────────────────────
   const [local, setLocal] = useState<LocalAllocation[]>([]);
@@ -228,8 +238,7 @@ export function AllocationFlow() {
     reorderAllocations(order);
   }, [reorderAllocations]);
 
-  // ── Selected month (hero header + expenses) ────────────────────
-  const { selectedMonth, isCurrentMonth, isFutureMonth } = useMonth();
+  // ── Month-derived data (selectedMonth obtained above) ────────────────────
   const { saving: savingMonthlyBudget, isSaved: isBudgetSaved, saveBudgets } =
     useMonthlyBudget(selectedMonth);
   const { review: monthReview } = useMonthlyReview(selectedMonth);
@@ -244,6 +253,7 @@ export function AllocationFlow() {
 
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showRecurring, setShowRecurring] = useState(false);
+  const [showAddIncome, setShowAddIncome] = useState(false);
 
   const handleSaveMonthlyBudget = async () => {
     const entries = local.map(a => ({ allocationId: a.id, allocatedAmount: a.allocatedAmount }));
@@ -308,7 +318,21 @@ export function AllocationFlow() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <p className="text-sm opacity-75 mb-2">{t('allocation.monthlyIncome')}</p>
-              {editingIncome ? (
+              {hasRecordedIncome ? (
+                /* Dynamic: sum of this month's recorded income transactions */
+                <div>
+                  <p className="text-5xl font-display">€{monthlyIncome.toLocaleString()}</p>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-xs opacity-60">{t('allocation.incomeFromEntries', { count: incomes.length })}</span>
+                    <button
+                      onClick={() => setShowAddIncome(true)}
+                      className="inline-flex items-center gap-1 text-xs bg-white/15 hover:bg-white/25 rounded-lg px-2.5 py-1 transition-colors"
+                    >
+                      <Plus className="w-3 h-3" /> {t('allocation.addIncome')}
+                    </button>
+                  </div>
+                </div>
+              ) : editingIncome ? (
                 <div className="flex items-center gap-3">
                   <span className="text-3xl opacity-75">€</span>
                   <input
@@ -323,13 +347,24 @@ export function AllocationFlow() {
                   <button onClick={() => setEditingIncome(false)} className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors"><X className="w-4 h-4" /></button>
                 </div>
               ) : (
-                <button
-                  className="text-5xl font-display hover:opacity-80 transition-opacity flex items-center gap-3 group"
-                  onClick={() => { setIncomeInput(String(monthlyIncome)); setEditingIncome(true); }}
-                >
-                  €{monthlyIncome.toLocaleString()}
-                  <Pencil className="w-5 h-5 opacity-0 group-hover:opacity-60 transition-opacity" />
-                </button>
+                <div>
+                  <button
+                    className="text-5xl font-display hover:opacity-80 transition-opacity flex items-center gap-3 group"
+                    onClick={() => { setIncomeInput(String(baseIncome)); setEditingIncome(true); }}
+                  >
+                    €{monthlyIncome.toLocaleString()}
+                    <Pencil className="w-5 h-5 opacity-0 group-hover:opacity-60 transition-opacity" />
+                  </button>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-xs opacity-60">{t('allocation.incomeBaseline')}</span>
+                    <button
+                      onClick={() => setShowAddIncome(true)}
+                      className="inline-flex items-center gap-1 text-xs bg-white/15 hover:bg-white/25 rounded-lg px-2.5 py-1 transition-colors"
+                    >
+                      <Plus className="w-3 h-3" /> {t('allocation.addIncome')}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
             <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
@@ -369,35 +404,35 @@ export function AllocationFlow() {
           ) : (
             <div className="grid grid-cols-3 gap-4 pt-6 border-t border-white/20">
               <div>
-                <p className="text-xs opacity-75 mb-1">{t('allocation.budgeted')}</p>
-                <p className="text-xl font-display">€{totalAllocated.toLocaleString()}</p>
-                <p className="text-xs opacity-60">{t('allocation.plannedForMonth')}</p>
+                <p className="text-xs opacity-75 mb-1">{t('allocation.totalIncome')}</p>
+                <p className="text-xl font-display text-emerald-300">€{monthlyIncome.toLocaleString()}</p>
+                <p className="text-xs opacity-60">
+                  {hasRecordedIncome ? t('allocation.incomeFromEntries', { count: incomes.length }) : t('allocation.incomeBaseline')}
+                </p>
               </div>
               <div>
                 <p className="text-xs opacity-75 mb-1">{t('allocation.actuallySpent')}</p>
-                <p className={`text-xl font-display ${monthReview && monthReview.totalActual > totalAllocated ? 'text-red-300' : 'text-emerald-300'}`}>
-                  €{(monthReview?.totalActual ?? 0).toLocaleString()}
-                </p>
+                <p className="text-xl font-display">€{(monthReview?.totalActual ?? 0).toLocaleString()}</p>
                 <p className="text-xs opacity-60">
                   {monthReview
-                    ? `${Math.round((monthReview.totalActual / Math.max(totalAllocated, 1)) * 100)}% ${t('allocation.pctOfBudget')}`
+                    ? `${Math.round((monthReview.totalActual / Math.max(monthlyIncome, 1)) * 100)}% ${t('allocation.pctOfIncome')}`
                     : t('allocation.noData')}
                 </p>
               </div>
               <div>
-                <p className="text-xs opacity-75 mb-1">
-                  {monthReview && monthReview.totalActual > totalAllocated
-                    ? t('allocation.overBudgetLabel')
-                    : t('allocation.savedVsBudget')}
-                </p>
-                <p className={`text-xl font-display ${monthReview && monthReview.totalActual > totalAllocated ? 'text-red-300' : 'text-emerald-300'}`}>
-                  {monthReview ? `€${Math.abs(monthReview.totalActual - totalAllocated).toLocaleString()}` : '—'}
-                </p>
-                <p className="text-xs opacity-60">
-                  {monthReview && monthReview.totalActual > totalAllocated
-                    ? t('allocation.abovePlan')
-                    : t('allocation.underPlan')}
-                </p>
+                {(() => {
+                  const net = monthlyIncome - (monthReview?.totalActual ?? 0);
+                  const negative = net < 0;
+                  return (
+                    <>
+                      <p className="text-xs opacity-75 mb-1">{t('allocation.net')}</p>
+                      <p className={`text-xl font-display ${negative ? 'text-red-300' : 'text-emerald-300'}`}>
+                        {negative ? '-' : '+'}€{Math.abs(net).toLocaleString()}
+                      </p>
+                      <p className="text-xs opacity-60">{t('allocation.afterExpenses')}</p>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -760,6 +795,13 @@ export function AllocationFlow() {
       />
 
       <RecurringManager isOpen={showRecurring} onClose={() => setShowRecurring(false)} />
+
+      <AddIncome
+        isOpen={showAddIncome}
+        onClose={() => setShowAddIncome(false)}
+        defaultDate={expenseDefaultDate}
+        onSaved={() => fetchIncomes(selectedMonth)}
+      />
     </div>
     </DndProvider>
   );

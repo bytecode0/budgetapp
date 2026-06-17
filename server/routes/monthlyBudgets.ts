@@ -156,9 +156,13 @@ monthlyBudgetsRouter.get("/review", requireAuth, async (req: AuthRequest, res: R
       };
     });
 
-    const totalBudgeted = review.reduce((s, r) => s + r.budgeted, 0);
-    const totalActual   = review.reduce((s, r) => s + r.actual,   0);
     const unassigned    = actualByAllocation["__unassigned__"] ?? 0;
+    const totalBudgeted = review.reduce((s, r) => s + r.budgeted, 0);
+    // Include uncategorized spending in the total so it reconciles with the
+    // Activity list and analytics (which sum every expense regardless of
+    // allocation). `unassigned` is still returned separately so the UI can nudge
+    // the user to categorize it.
+    const totalActual   = review.reduce((s, r) => s + r.actual, 0) + unassigned;
 
     return res.json(serializeMoney({ review, totalBudgeted, totalActual, unassigned, month }));
   } catch (err) {

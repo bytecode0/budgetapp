@@ -6,6 +6,8 @@ import { toCents, serializeMoney } from "../lib/money.js";
 import { categorize, learnFromCorrection } from "../lib/categorize.js";
 import { findDuplicateGroups } from "../lib/dedupe.js";
 import { prepareImport } from "../lib/importStatement.js";
+import { aiEnabled, classifyMerchants } from "../lib/ai/classify.js";
+import { suggestCategories } from "../lib/ai/suggestCategories.js";
 
 export const expensesRouter = Router();
 
@@ -59,6 +61,31 @@ expensesRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
     return res.json(serializeMoney({ expenses }));
   } catch (err) {
     console.error("[expenses/GET]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/expenses/suggest?description=...
+// Returns the allocation the rules would assign for this description, without
+// writing anything. Powers the live category suggestion in the add-expense form.
+expensesRouter.get("/suggest", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const description = String(req.query.description ?? "").trim();
+    if (!description) return res.json({ suggestion: null });
+
+    const merchant = normalizeMerchant(description);
+    const allocationId = await categorize(req.userId!, description, merchant);
+    if (!allocationId) return res.json({ suggestion: null });
+
+    const alloc = await prisma.allocation.findFirst({
+      where: { id: allocationId, userId: req.userId! },
+      select: { id: true, name: true, icon: true },
+    });
+    return res.json({
+      suggestion: alloc ? { allocationId: alloc.id, name: alloc.name, icon: alloc.icon } : null,
+    });
+  } catch (err) {
+    console.error("[expenses/suggest]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -214,6 +241,55 @@ expensesRouter.post("/import/preview", requireAuth, async (req: AuthRequest, res
   }
 });
 
+// POST /api/expenses/import/classify
+// Body: { merchants: string[] }. AI-classifies the given (rule-less) merchants
+// against the user's allocations. Read-only — returns suggestions the UI merges
+// into the preview. 503 when AI isn't configured; degrades to [] on AI failure.
+expensesRouter.post("/import/classify", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!aiEnabled()) return res.status(503).json({ error: "AI not configured" });
+
+    const raw = (req.body?.merchants ?? []) as unknown[];
+    const merchants = [...new Set(raw.filter((m): m is string => typeof m === "string" && m.length > 0))].slice(0, 40);
+    if (merchants.length === 0) return res.json({ suggestions: [] });
+
+    const allocations = await prisma.allocation.findMany({
+      where: { userId: req.userId! },
+      select: { id: true, name: true },
+    });
+
+    const map = await classifyMerchants(merchants, allocations);
+    const nameById = Object.fromEntries(allocations.map(a => [a.id, a.name]));
+    const suggestions = Object.entries(map)
+      .filter(([, id]) => id)
+      .map(([merchant, allocationId]) => ({ merchant, allocationId, name: nameById[allocationId!] ?? null }));
+
+    return res.json({ suggestions });
+  } catch (err) {
+    console.error("[expenses/import/classify]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/expenses/import/suggest-categories
+// Body: { merchants: string[] }. AI proposes a category set for the cold-start
+// case. Read-only — the UI reviews and creates the accepted ones via /allocations.
+expensesRouter.post("/import/suggest-categories", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!aiEnabled()) return res.status(503).json({ error: "AI not configured" });
+
+    const raw = (req.body?.merchants ?? []) as unknown[];
+    const merchants = [...new Set(raw.filter((m): m is string => typeof m === "string" && m.length > 0))].slice(0, 40);
+    if (merchants.length === 0) return res.json({ categories: [] });
+
+    const categories = await suggestCategories(merchants);
+    return res.json({ categories });
+  } catch (err) {
+    console.error("[expenses/import/suggest-categories]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // POST /api/expenses/import/confirm
 // Body: { accountId?, rows: ImportRow[] }. Inserts debits as expenses and
 // credits as income, both source='import'. Idempotent via @@unique externalId.
@@ -263,6 +339,23 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
         skipDuplicates: true,
       }),
     ]);
+
+    // Learn from the categories assigned during import: every classified merchant
+    // becomes a `learned` rule so the rest of this file — and future imports — get
+    // auto-categorized. Dedupe by merchant (last assignment wins). Best-effort:
+    // a learning failure must not undo the already-committed import.
+    try {
+      const merchantToAllocation = new Map<string, string>();
+      for (const r of expenseRows) {
+        const m = r.merchant || normalizeMerchant(r.description ?? "");
+        if (m && r.allocationId) merchantToAllocation.set(m, r.allocationId);
+      }
+      for (const [merchant, allocationId] of merchantToAllocation) {
+        await learnFromCorrection(req.userId!, merchant, allocationId);
+      }
+    } catch (learnErr) {
+      console.error("[expenses/import/confirm] learn", learnErr);
+    }
 
     return res.json({ success: true, expenses: exp.count, income: inc.count, inserted: exp.count + inc.count });
   } catch (err) {

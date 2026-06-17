@@ -58,11 +58,15 @@ export function Home({ onNavigate }: HomeProps) {
       .catch(() => {});
   }, [isCurrentMonth]);
 
-  const isOverBudget    = review && review.totalActual > review.totalBudgeted;
+  // Budget comparison uses categorized spending only — uncategorized money has no
+  // budget to compare against (it's surfaced separately by the amber nudge below).
+  // The "spent so far" stat still shows the inclusive total (review.totalActual).
+  const categorizedActual = review ? review.totalActual - review.unassigned : 0;
+  const isOverBudget    = review && categorizedActual > review.totalBudgeted;
   const overBudgetCount = review?.review.filter(r => r.diff > 0.5).length ?? 0;
-  const budgetDiff      = review ? Math.abs(review.totalActual - review.totalBudgeted) : 0;
+  const budgetDiff      = review ? Math.abs(categorizedActual - review.totalBudgeted) : 0;
   const budgetUsedPct   = review && review.totalBudgeted > 0
-    ? Math.round((review.totalActual / review.totalBudgeted) * 100)
+    ? Math.round((categorizedActual / review.totalBudgeted) * 100)
     : 0;
 
   return (
@@ -169,6 +173,32 @@ export function Home({ onNavigate }: HomeProps) {
                 </button>
               )}
             </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* ── Uncategorized spending nudge ── */}
+      {review && review.unassigned > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+          className="flex items-start gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-5 py-4"
+        >
+          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-medium text-amber-700 dark:text-amber-400">
+              {t('home.unassignedTitle', { amount: review.unassigned.toLocaleString() })}
+            </p>
+            <p className="text-sm text-amber-600/70 dark:text-amber-400/70 mt-0.5">
+              {t('home.unassignedDesc')}
+            </p>
+          </div>
+          {onNavigate && (
+            <button
+              onClick={() => onNavigate('activity')}
+              className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 hover:underline shrink-0"
+            >
+              {t('home.viewExpenses')} <ArrowRight className="w-3 h-3" />
+            </button>
           )}
         </motion.div>
       )}
