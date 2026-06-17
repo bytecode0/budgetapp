@@ -4,7 +4,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useTranslation } from 'react-i18next';
 import {
   DollarSign, TrendingUp, CheckCircle2, Plus, Trash2,
-  Pencil, X, Check, Loader2, CalendarCheck, GripVertical, Repeat,
+  Pencil, X, Check, Loader2, CalendarCheck, GripVertical, Repeat, Wallet,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import { useMonthlyBudget, useMonthlyReview } from '../hooks/useMonthlyBudget';
 import { AddExpense } from './AddExpense';
 import { AddIncome } from './AddIncome';
 import { RecurringManager } from './RecurringManager';
+import { BudgetSuggestions } from './BudgetSuggestions';
 import { useLanguage } from '../context/LanguageContext';
 import { useMonth, monthLabel } from '../context/MonthContext';
 
@@ -110,8 +111,10 @@ export function AllocationFlow() {
 
   const {
     allocations: rawAllocations, monthlyIncome: baseIncome, loading,
-    updateIncome, createAllocation, updateAllocation, deleteAllocation, reorderAllocations,
+    updateIncome, createAllocation, updateAllocation, deleteAllocation, reorderAllocations, fetchAllocations,
   } = useAllocations();
+
+  const [showBudgetSuggestions, setShowBudgetSuggestions] = useState(false);
 
   const { plans: rawPlans, loading: plansLoading } = usePlans();
 
@@ -485,9 +488,17 @@ export function AllocationFlow() {
         initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
         className="bg-card border border-border rounded-2xl p-6 md:p-8 space-y-6"
       >
-        <div>
-          <h2 className="text-2xl font-display mb-1">{t('allocation.monthlyAllocations')}</h2>
-          <p className="text-muted-foreground text-sm">{t('allocation.assignIncome')}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-display mb-1">{t('allocation.monthlyAllocations')}</h2>
+            <p className="text-muted-foreground text-sm">{t('allocation.assignIncome')}</p>
+          </div>
+          <button
+            onClick={() => setShowBudgetSuggestions(true)}
+            className="shrink-0 inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl border border-border hover:bg-muted transition-colors"
+          >
+            <Wallet className="w-3.5 h-3.5" /> {t('budgets.suggestFromHistory')}
+          </button>
         </div>
 
         {isBudgetSaved && (
@@ -795,6 +806,12 @@ export function AllocationFlow() {
       />
 
       <RecurringManager isOpen={showRecurring} onClose={() => setShowRecurring(false)} />
+
+      <BudgetSuggestions
+        isOpen={showBudgetSuggestions}
+        onClose={() => setShowBudgetSuggestions(false)}
+        onApplied={() => fetchAllocations()}
+      />
 
       <AddIncome
         isOpen={showAddIncome}

@@ -655,6 +655,17 @@
     "nothingSelected": "Selecciona al menos una fila",
     "importedOk": "Importadas {{count}} transacciones"
   },
+  "budgets": {
+    "title": "Presupuestos sugeridos",
+    "subtitle": "Según tu historial de gastos",
+    "suggestFromHistory": "Sugerir desde mi historial",
+    "monthsObserved": "{{count}} meses de historial",
+    "lowConfidence": "baja confianza",
+    "apply": "Aplicar a {{count}}",
+    "applied": "Actualizados {{count}} presupuestos",
+    "none": "Aún no hay suficiente historial para sugerir presupuestos",
+    "overIncome": "Los presupuestos seleccionados (€{{total}}) superan tu ingreso mensual (€{{income}})"
+  },
   "monthlyReview": {
     "title": "Revisión del Presupuesto",
     "subtitle": "Compara lo que presupuestaste con lo que realmente gastaste",

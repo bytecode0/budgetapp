@@ -15,6 +15,7 @@ Tickets por fase (un epic por fase). Orden de implementación recomendado A → 
 | H | [Open banking / agregador](./H-open-banking.md) (placeholder) | importación (API) | L | G, E |
 | I | [Categorización sin fricción (sugerencia en vivo, aprendizaje en import, lote)](./I-categorizacion-sin-friccion.md) | reduce fricción de categorizar tras importar | S–M | B, G (duro) |
 | J | [Clasificación y configuración de categorías por IA](./J-clasificacion-ia.md) | "importa y pulsa un botón" | M–L | B, G (duro); recomendado tras I |
+| K | [Presupuestos sugeridos a partir del historial](./K-presupuestos-sugeridos.md) | monto por categoría calculado del historial (sin IA) | M | B, G (duro); recomendado tras J |
 
 ## Por qué este orden
 - **A primero:** una sola migración de `Expense` (`merchant`, `source`, `externalId`, opcional céntimos) que sirve a B, F y a la futura importación → evita migraciones parciales repetidas.
@@ -24,6 +25,7 @@ Tickets por fase (un epic por fase). Orden de implementación recomendado A → 
 - **E2 (ingresos) justo tras E:** el ingreso pasa de número estático (`UserSettings.monthlyIncome`) a movimiento transaccional (tabla `Income` paralela a `Expense`), necesario para que la importación registre abonos y para el cashflow real. Depende de `Account` (E) y reutiliza los patrones de A/B. Decisión cerrada: tabla paralela, no `Transaction` unificada (ver ticket).
 - **G (importación) tras E, B y F:** ver el ticket; solo A es bloqueante duro, pero E (cuenta de origen, evita backfill de `accountId`), B (auto-categorizar el volumen importado) y F (dedupe/idempotencia) elevan mucho el valor antes de G. C y D son independientes y pueden ir después.
 - **I (fricción) tras G:** B + G ya funcionan, pero el primer import no clasifica nada (arranque en frío: no hay reglas todavía) y obliga a categorizar gasto por gasto. I añade sugerencia en vivo al escribir, aprendizaje en el confirm del import y asignación en lote por comercio — todo determinista, sin IA. **Nota:** los gastos importados ya cuentan en el total del mes aunque estén sin categoría (`monthlyBudgets.ts` suma los `__unassigned__`); I es para el desglose por categoría, no para el total.
+- **K (presupuestos) tras J:** cierra el ciclo de la importación. Tras J las categorías sugeridas quedan en €0; K calcula el monto por categoría desde el historial ya clasificado (mediana de 6 meses) y lo aplica — **determinista, sin IA** (un LLM no es fiable sumando transacciones). Rellena por defecto solo las categorías en €0.
 - **J (IA) tras I:** la IA solo aporta donde las reglas no pueden — el arranque en frío. Se usa como *fallback* (regla → learned → IA → unassigned), en batch por comercio, y cada acierto se materializa como regla `learned` para que la factura de IA decrezca. Habilita el "importa y pulsa un botón". Conviene hacer I antes para que el flujo determinista esté sólido y la IA trabaje solo sobre lo desconocido.
 
 ## Decisiones pendientes (bloquean partes del plan)
