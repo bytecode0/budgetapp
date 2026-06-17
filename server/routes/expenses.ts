@@ -7,6 +7,7 @@ import { categorize, learnFromCorrection } from "../lib/categorize.js";
 import { findDuplicateGroups } from "../lib/dedupe.js";
 import { prepareImport } from "../lib/importStatement.js";
 import { rebuildExpenseShares } from "../lib/expenseShares.js";
+import { expenseListingFilter } from "../lib/visibility.js";
 
 export const expensesRouter = Router();
 
@@ -47,6 +48,10 @@ expensesRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
     if (allocationId) {
       where.allocationId = allocationId === "unassigned" ? null : allocationId;
     }
+
+    // Visibility (Epic H5): at shared_stats, the list shows only the viewer's
+    // own transactions; the partner's appear only in aggregates.
+    Object.assign(where, await expenseListingFilter(req));
 
     const expenses = await prisma.expense.findMany({
       where,
