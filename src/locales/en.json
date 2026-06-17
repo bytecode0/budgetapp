@@ -5,7 +5,24 @@
     "activity": "Activity",
     "allocate": "Allocate",
     "accounts": "Accounts",
+    "household": "Household",
     "settings": "Settings"
+  },
+  "familyDashboard": {
+    "title": "Household",
+    "subtitle": "Your household's finances at a glance",
+    "income": "Income",
+    "expenses": "Expenses",
+    "savings": "Savings",
+    "netWorth": "Net worth",
+    "savingsRate": "Savings rate",
+    "byPerson": "By person",
+    "personLine": "€{{income}} in · €{{spent}} spent",
+    "contribution": "{{pct}}% of income",
+    "byCategory": "By category",
+    "unassigned": "Unassigned",
+    "noSpending": "No spending this month",
+    "noData": "No household data yet"
   },
   "sidebar": {
     "tagline": "Financial Life Planner",

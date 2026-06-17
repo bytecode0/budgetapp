@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LayoutDashboard, Sparkles, Wallet, Target, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight, Landmark } from 'lucide-react';
+import { LayoutDashboard, Sparkles, Wallet, Target, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight, Landmark, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster } from 'sonner';
 import { Home } from './components/Home';
@@ -11,6 +11,7 @@ import { AllocationFlow } from './components/AllocationFlow';
 import { PlanningSettings } from './components/PlanningSettings';
 import { Activity } from './components/Activity';
 import { Accounts } from './components/Accounts';
+import { FamilyDashboard } from './components/FamilyDashboard';
 import { AddExpense } from './components/AddExpense';
 import { AuthFlow } from './components/auth/AuthFlow';
 import { PartnerInviteAccept } from './components/PartnerInviteAccept';
@@ -19,14 +20,17 @@ import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { MonthProvider, useMonth, monthLabel } from './context/MonthContext';
 import { useAllocations } from './hooks/useAllocations';
 import { useAnalytics } from './hooks/useAnalytics';
+import { useHousehold } from './hooks/useHousehold';
 import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/usePartner';
 
-type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'settings';
+type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'household' | 'settings';
 
 function AppInner() {
   const { user, loading, logout, refreshUser } = useAuth();
   const { t } = useTranslation();
   const { darkMode, updateDarkMode, dbLanguage, updateLanguage } = useAllocations();
+  const { household } = useHousehold();
+  const inHousehold = (household?.members?.length ?? 0) > 1;
   const { language, setLanguage } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
   const { selectedMonth, navigate: navigateMonth, isCurrentMonth: isCurrentMonthSelected, isFutureMonth } = useMonth();
@@ -80,6 +84,7 @@ function AppInner() {
     { id: 'activity' as Screen,   label: t('nav.activity'),  icon: ActivityIcon },
     { id: 'allocation' as Screen, label: t('nav.allocate'),  icon: Wallet },
     { id: 'accounts' as Screen,   label: t('nav.accounts'),  icon: Landmark },
+    ...(inHousehold ? [{ id: 'household' as Screen, label: t('nav.household'), icon: Users }] : []),
     { id: 'settings' as Screen,   label: t('nav.settings'),  icon: Settings },
   ];
 
@@ -108,6 +113,8 @@ function AppInner() {
         return <AllocationFlow />;
       case 'accounts':
         return <Accounts />;
+      case 'household':
+        return <FamilyDashboard />;
       case 'settings':
         return <PlanningSettings darkMode={darkMode} onToggleDarkMode={() => updateDarkMode(!darkMode)} onLanguageChange={updateLanguage} onLogout={() => logout()} />;
       default:
