@@ -14,6 +14,8 @@ import { incomeRouter } from "./routes/income.js";
 import { recurringRouter } from "./routes/recurring.js";
 import { analyticsRouter } from "./routes/analytics.js";
 import { partnerRouter } from "./routes/partner.js";
+import { householdsRouter } from "./routes/households.js";
+import { dashboardRouter } from "./routes/dashboard.js";
 import { stripeRouter } from "./routes/stripe.js";
 import { aiRouter } from "./routes/ai.js";
 
@@ -45,6 +47,8 @@ app.use("/api/income", incomeRouter);
 app.use("/api/recurring", recurringRouter);
 app.use("/api/analytics", analyticsRouter);
 app.use("/api/partner", partnerRouter);
+app.use("/api/households", householdsRouter);
+app.use("/api/dashboard", dashboardRouter);
 app.use("/api/stripe", stripeRouter);
 app.use("/api/ai", aiRouter);
 

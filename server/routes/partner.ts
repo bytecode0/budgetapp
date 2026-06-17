@@ -2,6 +2,7 @@ import { Router, Response, Request } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { sendPartnerInviteEmail } from "../lib/mailer.js";
+import { ensureHousehold } from "../lib/household.js";
 
 export const partnerRouter = Router();
 
@@ -220,6 +221,14 @@ partnerRouter.post("/accept", requireAuth, async (req: AuthRequest, res: Respons
         data: { status: "accepted" },
       }),
     ]);
+
+    // Mirror the link into the new Household model (Epic H1): sender = primary
+    // (owner), acceptor = member. Idempotent; best-effort (never block linking).
+    try {
+      await ensureHousehold(invite.senderId, myId);
+    } catch (e) {
+      console.error("[partner/accept] ensureHousehold", e);
+    }
 
     return res.json({
       success: true,

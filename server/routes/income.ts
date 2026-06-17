@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { normalizeMerchant } from "../lib/normalizeMerchant.js";
 import { toCents, serializeMoney } from "../lib/money.js";
+import { incomeListingFilter } from "../lib/visibility.js";
 
 export const incomeRouter = Router();
 
@@ -29,6 +30,9 @@ incomeRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
       where.date = { gte: new Date(year, mon - 1, 1), lt: new Date(year, mon, 1) };
     }
     if (accountId) where.accountId = accountId;
+
+    // Visibility (Epic H5): at shared_stats, show only the viewer's own income.
+    Object.assign(where, await incomeListingFilter(req));
 
     const incomes = await prisma.income.findMany({
       where,

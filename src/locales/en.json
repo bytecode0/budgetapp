@@ -5,7 +5,24 @@
     "activity": "Activity",
     "allocate": "Allocate",
     "accounts": "Accounts",
+    "household": "Household",
     "settings": "Settings"
+  },
+  "familyDashboard": {
+    "title": "Household",
+    "subtitle": "Your household's finances at a glance",
+    "income": "Income",
+    "expenses": "Expenses",
+    "savings": "Savings",
+    "netWorth": "Net worth",
+    "savingsRate": "Savings rate",
+    "byPerson": "By person",
+    "personLine": "€{{income}} in · €{{spent}} spent",
+    "contribution": "{{pct}}% of income",
+    "byCategory": "By category",
+    "unassigned": "Unassigned",
+    "noSpending": "No spending this month",
+    "noData": "No household data yet"
   },
   "sidebar": {
     "tagline": "Financial Life Planner",
@@ -81,6 +98,28 @@
       "button": "Sign Out",
       "subtitle": "You'll need to sign in again"
     }
+  },
+  "household": {
+    "updated": "Household updated",
+    "owner": "Owner",
+    "member": "Member",
+    "model": "Financial model",
+    "modelIndividual": "Individual",
+    "modelIndividualDesc": "Each person manages their own money",
+    "modelProportional": "Proportional",
+    "modelProportionalDesc": "Shared costs split by income",
+    "modelShared": "Household",
+    "modelSharedDesc": "One combined economic unit",
+    "privacy": "Privacy",
+    "privacyTransparent": "Full transparency",
+    "privacyTransparentDesc": "Members see each other's transactions, merchants and income",
+    "privacyStats": "Shared statistics",
+    "privacyStatsDesc": "Members see totals and savings, not individual transactions",
+    "contributions": "Income contribution",
+    "incomeShare": "{{pct}}% of income",
+    "balances": "Balances",
+    "settledUp": "You're all settled up",
+    "noShared": "No shared expenses yet"
   },
   "toast": {
     "inviteSent": "Invitation sent!",
@@ -495,6 +534,11 @@
     "namePlaceholder": "e.g. BBVA checking",
     "typeLabel": "Type",
     "balanceLabel": "Current balance",
+    "visibilityLabel": "Visibility",
+    "visibility_household": "Household",
+    "visibility_household_desc": "Visible to household members",
+    "visibility_private": "Private",
+    "visibility_private_desc": "Only you can see this account",
     "createAction": "Create account",
     "nameRequired": "Name is required",
     "createdOk": "Account created",
@@ -526,7 +570,15 @@
     "date": "Date",
     "save": "Save changes",
     "saved": "Expense updated",
-    "invalidAmount": "Enter a valid amount"
+    "invalidAmount": "Enter a valid amount",
+    "attribution": "Who paid & how it's split",
+    "scope_personal": "Personal",
+    "scope_shared": "Shared",
+    "payer": "Paid by",
+    "splitModel": "By model",
+    "splitCustom": "Custom",
+    "splitTotal": "Total €{{total}} of €{{amount}}",
+    "splitMustSum": "Split (€{{total}}) must equal the amount (€{{amount}})"
   },
   "rules": {
     "title": "Categorization rules",
@@ -571,7 +623,9 @@
     "incomeRemoved": "Income removed",
     "today": "Today",
     "yesterday": "Yesterday",
-    "expense": "Expense"
+    "expense": "Expense",
+    "shared": "Shared",
+    "sharedPaidBy": "Shared · paid by {{name}}"
   },
   "addIncome": {
     "title": "Add income",

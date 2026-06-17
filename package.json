@@ -13,6 +13,9 @@
     "db:reset": "prisma db push --force-reset",
     "backfill:merchant": "tsx server/scripts/backfillMerchant.ts",
     "backfill:accounts": "tsx server/scripts/backfillAccounts.ts",
+    "migrate:households": "tsx server/scripts/migrateHouseholds.ts",
+    "seed:household": "tsx server/scripts/seedHousehold.ts",
+    "backfill:attribution": "tsx server/scripts/backfillExpenseAttribution.ts",
     "seed:phasef": "tsx server/scripts/seedPhaseF.ts",
     "test": "tsx --test \"server/**/*.test.ts\""
   },

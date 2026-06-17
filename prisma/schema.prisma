@@ -27,6 +27,7 @@ model User {
   incomes        Income[]
   recurringCommitments RecurringCommitment[]
   sentInvites    PartnerInvite[] @relation("SentInvites")
+  householdMemberships HouseholdMember[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -139,16 +140,38 @@ model Expense {
   externalId   String? // idempotency key for future bank import; null for manual entries
   date         DateTime @default(now())
 
+  // Attribution (Epic H3) — who paid, who benefits, how it's split.
+  payerUserId       String? // who actually paid (real person); null for legacy rows
+  scope             String  @default("personal") // personal | shared
+  beneficiaryUserId String? // when scope=personal and beneficiary ≠ payer
+  scopeConfidence   Float?  // 0..1 when scope was set by AI
+  scopeSource       String  @default("manual") // manual | ai | rule
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   allocation Allocation? @relation(fields: [allocationId], references: [id], onDelete: SetNull)
   account    Account?    @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  shares     ExpenseShare[]
 
   @@unique([userId, externalId]) // dedupe imported rows; multiple NULLs allowed in Postgres
   @@index([userId, merchant])
   @@index([userId, accountId])
+}
+
+// The distribution of a shared expense across household members (Epic H3).
+// Σ shares.amount == expense.amount (rounding residue assigned to the payer).
+model ExpenseShare {
+  id        String @id @default(cuid())
+  expenseId String
+  userId    String
+  amount    Int    // cents
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@unique([expenseId, userId])
+  @@index([userId])
 }
 
 model Account {
@@ -161,6 +184,11 @@ model Account {
   currentBalance Int     @default(0) // cents; may be negative (cards/debt)
   isArchived     Boolean @default(false)
   sortOrder      Int     @default(0)
+
+  // Household (Epic H2) — a bank account is only a data source. householdId links
+  // it to a household; visibility controls whether other members can see it.
+  householdId    String? // null = purely personal, not shared with a household
+  visibility     String  @default("household") // private | household
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -270,4 +298,42 @@ model OtpToken {
   createdAt DateTime @default(now())
 
   @@index([email, type])
+}
+
+// ── Household (Epic H1) ──────────────────────────────────────────────
+// A financial unit formed by one or more people. Replaces the "merge into the
+// primary user's pool" hack (UserSettings.linkedUserId), which is kept in
+// parallel during migration. Data ownership stays per-person; the household is
+// the shared scope. visibilityTier default is "transparent" so migrated couples
+// keep their current behaviour; new households are created as "shared_stats".
+model Household {
+  id             String @id @default(cuid())
+  name           String
+  financialModel String @default("shared")      // individual | proportional | shared
+  visibilityTier String @default("transparent") // transparent | shared_stats | global_only
+  baseCurrency   String @default("EUR")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members HouseholdMember[]
+}
+
+model HouseholdMember {
+  id                String  @id @default(cuid())
+  householdId       String
+  userId            String
+  role              String  @default("member")  // owner | member
+  status            String  @default("active")  // active | invited | left
+  contributionBasis String @default("income")   // income | equal | custom
+  customSharePct    Int?                          // basis points, when contributionBasis = custom
+
+  joinedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, userId])
+  @@index([userId])
 }

@@ -5,7 +5,24 @@
     "activity": "Actividad",
     "allocate": "Asignar",
     "accounts": "Cuentas",
+    "household": "Hogar",
     "settings": "Ajustes"
+  },
+  "familyDashboard": {
+    "title": "Hogar",
+    "subtitle": "Las finanzas de tu hogar de un vistazo",
+    "income": "Ingresos",
+    "expenses": "Gastos",
+    "savings": "Ahorro",
+    "netWorth": "Patrimonio neto",
+    "savingsRate": "Tasa de ahorro",
+    "byPerson": "Por persona",
+    "personLine": "€{{income}} entran · €{{spent}} gastados",
+    "contribution": "{{pct}}% de los ingresos",
+    "byCategory": "Por categoría",
+    "unassigned": "Sin asignar",
+    "noSpending": "Sin gastos este mes",
+    "noData": "Aún no hay datos del hogar"
   },
   "sidebar": {
     "tagline": "Planificador Financiero de Vida",
@@ -81,6 +98,28 @@
       "button": "Cerrar Sesión",
       "subtitle": "Tendrás que iniciar sesión de nuevo"
     }
+  },
+  "household": {
+    "updated": "Hogar actualizado",
+    "owner": "Propietario",
+    "member": "Miembro",
+    "model": "Modelo financiero",
+    "modelIndividual": "Individual",
+    "modelIndividualDesc": "Cada persona gestiona su propio dinero",
+    "modelProportional": "Proporcional",
+    "modelProportionalDesc": "Gastos compartidos repartidos según ingresos",
+    "modelShared": "Hogar",
+    "modelSharedDesc": "Una sola unidad económica combinada",
+    "privacy": "Privacidad",
+    "privacyTransparent": "Transparencia total",
+    "privacyTransparentDesc": "Los miembros ven transacciones, comercios e ingresos del otro",
+    "privacyStats": "Estadísticas compartidas",
+    "privacyStatsDesc": "Los miembros ven totales y ahorro, no transacciones individuales",
+    "contributions": "Contribución por ingresos",
+    "incomeShare": "{{pct}}% de los ingresos",
+    "balances": "Balances",
+    "settledUp": "Estáis igualados",
+    "noShared": "Aún no hay gastos compartidos"
   },
   "toast": {
     "inviteSent": "¡Invitación enviada!",
@@ -495,6 +534,11 @@
     "namePlaceholder": "p. ej. Cuenta BBVA",
     "typeLabel": "Tipo",
     "balanceLabel": "Saldo actual",
+    "visibilityLabel": "Visibilidad",
+    "visibility_household": "Hogar",
+    "visibility_household_desc": "Visible para los miembros del hogar",
+    "visibility_private": "Privada",
+    "visibility_private_desc": "Solo tú ves esta cuenta",
     "createAction": "Crear cuenta",
     "nameRequired": "El nombre es obligatorio",
     "createdOk": "Cuenta creada",
@@ -526,7 +570,15 @@
     "date": "Fecha",
     "save": "Guardar cambios",
     "saved": "Gasto actualizado",
-    "invalidAmount": "Introduce un importe válido"
+    "invalidAmount": "Introduce un importe válido",
+    "attribution": "Quién pagó y cómo se reparte",
+    "scope_personal": "Personal",
+    "scope_shared": "Compartido",
+    "payer": "Pagado por",
+    "splitModel": "Según modelo",
+    "splitCustom": "Personalizado",
+    "splitTotal": "Total €{{total}} de €{{amount}}",
+    "splitMustSum": "El reparto (€{{total}}) debe igualar el importe (€{{amount}})"
   },
   "rules": {
     "title": "Reglas de categorización",
@@ -571,7 +623,9 @@
     "incomeRemoved": "Ingreso eliminado",
     "today": "Hoy",
     "yesterday": "Ayer",
-    "expense": "Gasto"
+    "expense": "Gasto",
+    "shared": "Compartido",
+    "sharedPaidBy": "Compartido · pagó {{name}}"
   },
   "addIncome": {
     "title": "Añadir ingreso",

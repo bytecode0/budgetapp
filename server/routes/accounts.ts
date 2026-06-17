@@ -7,14 +7,20 @@ import { toCents, serializeMoney } from "../lib/money.js";
 export const accountsRouter = Router();
 
 const ACCOUNT_TYPES = new Set(["checking", "savings", "cash", "investment", "card"]);
+const VISIBILITIES = new Set(["private", "household"]);
 
 // GET /api/accounts  — list (sorted) + net worth across non-archived accounts
 accountsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     await createDefaultAccount(req.userId!); // ensure at least one exists
 
+    // Visibility (Epic H2): you always see your own accounts; you only see other
+    // members' accounts when they're shared with the household (private hidden).
     const accounts = await prisma.account.findMany({
-      where: { userId: req.userId! },
+      where: {
+        userId: req.userId!,
+        OR: [{ ownerUserId: req.authUserId! }, { visibility: "household" }],
+      },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     });
 
@@ -32,10 +38,13 @@ accountsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
 // POST /api/accounts
 accountsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, type, currency, currentBalance } = req.body;
+    const { name, type, currency, currentBalance, visibility } = req.body;
     if (!name) return res.status(400).json({ error: "Name is required" });
     if (type !== undefined && !ACCOUNT_TYPES.has(type)) {
       return res.status(400).json({ error: "Invalid account type" });
+    }
+    if (visibility !== undefined && !VISIBILITIES.has(visibility)) {
+      return res.status(400).json({ error: "Invalid visibility" });
     }
 
     const lastOrder = await prisma.account.findFirst({
@@ -47,9 +56,11 @@ accountsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
       data: {
         userId: req.userId!,
         ownerUserId: req.authUserId!, // the real user, even when acting on a shared pool
+        householdId: req.householdId ?? null,
         name,
         type: type ?? "checking",
         currency: currency ?? "EUR",
+        visibility: visibility ?? "household",
         currentBalance: toCents(currentBalance),
         sortOrder: (lastOrder?.sortOrder ?? -1) + 1,
       },
@@ -93,9 +104,19 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     const existing = await prisma.account.findFirst({ where: { id, userId: req.userId! } });
     if (!existing) return res.status(404).json({ error: "Account not found" });
 
-    const { name, type, currency, currentBalance, isArchived, sortOrder } = req.body;
+    const { name, type, currency, currentBalance, isArchived, sortOrder, visibility, ownerUserId } = req.body;
     if (type !== undefined && !ACCOUNT_TYPES.has(type)) {
       return res.status(400).json({ error: "Invalid account type" });
+    }
+    if (visibility !== undefined && !VISIBILITIES.has(visibility)) {
+      return res.status(400).json({ error: "Invalid visibility" });
+    }
+    // ownerUserId can only be reassigned to a member of the same household.
+    if (ownerUserId !== undefined && req.householdId) {
+      const member = await prisma.householdMember.findFirst({
+        where: { householdId: req.householdId, userId: ownerUserId }, select: { id: true },
+      });
+      if (!member) return res.status(400).json({ error: "Owner must be a household member" });
     }
 
     const account = await prisma.account.update({
@@ -107,6 +128,8 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
         ...(currentBalance !== undefined && { currentBalance: toCents(currentBalance) }),
         ...(isArchived !== undefined && { isArchived: Boolean(isArchived) }),
         ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
+        ...(visibility !== undefined && { visibility }),
+        ...(ownerUserId !== undefined && { ownerUserId }),
       },
     });
 

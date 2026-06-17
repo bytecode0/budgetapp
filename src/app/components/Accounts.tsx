@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
 import { useAccounts, type Account, type AccountType } from '../hooks/useAccounts';
+import { useHousehold } from '../hooks/useHousehold';
 
 const ACCOUNT_TYPES: AccountType[] = ['checking', 'savings', 'cash', 'investment', 'card'];
 
@@ -73,15 +74,18 @@ interface FormState {
   name: string;
   type: AccountType;
   currentBalance: string;
+  visibility: 'private' | 'household';
 }
 
-const EMPTY_FORM: FormState = { id: null, name: '', type: 'checking', currentBalance: '' };
+const EMPTY_FORM: FormState = { id: null, name: '', type: 'checking', currentBalance: '', visibility: 'household' };
 
 export function Accounts() {
   const { t } = useTranslation();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
   const { accounts, netWorth, loading, createAccount, updateAccount, deleteAccount, reorderAccounts } = useAccounts();
+  const { household } = useHousehold();
+  const inHousehold = (household?.members?.length ?? 0) > 1;
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -126,7 +130,7 @@ export function Accounts() {
 
   const openCreate = () => { setForm(EMPTY_FORM); setShowForm(true); };
   const openEdit = (a: Account) => {
-    setForm({ id: a.id, name: a.name, type: a.type, currentBalance: String(a.currentBalance) });
+    setForm({ id: a.id, name: a.name, type: a.type, currentBalance: String(a.currentBalance), visibility: a.visibility ?? 'household' });
     setShowForm(true);
   };
 
@@ -137,6 +141,7 @@ export function Accounts() {
       name: form.name.trim(),
       type: form.type,
       currentBalance: parseFloat(form.currentBalance) || 0,
+      visibility: form.visibility,
     };
     const result = form.id
       ? await updateAccount(form.id, payload)
@@ -345,6 +350,27 @@ export function Accounts() {
                   />
                 </div>
               </div>
+
+              {/* Visibility (Epic H2) — only relevant inside a household */}
+              {inHousehold && (
+                <div className="space-y-2">
+                  <label className="text-xs text-muted-foreground">{t('accounts.visibilityLabel')}</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['household', 'private'] as const).map(v => (
+                      <button
+                        key={v}
+                        onClick={() => setForm(f => ({ ...f, visibility: v }))}
+                        className={`p-2.5 rounded-xl border-2 text-left transition-all ${
+                          form.visibility === v ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
+                        }`}
+                      >
+                        <p className="text-sm font-medium">{t(`accounts.visibility_${v}`)}</p>
+                        <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">{t(`accounts.visibility_${v}_desc`)}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <button
                 onClick={handleSubmit}
