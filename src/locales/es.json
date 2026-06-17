@@ -97,7 +97,12 @@
     "privacyTransparent": "Transparencia total",
     "privacyTransparentDesc": "Los miembros ven transacciones, comercios e ingresos del otro",
     "privacyStats": "Estadísticas compartidas",
-    "privacyStatsDesc": "Los miembros ven totales y ahorro, no transacciones individuales"
+    "privacyStatsDesc": "Los miembros ven totales y ahorro, no transacciones individuales",
+    "contributions": "Contribución por ingresos",
+    "incomeShare": "{{pct}}% de los ingresos",
+    "balances": "Balances",
+    "settledUp": "Estáis igualados",
+    "noShared": "Aún no hay gastos compartidos"
   },
   "toast": {
     "inviteSent": "¡Invitación enviada!",

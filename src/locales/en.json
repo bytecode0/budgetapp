@@ -97,7 +97,12 @@
     "privacyTransparent": "Full transparency",
     "privacyTransparentDesc": "Members see each other's transactions, merchants and income",
     "privacyStats": "Shared statistics",
-    "privacyStatsDesc": "Members see totals and savings, not individual transactions"
+    "privacyStatsDesc": "Members see totals and savings, not individual transactions",
+    "contributions": "Income contribution",
+    "incomeShare": "{{pct}}% of income",
+    "balances": "Balances",
+    "settledUp": "You're all settled up",
+    "noShared": "No shared expenses yet"
   },
   "toast": {
     "inviteSent": "Invitation sent!",

@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Users, Loader2 } from 'lucide-react';
 import { useHousehold, type FinancialModel, type VisibilityTier } from '../hooks/useHousehold';
+import { HouseholdBalances } from './HouseholdBalances';
 
 // Household settings panel (Epic H1 UI). Shown inside Shared Finances when the
 // user belongs to a household. Surfaces members + lets the owner pick the
@@ -95,6 +96,11 @@ export function HouseholdPanel() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Balances + contributions (Epic H4) */}
+      <div className="pt-2 border-t border-border">
+        <HouseholdBalances />
       </div>
     </div>
   );

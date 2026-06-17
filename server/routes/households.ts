@@ -2,8 +2,18 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { ensureHousehold, isFinancialModel, isVisibilityTier } from "../lib/household.js";
+import { computeBalances } from "../lib/balances.js";
+import { serializeMoney, toEuros } from "../lib/money.js";
 
 export const householdsRouter = Router();
+
+// Active members of the user's household with display names.
+async function activeMembers(householdId: string) {
+  return prisma.householdMember.findMany({
+    where: { householdId, status: "active" },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  });
+}
 
 // Shape a household + its members for the client.
 async function serializeHousehold(householdId: string) {
@@ -60,6 +70,69 @@ householdsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) 
     return res.json({ household: await serializeHousehold(householdId) });
   } catch (err) {
     console.error("[households/POST]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/households/balances?period=YYYY-MM — who owes whom (Epic H4).
+householdsRouter.get("/balances", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.householdId) return res.json({ balances: [], settlements: [] });
+    const members = await activeMembers(req.householdId);
+    const nameById = Object.fromEntries(members.map(m => [m.userId, m.user.name ?? m.user.email]));
+    const { balances, settlements } = await computeBalances(
+      req.userId!,
+      members.map(m => m.userId),
+      typeof req.query.period === "string" ? req.query.period : undefined,
+    );
+    // paid/owed/balance aren't MONEY_KEYS — convert to euros explicitly.
+    return res.json({
+      balances: balances.map(b => ({
+        userId: b.userId,
+        name: nameById[b.userId] ?? null,
+        paid: toEuros(b.paid),
+        owed: toEuros(b.owed),
+        balance: toEuros(b.balance),
+      })),
+      settlements: settlements.map(s => ({
+        fromUserId: s.fromUserId,
+        toUserId: s.toUserId,
+        fromName: nameById[s.fromUserId] ?? null,
+        toName: nameById[s.toUserId] ?? null,
+        amount: toEuros(s.amount),
+      })),
+    });
+  } catch (err) {
+    console.error("[households/balances]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/households/contributions — each member's income share (Epic H4).
+householdsRouter.get("/contributions", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.householdId) return res.json({ contributions: [] });
+    const members = await activeMembers(req.householdId);
+    const now = new Date();
+    const since = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+    const grouped = await prisma.income.groupBy({
+      by: ["ownerUserId"],
+      where: { ownerUserId: { in: members.map(m => m.userId) }, date: { gte: since } },
+      _sum: { amount: true },
+    });
+    const incomeBy: Record<string, number> = {};
+    for (const g of grouped) incomeBy[g.ownerUserId] = g._sum.amount ?? 0;
+    const total = members.reduce((s, m) => s + (incomeBy[m.userId] ?? 0), 0);
+
+    const contributions = members.map(m => ({
+      userId: m.userId,
+      name: m.user.name ?? m.user.email,
+      income: incomeBy[m.userId] ?? 0,
+      sharePct: total > 0 ? Math.round(((incomeBy[m.userId] ?? 0) / total) * 1000) / 10 : Math.round((100 / members.length) * 10) / 10,
+    }));
+    return res.json(serializeMoney({ contributions }));
+  } catch (err) {
+    console.error("[households/contributions]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
