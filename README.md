@@ -81,14 +81,20 @@ Or connect to your PostgreSQL instance and run:
 CREATE DATABASE budgetapp;
 ```
 
-### Run Prisma migrations
+### Sync the database schema
 
-Generate the Prisma client and apply all migrations:
+Generate the Prisma client and push the schema to the database:
 
 ```bash
 npm run prisma:generate
-npm run prisma:migrate
+npx prisma db push
 ```
+
+> ⚠️ **Do NOT run `npm run prisma:migrate` (`prisma migrate dev`).** The migration
+> history is incomplete and fails on the shadow database (P3006/P1014: "the
+> underlying table for model `Expense` does not exist"). This project syncs the
+> schema with **`prisma db push`** (additive — adds new tables/columns without
+> data loss). For a full wipe-and-recreate, see "Reset the database" below.
 
 ---
 
