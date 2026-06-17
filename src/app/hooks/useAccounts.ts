@@ -12,6 +12,8 @@ export interface Account {
   currentBalance: number; // euros
   isArchived: boolean;
   sortOrder: number;
+  visibility?: 'private' | 'household'; // Epic H2
+  householdId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +45,7 @@ export function useAccounts() {
     type?: AccountType;
     currency?: string;
     currentBalance?: number;
+    visibility?: 'private' | 'household';
   }) => {
     const res = await fetch('/api/accounts', {
       method: 'POST',

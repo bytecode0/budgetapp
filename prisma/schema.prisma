@@ -185,6 +185,11 @@ model Account {
   isArchived     Boolean @default(false)
   sortOrder      Int     @default(0)
 
+  // Household (Epic H2) — a bank account is only a data source. householdId links
+  // it to a household; visibility controls whether other members can see it.
+  householdId    String? // null = purely personal, not shared with a household
+  visibility     String  @default("household") // private | household
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
