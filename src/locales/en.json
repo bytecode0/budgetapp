@@ -1,4 +1,151 @@
 {
+  "radiografia": {
+    "hydrating": "Setting up your account with your data…",
+    "landing": {
+      "badge": "Financial X-Ray",
+      "title": "See what's really happening with your money",
+      "subtitle": "Upload one bank statement and get a clear picture of your finances in under 2 minutes. No sign-up, no jargon.",
+      "dropTitle": "Drop your bank statement here",
+      "dropHint": "Excel or CSV exported from your bank",
+      "cta": "Choose file",
+      "addMore": "Add another file",
+      "multiHint": "You can add several accounts (e.g. checking + savings)",
+      "analyze_one": "Analyze {{count}} file",
+      "analyze_other": "Analyze {{count}} files",
+      "trustNoSignup": "No sign-up required",
+      "trustPrivate": "Your data stays private",
+      "trustDeleted": "Deleted automatically",
+      "howTitle": "How do I download my statement?",
+      "howStep1": "Log in to your bank's website or app.",
+      "howStep2": "Open your account movements and pick a date range — the last 1–3 months works best.",
+      "howStep3": "Export or download them as Excel or CSV.",
+      "supportedBanks": "Works with statements from"
+    },
+    "errors": {
+      "generic": "Something went wrong. Please try again.",
+      "unreadable_file": "We couldn't open this file. Make sure it's an Excel (.xlsx) or CSV export.",
+      "unrecognized_format": "We couldn't recognize the movements in this file. Try exporting it again as Excel or CSV.",
+      "no_transactions": "We didn't find any transactions in this file.",
+      "too_many_transactions": "This file is too large. Try a shorter date range.",
+      "rate_limited": "Too many attempts. Please try again in a little while.",
+      "analyze_failed": "We couldn't analyze this file. Please try again.",
+      "network": "Connection problem. Please try again."
+    },
+    "processing": {
+      "analyzing": "Reading your movements…",
+      "categorizing": "Detecting categories…",
+      "calculating": "Calculating your spending…",
+      "recurring": "Finding recurring charges…",
+      "ant": "Spotting your ant expenses…",
+      "scoring": "Building your financial health score…",
+      "teaser": "Almost there — there's a number you won't expect."
+    },
+    "results": {
+      "periodLabel": "Based on your last {{months}} months",
+      "heroLead": "Here's the big picture.",
+      "income": "Income",
+      "expenses": "Expenses",
+      "saved": "You saved",
+      "overspent": "You overspent",
+      "balanceTitle": "Your liquid net worth",
+      "runway": "That covers about {{months}} months of your spending.",
+      "account": "Account {{n}}",
+      "balanceNote": "Liquid balance of the accounts you uploaded — it doesn't include debts or other assets.",
+      "categoriesTitle": "Where your money really goes",
+      "categoriesSubtitle": "Your spending by category, projected over a full year.",
+      "perYear": "{{amount}} / year",
+      "year": "year",
+      "antTitle": "Your ant expenses",
+      "antReframe": "That's around {{amount}} over the next 5 years.",
+      "antItem": "{{count}}× · avg {{avg}}",
+      "recurringTitle": "Recurring & subscriptions",
+      "recurringSubtitle": "{{count}} recurring payments · {{amount}} per month.",
+      "wealthTitle": "Savings & investment detected",
+      "wealthReframe": "This isn't spending — it's wealth you keep. We've left it out of your expenses.",
+      "reviewTitle": "Is this saving or spending?",
+      "reviewSubtitle": "We found some transfers and cash we couldn't be sure about. Tell us, and your score updates instantly.",
+      "isSaving": "Saving / investing",
+      "isSpending": "Spending",
+      "transferGeneric": "Unidentified transfer",
+      "internalTitle": "Between your accounts",
+      "internalReconciled": "{{count}} transfers between your own accounts reconciled ({{amount}}) — left out of income, spending and savings.",
+      "addAccountCta": "Do you have a savings account?",
+      "addAccountHint": "Add it and we'll detect transfers between your accounts and complete the picture.",
+      "addAccountButton": "Add account",
+      "adding": "Analyzing…",
+      "healthTitle": "Your Financial Health Index",
+      "strongest": "Your biggest strength right now: {{pillar}}.",
+      "share": "Share my result",
+      "opportunitiesTitle": "Your opportunities",
+      "opportunitiesSubtitle": "Small moves, backed by your real numbers.",
+      "ctaTitle": "Want the full report?",
+      "ctaSubtitle": "Get your complete PDF analysis plus the Financial Transformation Manual.",
+      "ctaButton": "Send me the report"
+    },
+    "stage": {
+      "building": "Building",
+      "balancing": "Finding balance",
+      "growing": "Growing",
+      "solid": "Solid"
+    },
+    "pillar": {
+      "savings": "Savings",
+      "structure": "Structure",
+      "leaks": "Leaks",
+      "commitments": "Commitments",
+      "stability": "Stability"
+    },
+    "category": {
+      "supermarket": "Groceries",
+      "delivery": "Food delivery",
+      "restaurants": "Restaurants",
+      "transport": "Transport",
+      "fuel": "Fuel",
+      "subscriptions": "Subscriptions",
+      "utilities": "Utilities",
+      "shopping": "Shopping",
+      "health": "Health",
+      "fitness": "Fitness",
+      "insurance": "Insurance",
+      "housing": "Housing",
+      "education": "Education",
+      "travel": "Travel",
+      "cash": "Cash",
+      "other": "Other"
+    },
+    "opportunity": {
+      "cut_dining_20": {
+        "title": "Eat out a little less",
+        "detail": "Reducing your restaurants & delivery by {{pct}}% would free up around {{saving}} a year."
+      },
+      "halve_ant": {
+        "title": "Tame your ant expenses",
+        "detail": "Halving those small, frequent spends would save about {{saving}} a year."
+      },
+      "review_subscriptions": {
+        "title": "Review your {{count}} subscriptions",
+        "detail": "Cancelling the ones you don't use could recover about {{saving}} a year."
+      },
+      "emergency_fund": {
+        "title": "Build your safety net",
+        "detail": "At your current pace, a 3-month emergency fund ({{target}}) would be complete in about {{months}} months."
+      }
+    },
+    "email": {
+      "title": "Where should we send it?",
+      "subtitle": "Your full report and the Financial Transformation Manual, straight to your inbox.",
+      "perkReport": "Complete PDF report with charts & action plan",
+      "perkEbook": "Financial Transformation Manual (eBook)",
+      "placeholder": "you@email.com",
+      "submit": "Send my report",
+      "sending": "Sending…",
+      "privacy": "We'll only email you what you asked for. No spam.",
+      "doneTitle": "Check your inbox",
+      "doneSubtitle": "Your report is on its way. It may take a minute to arrive.",
+      "createAccount": "Keep it live — create a free account",
+      "createAccountHint": "We'll load these movements into your account, so you start with zero setup."
+    }
+  },
   "nav": {
     "home": "Home",
     "lifePlans": "Life Plans",
@@ -484,6 +631,11 @@
     "assignIncome": "Assign your income to each destination",
     "addCategory": "Add category",
     "budgetSnapshotSaved": "Budget snapshot saved for {{month}}",
+    "saving": "Saving...",
+    "usingDefaultBudget": "This month uses your default budget",
+    "customBudgetForMonth": "Custom budget for {{month}}",
+    "defaultSaved": "Default budget saved — applies to months without their own budget",
+    "saveFailed": "Some changes could not be saved",
     "unsaved": "Unsaved",
     "saveAsDefault": "Save as Default Budget",
     "updateMonthSnapshot": "Update {{month}} snapshot",

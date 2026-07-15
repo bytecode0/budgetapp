@@ -43,16 +43,21 @@ function isoDay(d: Date): string {
 // Deterministic idempotency key. BBVA exports carry no stable transaction id, so
 // we hash the stable fields; the running balance disambiguates same-day, same-
 // amount, same-merchant charges that are genuinely distinct.
-function externalIdFor(t: ParsedTxn, merchant: string): string {
+export function externalIdFor(t: ParsedTxn, merchant: string): string {
   const key = [isoDay(t.date), Math.round(t.amount * 100), merchant, t.balance ?? ""].join("|");
   return crypto.createHash("sha256").update(key).digest("hex").slice(0, 32);
 }
 
-function readGrid(buffer: Buffer, filename: string): unknown[][] {
+export function readGrid(buffer: Buffer, filename: string): unknown[][] {
   if (filename.toLowerCase().endsWith(".csv")) {
     const text = buffer.toString("utf8");
-    const firstLine = text.split(/\r?\n/)[0] ?? "";
-    const sep = (firstLine.split(";").length - 1) >= (firstLine.split(",").length - 1) ? ";" : ",";
+    // Pick the delimiter by scanning the first few non-empty lines, not just the
+    // first — a title/metadata row (no delimiter) would otherwise mislead it, and
+    // decimal commas in a ';'-delimited file shouldn't win over the real ';'.
+    const sample = text.split(/\r?\n/).filter(l => l.trim().length > 0).slice(0, 5);
+    let semi = 0, comma = 0;
+    for (const l of sample) { semi += l.split(";").length - 1; comma += l.split(",").length - 1; }
+    const sep = semi >= comma ? ";" : ",";
     return text.split(/\r?\n/).map(line =>
       line.split(sep).map(c => c.replace(/^"(.*)"$/, "$1").trim())
     );

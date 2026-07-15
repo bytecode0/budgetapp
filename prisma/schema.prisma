@@ -337,3 +337,37 @@ model HouseholdMember {
   @@unique([householdId, userId])
   @@index([userId])
 }
+
+// Ephemeral session for the Radiografía Financiera (anonymous lead-magnet flow).
+// No auth: an uploaded statement is analyzed, the aggregate result + parsed rows
+// are stored briefly (TTL) to serve GET /:id, generate the PDF, capture the lead
+// email, and — if the user later signs up — hydrate their new account. Purged
+// after `expiresAt`; there is no user relation and it is never long-lived.
+model XRaySession {
+  id           String   @id @default(cuid())
+  result       Json     // computed XRayResult (aggregates, safe to keep)
+  transactions Json     // parsed rows, for optional account hydration on signup
+  bank         String   @default("bbva")
+  txnCount     Int      @default(0)
+  aiCategories Json?    // AI category grouping, kept so reclassify recomputes with the same labels (R7)
+  overrides    Json?    // user movement reclassifications (merchant → consumption|wealth) (R7)
+  email        String?  // captured at the CTA step (R4); null until then
+  claimedByUserId String? // set once the session is used to hydrate an account (R5)
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime            // now + TTL; a cleanup job / lazy check purges past this
+
+  @@index([expiresAt])
+}
+
+// Funnel analytics for the Radiografía (R6). Anonymous, no PII — just a step name
+// and an optional session id, so we can measure upload → WOW → email → account.
+model XRayEvent {
+  id        String   @id @default(cuid())
+  sessionId String?
+  event     String   // whitelisted step name (see routes/xray.ts)
+  createdAt DateTime @default(now())
+
+  @@index([event])
+  @@index([createdAt])
+}

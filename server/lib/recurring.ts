@@ -37,16 +37,34 @@ function mostCommon(values: (string | null)[]): string | null {
   return best;
 }
 
-/** Scan a user's expense history and return the merchants that look recurring. */
-export async function detectRecurring(userId: string): Promise<RecurringCandidate[]> {
-  const expenses = await prisma.expense.findMany({
-    where: { userId, merchant: { not: "" } },
-    select: { merchant: true, amount: true, date: true, allocationId: true },
-    orderBy: { date: "asc" },
-  });
+// A single charge, in the shape the pure detector needs. Amounts are integer
+// cents (Phase A). Decoupled from Prisma so the same heuristic can run over an
+// authenticated user's history OR over an anonymous statement (Radiografía).
+export interface RecurringInput {
+  merchant: string;
+  amount: number;                // cents (positive magnitude)
+  date: Date;
+  allocationId?: string | null;
+}
 
-  const byMerchant = new Map<string, typeof expenses>();
-  for (const e of expenses) {
+export interface RecurringOptions {
+  minMonths?: number;            // distinct months a merchant must span (default 3)
+  minInBand?: number;            // charges close to the average required (default 3)
+}
+
+/**
+ * Pure recurring-merchant detector. No DB access — give it a flat list of
+ * charges and it returns the merchants that look like fixed monthly commitments.
+ * The thresholds are overridable so short windows (e.g. a 1–2 month statement in
+ * the Radiografía flow) can relax them.
+ */
+export function detectRecurringFrom(items: RecurringInput[], opts: RecurringOptions = {}): RecurringCandidate[] {
+  const minMonths = opts.minMonths ?? MIN_MONTHS;
+  const minInBand = opts.minInBand ?? MIN_IN_BAND;
+
+  const byMerchant = new Map<string, RecurringInput[]>();
+  for (const e of items) {
+    if (!e.merchant) continue;
     const arr = byMerchant.get(e.merchant) ?? [];
     arr.push(e);
     byMerchant.set(e.merchant, arr);
@@ -54,14 +72,15 @@ export async function detectRecurring(userId: string): Promise<RecurringCandidat
 
   const candidates: RecurringCandidate[] = [];
   for (const [merchant, group] of byMerchant) {
+    group.sort((a, b) => a.date.getTime() - b.date.getTime());
     const months = new Set(group.map(e => monthKey(e.date)));
-    if (months.size < MIN_MONTHS) continue;
+    if (months.size < minMonths) continue;
 
     const amounts = group.map(e => e.amount);
     const avg = amounts.reduce((s, a) => s + a, 0) / amounts.length;
     const band = Math.max(avg * BAND_RATIO, BAND_FLOOR_CENTS);
     const inBand = amounts.filter(a => Math.abs(a - avg) <= band);
-    if (inBand.length < MIN_IN_BAND) continue; // amount too volatile → not a fixed commitment
+    if (inBand.length < minInBand) continue; // amount too volatile → not a fixed commitment
 
     const avgAmount = Math.round(inBand.reduce((s, a) => s + a, 0) / inBand.length);
     const lastDate = group[group.length - 1].date;
@@ -72,9 +91,20 @@ export async function detectRecurring(userId: string): Promise<RecurringCandidat
       avgAmount,
       cadence: "monthly",
       nextExpectedDate,
-      allocationId: mostCommon(group.map(e => e.allocationId)),
+      allocationId: mostCommon(group.map(e => e.allocationId ?? null)),
     });
   }
 
   return candidates;
+}
+
+/** Scan a user's expense history and return the merchants that look recurring. */
+export async function detectRecurring(userId: string): Promise<RecurringCandidate[]> {
+  const expenses = await prisma.expense.findMany({
+    where: { userId, merchant: { not: "" } },
+    select: { merchant: true, amount: true, date: true, allocationId: true },
+    orderBy: { date: "asc" },
+  });
+
+  return detectRecurringFrom(expenses);
 }

@@ -393,6 +393,53 @@ export async function sendPartnerInviteEmail(
   if (error) { console.error("[mailer/sendPartnerInviteEmail]", error); throw new Error(error.message); }
 }
 
+// ─── 6. Radiografía Financiera — report + eBook (R4) ─────────────────────────
+
+export async function sendXrayReportEmail(email: string, pdf: Buffer, score: number) {
+  const html = wrapper(`
+    <tr><td style="height:4px;background:linear-gradient(90deg,#1E3A8A 0%,#10B981 100%);"></td></tr>
+    <tr>
+      <td style="padding:44px 40px 24px;text-align:center;">
+        <div style="width:64px;height:64px;background:linear-gradient(135deg,rgba(16,185,129,0.15) 0%,rgba(30,58,138,0.1) 100%);border:2px solid rgba(16,185,129,0.3);border-radius:50%;margin:0 auto 20px;text-align:center;line-height:64px;font-size:28px;">📊</div>
+        <h1 style="margin:0 0 10px;font-size:26px;font-weight:800;color:#111827;line-height:1.2;">Aquí tienes tu Radiografía Financiera</h1>
+        <p style="margin:0 auto;font-size:15px;color:#6B7280;line-height:1.6;max-width:400px;">
+          Tu informe completo va adjunto en PDF. Tu Índice de Salud Financiera es
+          <strong style="color:#1E3A8A;">${score}/100</strong> — dentro encontrarás tus gastos hormiga, suscripciones y oportunidades concretas.
+        </p>
+      </td>
+    </tr>
+    ${divider()}
+    <tr>
+      <td style="padding:28px 40px;">
+        <p style="margin:0 0 16px;font-size:12px;font-weight:600;letter-spacing:1px;color:#6B7280;text-transform:uppercase;">Qué incluye tu informe</p>
+        <table cellpadding="0" cellspacing="0" width="100%">
+          ${featureRow("📄", "<strong style='color:#111827;'>Análisis completo en PDF</strong> — resumen, categorías y gráficos")}
+          ${featureRow("🐜", "<strong style='color:#111827;'>Gastos hormiga y suscripciones</strong> — cuánto suman al año")}
+          ${featureRow("💡", "<strong style='color:#111827;'>Tus oportunidades</strong> — basadas en tus números reales")}
+          ${featureRow("📖", "<strong style='color:#111827;'>Manual de Transformación Financiera</strong> — tu siguiente paso")}
+        </table>
+      </td>
+    </tr>
+    ${divider()}
+    <tr>
+      <td style="padding:32px 40px 40px;text-align:center;">
+        ${ctaButton("Crear mi cuenta gratis →", `${APP_URL}`)}
+        <p style="margin:16px 0 0;font-size:12px;color:#9CA3AF;">Plan gratuito · Tus datos ya quedarán cargados</p>
+      </td>
+    </tr>
+  `);
+
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: "Tu Radiografía Financiera 📊",
+    html,
+    attachments: [{ filename: "radiografia-financiera.pdf", content: pdf }],
+  });
+
+  if (error) { console.error("[mailer/sendXrayReportEmail]", error); throw new Error(error.message); }
+}
+
 // ─── 5. Welcome — Google signup ───────────────────────────────────────────────
 
 export async function sendWelcomeGoogleEmail(email: string, name: string) {

@@ -1,4 +1,151 @@
 {
+  "radiografia": {
+    "hydrating": "Preparando tu cuenta con tus datos…",
+    "landing": {
+      "badge": "Radiografía Financiera",
+      "title": "Descubre qué está pasando realmente con tu dinero",
+      "subtitle": "Sube un extracto de tu banco y obtén una imagen clara de tus finanzas en menos de 2 minutos. Sin registro, sin tecnicismos.",
+      "dropTitle": "Arrastra aquí el extracto de tu banco",
+      "dropHint": "Excel o CSV descargado de tu banco",
+      "cta": "Elegir archivo",
+      "addMore": "Añadir otro archivo",
+      "multiHint": "Puedes añadir varias cuentas (p. ej. gastos + ahorro)",
+      "analyze_one": "Analizar {{count}} archivo",
+      "analyze_other": "Analizar {{count}} archivos",
+      "trustNoSignup": "Sin registro",
+      "trustPrivate": "Tus datos son privados",
+      "trustDeleted": "Se borra automáticamente",
+      "howTitle": "¿Cómo descargo mi extracto?",
+      "howStep1": "Entra en la web o la app de tu banco.",
+      "howStep2": "Abre los movimientos de tu cuenta y elige un rango de fechas — lo ideal son los últimos 1–3 meses.",
+      "howStep3": "Expórtalos o descárgalos en Excel o CSV.",
+      "supportedBanks": "Compatible con extractos de"
+    },
+    "errors": {
+      "generic": "Algo salió mal. Inténtalo de nuevo.",
+      "unreadable_file": "No pudimos abrir este archivo. Asegúrate de que sea un Excel (.xlsx) o CSV.",
+      "unrecognized_format": "No pudimos reconocer los movimientos de este archivo. Prueba a exportarlo de nuevo en Excel o CSV.",
+      "no_transactions": "No encontramos movimientos en este archivo.",
+      "too_many_transactions": "El archivo es demasiado grande. Prueba con un rango de fechas más corto.",
+      "rate_limited": "Demasiados intentos. Inténtalo de nuevo en un rato.",
+      "analyze_failed": "No pudimos analizar este archivo. Inténtalo de nuevo.",
+      "network": "Problema de conexión. Inténtalo de nuevo."
+    },
+    "processing": {
+      "analyzing": "Leyendo tus movimientos…",
+      "categorizing": "Detectando categorías…",
+      "calculating": "Calculando tus gastos…",
+      "recurring": "Buscando gastos recurrentes…",
+      "ant": "Detectando tus gastos hormiga…",
+      "scoring": "Calculando tu índice de salud financiera…",
+      "teaser": "Casi listo — hay un dato que no vas a esperar."
+    },
+    "results": {
+      "periodLabel": "Según tus últimos {{months}} meses",
+      "heroLead": "Esta es la foto completa.",
+      "income": "Ingresos",
+      "expenses": "Gastos",
+      "saved": "Ahorraste",
+      "overspent": "Gastaste de más",
+      "balanceTitle": "Tu patrimonio líquido",
+      "runway": "Eso cubre unos {{months}} meses de tus gastos.",
+      "account": "Cuenta {{n}}",
+      "balanceNote": "Saldo líquido de las cuentas que subiste — no incluye deudas ni otros bienes.",
+      "categoriesTitle": "A dónde va realmente tu dinero",
+      "categoriesSubtitle": "Tus gastos por categoría, proyectados a un año completo.",
+      "perYear": "{{amount}} / año",
+      "year": "año",
+      "antTitle": "Tus gastos hormiga",
+      "antReframe": "Eso son unos {{amount}} en los próximos 5 años.",
+      "antItem": "{{count}}× · media {{avg}}",
+      "recurringTitle": "Recurrentes y suscripciones",
+      "recurringSubtitle": "{{count}} pagos recurrentes · {{amount}} al mes.",
+      "wealthTitle": "Ahorro e inversión detectados",
+      "wealthReframe": "Esto no es gasto: es patrimonio que conservas. Lo hemos dejado fuera de tus gastos.",
+      "reviewTitle": "¿Esto es ahorro o gasto?",
+      "reviewSubtitle": "Encontramos algunos traspasos y retiradas de efectivo que no pudimos clasificar con seguridad. Dínoslo y tu puntuación se actualiza al instante.",
+      "isSaving": "Ahorro / inversión",
+      "isSpending": "Gasto",
+      "transferGeneric": "Transferencia sin identificar",
+      "internalTitle": "Entre tus cuentas",
+      "internalReconciled": "{{count}} traspasos entre tus cuentas reconciliados ({{amount}}) — fuera de ingresos, gastos y ahorro.",
+      "addAccountCta": "¿Tienes una cuenta de ahorro?",
+      "addAccountHint": "Añádela y detectaremos los traspasos entre tus cuentas para completar la foto.",
+      "addAccountButton": "Añadir cuenta",
+      "adding": "Analizando…",
+      "healthTitle": "Tu Índice de Salud Financiera",
+      "strongest": "Tu mayor fortaleza ahora mismo: {{pillar}}.",
+      "share": "Compartir mi resultado",
+      "opportunitiesTitle": "Tus oportunidades",
+      "opportunitiesSubtitle": "Pequeños movimientos, basados en tus números reales.",
+      "ctaTitle": "¿Quieres el informe completo?",
+      "ctaSubtitle": "Recibe tu análisis completo en PDF y el Manual de Transformación Financiera.",
+      "ctaButton": "Enviarme el informe"
+    },
+    "stage": {
+      "building": "En construcción",
+      "balancing": "Buscando equilibrio",
+      "growing": "En crecimiento",
+      "solid": "Sólido"
+    },
+    "pillar": {
+      "savings": "Ahorro",
+      "structure": "Estructura",
+      "leaks": "Fugas",
+      "commitments": "Compromisos",
+      "stability": "Estabilidad"
+    },
+    "category": {
+      "supermarket": "Supermercado",
+      "delivery": "Comida a domicilio",
+      "restaurants": "Restaurantes",
+      "transport": "Transporte",
+      "fuel": "Combustible",
+      "subscriptions": "Suscripciones",
+      "utilities": "Suministros",
+      "shopping": "Compras",
+      "health": "Salud",
+      "fitness": "Gimnasio",
+      "insurance": "Seguros",
+      "housing": "Vivienda",
+      "education": "Educación",
+      "travel": "Viajes",
+      "cash": "Efectivo",
+      "other": "Otros"
+    },
+    "opportunity": {
+      "cut_dining_20": {
+        "title": "Comer fuera un poco menos",
+        "detail": "Reducir un {{pct}}% en restaurantes y comida a domicilio liberaría unos {{saving}} al año."
+      },
+      "halve_ant": {
+        "title": "Domar tus gastos hormiga",
+        "detail": "Reducir a la mitad esos pequeños gastos frecuentes ahorraría unos {{saving}} al año."
+      },
+      "review_subscriptions": {
+        "title": "Revisa tus {{count}} suscripciones",
+        "detail": "Cancelar las que no usas podría recuperar unos {{saving}} al año."
+      },
+      "emergency_fund": {
+        "title": "Crea tu colchón de seguridad",
+        "detail": "A tu ritmo actual, un fondo de emergencia de 3 meses ({{target}}) estaría completo en unos {{months}} meses."
+      }
+    },
+    "email": {
+      "title": "¿A dónde te lo enviamos?",
+      "subtitle": "Tu informe completo y el Manual de Transformación Financiera, directos a tu correo.",
+      "perkReport": "Informe completo en PDF con gráficos y plan de acción",
+      "perkEbook": "Manual de Transformación Financiera (eBook)",
+      "placeholder": "tu@email.com",
+      "submit": "Enviarme el informe",
+      "sending": "Enviando…",
+      "privacy": "Solo te enviaremos lo que has pedido. Sin spam.",
+      "doneTitle": "Revisa tu correo",
+      "doneSubtitle": "Tu informe va en camino. Puede tardar un minuto en llegar.",
+      "createAccount": "Mantenlo vivo — crea una cuenta gratis",
+      "createAccountHint": "Cargaremos estos movimientos en tu cuenta, así empiezas sin configurar nada."
+    }
+  },
   "nav": {
     "home": "Inicio",
     "lifePlans": "Planes de Vida",
@@ -484,6 +631,11 @@
     "assignIncome": "Asigna tus ingresos a cada destino",
     "addCategory": "Añadir categoría",
     "budgetSnapshotSaved": "Instantánea del presupuesto guardada para {{month}}",
+    "saving": "Guardando...",
+    "usingDefaultBudget": "Este mes usa tu presupuesto por defecto",
+    "customBudgetForMonth": "Presupuesto propio de {{month}}",
+    "defaultSaved": "Presupuesto por defecto guardado — se aplica a los meses sin ajuste propio",
+    "saveFailed": "No se pudieron guardar algunos cambios",
     "unsaved": "Sin guardar",
     "saveAsDefault": "Guardar como Presupuesto Predeterminado",
     "updateMonthSnapshot": "Actualizar instantánea de {{month}}",

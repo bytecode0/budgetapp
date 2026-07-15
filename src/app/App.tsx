@@ -22,11 +22,12 @@ import { useAllocations } from './hooks/useAllocations';
 import { useAnalytics } from './hooks/useAnalytics';
 import { useHousehold } from './hooks/useHousehold';
 import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/usePartner';
+import { XRayFlow } from './components/xray/XRayFlow';
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'household' | 'settings';
 
 function AppInner() {
-  const { user, loading, logout, refreshUser } = useAuth();
+  const { user, loading, hydrating, logout, refreshUser } = useAuth();
   const { t } = useTranslation();
   const { darkMode, updateDarkMode, dbLanguage, updateLanguage } = useAllocations();
   const { household } = useHousehold();
@@ -122,8 +123,8 @@ function AppInner() {
     }
   };
 
-  // Show loading screen while checking auth
-  if (loading) {
+  // Show loading screen while checking auth (or importing the Radiografía data).
+  if (loading || hydrating) {
     return (
       <div className="size-full bg-background flex items-center justify-center">
         <motion.div
@@ -136,6 +137,7 @@ function AppInner() {
             <Target className="w-11 h-11 text-white" />
           </div>
           <h2 className="text-2xl font-display text-primary mb-2">LifePlan</h2>
+          {hydrating && <p className="text-sm text-muted-foreground mb-4">{t('radiografia.hydrating')}</p>}
           <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto" />
         </motion.div>
       </div>
@@ -367,6 +369,20 @@ function AppInner() {
 }
 
 export default function App() {
+  // Public, unauthenticated lead-magnet flow. Checked before the authenticated
+  // app mounts so its auth-only data hooks never fire for anonymous visitors.
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/radiografia')) {
+    // No LanguageProvider here: it persists the language to localStorage, which
+    // would leak into the authenticated app. XRayFlow forces Spanish at runtime
+    // (the lead magnet's audience) without touching the saved preference.
+    return (
+      <>
+        <Toaster richColors position="top-right" />
+        <XRayFlow />
+      </>
+    );
+  }
+
   return (
     <LanguageProvider>
       <AuthProvider>

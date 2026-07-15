@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(tsx *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(git merge *)",
+      "Bash(git fetch *)",
+      "Bash(git stash *)",
+      "Bash(git worktree *)",
+      "Bash(curl -s http://localhost:*)",
+      "Bash(curl -s --max-time * http://localhost:*)",
+      "Bash(lsof *)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:registry.npmjs.org)"
+    ],
+    "deny": [
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~*)",
+      "Read(.env)",
+      "Read(.env.local)",
+      "Read(.env.production)",
+      "Read(**/.env)"
+    ],
+    "ask": [
+      "Bash(git push --force*)",
+      "Bash(npx prisma migrate reset*)",
+      "Bash(npx prisma db push --force-reset*)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "network": {
+      "allowedDomains": [
+        "github.com",
+        "*.githubusercontent.com",
+        "registry.npmjs.org",
+        "*.npmjs.org",
+        "binaries.prisma.sh",
+        "*.prisma.sh"
+      ],
+      "allowLocalBinding": true
+    }
+  }
+}

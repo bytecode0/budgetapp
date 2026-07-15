@@ -101,7 +101,12 @@ function DraggableRow({
 interface LocalAllocation {
   id: string; name: string; icon: string; type: string;
   lifePlanId: string | null;
-  allocatedAmount: number; actualAmount: number; isDefault: boolean; dirty: boolean;
+  allocatedAmount: number; actualAmount: number; isDefault: boolean;
+  dirty: boolean;
+  // Track what changed so saves route correctly: amounts are per-month
+  // (MonthlyBudget), while name/icon/type/lifePlan are global attributes of the
+  // category (Allocation).
+  amountDirty: boolean; metaDirty: boolean;
 }
 
 export function AllocationFlow() {
@@ -119,6 +124,13 @@ export function AllocationFlow() {
   const { plans: rawPlans, loading: plansLoading } = usePlans();
 
   const { selectedMonth, isCurrentMonth, isFutureMonth } = useMonth();
+  // Per-month budget data (MonthlyBudget). The GET endpoint returns this month's
+  // overrides, or the global allocation amounts as a fallback flagged saved:false.
+  const {
+    budgets: monthlyBudgets, loading: monthlyLoading,
+    saving: savingMonthlyBudget, isSaved: isBudgetSaved, saveBudgets, fetchBudgets,
+  } = useMonthlyBudget(selectedMonth);
+  const { review: monthReview } = useMonthlyReview(selectedMonth);
   const { incomes, totalIncome, fetchIncomes } = useIncome(selectedMonth);
   // Effective income for the month = sum of recorded income transactions,
   // falling back to the planned baseline (UserSettings.monthlyIncome) when none
@@ -146,14 +158,22 @@ export function AllocationFlow() {
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [nameInput, setNameInput]         = useState('');
 
+  // Seed the editable rows from the category list (metadata) merged with the
+  // selected month's budget amount. Re-seeds when the month changes, so each
+  // month shows its own budget (or the default fallback). Category metadata
+  // (name/icon/type/lifePlan) is always global.
   useEffect(() => {
+    if (monthlyLoading) return;
+    const amountByAlloc = new Map(monthlyBudgets.map(b => [b.allocationId, b.allocatedAmount]));
     setLocal(rawAllocations.map(a => ({
       id: a.id, name: a.name, icon: a.icon, type: a.type,
       lifePlanId: a.lifePlanId ?? null,
-      allocatedAmount: a.allocatedAmount, actualAmount: a.actualAmount,
-      isDefault: a.isDefault, dirty: false,
+      allocatedAmount: amountByAlloc.has(a.id) ? amountByAlloc.get(a.id)! : a.allocatedAmount,
+      actualAmount: a.actualAmount,
+      isDefault: a.isDefault,
+      dirty: false, amountDirty: false, metaDirty: false,
     })));
-  }, [rawAllocations]);
+  }, [rawAllocations, monthlyBudgets, monthlyLoading]);
 
   // ── Derived numbers ─────────────────────────────────────
   const totalAllocated = local.reduce((s, a) => s + a.allocatedAmount, 0);
@@ -166,8 +186,19 @@ export function AllocationFlow() {
 
   // ── Handlers — allocations ──────────────────────────────
   const updateLocal = (id: string, patch: Partial<LocalAllocation>) =>
-    setLocal(prev => prev.map(a => a.id === id ? { ...a, ...patch, dirty: true } : a));
+    setLocal(prev => prev.map(a => {
+      if (a.id !== id) return a;
+      const touchesAmount = 'allocatedAmount' in patch;
+      const touchesMeta = 'name' in patch || 'icon' in patch || 'type' in patch || 'lifePlanId' in patch;
+      return {
+        ...a, ...patch, dirty: true,
+        amountDirty: a.amountDirty || touchesAmount,
+        metaDirty: a.metaDirty || touchesMeta,
+      };
+    }));
 
+  // "Save as default": writes amounts (and any structural edits) onto the global
+  // Allocation template. Months WITHOUT their own budget then reflect this.
   const handleSaveAllocations = async () => {
     setSaving(true);
     const dirty = local.filter(a => a.dirty);
@@ -179,10 +210,11 @@ export function AllocationFlow() {
     );
     setSaving(false);
     if (results.some(r => r && 'error' in r && r.error)) {
-      toast.error('Some allocations failed to save');
+      toast.error(t('allocation.saveFailed'));
     } else {
-      setLocal(prev => prev.map(a => ({ ...a, dirty: false })));
-      toast.success('Allocations saved!');
+      setLocal(prev => prev.map(a => ({ ...a, dirty: false, amountDirty: false, metaDirty: false })));
+      await fetchBudgets(); // refresh so the current month reflects the new default
+      toast.success(t('allocation.defaultSaved'));
     }
   };
 
@@ -241,11 +273,6 @@ export function AllocationFlow() {
     reorderAllocations(order);
   }, [reorderAllocations]);
 
-  // ── Month-derived data (selectedMonth obtained above) ────────────────────
-  const { saving: savingMonthlyBudget, isSaved: isBudgetSaved, saveBudgets } =
-    useMonthlyBudget(selectedMonth);
-  const { review: monthReview } = useMonthlyReview(selectedMonth);
-
   const expenseDefaultDate = isCurrentMonth
     ? new Date().toISOString().slice(0, 10)
     : (() => {
@@ -258,11 +285,32 @@ export function AllocationFlow() {
   const [showRecurring, setShowRecurring] = useState(false);
   const [showAddIncome, setShowAddIncome] = useState(false);
 
+  // "Save for {month}": the primary action. Structural edits (name/icon/type/
+  // lifePlan) are global, so they go to the Allocation. Amounts become per-month
+  // overrides — but only for the categories the user actually changed, so the
+  // rest keep following the default template.
   const handleSaveMonthlyBudget = async () => {
-    const entries = local.map(a => ({ allocationId: a.id, allocatedAmount: a.allocatedAmount }));
-    const result = await saveBudgets(entries);
-    if ('error' in result) toast.error(result.error as string);
-    else toast.success(t('allocation.budgetSnapshotSaved', { month: monthLabel(selectedMonth, locale) }));
+    const metaDirty = local.filter(a => a.metaDirty);
+    const metaResults = await Promise.all(
+      metaDirty.map(a => updateAllocation(a.id, {
+        name: a.name, icon: a.icon, type: a.type, lifePlanId: a.lifePlanId,
+      } as any))
+    );
+
+    const amountEntries = local
+      .filter(a => a.amountDirty)
+      .map(a => ({ allocationId: a.id, allocatedAmount: a.allocatedAmount }));
+    const budgetResult = amountEntries.length > 0
+      ? await saveBudgets(amountEntries)
+      : {};
+
+    const metaFailed = metaResults.some(r => r && 'error' in r && r.error);
+    if (metaFailed || ('error' in budgetResult && budgetResult.error)) {
+      toast.error(t('allocation.saveFailed'));
+      return;
+    }
+    setLocal(prev => prev.map(a => ({ ...a, dirty: false, amountDirty: false, metaDirty: false })));
+    toast.success(t('allocation.budgetSnapshotSaved', { month: monthLabel(selectedMonth, locale) }));
   };
 
   if (loading || plansLoading) {
@@ -376,7 +424,10 @@ export function AllocationFlow() {
           </div>
 
           {/* Stats */}
-          {isCurrentMonth ? (
+          {/* Current AND future months use the planning view (income vs. allocated)
+              so over-allocation shows in red. A future month can't have actual
+              spending yet, so the spent/net review only makes sense for past months. */}
+          {(isCurrentMonth || isFutureMonth) ? (
             <div className="grid grid-cols-3 gap-4 pt-6 border-t border-white/20">
               <div>
                 <p className="text-xs opacity-75 mb-1">{t('allocation.totalAllocated')}</p>
@@ -501,12 +552,17 @@ export function AllocationFlow() {
           </button>
         </div>
 
-        {isBudgetSaved && (
-          <div className="flex items-center gap-2 text-xs text-secondary bg-secondary/10 px-3 py-2 rounded-xl">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            {t('allocation.budgetSnapshotSaved', { month: monthLabel(selectedMonth, locale) })}
-          </div>
-        )}
+        <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-xl ${
+          isBudgetSaved ? 'text-secondary bg-secondary/10' : 'text-muted-foreground bg-muted'
+        }`}>
+          {isBudgetSaved ? (
+            <><CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              {t('allocation.customBudgetForMonth', { month: monthLabel(selectedMonth, locale) })}</>
+          ) : (
+            <><CalendarCheck className="w-3.5 h-3.5 shrink-0" />
+              {t('allocation.usingDefaultBudget')}</>
+          )}
+        </div>
 
         <div className="space-y-5">
           <AnimatePresence initial={false}>
@@ -629,33 +685,28 @@ export function AllocationFlow() {
           </AnimatePresence>
         </div>
 
-        <div className="flex flex-col gap-2">
-          {hasDirtyAllocations && (
+        {hasDirtyAllocations && (
+          <div className="flex flex-col gap-2">
+            {/* Primary: save the edited amounts for THIS month only */}
             <button
-              onClick={handleSaveAllocations} disabled={saving}
+              onClick={handleSaveMonthlyBudget} disabled={savingMonthlyBudget}
               className="w-full py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50"
             >
+              {savingMonthlyBudget
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('allocation.saving')}</>
+                : <><CalendarCheck className="w-4 h-4" /> {t('allocation.saveBudgetFor', { month: monthLabel(selectedMonth, locale) })}</>}
+            </button>
+            {/* Secondary: update the default template for months without their own budget */}
+            <button
+              onClick={handleSaveAllocations} disabled={saving}
+              className="w-full py-3 rounded-xl border border-border text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+            >
               {saving
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('allocation.saving')}</>
                 : <><CheckCircle2 className="w-4 h-4" /> {t('allocation.saveAsDefault')}</>}
             </button>
-          )}
-          <button
-            onClick={handleSaveMonthlyBudget} disabled={savingMonthlyBudget}
-            className={`w-full py-3 rounded-xl border transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 ${
-              isBudgetSaved
-                ? 'border-secondary/30 text-secondary hover:bg-secondary/5'
-                : 'border-primary/30 text-primary hover:bg-primary/5'
-            }`}
-          >
-            {savingMonthlyBudget
-              ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
-              : isBudgetSaved
-              ? <><CheckCircle2 className="w-4 h-4" /> {t('allocation.updateMonthSnapshot', { month: monthLabel(selectedMonth, locale) })}</>
-              : <><CalendarCheck className="w-4 h-4" /> {t('allocation.saveBudgetFor', { month: monthLabel(selectedMonth, locale) })}</>
-            }
-          </button>
-        </div>
+          </div>
+        )}
       </motion.div>
 
       {/* ── Tip ── */}

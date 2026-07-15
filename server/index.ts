@@ -18,6 +18,7 @@ import { householdsRouter } from "./routes/households.js";
 import { dashboardRouter } from "./routes/dashboard.js";
 import { stripeRouter } from "./routes/stripe.js";
 import { aiRouter } from "./routes/ai.js";
+import { xrayRouter } from "./routes/xray.js";
 
 const app = express();
 const PORT = process.env.SERVER_PORT || 3002;
@@ -51,6 +52,7 @@ app.use("/api/households", householdsRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/stripe", stripeRouter);
 app.use("/api/ai", aiRouter);
+app.use("/api/xray", xrayRouter); // public (no requireAuth) — Radiografía Financiera
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
