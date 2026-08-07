@@ -57,8 +57,9 @@ export interface XRayResult {
   wealth: {
     total: number;
     savings: number;
+    giving: number;
     investment: number;
-    items: { merchant: string; total: number; kind: 'savings' | 'investment' }[];
+    items: { merchant: string; total: number; kind: 'savings' | 'giving' | 'investment' }[];
   };
   uncertain: {
     total: number;

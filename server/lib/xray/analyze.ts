@@ -66,12 +66,13 @@ export interface XRayResult {
     count: number;
     items: { merchant: string; monthlyAmount: number; annualized: number; categoryKey: string }[];
   };
-  // Detected savings + investment (money kept, not spent).
+  // Detected savings + giving + investment (money kept or given, not spent).
   wealth: {
     total: number;
     savings: number;
+    giving: number;
     investment: number;
-    items: { merchant: string; total: number; kind: "savings" | "investment" }[];
+    items: { merchant: string; total: number; kind: "savings" | "giving" | "investment" }[];
   };
   // Ambiguous movements (transfers, cash) awaiting user confirmation.
   uncertain: {
@@ -244,10 +245,10 @@ export function analyze(txns: TaggedTxn[], aiCategories?: SuggestedCategory[], o
     .sort((a, b) => b.total - a.total);
   const antTotalC = sum(antItems.map(a => toCents(a.total)));
 
-  // ---- Wealth (savings + investment) ----
-  const wealthByMerchant = new Map<string, { cents: number; kind: "savings" | "investment" }>();
+  // ---- Wealth (savings + giving + investment) ----
+  const wealthByMerchant = new Map<string, { cents: number; kind: "savings" | "giving" | "investment" }>();
   for (const e of wealthTxns) {
-    const kind = e.movementKind === "investment" ? "investment" : "savings";
+    const kind = e.movementKind === "investment" ? "investment" : e.movementKind === "giving" ? "giving" : "savings";
     const cur = wealthByMerchant.get(e.merchant) ?? { cents: 0, kind };
     cur.cents += e.cents;
     wealthByMerchant.set(e.merchant, cur);
@@ -255,7 +256,8 @@ export function analyze(txns: TaggedTxn[], aiCategories?: SuggestedCategory[], o
   const wealthItems = [...wealthByMerchant.entries()]
     .map(([merchant, v]) => ({ merchant, total: eur(v.cents), kind: v.kind }))
     .sort((a, b) => b.total - a.total);
-  const savingsC = sum(wealthTxns.filter(e => e.movementKind !== "investment").map(e => e.cents));
+  const savingsC = sum(wealthTxns.filter(e => e.movementKind !== "investment" && e.movementKind !== "giving").map(e => e.cents));
+  const givingC = sum(wealthTxns.filter(e => e.movementKind === "giving").map(e => e.cents));
   const investmentC = sum(wealthTxns.filter(e => e.movementKind === "investment").map(e => e.cents));
 
   // ---- Uncertain (transfers + cash), grouped by the stable movementKey so a
@@ -367,8 +369,9 @@ export function analyze(txns: TaggedTxn[], aiCategories?: SuggestedCategory[], o
         .sort((a, b) => b.annualized - a.annualized),
     },
     wealth: {
-      total: eur(savingsC + investmentC),
+      total: eur(savingsC + givingC + investmentC),
       savings: eur(savingsC),
+      giving: eur(givingC),
       investment: eur(investmentC),
       items: wealthItems,
     },

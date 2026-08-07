@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useMonth, currentMonthKey } from '../context/MonthContext';
+import { useMonth } from '../context/MonthContext';
 import { motion } from 'motion/react';
-import { AlertTriangle, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ArrowRight, Sparkles, CreditCard } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { MonthlyReview } from './MonthlyReview';
 import { Analytics } from './Analytics';
@@ -9,6 +9,7 @@ import { usePlans } from '../hooks/usePlans';
 import { useAllocations } from '../hooks/useAllocations';
 import { useIncome } from '../hooks/useIncome';
 import { useMonthlyReview } from '../hooks/useMonthlyBudget';
+import { useDebts } from '../hooks/useDebts';
 import { useLanguage } from '../context/LanguageContext';
 
 function greeting(t: (key: string) => string) {
@@ -23,6 +24,11 @@ function monthLabel(key: string, locale: string) {
   return new Date(y, m - 1, 1).toLocaleDateString(locale === 'es' ? 'es-ES' : 'en-GB', { month: 'long', year: 'numeric' });
 }
 
+function shortMonthLabel(key: string, locale: string) {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(locale === 'es' ? 'es-ES' : 'en-GB', { month: 'short' });
+}
+
 interface HomeProps {
   onNavigate?: (screen: string) => void;
 }
@@ -35,7 +41,10 @@ export function Home({ onNavigate }: HomeProps) {
   const { monthlyIncome } = useAllocations();
   const { incomes, totalIncome } = useIncome(selectedMonth);
   const { review } = useMonthlyReview(selectedMonth);
+  const { totalOwed, timeline, fetchTimeline } = useDebts();
   const month = selectedMonth;
+
+  useEffect(() => { fetchTimeline(6); }, [fetchTimeline]);
 
   // Actual income for the month when recorded; otherwise the planned baseline.
   const displayIncome = incomes.length > 0 ? totalIncome : monthlyIncome;
@@ -48,15 +57,14 @@ export function Home({ onNavigate }: HomeProps) {
   const [missedPlans, setMissedPlans] = useState<{ planId: string; title: string; icon: string }[]>([]);
   useEffect(() => {
     if (!isCurrentMonth) { setMissedPlans([]); return; }
-    const month = currentMonthKey();
-    fetch(`/api/plans/monthly-status?month=${month}`, { credentials: 'include' })
+    fetch(`/api/plans/monthly-status?month=${selectedMonth}`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data) return;
         setMissedPlans(data.status.filter((s: any) => s.status === 'missed').map((s: any) => ({ planId: s.planId, title: s.title, icon: s.icon })));
       })
       .catch(() => {});
-  }, [isCurrentMonth]);
+  }, [isCurrentMonth, selectedMonth]);
 
   // Budget comparison uses categorized spending only — uncategorized money has no
   // budget to compare against (it's surfaced separately by the amber nudge below).
@@ -117,6 +125,49 @@ export function Home({ onNavigate }: HomeProps) {
           </div>
         </div>
       </motion.div>
+
+      {/* ── Committed future: the core differentiator — how much of what's
+           coming in is already spoken for by debt, before you've spent a cent ── */}
+      {totalOwed > 0 && timeline.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
+          className="bg-card border border-border rounded-2xl p-6"
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 rounded-2xl bg-destructive/10 flex items-center justify-center text-destructive shrink-0">
+              <CreditCard className="w-6 h-6" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl font-display">{t('home.committedFutureTitle')}</h2>
+              <p className="text-sm text-muted-foreground">
+                {t('home.committedFutureSubtitle', { pct: timeline[0].pctCommitted })}
+              </p>
+            </div>
+            {onNavigate && (
+              <button
+                onClick={() => onNavigate('debts')}
+                className="text-xs text-primary flex items-center gap-1 hover:underline shrink-0"
+              >
+                {t('home.viewDebts')} <ArrowRight className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-6 gap-2">
+            {timeline.map(p => (
+              <div key={p.period} className="text-center">
+                <div className="h-16 flex items-end justify-center">
+                  <div
+                    className="w-full max-w-8 bg-destructive/70 rounded-t-md transition-all"
+                    style={{ height: `${Math.min(100, Math.max(2, p.pctCommitted))}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 capitalize">{shortMonthLabel(p.period, language)}</p>
+                <p className="text-xs font-display">{p.pctCommitted}%</p>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* ── Budget status banner ── */}
       {review && (

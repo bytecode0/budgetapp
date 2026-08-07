@@ -10,6 +10,8 @@ import { aiEnabled, classifyMerchants } from "../lib/ai/classify.js";
 import { suggestCategories } from "../lib/ai/suggestCategories.js";
 import { rebuildExpenseShares } from "../lib/expenseShares.js";
 import { expenseListingFilter } from "../lib/visibility.js";
+import { periodBounds } from "../lib/period.js";
+import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 
 export const expensesRouter = Router();
 
@@ -40,11 +42,9 @@ expensesRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
     const where: any = { userId: req.userId! };
 
     if (month) {
-      const [year, mon] = month.split("-").map(Number);
-      where.date = {
-        gte: new Date(year, mon - 1, 1),
-        lt: new Date(year, mon, 1),
-      };
+      const cycleStartDay = await getCycleStartDay(req.userId!);
+      const { start, end } = periodBounds(month, cycleStartDay);
+      where.date = { gte: start, lt: end };
     }
 
     if (allocationId) {

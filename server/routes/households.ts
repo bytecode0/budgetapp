@@ -4,6 +4,8 @@ import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { ensureHousehold, isFinancialModel, isVisibilityTier } from "../lib/household.js";
 import { computeBalances } from "../lib/balances.js";
 import { serializeMoney, toEuros } from "../lib/money.js";
+import { currentPeriodKey, periodKeyOffset, periodBounds } from "../lib/period.js";
+import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 
 export const householdsRouter = Router();
 
@@ -113,8 +115,9 @@ householdsRouter.get("/contributions", requireAuth, async (req: AuthRequest, res
   try {
     if (!req.householdId) return res.json({ contributions: [] });
     const members = await activeMembers(req.householdId);
-    const now = new Date();
-    const since = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+    const cycleStartDay = await getCycleStartDay(req.userId!);
+    const current = currentPeriodKey(cycleStartDay);
+    const since = periodBounds(periodKeyOffset(current, -6), cycleStartDay).start;
     const grouped = await prisma.income.groupBy({
       by: ["ownerUserId"],
       where: { ownerUserId: { in: members.map(m => m.userId) }, date: { gte: since } },

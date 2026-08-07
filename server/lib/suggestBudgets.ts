@@ -6,6 +6,8 @@
 // categories; turning that history into a number is arithmetic, not a task for
 // an LLM. Works with no API key configured.
 import { prisma } from "./prisma.js";
+import { periodKeyFor, periodKeyOffset, periodBounds, currentPeriodKey } from "./period.js";
+import { getCycleStartDay } from "./getCycleStartDay.js";
 
 export type Confidence = "high" | "medium" | "low";
 
@@ -14,10 +16,6 @@ export interface BudgetSuggestion {
   suggested: number; // cents, rounded to the nearest €5
   monthsObserved: number; // months (in window) with any spend in this category
   confidence: Confidence;
-}
-
-function monthKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function median(values: number[]): number {
@@ -37,14 +35,15 @@ function roundToFiveEuros(cents: number): number {
  * Savings ("plan") allocations are skipped. Returns only allocations with spend.
  */
 export async function suggestBudgets(userId: string, monthsBack = 6): Promise<BudgetSuggestion[]> {
-  const now = new Date();
-  const windowStart = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
-  const windowEnd = new Date(now.getFullYear(), now.getMonth(), 1); // first of current (partial) month — exclusive
+  const cycleStartDay = await getCycleStartDay(userId);
+  const current = currentPeriodKey(cycleStartDay);
+  const windowStart = periodBounds(periodKeyOffset(current, -monthsBack), cycleStartDay).start;
+  const windowEnd = periodBounds(current, cycleStartDay).start; // start of the current (partial) period — exclusive
 
-  // The complete months in the window, oldest → newest.
+  // The complete periods in the window, oldest → newest.
   const windowMonths: string[] = [];
   for (let i = monthsBack; i >= 1; i--) {
-    windowMonths.push(monthKey(new Date(now.getFullYear(), now.getMonth() - i, 1)));
+    windowMonths.push(periodKeyOffset(current, -i));
   }
 
   const [expenses, allocations] = await Promise.all([
@@ -64,7 +63,7 @@ export async function suggestBudgets(userId: string, monthsBack = 6): Promise<Bu
   // window to start at the earliest month with spend.
   let earliest = windowMonths[windowMonths.length - 1];
   for (const e of expenses) {
-    const m = monthKey(e.date);
+    const m = periodKeyFor(e.date, cycleStartDay);
     if (m < earliest) earliest = m;
   }
   const months = windowMonths.filter(m => m >= earliest);
@@ -73,7 +72,7 @@ export async function suggestBudgets(userId: string, monthsBack = 6): Promise<Bu
   const byAllocMonth = new Map<string, Map<string, number>>();
   for (const e of expenses) {
     const id = e.allocationId!;
-    const m = monthKey(e.date);
+    const m = periodKeyFor(e.date, cycleStartDay);
     const inner = byAllocMonth.get(id) ?? new Map<string, number>();
     inner.set(m, (inner.get(m) ?? 0) + e.amount);
     byAllocMonth.set(id, inner);

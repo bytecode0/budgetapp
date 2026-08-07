@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LayoutDashboard, Sparkles, Wallet, Target, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight, Landmark, Users } from 'lucide-react';
+import { LayoutDashboard, Sparkles, Wallet, Target, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight, Landmark, Users, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster } from 'sonner';
 import { Home } from './components/Home';
@@ -11,30 +11,37 @@ import { AllocationFlow } from './components/AllocationFlow';
 import { PlanningSettings } from './components/PlanningSettings';
 import { Activity } from './components/Activity';
 import { Accounts } from './components/Accounts';
+import { Debts } from './components/Debts';
 import { FamilyDashboard } from './components/FamilyDashboard';
 import { AddExpense } from './components/AddExpense';
 import { AuthFlow } from './components/auth/AuthFlow';
 import { PartnerInviteAccept } from './components/PartnerInviteAccept';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
-import { MonthProvider, useMonth, monthLabel } from './context/MonthContext';
+import { MonthProvider, useMonth, monthLabel, periodRangeLabel } from './context/MonthContext';
 import { useAllocations } from './hooks/useAllocations';
 import { useAnalytics } from './hooks/useAnalytics';
 import { useHousehold } from './hooks/useHousehold';
 import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/usePartner';
 import { XRayFlow } from './components/xray/XRayFlow';
 
-type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'household' | 'settings';
+type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
 
 function AppInner() {
   const { user, loading, hydrating, logout, refreshUser } = useAuth();
   const { t } = useTranslation();
-  const { darkMode, updateDarkMode, dbLanguage, updateLanguage } = useAllocations();
+  const { darkMode, updateDarkMode, dbLanguage, updateLanguage, updatePayday } = useAllocations();
   const { household } = useHousehold();
   const inHousehold = (household?.members?.length ?? 0) > 1;
   const { language, setLanguage } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
-  const { selectedMonth, navigate: navigateMonth, isCurrentMonth: isCurrentMonthSelected, isFutureMonth } = useMonth();
+  const { selectedMonth, navigate: navigateMonth, isCurrentMonth: isCurrentMonthSelected, isFutureMonth, cycleStartDay, refreshCycleStartDay } = useMonth();
+
+  const handleUpdatePayday = async (day: number) => {
+    const result = await updatePayday(day);
+    if (!result.error) await refreshCycleStartDay();
+    return result;
+  };
   const { analytics } = useAnalytics(selectedMonth, selectedMonth);
   const alignmentPct = analytics?.alignment.pct ?? null;
   const alignmentLabel = alignmentPct === null
@@ -52,6 +59,9 @@ function AppInner() {
   const [inviteDetails, setInviteDetails] = useState<InviteDetails | null>(null);
   const { acceptInvite } = usePartner();
 
+  // Open Banking: detect ?bankToken=TOKEN in URL (post-consent redirect hand-off)
+  const [pendingBankToken, setPendingBankToken] = useState<string | null>(null);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('invite');
@@ -61,6 +71,15 @@ function AppInner() {
       // Clean the token from the URL without reloading
       const url = new URL(window.location.href);
       url.searchParams.delete('invite');
+      window.history.replaceState({}, '', url.toString());
+    }
+
+    const bankToken = params.get('bankToken');
+    if (bankToken) {
+      setPendingBankToken(bankToken);
+      setCurrentScreen('accounts');
+      const url = new URL(window.location.href);
+      url.searchParams.delete('bankToken');
       window.history.replaceState({}, '', url.toString());
     }
   }, []);
@@ -85,6 +104,7 @@ function AppInner() {
     { id: 'activity' as Screen,   label: t('nav.activity'),  icon: ActivityIcon },
     { id: 'allocation' as Screen, label: t('nav.allocate'),  icon: Wallet },
     { id: 'accounts' as Screen,   label: t('nav.accounts'),  icon: Landmark },
+    { id: 'debts' as Screen,      label: t('nav.debts'),     icon: CreditCard },
     ...(inHousehold ? [{ id: 'household' as Screen, label: t('nav.household'), icon: Users }] : []),
     { id: 'settings' as Screen,   label: t('nav.settings'),  icon: Settings },
   ];
@@ -113,11 +133,22 @@ function AppInner() {
       case 'allocation':
         return <AllocationFlow />;
       case 'accounts':
-        return <Accounts />;
+        return <Accounts pendingBankToken={pendingBankToken} onConsumedBankToken={() => setPendingBankToken(null)} />;
+      case 'debts':
+        return <Debts />;
       case 'household':
         return <FamilyDashboard />;
       case 'settings':
-        return <PlanningSettings darkMode={darkMode} onToggleDarkMode={() => updateDarkMode(!darkMode)} onLanguageChange={updateLanguage} onLogout={() => logout()} />;
+        return (
+          <PlanningSettings
+            darkMode={darkMode}
+            onToggleDarkMode={() => updateDarkMode(!darkMode)}
+            onLanguageChange={updateLanguage}
+            onLogout={() => logout()}
+            cycleStartDay={cycleStartDay}
+            onUpdatePayday={handleUpdatePayday}
+          />
+        );
       default:
         return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} />;
     }
@@ -258,6 +289,9 @@ function AppInner() {
             </button>
             <div className="flex-1 text-center">
               <p className="text-sm font-display capitalize leading-tight">{monthLabel(selectedMonth, locale)}</p>
+              {cycleStartDay !== 1 && (
+                <p className="text-xs text-muted-foreground leading-tight">{periodRangeLabel(selectedMonth, cycleStartDay, locale)}</p>
+              )}
               {isFutureMonth && <p className="text-xs text-violet-500 leading-tight">{t('monthlyReview.nextMonth')}</p>}
               {isCurrentMonthSelected && <p className="text-xs text-primary/60 leading-tight">●</p>}
             </div>

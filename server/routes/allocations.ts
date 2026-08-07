@@ -4,6 +4,7 @@ import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { createDefaultAllocations } from "../lib/defaults.js";
 import { toCents, toEuros, serializeMoney } from "../lib/money.js";
 import { suggestBudgets } from "../lib/suggestBudgets.js";
+import { clampCycleStartDay } from "../lib/period.js";
 
 export const allocationsRouter = Router();
 
@@ -26,6 +27,7 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
       monthlyIncome: settings?.monthlyIncome ?? 0,
       darkMode: settings?.darkMode ?? false,
       language: settings?.language ?? 'en',
+      cycleStartDay: settings?.cycleStartDay ?? 1,
     }));
   } catch (err) {
     console.error("[allocations/GET]", err);
@@ -268,6 +270,29 @@ allocationsRouter.patch("/settings/income", requireAuth, async (req: AuthRequest
     return res.json(serializeMoney({ monthlyIncome: settings.monthlyIncome }));
   } catch (err) {
     console.error("[allocations/settings/income]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/allocations/settings/payday  (update the day the budget period starts)
+// 1-28; 1 = calendar month (the default — unchanged behavior for every existing user).
+allocationsRouter.patch("/settings/payday", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { cycleStartDay } = req.body;
+    if (cycleStartDay === undefined || isNaN(Number(cycleStartDay))) {
+      return res.status(400).json({ error: "cycleStartDay is required" });
+    }
+
+    const clamped = clampCycleStartDay(Number(cycleStartDay));
+    const settings = await prisma.userSettings.upsert({
+      where: { userId: req.userId! },
+      update: { cycleStartDay: clamped },
+      create: { userId: req.userId!, cycleStartDay: clamped },
+    });
+
+    return res.json({ cycleStartDay: settings.cycleStartDay });
+  } catch (err) {
+    console.error("[allocations/settings/payday]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

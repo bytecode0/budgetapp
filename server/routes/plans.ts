@@ -2,6 +2,8 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { toCents, serializeMoney } from "../lib/money.js";
+import { currentPeriodKey } from "../lib/period.js";
+import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 
 export const plansRouter = Router();
 
@@ -90,10 +92,8 @@ plansRouter.get("/monthly-status", requireAuth, async (req: AuthRequest, res: Re
       return res.status(400).json({ error: "month is required (YYYY-MM)" });
     }
 
-    const currentMonth = (() => {
-      const d = new Date();
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    })();
+    const cycleStartDay = await getCycleStartDay(req.userId!);
+    const currentMonth = currentPeriodKey(cycleStartDay);
 
     // Plans that have a linked allocation
     const allocations = await prisma.allocation.findMany({

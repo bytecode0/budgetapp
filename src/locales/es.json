@@ -3,7 +3,7 @@
     "hydrating": "Preparando tu cuenta con tus datos…",
     "landing": {
       "badge": "Radiografía Financiera",
-      "title": "Descubre qué está pasando realmente con tu dinero",
+      "title": "Cada extracto bancario cuenta una historia. Vamos a leerla juntos.",
       "subtitle": "Sube un extracto de tu banco y obtén una imagen clara de tus finanzas en menos de 2 minutos. Sin registro, sin tecnicismos.",
       "dropTitle": "Arrastra aquí el extracto de tu banco",
       "dropHint": "Excel o CSV descargado de tu banco",
@@ -32,13 +32,13 @@
       "network": "Problema de conexión. Inténtalo de nuevo."
     },
     "processing": {
-      "analyzing": "Leyendo tus movimientos…",
-      "categorizing": "Detectando categorías…",
-      "calculating": "Calculando tus gastos…",
-      "recurring": "Buscando gastos recurrentes…",
-      "ant": "Detectando tus gastos hormiga…",
-      "scoring": "Calculando tu índice de salud financiera…",
-      "teaser": "Casi listo — hay un dato que no vas a esperar."
+      "analyzing": "Leyendo tus movimientos, uno por uno…",
+      "categorizing": "Encontrando el orden dentro del caos aparente…",
+      "calculating": "Distinguiendo lo esencial de lo pasajero…",
+      "recurring": "Buscando patrones que se repiten en silencio…",
+      "ant": "Notando los gastos que casi no se ven…",
+      "scoring": "Calculando tu Índice de Salud Financiera…",
+      "teaser": "Casi lista tu radiografía — hay algo aquí que no esperabas ver."
     },
     "results": {
       "periodLabel": "Según tus últimos {{months}} meses",
@@ -60,8 +60,8 @@
       "antItem": "{{count}}× · media {{avg}}",
       "recurringTitle": "Recurrentes y suscripciones",
       "recurringSubtitle": "{{count}} pagos recurrentes · {{amount}} al mes.",
-      "wealthTitle": "Ahorro e inversión detectados",
-      "wealthReframe": "Esto no es gasto: es patrimonio que conservas. Lo hemos dejado fuera de tus gastos.",
+      "wealthTitle": "Ahorro, generosidad e inversión detectados",
+      "wealthReframe": "Esto no es gasto: es cómo administras lo que tienes. Lo hemos dejado fuera de tus gastos.",
       "reviewTitle": "¿Esto es ahorro o gasto?",
       "reviewSubtitle": "Encontramos algunos traspasos y retiradas de efectivo que no pudimos clasificar con seguridad. Dínoslo y tu puntuación se actualiza al instante.",
       "isSaving": "Ahorro / inversión",
@@ -80,7 +80,14 @@
       "opportunitiesSubtitle": "Pequeños movimientos, basados en tus números reales.",
       "ctaTitle": "¿Quieres el informe completo?",
       "ctaSubtitle": "Recibe tu análisis completo en PDF y el Manual de Transformación Financiera.",
-      "ctaButton": "Enviarme el informe"
+      "ctaButton": "Enviarme el informe",
+      "reflection": "Como en la parábola de los talentos: no se trata de cuánto tienes, sino de cómo lo administras.",
+      "savingsCardTitle": "Ahorro",
+      "savingsReframe": "Esto no es gasto — es dinero que sigue siendo tuyo.",
+      "givingCardTitle": "Generosidad",
+      "givingReframe": "Esto no es gasto — es siembra.",
+      "investmentCardTitle": "Inversión",
+      "investmentReframe": "Dinero que estás poniendo a trabajar para tu futuro."
     },
     "stage": {
       "building": "En construcción",
@@ -143,7 +150,8 @@
       "doneTitle": "Revisa tu correo",
       "doneSubtitle": "Tu informe va en camino. Puede tardar un minuto en llegar.",
       "createAccount": "Mantenlo vivo — crea una cuenta gratis",
-      "createAccountHint": "Cargaremos estos movimientos en tu cuenta, así empiezas sin configurar nada."
+      "createAccountHint": "Cargaremos estos movimientos en tu cuenta, así empiezas sin configurar nada.",
+      "closingLine": "No estamos aquí para que ganes más. Estamos aquí para que encuentres paz con lo que ya tienes."
     }
   },
   "nav": {
@@ -153,7 +161,8 @@
     "allocate": "Asignar",
     "accounts": "Cuentas",
     "household": "Hogar",
-    "settings": "Ajustes"
+    "settings": "Ajustes",
+    "debts": "Deudas"
   },
   "familyDashboard": {
     "title": "Hogar",
@@ -195,7 +204,11 @@
       "monthlyIncome": "Ingresos Mensuales",
       "monthlyIncomeSubtitle": "Actualiza tus ingresos para una mejor planificación",
       "riskProfile": "Perfil de Riesgo",
-      "riskProfileSubtitle": "Conservador, moderado o agresivo"
+      "riskProfileSubtitle": "Conservador, moderado o agresivo",
+      "payday": "Día de cobro",
+      "paydaySubtitle": "El día en que empieza tu ciclo de presupuesto (1-28). 1 = mes natural.",
+      "paydaySave": "Guardar",
+      "paydaySaved": "Día de cobro actualizado"
     },
     "appearance": {
       "sectionTitle": "Apariencia",
@@ -329,7 +342,10 @@
     "tipAutomateBody": "Configura transferencias automáticas a tus cuentas de plan de vida el día de cobro para ahorrar antes de gastar.",
     "tipReviewBadge": "mentalidad",
     "tipReviewTitle": "Revisa Mensualmente",
-    "tipReviewBody": "Revisa tus planes una vez al mes para mantenerte en el camino y ajusta las contribuciones cuando cambien tus ingresos."
+    "tipReviewBody": "Revisa tus planes una vez al mes para mantenerte en el camino y ajusta las contribuciones cuando cambien tus ingresos.",
+    "committedFutureTitle": "Lo que ya está comprometido",
+    "committedFutureSubtitle": "El {{pct}}% de tu próximo cobro ya está destinado a deudas",
+    "viewDebts": "Ver deudas"
   },
   "dashboard": {
     "title": "Tu Plan Financiero de Vida",
@@ -712,7 +728,23 @@
       "cash": "Efectivo",
       "investment": "Inversión",
       "card": "Tarjeta"
-    }
+    },
+    "connectBank": "Conecta tu banco",
+    "bankStatusActive": "Conectado — sincronizando automáticamente",
+    "bankStatusPending": "Conectando...",
+    "bankStatusNeedsAttention": "Necesita reconexión",
+    "chooseBankTitle": "Elige tu banco",
+    "noInstitutions": "No se encontraron bancos para tu país.",
+    "mapAccountsTitle": "Vincula tus cuentas",
+    "mapAccountsSubtitle": "Elige a dónde debe ir cada cuenta de {{bank}}.",
+    "mapAsNew": "Crear como cuenta nueva",
+    "mapToExisting": "Vincular con \"{{name}}\"",
+    "confirmLink": "Confirmar",
+    "bankAccountFallback": "Cuenta bancaria",
+    "bankLinkedOk": "{{count}} cuenta(s) vinculada(s)",
+    "syncNow": "Sincronizar ahora",
+    "syncedOk": "Sincronizado — {{expenses}} gasto(s) nuevo(s), {{income}} ingreso(s) nuevo(s)",
+    "reconnect": "Reconectar"
   },
   "editExpense": {
     "title": "Editar gasto",
@@ -1063,5 +1095,65 @@
     "loadingBilling": "Cargando información de facturación...",
     "planActivated": "¡Plan Premium activado!",
     "upgradeNow": "Mejorar Ahora"
+  },
+  "debts": {
+    "title": "Deudas",
+    "subtitle": "Cada tarjeta de crédito, préstamo y plan de cuotas — en un solo lugar.",
+    "totalOwed": "Total adeudado",
+    "totalOwedHint": "en {{count}} deuda(s) activa(s)",
+    "committedPerPeriod": "Comprometido por período",
+    "committedHint": "mínimos y cuotas por pagar",
+    "emptyTitle": "Aún no hay deudas registradas",
+    "emptyDesc": "Añade una tarjeta, préstamo o plan de cuotas con el botón +.",
+    "newTitle": "Nueva deuda",
+    "editTitle": "Editar deuda",
+    "nameLabel": "Nombre",
+    "namePlaceholder": "p.ej. Tarjeta Visa, Klarna - sofá",
+    "kindLabel": "Tipo",
+    "balanceLabel": "Saldo actual",
+    "aprLabel": "Tasa de interés (TAE)",
+    "creditLimitLabel": "Límite de crédito",
+    "paymentDueDayLabel": "Día de pago",
+    "minimumPaymentLabel": "Pago mínimo",
+    "installmentAmountLabel": "Importe de la cuota",
+    "installmentsTotalLabel": "Cuotas totales",
+    "installmentsPaidLabel": "Cuotas pagadas",
+    "installments": "cuotas",
+    "perPeriod": "/ período",
+    "createAction": "Añadir deuda",
+    "nameRequired": "El nombre es obligatorio",
+    "createdOk": "Deuda añadida",
+    "savedOk": "Deuda guardada",
+    "markedPaidOff": "Marcada como pagada",
+    "reactivatedOk": "Deuda reactivada",
+    "deletedOk": "Deuda eliminada",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "save": "Guardar",
+    "markPaidOff": "Marcar como pagada",
+    "reactivate": "Reactivar",
+    "showPaidOff": "Ver pagadas ({{count}})",
+    "hidePaidOff": "Ocultar pagadas",
+    "dragToReorder": "Arrastra para reordenar",
+    "kind": {
+      "credit_card": "Tarjeta de crédito",
+      "installment": "Cuotas",
+      "bnpl": "Compra ahora, paga después",
+      "payday_loan": "Préstamo rápido",
+      "auto_loan": "Préstamo de coche",
+      "other": "Otro"
+    },
+    "payoffTitle": "Plan de pago",
+    "payoffSubtitle": "Compara dos estrategias para quedarte sin deudas.",
+    "extraPaymentLabel": "Pago extra por período",
+    "method": {
+      "snowball": "Bola de nieve",
+      "avalanche": "Avalancha"
+    },
+    "lessInterest": "Menos interés",
+    "monthsToDebtFree": "meses para estar libre de deudas",
+    "totalInterest": "Interés total",
+    "month": "mes {{count}}",
+    "month_other": "mes {{count}}"
   }
 }

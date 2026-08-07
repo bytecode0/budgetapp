@@ -2,34 +2,13 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { serializeMoney } from "../lib/money.js";
+import { periodBounds, periodKeyFor, enumeratePeriods } from "../lib/period.js";
+import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 
 export const analyticsRouter = Router();
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 const MAX_MONTHS = 24; // guard against unbounded ranges
-
-function monthKey(year: number, month1: number): string {
-  return `${year}-${String(month1).padStart(2, "0")}`;
-}
-
-// Local-time month key for an expense date (matches the month filtering used
-// elsewhere, e.g. expenses/monthly-budgets, which build dates with new Date(y, m-1)).
-function dateToMonthKey(d: Date): string {
-  return monthKey(d.getFullYear(), d.getMonth() + 1);
-}
-
-// Inclusive list of "YYYY-MM" keys from `from` to `to`.
-function enumerateMonths(from: string, to: string): string[] {
-  const result: string[] = [];
-  let [y, m] = from.split("-").map(Number);
-  const [ty, tm] = to.split("-").map(Number);
-  while (y < ty || (y === ty && m <= tm)) {
-    result.push(monthKey(y, m));
-    m++;
-    if (m > 12) { m = 1; y++; }
-  }
-  return result;
-}
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
@@ -47,17 +26,15 @@ analyticsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
       return res.status(400).json({ error: "from must be <= to" });
     }
 
-    const months = enumerateMonths(from, to);
+    const months = enumeratePeriods(from, to);
     if (months.length > MAX_MONTHS) {
       return res.status(400).json({ error: `range too large (max ${MAX_MONTHS} months)` });
     }
 
-    const [fy, fm] = from.split("-").map(Number);
-    const [ty, tm] = to.split("-").map(Number);
-    const rangeStart = new Date(fy, fm - 1, 1);
-    const rangeEnd = new Date(ty, tm, 1); // exclusive: first day of the month after `to`
-
     const userId = req.userId!;
+    const cycleStartDay = await getCycleStartDay(userId);
+    const rangeStart = periodBounds(from, cycleStartDay).start;
+    const rangeEnd = periodBounds(to, cycleStartDay).end; // exclusive: end of the `to` period
 
     const [expenses, incomes, allocations, depositsInRange, baselineAgg] = await Promise.all([
       prisma.expense.findMany({
@@ -89,7 +66,7 @@ analyticsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
     // ── Average spend per category (categorized expenses only) ──
     const totalByAllocation: Record<string, number> = {};
     for (const e of expenses) {
-      const mKey = dateToMonthKey(e.date);
+      const mKey = periodKeyFor(e.date, cycleStartDay);
       if (mKey in spentByMonth) spentByMonth[mKey] += e.amount;
       if (e.allocationId) {
         totalByAllocation[e.allocationId] = (totalByAllocation[e.allocationId] ?? 0) + e.amount;
@@ -99,7 +76,7 @@ analyticsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
     // ── Income month over month (cashflow alongside spending) ──
     const incomeByMonth: Record<string, number> = Object.fromEntries(months.map(m => [m, 0]));
     for (const inc of incomes) {
-      const mKey = dateToMonthKey(inc.date);
+      const mKey = periodKeyFor(inc.date, cycleStartDay);
       if (mKey in incomeByMonth) incomeByMonth[mKey] += inc.amount;
     }
 
@@ -131,10 +108,11 @@ analyticsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
     });
 
     // ── Spending-plan alignment for the `to` month (replaces the sidebar mock) ──
+    const toBounds = periodBounds(to, cycleStartDay);
     const [savedBudgets, toExpenses] = await Promise.all([
       prisma.monthlyBudget.findMany({ where: { userId, month: to } }),
       prisma.expense.findMany({
-        where: { userId, date: { gte: new Date(ty, tm - 1, 1), lt: new Date(ty, tm, 1) } },
+        where: { userId, date: { gte: toBounds.start, lt: toBounds.end } },
         select: { amount: true },
       }),
     ]);

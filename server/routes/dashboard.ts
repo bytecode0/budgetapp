@@ -2,6 +2,8 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { toEuros } from "../lib/money.js";
+import { periodBounds } from "../lib/period.js";
+import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 
 export const dashboardRouter = Router();
 
@@ -13,12 +15,12 @@ dashboardRouter.get("/household", requireAuth, async (req: AuthRequest, res: Res
   try {
     const pool = req.userId!;
     const period = typeof req.query.period === "string" ? req.query.period : undefined;
-    const range = (() => {
-      if (!period) return undefined;
-      const [y, m] = period.split("-").map(Number);
-      if (!y || !m) return undefined;
-      return { gte: new Date(y, m - 1, 1), lt: new Date(y, m, 1) };
-    })();
+    let range: { gte: Date; lt: Date } | undefined;
+    if (period && /^\d{4}-\d{2}$/.test(period)) {
+      const cycleStartDay = await getCycleStartDay(pool);
+      const { start, end } = periodBounds(period, cycleStartDay);
+      range = { gte: start, lt: end };
+    }
 
     // Members (active) for the per-person breakdown.
     const members = req.householdId

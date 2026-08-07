@@ -14,7 +14,8 @@ import { differenceInDays, format } from 'date-fns';
 import { toast } from 'sonner';
 import { usePlans, getPlanStatus } from '../hooks/usePlans';
 import { useTranslation } from 'react-i18next';
-import { currentMonthKey, monthLabel } from '../context/MonthContext';
+import { monthLabel, useMonth } from '../context/MonthContext';
+import { currentPeriodKey } from '../lib/period';
 import { useLanguage } from '../context/LanguageContext';
 
 const COLOR_OPTIONS = [
@@ -159,6 +160,7 @@ function ProjectionTooltip({ active, payload, label, target, t }: any) {
 
 export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => void }) {
   const { t } = useTranslation();
+  const { cycleStartDay } = useMonth();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
   const { plans, fetchPlans, updatePlan, deletePlan, contributeToPlan } = usePlans();
@@ -290,7 +292,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
 
   // Fetch monthly contribution status (only if plan has a linked allocation)
   const fetchMonthlyStatus = async (pid: string) => {
-    const month = currentMonthKey();
+    const month = currentPeriodKey(cycleStartDay);
     const res = await fetch(`/api/plans/monthly-status?month=${month}`, { credentials: 'include' });
     if (!res.ok) return;
     const data = await res.json();
@@ -305,7 +307,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
     const amount = parseFloat(depositAmount) || plan.monthlyContribution;
     if (!amount || amount <= 0) return;
     setDepositing(true);
-    const month = currentMonthKey();
+    const month = currentPeriodKey(cycleStartDay);
     const res = await fetch('/api/plan-deposits/confirm', {
       method: 'POST',
       credentials: 'include',
@@ -829,7 +831,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                     {monthlyStatus.status === 'pending'     && t('planDetail.monthPending', { amount: monthlyStatus.expectedAmount.toLocaleString() })}
                   </p>
                   <p className="text-xs text-muted-foreground capitalize mt-0.5">
-                    {monthLabel(currentMonthKey(), locale)}
+                    {monthLabel(currentPeriodKey(cycleStartDay), locale)}
                   </p>
                 </div>
               </div>

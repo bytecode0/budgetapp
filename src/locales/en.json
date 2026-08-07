@@ -3,7 +3,7 @@
     "hydrating": "Setting up your account with your data…",
     "landing": {
       "badge": "Financial X-Ray",
-      "title": "See what's really happening with your money",
+      "title": "Every bank statement tells a story. Let's read it together.",
       "subtitle": "Upload one bank statement and get a clear picture of your finances in under 2 minutes. No sign-up, no jargon.",
       "dropTitle": "Drop your bank statement here",
       "dropHint": "Excel or CSV exported from your bank",
@@ -32,13 +32,13 @@
       "network": "Connection problem. Please try again."
     },
     "processing": {
-      "analyzing": "Reading your movements…",
-      "categorizing": "Detecting categories…",
-      "calculating": "Calculating your spending…",
-      "recurring": "Finding recurring charges…",
-      "ant": "Spotting your ant expenses…",
-      "scoring": "Building your financial health score…",
-      "teaser": "Almost there — there's a number you won't expect."
+      "analyzing": "Reading your movements, one by one…",
+      "categorizing": "Finding the order inside the apparent chaos…",
+      "calculating": "Telling the essential from the passing…",
+      "recurring": "Looking for patterns that repeat quietly…",
+      "ant": "Noticing the expenses that barely show…",
+      "scoring": "Calculating your Financial Health Score…",
+      "teaser": "Almost there — there's something here you weren't expecting to see."
     },
     "results": {
       "periodLabel": "Based on your last {{months}} months",
@@ -60,8 +60,8 @@
       "antItem": "{{count}}× · avg {{avg}}",
       "recurringTitle": "Recurring & subscriptions",
       "recurringSubtitle": "{{count}} recurring payments · {{amount}} per month.",
-      "wealthTitle": "Savings & investment detected",
-      "wealthReframe": "This isn't spending — it's wealth you keep. We've left it out of your expenses.",
+      "wealthTitle": "Savings, giving & investment detected",
+      "wealthReframe": "This isn't spending: it's how you steward what you have. We've left it out of your expenses.",
       "reviewTitle": "Is this saving or spending?",
       "reviewSubtitle": "We found some transfers and cash we couldn't be sure about. Tell us, and your score updates instantly.",
       "isSaving": "Saving / investing",
@@ -80,7 +80,14 @@
       "opportunitiesSubtitle": "Small moves, backed by your real numbers.",
       "ctaTitle": "Want the full report?",
       "ctaSubtitle": "Get your complete PDF analysis plus the Financial Transformation Manual.",
-      "ctaButton": "Send me the report"
+      "ctaButton": "Send me the report",
+      "reflection": "As in the parable of the talents: it isn't about how much you have, but how you steward it.",
+      "savingsCardTitle": "Savings",
+      "savingsReframe": "This isn't spending — it's money that's still yours.",
+      "givingCardTitle": "Giving",
+      "givingReframe": "This isn't spending — it's sowing.",
+      "investmentCardTitle": "Investment",
+      "investmentReframe": "Money you're putting to work for your future."
     },
     "stage": {
       "building": "Building",
@@ -143,7 +150,8 @@
       "doneTitle": "Check your inbox",
       "doneSubtitle": "Your report is on its way. It may take a minute to arrive.",
       "createAccount": "Keep it live — create a free account",
-      "createAccountHint": "We'll load these movements into your account, so you start with zero setup."
+      "createAccountHint": "We'll load these movements into your account, so you start with zero setup.",
+      "closingLine": "We're not here to help you earn more. We're here to help you find peace with what you already have."
     }
   },
   "nav": {
@@ -153,7 +161,8 @@
     "allocate": "Allocate",
     "accounts": "Accounts",
     "household": "Household",
-    "settings": "Settings"
+    "settings": "Settings",
+    "debts": "Debts"
   },
   "familyDashboard": {
     "title": "Household",
@@ -195,7 +204,11 @@
       "monthlyIncome": "Monthly Income",
       "monthlyIncomeSubtitle": "Update your income for better planning",
       "riskProfile": "Risk Profile",
-      "riskProfileSubtitle": "Conservative, moderate, or aggressive"
+      "riskProfileSubtitle": "Conservative, moderate, or aggressive",
+      "payday": "Payday",
+      "paydaySubtitle": "The day your budget period starts (1-28). 1 = calendar month.",
+      "paydaySave": "Save",
+      "paydaySaved": "Payday updated"
     },
     "appearance": {
       "sectionTitle": "Appearance",
@@ -329,7 +342,10 @@
     "tipAutomateBody": "Set up automatic transfers to your life plan accounts on payday so you save before you spend.",
     "tipReviewBadge": "mindset",
     "tipReviewTitle": "Review Monthly",
-    "tipReviewBody": "Check your plans once a month to stay on track and adjust contributions when your income changes."
+    "tipReviewBody": "Check your plans once a month to stay on track and adjust contributions when your income changes.",
+    "committedFutureTitle": "What's already committed",
+    "committedFutureSubtitle": "{{pct}}% of your next paycheck is already spoken for by debt",
+    "viewDebts": "View debts"
   },
   "dashboard": {
     "title": "Your Financial Life Plan",
@@ -712,7 +728,23 @@
       "cash": "Cash",
       "investment": "Investment",
       "card": "Card"
-    }
+    },
+    "connectBank": "Connect your bank",
+    "bankStatusActive": "Connected — syncing automatically",
+    "bankStatusPending": "Connecting...",
+    "bankStatusNeedsAttention": "Needs reconnection",
+    "chooseBankTitle": "Choose your bank",
+    "noInstitutions": "No banks found for your country.",
+    "mapAccountsTitle": "Link your accounts",
+    "mapAccountsSubtitle": "Choose where each account from {{bank}} should go.",
+    "mapAsNew": "Create as a new account",
+    "mapToExisting": "Link to \"{{name}}\"",
+    "confirmLink": "Confirm",
+    "bankAccountFallback": "Bank account",
+    "bankLinkedOk": "{{count}} account(s) linked",
+    "syncNow": "Sync now",
+    "syncedOk": "Synced — {{expenses}} new expense(s), {{income}} new income",
+    "reconnect": "Reconnect"
   },
   "editExpense": {
     "title": "Edit expense",
@@ -1063,5 +1095,65 @@
     "loadingBilling": "Loading billing info...",
     "planActivated": "Premium plan activated!",
     "upgradeNow": "Upgrade Now"
+  },
+  "debts": {
+    "title": "Debts",
+    "subtitle": "Every credit card, loan, and installment plan — in one place.",
+    "totalOwed": "Total owed",
+    "totalOwedHint": "across {{count}} active debt(s)",
+    "committedPerPeriod": "Committed per period",
+    "committedHint": "minimums and installments due",
+    "emptyTitle": "No debts tracked yet",
+    "emptyDesc": "Add a credit card, loan, or installment plan with the + button.",
+    "newTitle": "New debt",
+    "editTitle": "Edit debt",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. Visa card, Klarna - sofa",
+    "kindLabel": "Type",
+    "balanceLabel": "Current balance",
+    "aprLabel": "Interest rate (APR)",
+    "creditLimitLabel": "Credit limit",
+    "paymentDueDayLabel": "Payment due day",
+    "minimumPaymentLabel": "Minimum payment",
+    "installmentAmountLabel": "Installment amount",
+    "installmentsTotalLabel": "Total installments",
+    "installmentsPaidLabel": "Installments paid",
+    "installments": "installments",
+    "perPeriod": "/ period",
+    "createAction": "Add debt",
+    "nameRequired": "Name is required",
+    "createdOk": "Debt added",
+    "savedOk": "Debt saved",
+    "markedPaidOff": "Marked as paid off",
+    "reactivatedOk": "Debt reactivated",
+    "deletedOk": "Debt deleted",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "markPaidOff": "Mark as paid off",
+    "reactivate": "Reactivate",
+    "showPaidOff": "Show paid off ({{count}})",
+    "hidePaidOff": "Hide paid off",
+    "dragToReorder": "Drag to reorder",
+    "kind": {
+      "credit_card": "Credit card",
+      "installment": "Installment",
+      "bnpl": "Buy now, pay later",
+      "payday_loan": "Payday loan",
+      "auto_loan": "Auto loan",
+      "other": "Other"
+    },
+    "payoffTitle": "Payoff planner",
+    "payoffSubtitle": "Compare two strategies for becoming debt-free.",
+    "extraPaymentLabel": "Extra payment per period",
+    "method": {
+      "snowball": "Snowball",
+      "avalanche": "Avalanche"
+    },
+    "lessInterest": "Less interest",
+    "monthsToDebtFree": "months to debt-free",
+    "totalInterest": "Total interest",
+    "month": "month {{count}}",
+    "month_other": "month {{count}}"
   }
 }

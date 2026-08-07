@@ -15,10 +15,20 @@ const NOISE_TOKENS = new Set([
   "pago", "compra", "recibo", "tarj", "tarjeta", "transferencia", "bizum",
 ]);
 
+// Revolut (and similar neobanks) export card purchases as a full sentence with
+// the amount baked in, e.g. "Card Transaction Of 15.00 EUR Issued By Iglesia
+// Lego De Las Buena Torrejon De ...". None of those boilerplate words are in
+// NOISE_TOKENS, so they'd otherwise stick to the merchant key — harmless when
+// every occurrence has the same prefix, but worth stripping so the merchant
+// name itself reads cleanly wherever it's displayed.
+const CARD_TXN_PREFIX = /^card transaction of[\s\d.,]*(?:eur|usd|gbp)\s+issued by\s+/i;
+
 export function normalizeMerchant(input: string | null | undefined): string {
   if (!input) return "";
 
-  const cleaned = input
+  const withoutBoilerplate = input.replace(CARD_TXN_PREFIX, "");
+
+  const cleaned = withoutBoilerplate
     .toLowerCase()
     .normalize("NFD") // split accented chars into base + diacritic
     .replace(/[̀-ͯ]/g, "") // strip diacritics (combining marks)

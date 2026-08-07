@@ -25,6 +25,8 @@ model User {
   categorizationRules CategorizationRule[]
   accounts       Account[]
   incomes        Income[]
+  debts          Debt[]
+  bankConnections BankConnection[]
   recurringCommitments RecurringCommitment[]
   sentInvites    PartnerInvite[] @relation("SentInvites")
   householdMemberships HouseholdMember[]
@@ -56,6 +58,7 @@ model UserSettings {
   darkMode      Boolean @default(false)
   language      String  @default("en")
   linkedUserId  String? // Points to primary user's id when this is a linked (partner) account
+  cycleStartDay Int     @default(1) // 1-28; day the budget period starts (payday). 1 = calendar month (unchanged behavior)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -133,6 +136,7 @@ model Expense {
   userId       String
   allocationId String?
   accountId    String? // bank account this expense was paid from (Phase E)
+  debtId       String? // this payment pays down a debt (credit card / installment)
   amount       Int // cents
   description  String   @default("")
   merchant     String   @default("") // normalized form of description (see server/lib/normalizeMerchant.ts)
@@ -153,11 +157,14 @@ model Expense {
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   allocation Allocation? @relation(fields: [allocationId], references: [id], onDelete: SetNull)
   account    Account?    @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  debt       Debt?       @relation(fields: [debtId], references: [id], onDelete: SetNull)
   shares     ExpenseShare[]
 
   @@unique([userId, externalId]) // dedupe imported rows; multiple NULLs allowed in Postgres
   @@index([userId, merchant])
   @@index([userId, accountId])
+  @@index([userId, date])
+  @@index([userId, debtId])
 }
 
 // The distribution of a shared expense across household members (Epic H3).
@@ -172,6 +179,39 @@ model ExpenseShare {
 
   @@unique([expenseId, userId])
   @@index([userId])
+}
+
+// One connected bank login (Open Banking). A single login can expose multiple
+// accounts, so this is separate from Account: Account is a money bucket the
+// rest of the app already understands; BankConnection is where it came from
+// and how to keep it in sync. No access/refresh tokens are stored in the
+// clear anywhere in this model — see server/lib/crypto/secretBox.ts.
+model BankConnection {
+  id              String    @id @default(cuid())
+  userId          String    // shared pool (primary user in couples)
+  ownerUserId     String    // real owner (req.authUserId) — per-person attribution
+  householdId     String?
+  visibility      String    @default("household") // private | household
+
+  provider        String    @default("gocardless")
+  institutionId   String    // provider's bank identifier
+  institutionName String
+  requisitionId   String    // provider's consent/session identifier
+  status          String    @default("pending") // pending | active | expired | error
+
+  consentGivenAt  DateTime?
+  expiresAt       DateTime? // when re-consent will be required
+  lastSyncedAt    DateTime?
+  lastSyncError   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accounts Account[]
+  debts    Debt[]
+
+  @@index([userId, status])
 }
 
 model Account {
@@ -190,14 +230,80 @@ model Account {
   householdId    String? // null = purely personal, not shared with a household
   visibility     String  @default("household") // private | household
 
+  // Open Banking (optional) — set only when this account is linked to a live
+  // bank connection instead of being purely manual.
+  bankConnectionId String?
+  externalAccountId String? // provider's account identifier
+  balanceSource      String   @default("manual") // manual | bank_sync
+  balanceSyncedAt    DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bankConnection BankConnection? @relation(fields: [bankConnectionId], references: [id], onDelete: SetNull)
   expenses Expense[]
   incomes  Income[]
+  debts    Debt[]
 
   @@index([userId, sortOrder])
+  @@index([bankConnectionId])
+}
+
+// A liability the user owes: credit card, installment/BNPL plan, payday loan,
+// or auto loan. The product's core differentiator — consolidating every debt
+// into one place so the user can see everything already committed, and plan
+// a payoff (Phases 3/4). Distinct from Account: an Account is a data source
+// (a bank/card feed); a Debt is a thing you owe, optionally backed by one.
+model Debt {
+  id          String  @id @default(cuid())
+  userId      String  // shared pool (primary user in couples)
+  ownerUserId String  // real owner (req.authUserId) — per-person attribution
+  name        String
+  kind        String  @default("other") // credit_card | installment | bnpl | payday_loan | auto_loan | other
+  status      String  @default("active") // active | paid_off | archived
+  sortOrder   Int     @default(0)
+
+  accountId      String? // optional link to the card/loan account this debt is drawn on
+  currentBalance Int     @default(0) // cents; what's owed right now
+  principal      Int?    // cents; original amount borrowed (for payoff simulations)
+  apr            Float?  // annual percentage rate, e.g. 19.9
+
+  // Credit-card shaped (kind = credit_card)
+  creditLimit    Int?
+  statementDay   Int?    // 1-28: when the statement closes
+  paymentDueDay  Int?    // 1-28: when the minimum payment is due
+  minimumPayment Int?    // cents
+
+  // Installment-shaped (kind = installment | bnpl | payday_loan | auto_loan)
+  installmentAmount Int?      // cents per installment
+  installmentsTotal Int?
+  installmentsPaid  Int?      @default(0)
+  startDate         DateTime?
+  endDate           DateTime?
+
+  // Household (mirrors Account) — a debt is only shared/visible when explicit.
+  householdId String?
+  visibility  String  @default("household") // private | household
+
+  // Open Banking (optional) — set only for a debt whose balance is kept fresh
+  // by a live bank connection (typically kind = credit_card) instead of
+  // manual upkeep.
+  bankConnectionId   String?
+  externalAccountId  String? // provider's account identifier
+  balanceSource      String   @default("manual") // manual | bank_sync
+  balanceSyncedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account        Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  bankConnection BankConnection? @relation(fields: [bankConnectionId], references: [id], onDelete: SetNull)
+  expenses Expense[]
+
+  @@index([userId, sortOrder])
+  @@index([bankConnectionId])
 }
 
 model Income {
@@ -221,6 +327,7 @@ model Income {
 
   @@unique([userId, externalId]) // dedupe imported rows; multiple NULLs allowed in Postgres
   @@index([userId, accountId])
+  @@index([userId, date])
 }
 
 model CategorizationRule {

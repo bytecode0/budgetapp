@@ -12,8 +12,9 @@ interface CardData {
   lang: 'es' | 'en';
 }
 
-const NAVY = '#1E3A8A';
-const GREEN = '#10B981';
+const FOREST = '#1F3D30';
+const FOREST_DEEP = '#12241C';
+const GOLD = '#D9B872';
 
 function stageEmoji(score: number): string {
   if (score >= 80) return '💪';
@@ -36,17 +37,17 @@ export function renderShareCard(canvas: HTMLCanvasElement, d: CardData): void {
   if (!ctx) return;
   const t = COPY[d.lang];
 
-  // Background gradient
+  // Background gradient — the "film" ground
   const bg = ctx.createLinearGradient(0, 0, S, S);
-  bg.addColorStop(0, NAVY);
-  bg.addColorStop(1, '#0F2A6B');
+  bg.addColorStop(0, FOREST);
+  bg.addColorStop(1, FOREST_DEEP);
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, S, S);
 
   // Soft glow
   const glow = ctx.createRadialGradient(S * 0.8, S * 0.15, 0, S * 0.8, S * 0.15, 500);
-  glow.addColorStop(0, 'rgba(16,185,129,0.25)');
-  glow.addColorStop(1, 'rgba(16,185,129,0)');
+  glow.addColorStop(0, 'rgba(217,184,114,0.18)');
+  glow.addColorStop(1, 'rgba(217,184,114,0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, S, S);
 
@@ -68,7 +69,7 @@ export function renderShareCard(canvas: HTMLCanvasElement, d: CardData): void {
   ctx.arc(cx, ringY, radius, 0, Math.PI * 2);
   ctx.stroke();
 
-  ctx.strokeStyle = GREEN;
+  ctx.strokeStyle = GOLD;
   ctx.beginPath();
   ctx.arc(cx, ringY, radius, -Math.PI / 2, -Math.PI / 2 + (d.score / 100) * Math.PI * 2);
   ctx.stroke();
@@ -82,7 +83,7 @@ export function renderShareCard(canvas: HTMLCanvasElement, d: CardData): void {
   ctx.fillText(t.of, cx, ringY + 110);
 
   // Stage
-  ctx.fillStyle = GREEN;
+  ctx.fillStyle = GOLD;
   ctx.font = '700 58px system-ui, sans-serif';
   ctx.fillText(`${stageEmoji(d.score)}  ${d.stageLabel}`, cx, 730);
 

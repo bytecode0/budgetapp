@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'motion/react';
-import { Mail, CheckCircle2, ArrowRight, FileText, BookOpen } from 'lucide-react';
+import { CheckCircle2, ArrowRight, FileText, BookOpen } from 'lucide-react';
+import { XRayMark } from './XRayMark';
 
 interface Props {
   onSubmit: (email: string) => Promise<{ ok: boolean }>;
@@ -33,8 +34,8 @@ export function XRayEmailCapture({ onSubmit, onCreateAccount }: Props) {
       >
         {done ? (
           <div className="text-center space-y-6">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-9 h-9 text-emerald-500" />
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto" style={{ background: 'var(--xray-good-bg)' }}>
+              <CheckCircle2 className="w-9 h-9" style={{ color: 'var(--xray-good-fg)' }} />
             </div>
             <div>
               <h2 className="text-2xl font-display">{t('radiografia.email.doneTitle')}</h2>
@@ -42,19 +43,20 @@ export function XRayEmailCapture({ onSubmit, onCreateAccount }: Props) {
             </div>
             <button
               onClick={onCreateAccount}
-              className="w-full py-4 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-display flex items-center justify-center gap-2 hover:shadow-lg transition-all"
+              className="w-full py-4 bg-primary text-primary-foreground rounded-xl font-display flex items-center justify-center gap-2 hover:shadow-lg transition-all"
             >
               {t('radiografia.email.createAccount')}
               <ArrowRight className="w-4 h-4" />
             </button>
             <p className="text-xs text-muted-foreground">{t('radiografia.email.createAccountHint')}</p>
+            <p className="font-display italic text-sm text-primary pt-4 border-t border-border max-w-xs mx-auto">
+              {t('radiografia.email.closingLine')}
+            </p>
           </div>
         ) : (
           <div className="space-y-6">
             <div className="text-center space-y-3">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mx-auto shadow-xl">
-                <Mail className="w-8 h-8 text-white" />
-              </div>
+              <XRayMark className="w-14 h-14 mx-auto" />
               <h2 className="text-2xl font-display">{t('radiografia.email.title')}</h2>
               <p className="text-muted-foreground">{t('radiografia.email.subtitle')}</p>
             </div>

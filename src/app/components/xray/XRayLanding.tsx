@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'motion/react';
-import { Upload, ShieldCheck, FileSpreadsheet, ChevronDown, Lock, Sparkles, Trash2, X } from 'lucide-react';
+import { Upload, ShieldCheck, FileSpreadsheet, ChevronDown, Lock, Trash2, X } from 'lucide-react';
+import { XRayMark } from './XRayMark';
 
 const SUPPORTED_BANKS = ['BBVA', 'Santander', 'CaixaBank', 'ING', 'Sabadell', 'Revolut'];
 const MAX_FILES = 5;
@@ -41,9 +42,11 @@ export function XRayLanding({ onFiles, analyzing, error }: Props) {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-2xl text-center space-y-6"
       >
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/5 border border-primary/10 text-primary text-sm">
-          <Sparkles className="w-4 h-4" />
-          {t('radiografia.landing.badge')}
+        <div className="inline-flex items-center gap-2.5">
+          <XRayMark className="w-7 h-7" />
+          <span className="text-sm text-primary uppercase" style={{ letterSpacing: '0.1em' }}>
+            {t('radiografia.landing.badge')}
+          </span>
         </div>
 
         <h1 className="text-4xl md:text-5xl font-display tracking-tight leading-tight">
@@ -78,8 +81,8 @@ export function XRayLanding({ onFiles, analyzing, error }: Props) {
             className="hidden"
             onChange={e => { addFiles(e.target.files); e.target.value = ''; }}
           />
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-xl mb-5">
-            <Upload className="w-8 h-8 text-white" />
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-primary flex items-center justify-center shadow-xl mb-5">
+            <Upload className="w-8 h-8 text-primary-foreground" />
           </div>
           <p className="font-display text-lg">{t('radiografia.landing.dropTitle')}</p>
           <p className="text-sm text-muted-foreground mt-1">{t('radiografia.landing.dropHint')}</p>
@@ -118,9 +121,9 @@ export function XRayLanding({ onFiles, analyzing, error }: Props) {
 
         {/* Privacy — visceral, not legalese */}
         <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-emerald-500" />{t('radiografia.landing.trustNoSignup')}</span>
-          <span className="inline-flex items-center gap-1.5"><Lock className="w-4 h-4 text-emerald-500" />{t('radiografia.landing.trustPrivate')}</span>
-          <span className="inline-flex items-center gap-1.5"><Trash2 className="w-4 h-4 text-emerald-500" />{t('radiografia.landing.trustDeleted')}</span>
+          <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-primary" />{t('radiografia.landing.trustNoSignup')}</span>
+          <span className="inline-flex items-center gap-1.5"><Lock className="w-4 h-4 text-primary" />{t('radiografia.landing.trustPrivate')}</span>
+          <span className="inline-flex items-center gap-1.5"><Trash2 className="w-4 h-4 text-primary" />{t('radiografia.landing.trustDeleted')}</span>
         </div>
       </motion.div>
 

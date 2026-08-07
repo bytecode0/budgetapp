@@ -4,13 +4,14 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, X, GripVertical, Pencil, Trash2, Archive, ArchiveRestore,
-  Landmark, PiggyBank, Wallet, TrendingUp, CreditCard, Loader2,
+  Landmark, PiggyBank, Wallet, TrendingUp, CreditCard, Loader2, Link2, RefreshCw, AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
 import { useAccounts, type Account, type AccountType } from '../hooks/useAccounts';
 import { useHousehold } from '../hooks/useHousehold';
+import { useBanking, type BankInstitution, type BankProviderAccount, type BankConnection as BankConnectionInfo } from '../hooks/useBanking';
 
 const ACCOUNT_TYPES: AccountType[] = ['checking', 'savings', 'cash', 'investment', 'card'];
 
@@ -79,7 +80,7 @@ interface FormState {
 
 const EMPTY_FORM: FormState = { id: null, name: '', type: 'checking', currentBalance: '', visibility: 'household' };
 
-export function Accounts() {
+export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBankToken?: string | null; onConsumedBankToken?: () => void } = {}) {
   const { t } = useTranslation();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
@@ -87,10 +88,84 @@ export function Accounts() {
   const { household } = useHousehold();
   const inHousehold = (household?.members?.length ?? 0) > 1;
 
+  const { enabled: bankingEnabled, connections, connect, exchange, linkAccounts, fetchInstitutions, syncNow, reconnect } = useBanking();
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+
+  const handleSyncNow = async (connectionId: string) => {
+    setSyncingId(connectionId);
+    const result = await syncNow(connectionId);
+    setSyncingId(null);
+    if (result.error) toast.error(result.error);
+    else toast.success(t('accounts.syncedOk', { expenses: result.expenses ?? 0, income: result.income ?? 0 }));
+  };
+
+  const handleReconnect = async (c: BankConnectionInfo) => {
+    setConnecting(true);
+    const result = await reconnect(c);
+    if (result.error) { toast.error(result.error); setConnecting(false); }
+  };
+
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+
+  // Open Banking — institution picker
+  const [showInstitutionPicker, setShowInstitutionPicker] = useState(false);
+  const [institutions, setInstitutions] = useState<BankInstitution[]>([]);
+  const [loadingInstitutions, setLoadingInstitutions] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+
+  // Open Banking — post-consent account mapping
+  const [mapping, setMapping] = useState<{ connectionId: string; institutionName: string; providerAccounts: BankProviderAccount[] } | null>(null);
+  const [mappingChoices, setMappingChoices] = useState<Record<string, string>>({}); // externalAccountId -> 'new' | existing accountId
+  const [linking, setLinking] = useState(false);
+
+  useEffect(() => {
+    if (!pendingBankToken) return;
+    exchange(pendingBankToken).then(result => {
+      onConsumedBankToken?.();
+      if (result.error) { toast.error(result.error); return; }
+      if (result.connectionId && result.accounts) {
+        setMapping({ connectionId: result.connectionId, institutionName: result.institutionName ?? '', providerAccounts: result.accounts });
+        setMappingChoices(Object.fromEntries(result.accounts.map(a => [a.id, 'new'])));
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingBankToken]);
+
+  const openInstitutionPicker = async () => {
+    setShowInstitutionPicker(true);
+    setLoadingInstitutions(true);
+    const list = await fetchInstitutions('ES');
+    setInstitutions(list);
+    setLoadingInstitutions(false);
+  };
+
+  const handleConnect = async (inst: BankInstitution) => {
+    setConnecting(true);
+    const result = await connect(inst.id, inst.name);
+    if (result.error) { toast.error(result.error); setConnecting(false); }
+    // On success, connect() navigates the browser away — no further state update needed here.
+  };
+
+  const handleLinkAccounts = async () => {
+    if (!mapping) return;
+    setLinking(true);
+    const result = await linkAccounts(
+      mapping.connectionId,
+      mapping.providerAccounts.map(a => {
+        const choice = mappingChoices[a.id];
+        return choice === 'new' || !choice
+          ? { externalAccountId: a.id, create: { name: a.name || a.iban || t('accounts.bankAccountFallback'), type: 'checking' } }
+          : { externalAccountId: a.id, accountId: choice };
+      }),
+    );
+    setLinking(false);
+    if (result.error) { toast.error(result.error); return; }
+    toast.success(t('accounts.bankLinkedOk', { count: result.linked ?? 0 }));
+    setMapping(null);
+  };
 
   // Local copy for drag reordering of active accounts.
   const [local, setLocal] = useState<Account[]>([]);
@@ -225,6 +300,55 @@ export function Accounts() {
           <p className="text-xs opacity-60 mt-2">{t('accounts.netWorthHint', { count: active.length })}</p>
         </div>
       </motion.div>
+
+      {/* ── Open Banking: connect a bank + connection status ── */}
+      {bankingEnabled && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.07 }} className="space-y-3">
+          {connections.map(c => (
+            <div key={c.id} className="flex items-center justify-between gap-3 bg-card border border-border rounded-2xl p-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Link2 className="w-5 h-5 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-display truncate">{c.institutionName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {c.status === 'active' && t('accounts.bankStatusActive')}
+                    {c.status === 'pending' && t('accounts.bankStatusPending')}
+                    {(c.status === 'expired' || c.status === 'error') && t('accounts.bankStatusNeedsAttention')}
+                  </p>
+                </div>
+              </div>
+              {c.status === 'active' ? (
+                <button
+                  onClick={() => handleSyncNow(c.id)}
+                  disabled={syncingId === c.id}
+                  className="p-2 rounded-lg hover:bg-muted transition-colors shrink-0 disabled:opacity-50"
+                  title={t('accounts.syncNow')}
+                >
+                  <RefreshCw className={`w-4 h-4 text-muted-foreground ${syncingId === c.id ? 'animate-spin' : ''}`} />
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleReconnect(c)}
+                  disabled={connecting}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-display hover:bg-amber-500/20 transition-colors shrink-0 disabled:opacity-50"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  {t('accounts.reconnect')}
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            onClick={openInstitutionPicker}
+            className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-border rounded-2xl text-sm text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
+          >
+            <Link2 className="w-4 h-4" />
+            {t('accounts.connectBank')}
+          </button>
+        </motion.div>
+      )}
 
       {loading ? (
         <div className="bg-card border border-border rounded-2xl p-6 h-24 animate-pulse" />
@@ -379,6 +503,98 @@ export function Accounts() {
               >
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                 {form.id ? t('accounts.save') : t('accounts.createAction')}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Open Banking: institution picker ── */}
+      <AnimatePresence>
+        {showInstitutionPicker && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-4"
+            onClick={e => { if (e.target === e.currentTarget && !connecting) setShowInstitutionPicker(false); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }}
+              className="bg-card border border-border rounded-2xl p-6 w-full max-w-md space-y-4 max-h-[80vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-display">{t('accounts.chooseBankTitle')}</h2>
+                <button onClick={() => setShowInstitutionPicker(false)} disabled={connecting} className="p-2 rounded-lg hover:bg-muted transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              {loadingInstitutions ? (
+                <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+              ) : (
+                <div className="space-y-2">
+                  {institutions.map(inst => (
+                    <button
+                      key={inst.id}
+                      onClick={() => handleConnect(inst)}
+                      disabled={connecting}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-muted/50 transition-colors text-left disabled:opacity-50"
+                    >
+                      {inst.logo ? (
+                        <img src={inst.logo} alt="" className="w-8 h-8 rounded-lg object-contain shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0"><Landmark className="w-4 h-4 text-muted-foreground" /></div>
+                      )}
+                      <span className="text-sm font-display truncate">{inst.name}</span>
+                    </button>
+                  ))}
+                  {institutions.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">{t('accounts.noInstitutions')}</p>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Open Banking: map provider accounts to local accounts ── */}
+      <AnimatePresence>
+        {mapping && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }}
+              className="bg-card border border-border rounded-2xl p-6 w-full max-w-md space-y-5"
+            >
+              <div>
+                <h2 className="text-2xl font-display">{t('accounts.mapAccountsTitle')}</h2>
+                <p className="text-sm text-muted-foreground mt-1">{t('accounts.mapAccountsSubtitle', { bank: mapping.institutionName })}</p>
+              </div>
+              <div className="space-y-3">
+                {mapping.providerAccounts.map(pa => (
+                  <div key={pa.id} className="space-y-1.5">
+                    <p className="text-sm font-display truncate">{pa.name || pa.iban || pa.id}</p>
+                    <select
+                      value={mappingChoices[pa.id] ?? 'new'}
+                      onChange={e => setMappingChoices(c => ({ ...c, [pa.id]: e.target.value }))}
+                      className="w-full border border-border rounded-xl px-4 py-2.5 bg-background outline-none focus:border-primary text-sm"
+                    >
+                      <option value="new">{t('accounts.mapAsNew')}</option>
+                      {accounts.filter(a => !a.isArchived).map(a => (
+                        <option key={a.id} value={a.id}>{t('accounts.mapToExisting', { name: a.name })}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={handleLinkAccounts}
+                disabled={linking}
+                className="w-full py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {linking && <Loader2 className="w-4 h-4 animate-spin" />}
+                {t('accounts.confirmLink')}
               </button>
             </motion.div>
           </motion.div>

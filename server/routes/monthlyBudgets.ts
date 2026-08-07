@@ -2,6 +2,8 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { toCents, serializeMoney } from "../lib/money.js";
+import { periodBounds } from "../lib/period.js";
+import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 
 export const monthlyBudgetsRouter = Router();
 
@@ -107,9 +109,8 @@ monthlyBudgetsRouter.get("/review", requireAuth, async (req: AuthRequest, res: R
     const { month } = req.query as Record<string, string>;
     if (!month) return res.status(400).json({ error: "month is required" });
 
-    const [year, mon] = month.split("-").map(Number);
-    const monthStart = new Date(year, mon - 1, 1);
-    const monthEnd   = new Date(year, mon, 1);
+    const cycleStartDay = await getCycleStartDay(req.userId!);
+    const { start: monthStart, end: monthEnd } = periodBounds(month, cycleStartDay);
 
     // Get budgets (or fall back to current allocations)
     const savedBudgets = await prisma.monthlyBudget.findMany({

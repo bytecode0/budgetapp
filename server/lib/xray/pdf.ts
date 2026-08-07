@@ -99,14 +99,21 @@ export function generateXrayPdf(result: XRayResult, lang: Lang = "es"): Promise<
       doc.moveDown(0.8);
     }
 
-    // ── Wealth (savings + investment) ──
-    if (result.wealth.total > 0) {
-      sectionTitle(doc, left, T.wealthTitle);
-      doc.fillColor(GREEN).font("Helvetica-Bold").fontSize(16).text(`${money(result.wealth.total)}`);
-      doc.fillColor(GREY).font("Helvetica").fontSize(10).text(T.wealthSub(money(result.wealth.savings), money(result.wealth.investment)));
+    // ── Savings, giving & investment — three separate sections, not one
+    // combined figure: Ahorro/Generosidad/Inversión are distinct concepts. ──
+    const wealthGroup: { total: number; kind: "savings" | "giving" | "investment"; title: string }[] = [
+      { total: result.wealth.savings, kind: "savings", title: T.savings },
+      { total: result.wealth.giving, kind: "giving", title: T.giving },
+      { total: result.wealth.investment, kind: "investment", title: T.investment },
+    ];
+    for (const w of wealthGroup) {
+      if (w.total <= 0) continue;
+      sectionTitle(doc, left, w.title);
+      doc.fillColor(GREEN).font("Helvetica-Bold").fontSize(16).text(`${money(w.total)}`);
+      doc.fillColor(GREY).font("Helvetica").fontSize(10).text(T.wealthSub(w.kind));
       doc.moveDown(0.3);
-      result.wealth.items.slice(0, 6).forEach(i => {
-        row(doc, left, contentW, pretty(i.merchant), i.kind === "investment" ? T.investment : T.savings);
+      result.wealth.items.filter(i => i.kind === w.kind).slice(0, 6).forEach(i => {
+        row(doc, left, contentW, pretty(i.merchant), money(i.total));
       });
       doc.moveDown(0.8);
     }
@@ -173,9 +180,12 @@ const STRINGS = {
     categoriesTitle: "A dónde va tu dinero",
     antTitle: "Tus gastos hormiga",
     antReframe: (a: string) => `Eso son unos ${a} en los próximos 5 años.`,
-    wealthTitle: "Ahorro e inversión detectados",
-    wealthSub: (s: string, i: string) => `Ahorro: ${s}  ·  Inversión: ${i}. Esto no es gasto: es patrimonio que conservas.`,
-    savings: "Ahorro", investment: "Inversión",
+    wealthSub: (kind: "savings" | "giving" | "investment") => ({
+      savings: "Esto no es gasto — es dinero que sigue siendo tuyo.",
+      giving: "Esto no es gasto — es siembra.",
+      investment: "Dinero que estás poniendo a trabajar para tu futuro.",
+    })[kind],
+    savings: "Ahorro", giving: "Generosidad", investment: "Inversión",
     internalNote: (c: number, a: string) => `${c} traspasos entre tus cuentas reconciliados (${a}) — fuera de ingresos, gastos y ahorro.`,
     balanceLine: (total: string, months: number | null) => `Patrimonio líquido: ${total}${months != null ? ` · cubre ~${months} meses de gastos` : ""}`,
     recurringTitle: "Recurrentes y suscripciones",
@@ -193,9 +203,12 @@ const STRINGS = {
     categoriesTitle: "Where your money goes",
     antTitle: "Your ant expenses",
     antReframe: (a: string) => `That's around ${a} over the next 5 years.`,
-    wealthTitle: "Savings & investment detected",
-    wealthSub: (s: string, i: string) => `Savings: ${s}  ·  Investment: ${i}. This isn't spending — it's wealth you keep.`,
-    savings: "Savings", investment: "Investment",
+    wealthSub: (kind: "savings" | "giving" | "investment") => ({
+      savings: "This isn't spending — it's money that's still yours.",
+      giving: "This isn't spending — it's sowing.",
+      investment: "Money you're putting to work for your future.",
+    })[kind],
+    savings: "Savings", giving: "Giving", investment: "Investment",
     internalNote: (c: number, a: string) => `${c} transfers between your accounts reconciled (${a}) — left out of income, spending and savings.`,
     balanceLine: (total: string, months: number | null) => `Liquid net worth: ${total}${months != null ? ` · covers ~${months} months of spending` : ""}`,
     recurringTitle: "Recurring & subscriptions",

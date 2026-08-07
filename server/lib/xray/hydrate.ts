@@ -24,14 +24,17 @@ const FIXED_KEYS = new Set(["housing", "utilities", "insurance"]);
 // Wealth movements get their own allocations, not consumption categories.
 const SAVINGS_KEY = "__savings__";
 const INVESTMENT_KEY = "__investment__";
+const GIVING_KEY = "__giving__";
 function allocationLabel(key: string, lang: "es" | "en"): string {
   if (key === SAVINGS_KEY) return lang === "es" ? "Ahorro" : "Savings";
   if (key === INVESTMENT_KEY) return lang === "es" ? "Inversión" : "Investments";
+  if (key === GIVING_KEY) return lang === "es" ? "Generosidad" : "Giving";
   return categoryLabel(key, lang);
 }
 function allocationIcon(key: string): string {
   if (key === SAVINGS_KEY) return "🏦";
   if (key === INVESTMENT_KEY) return "📈";
+  if (key === GIVING_KEY) return "💛";
   return iconForKey(key);
 }
 
@@ -83,9 +86,11 @@ export async function hydrateFromXraySession(userId: string, sessionId: string):
       if (kind === "expense" && ov) {
         mv = ov === "wealth" ? { type: "wealth", kind: mv.kind === "investment" ? "investment" : "savings" } : { type: "consumption", kind: null };
       }
-      // Route wealth movements to Ahorro/Inversión; everything else to its category.
+      // Route wealth movements to Ahorro/Generosidad/Inversión; everything else to its category.
       let allocKey = classifyLocal(merchant).key;
-      if (kind === "expense" && mv.type === "wealth") allocKey = mv.kind === "investment" ? INVESTMENT_KEY : SAVINGS_KEY;
+      if (kind === "expense" && mv.type === "wealth") {
+        allocKey = mv.kind === "investment" ? INVESTMENT_KEY : mv.kind === "giving" ? GIVING_KEY : SAVINGS_KEY;
+      }
       return { t: p.t, merchant, externalId: externalIdFor(p.t, merchant), kind, allocKey, fileIndex: p.fileIndex, movementType: mv.type, movementKind: mv.kind };
     });
 

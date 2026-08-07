@@ -3,6 +3,8 @@
 // owes their ExpenseShare. balance = paid − owed (positive ⇒ others owe them).
 // MVP: computed on the fly (no Settlement records yet — that's V2).
 import { prisma } from "./prisma.js";
+import { periodBounds } from "./period.js";
+import { getCycleStartDay } from "./getCycleStartDay.js";
 
 export interface MemberBalance {
   userId: string;
@@ -17,11 +19,11 @@ export interface Settlement {
   amount: number;     // cents
 }
 
-function monthRange(period?: string): { gte: Date; lt: Date } | undefined {
+async function monthRange(poolUserId: string, period?: string): Promise<{ gte: Date; lt: Date } | undefined> {
   if (!period) return undefined;
-  const [y, m] = period.split("-").map(Number);
-  if (!y || !m) return undefined;
-  return { gte: new Date(y, m - 1, 1), lt: new Date(y, m, 1) };
+  const cycleStartDay = await getCycleStartDay(poolUserId);
+  const { start, end } = periodBounds(period, cycleStartDay);
+  return { gte: start, lt: end };
 }
 
 /** Greedy settlement: match the largest debtor with the largest creditor. */
@@ -51,7 +53,7 @@ export async function computeBalances(
   memberIds: string[],
   period?: string,
 ): Promise<{ balances: MemberBalance[]; settlements: Settlement[] }> {
-  const date = monthRange(period);
+  const date = await monthRange(poolUserId, period);
   const expenses = await prisma.expense.findMany({
     where: { userId: poolUserId, scope: "shared", ...(date ? { date } : {}) },
     select: { amount: true, payerUserId: true, shares: { select: { userId: true, amount: true } } },

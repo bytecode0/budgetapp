@@ -4,6 +4,8 @@ import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { normalizeMerchant } from "../lib/normalizeMerchant.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { incomeListingFilter } from "../lib/visibility.js";
+import { periodBounds } from "../lib/period.js";
+import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 
 export const incomeRouter = Router();
 
@@ -26,8 +28,9 @@ incomeRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
     const where: any = { userId: req.userId! };
 
     if (month) {
-      const [year, mon] = month.split("-").map(Number);
-      where.date = { gte: new Date(year, mon - 1, 1), lt: new Date(year, mon, 1) };
+      const cycleStartDay = await getCycleStartDay(req.userId!);
+      const { start, end } = periodBounds(month, cycleStartDay);
+      where.date = { gte: start, lt: end };
     }
     if (accountId) where.accountId = accountId;
 

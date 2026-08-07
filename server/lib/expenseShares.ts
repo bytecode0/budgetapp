@@ -3,12 +3,17 @@
 // income (for the proportional model) and writes ExpenseShare rows.
 import { prisma } from "./prisma.js";
 import { computeShares, type SplitBasis } from "./contributions.js";
+import { currentPeriodKey, periodKeyOffset, periodBounds } from "./period.js";
+import { getCycleStartDay } from "./getCycleStartDay.js";
 
-// Relative income per member over the last 6 months (magnitude is what matters
+// Relative income per member over the last 6 periods (magnitude is what matters
 // for proportional weighting, not the exact figure).
 async function incomeByMember(memberIds: string[]): Promise<Record<string, number>> {
-  const now = new Date();
-  const since = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+  // Any member's cycleStartDay works here — this is a coarse relative-weight
+  // signal, not an exact per-person figure.
+  const cycleStartDay = memberIds.length ? await getCycleStartDay(memberIds[0]) : 1;
+  const current = currentPeriodKey(cycleStartDay);
+  const since = periodBounds(periodKeyOffset(current, -6), cycleStartDay).start;
   const grouped = await prisma.income.groupBy({
     by: ["ownerUserId"],
     where: { ownerUserId: { in: memberIds }, date: { gte: since } },

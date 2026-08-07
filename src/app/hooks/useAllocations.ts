@@ -28,6 +28,7 @@ export function useAllocations() {
   const [monthlyIncome, setMonthlyIncome] = useState(0);
   const [darkMode, setDarkMode] = useState(false);
   const [dbLanguage, setDbLanguage] = useState<string>('en');
+  const [cycleStartDay, setCycleStartDay] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +41,7 @@ export function useAllocations() {
       setMonthlyIncome(data.monthlyIncome);
       setDarkMode(data.darkMode ?? false);
       setDbLanguage(data.language ?? 'en');
+      setCycleStartDay(data.cycleStartDay ?? 1);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -79,6 +81,19 @@ export function useAllocations() {
     if (!res.ok) return { error: data.error || 'Failed to create allocation' };
     setAllocations((a) => [...a, data.allocation]);
     return { allocation: data.allocation };
+  };
+
+  const updatePayday = async (day: number) => {
+    const res = await fetch('/api/allocations/settings/payday', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cycleStartDay: day }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { error: data.error || 'Failed to update payday' };
+    setCycleStartDay(data.cycleStartDay);
+    return {};
   };
 
   const updateAllocation = async (id: string, payload: Partial<Allocation>) => {
@@ -170,8 +185,8 @@ export function useAllocations() {
   const unallocated = Math.max(0, monthlyIncome - totalAllocated);
 
   return {
-    allocations, monthlyIncome, darkMode, dbLanguage, loading, error, totalAllocated, unallocated,
-    fetchAllocations, updateIncome, updateDarkMode, updateLanguage, createAllocation, updateAllocation, deleteAllocation, reorderAllocations,
+    allocations, monthlyIncome, darkMode, dbLanguage, cycleStartDay, loading, error, totalAllocated, unallocated,
+    fetchAllocations, updateIncome, updateDarkMode, updateLanguage, updatePayday, createAllocation, updateAllocation, deleteAllocation, reorderAllocations,
     fetchSuggestedBudgets, applyBudgets,
   };
 }

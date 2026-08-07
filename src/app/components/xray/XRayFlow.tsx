@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'motion/react';
+import './xray-theme.css';
 import { useXray } from './useXray';
 import { XRayLanding } from './XRayLanding';
 import { XRayProcessing } from './XRayProcessing';
@@ -73,7 +74,7 @@ export function XRayFlow() {
   };
 
   return (
-    <div className="size-full bg-background overflow-y-auto">
+    <div className="xray-scope size-full bg-background overflow-y-auto">
       <AnimatePresence mode="wait">
         <motion.div
           key={step}

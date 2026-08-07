@@ -1,4 +1,4 @@
-import { User, Bell, Moon, Sun, Shield, HelpCircle, LogOut, ChevronRight, Wallet, Heart, Send, X, Loader2, CheckCircle2, AlertTriangle, Link2Off, Globe, Crown, Zap, CreditCard } from 'lucide-react';
+import { User, Bell, Moon, Sun, Shield, HelpCircle, LogOut, ChevronRight, Wallet, Heart, Send, X, Loader2, CheckCircle2, AlertTriangle, Link2Off, Globe, Crown, Zap, CreditCard, CalendarClock } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -17,12 +17,33 @@ import {
   type BillingInfo,
 } from '../../api/stripe';
 
-export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange, onLogout }: { darkMode: boolean; onToggleDarkMode: () => void; onLanguageChange?: (lang: string) => void; onLogout?: () => void }) {
+export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange, onLogout, cycleStartDay, onUpdatePayday }: {
+  darkMode: boolean;
+  onToggleDarkMode: () => void;
+  onLanguageChange?: (lang: string) => void;
+  onLogout?: () => void;
+  cycleStartDay?: number;
+  onUpdatePayday?: (day: number) => Promise<{ error?: string }>;
+}) {
   const { t } = useTranslation();
   const { user, refreshUser } = useAuth();
   const { plans } = usePlans();
   const activePlans = plans.length;
   const { language, setLanguage } = useLanguage();
+
+  const [paydayInput, setPaydayInput] = useState(String(cycleStartDay ?? 1));
+  const [savingPayday, setSavingPayday] = useState(false);
+  useEffect(() => { setPaydayInput(String(cycleStartDay ?? 1)); }, [cycleStartDay]);
+
+  const handleSavePayday = async () => {
+    if (!onUpdatePayday) return;
+    const day = Math.min(28, Math.max(1, parseInt(paydayInput, 10) || 1));
+    setSavingPayday(true);
+    const result = await onUpdatePayday(day);
+    setSavingPayday(false);
+    if (result.error) toast.error(result.error);
+    else toast.success(t('settings.financial.paydaySaved'));
+  };
 
   const { status: partnerStatus, loading: partnerLoading, sendInvite, cancelInvite, unlink } = usePartner();
   const [inviteEmail, setInviteEmail] = useState('');
@@ -231,6 +252,36 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </div>
+          </div>
+          <div className="p-5">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <CalendarClock className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-display">{t('settings.financial.payday')}</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.financial.paydaySubtitle')}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <input
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={paydayInput}
+                  onChange={e => setPaydayInput(e.target.value)}
+                  className="w-20 border border-border rounded-xl px-3 py-2 bg-background outline-none focus:border-primary text-sm text-center"
+                />
+                <button
+                  onClick={handleSavePayday}
+                  disabled={savingPayday || String(cycleStartDay ?? 1) === paydayInput}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {savingPayday ? <Loader2 className="w-4 h-4 animate-spin" /> : t('settings.financial.paydaySave')}
+                </button>
+              </div>
             </div>
           </div>
           <div className="p-5 hover:bg-muted/30 transition-colors cursor-pointer">

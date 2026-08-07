@@ -1,0 +1,92 @@
+/* Scoped visual identity for the public Radiografía Financiera / Financial X-Ray
+   flow. Overrides live under .xray-scope only — the rest of the app keeps the
+   navy/emerald theme defined in src/styles/theme.css untouched. */
+
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Work+Sans:wght@400;500;600;700&display=swap');
+
+.xray-scope {
+  --background: #efeee3;
+  --foreground: #232b24;
+  --card: #f7f5eb;
+  --card-foreground: #232b24;
+  --popover: #f7f5eb;
+  --popover-foreground: #232b24;
+  --primary: #1f3d30;
+  --primary-foreground: #f4f1e6;
+  --secondary: #3f5a45;
+  --secondary-foreground: #f4f1e6;
+  --muted: #e4e1d2;
+  --muted-foreground: #6b7268;
+  --accent: #a9822f;
+  --accent-foreground: #232b24;
+  --destructive: #9a4a3b;
+  --destructive-foreground: #f4f1e6;
+  --border: rgba(35, 43, 36, 0.14);
+  --input: transparent;
+  --input-background: #fbf9f2;
+  --ring: #1f3d30;
+  --chart-1: #1f3d30;
+  --chart-2: #a9822f;
+  --chart-3: #6b8f7a;
+  --chart-4: #8c6a4a;
+  --chart-5: #55707a;
+  --radius: 1.1rem;
+
+  /* Semantic status — muted, never the saturated red/amber/green of a typical dashboard */
+  --xray-good-bg: #e3e9de;
+  --xray-good-border: #bed0ba;
+  --xray-good-fg: #45664b;
+  --xray-warn-bg: #f2e7d2;
+  --xray-warn-border: #d9c29b;
+  --xray-warn-fg: #8c6934;
+  --xray-bad-bg: #eedad2;
+  --xray-bad-border: #d4ac9b;
+  --xray-bad-fg: #8a4634;
+
+  /* Generosidad — its own tone, distinct from the sage "good" used for savings
+     and investment: the same warm gold family as the brand accent, one shade
+     softer so it doesn't compete with the accent's single moment-per-screen rule. */
+  --xray-giving-bg: #f2ecdd;
+  --xray-giving-border: #dcc98f;
+  --xray-giving-fg: #8c6d2f;
+
+  /* The "light table" — a fixed dark ground for diagnostic moments (processing,
+     the health score). Deliberately does not follow light/dark theme toggling:
+     film is always film, like a real negative held up to the light. */
+  --xray-film: #12201a;
+  --xray-film-card: #182620;
+  --xray-film-border: #33403a;
+  --xray-film-line: #ede6d2;
+  --xray-film-muted: #a7b3a9;
+  --xray-film-gold: #d9b872;
+
+  font-family: 'Work Sans', -apple-system, sans-serif;
+  font-feature-settings: 'tnum' 1;
+}
+
+.dark .xray-scope {
+  --background: #1a1f1a;
+  --foreground: #eee9db;
+  --card: #212720;
+  --card-foreground: #eee9db;
+  --popover: #212720;
+  --popover-foreground: #eee9db;
+  --primary: #2f5744;
+  --primary-foreground: #f4f1e6;
+  --secondary: #4b6b52;
+  --secondary-foreground: #f4f1e6;
+  --muted: #262c24;
+  --muted-foreground: #a9a793;
+  --accent: #d9b872;
+  --accent-foreground: #1a1f1a;
+  --border: rgba(238, 233, 219, 0.12);
+  --input-background: #262c24;
+  --ring: #2f5744;
+}
+
+.xray-scope h1,
+.xray-scope h2,
+.xray-scope h3,
+.xray-scope .font-display {
+  font-family: 'Newsreader', 'Iowan Old Style', Georgia, serif;
+}

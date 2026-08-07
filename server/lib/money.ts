@@ -49,6 +49,18 @@ const MONEY_KEYS = new Set([
   "netWorth",
   "income",
   "avgAmount",
+  "principal",
+  "creditLimit",
+  "minimumPayment",
+  "installmentAmount",
+  "committed",
+  "extraPayment",
+  "interestSaved",
+  "totalOwed",
+  "totalMinimums",
+  "expectedIncome",
+  "totalInterestPaid",
+  "totalPaid",
 ]);
 
 /**

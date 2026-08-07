@@ -13,7 +13,7 @@
 // strips exactly the tokens we need here ("transferencia", "bizum", …).
 
 export type MovementType = "consumption" | "wealth" | "uncertain";
-export type MovementKind = "savings" | "investment" | "transfer" | "cash" | null;
+export type MovementKind = "savings" | "investment" | "giving" | "transfer" | "cash" | null;
 export interface MovementClass { type: MovementType; kind: MovementKind }
 
 // Brokers, robo-advisors, crypto exchanges, pensions, funds.
@@ -25,14 +25,27 @@ const INVESTMENT = [
   "bolsa", "acciones", "etf", "openbank invest", "traspaso a fondo",
 ];
 const SAVINGS = ["ahorro", "hucha", "cuenta de ahorro", "objetivo de ahorro", "savings"];
+// Tithing, offerings, donations to churches/NGOs — stewardship, not spending.
+const GIVING = [
+  "diezmo", "diezmos", "ofrenda", "ofrendas", "donacion", "donaciones", "donativo", "donativos",
+  "limosna", "iglesia", "parroquia", "caritas", "cruz roja", "unicef", "manos unidas",
+  "aldeas infantiles", "world vision", "ong", "fundacion", "mision", "misiones", "diaconia",
+];
 const TRANSFER = ["transferencia", "traspaso", "bizum", "envio de dinero", "envio a", "transf"];
 const CASH = ["cajero", "reintegro", "retirada de efectivo", "retirada efectivo", "disposicion efectivo", "atm", "efectivo"];
 
 // Normalize to space-delimited words (punctuation → spaces), padded so we can
 // match whole words. Substring matching is unsafe here — e.g. "netflix" contains
 // "etf" and would falsely read as an investment.
+//
+// Some banks concatenate their fixed label directly onto the user's own
+// reference text with no separator (e.g. "Transferencia realizadaDiezmo - ...").
+// A lowercase→uppercase transition reliably marks that boundary, so we split
+// there before anything else — this can only ADD word breaks, never merge
+// two real words together, so it's safe for every existing keyword list too.
 function norm(s: string): string {
-  return ` ${(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim()} `;
+  const spaced = (s ?? "").replace(/([a-z])([A-Z])/g, "$1 $2");
+  return ` ${spaced.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim()} `;
 }
 
 // A needle matches only as a whole word / phrase, bounded by spaces.
@@ -42,6 +55,7 @@ function hits(haystack: string, needles: string[]): boolean {
 
 export function classifyMovement(concept: string): MovementClass {
   const c = norm(concept);
+  if (hits(c, GIVING)) return { type: "wealth", kind: "giving" };
   if (hits(c, INVESTMENT)) return { type: "wealth", kind: "investment" };
   if (hits(c, SAVINGS)) return { type: "wealth", kind: "savings" };
   if (hits(c, TRANSFER)) return { type: "uncertain", kind: "transfer" };
