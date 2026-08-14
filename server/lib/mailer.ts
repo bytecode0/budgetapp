@@ -440,6 +440,101 @@ export async function sendXrayReportEmail(email: string, pdf: Buffer, score: num
   if (error) { console.error("[mailer/sendXrayReportEmail]", error); throw new Error(error.message); }
 }
 
+// ─── 7. Radiografía onboarding — email confirmation code ────────────────────
+//
+// Deliberately its OWN minimal wrapper, not the shared `wrapper()` above:
+// no Google Fonts <link>, no CSS gradients — both silently degrade in Outlook
+// (plan §1.8 flags this as the fix owed to the existing Radiografía emails;
+// applying it here from the start rather than inheriting the same defect).
+// System fonts + flat colors only. Also not a "verify your account" message —
+// there's no account, per docs/plan-onboarding-radiografia.md §0.2.
+
+function radiografiaWrapper(content: string): string {
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Radiografía Financiera</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F0EEE8;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F0EEE8;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;">
+          <tr>
+            <td style="padding-bottom:24px;text-align:center;">
+              <span style="font-size:13px;font-weight:700;letter-spacing:1px;color:#1F3D30;text-transform:uppercase;">Radiografía Financiera</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#FFFFFF;border:1px solid #E5E1D8;border-radius:16px;">
+              ${content}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 0 0;text-align:center;">
+              <p style="margin:0;font-size:11px;color:#8A8578;">
+                Si no solicitaste este código, ignora este correo.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+export async function sendRadiografiaEmailCode(email: string, code: string) {
+  const html = radiografiaWrapper(`
+    <tr>
+      <td style="padding:36px 32px 12px;text-align:center;">
+        <h1 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#1F3D30;line-height:1.3;">
+          Confirma tu email
+        </h1>
+        <p style="margin:0;font-size:14px;color:#6B6558;line-height:1.6;">
+          Usa este código para confirmar tu email y seguir con tu diagnóstico financiero.
+        </p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:20px 32px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="background:#F0EEE8;border-radius:12px;padding:24px;text-align:center;">
+              <p style="margin:0;font-size:36px;font-weight:700;letter-spacing:10px;color:#1F3D30;font-family:'Courier New',Courier,monospace;">
+                ${code}
+              </p>
+              <p style="margin:10px 0 0;font-size:12px;color:#8A8578;">
+                Caduca en 15 minutos
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:8px 32px 32px;text-align:center;">
+        <p style="margin:0;font-size:12px;color:#8A8578;line-height:1.6;">
+          Es un código de un solo uso. Nadie de nuestro equipo te lo pedirá por otro medio.
+        </p>
+      </td>
+    </tr>
+  `);
+
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: `${code} — confirma tu email`,
+    html,
+    text: `Tu código de confirmación es ${code}. Caduca en 15 minutos. Si no solicitaste este código, ignora este correo.`,
+  });
+
+  if (error) { console.error("[mailer/sendRadiografiaEmailCode]", error); throw new Error(error.message); }
+}
+
 // ─── 5. Welcome — Google signup ───────────────────────────────────────────────
 
 export async function sendWelcomeGoogleEmail(email: string, name: string) {

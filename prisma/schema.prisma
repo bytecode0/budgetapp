@@ -630,6 +630,7 @@ model RadiografiaEmailCheck {
   email        String
   codeHash     String // sha256(code + salt), never the code itself
   salt         String // per-row salt
+  requestIp    String? // rate limit is by (email, IP), not just email — plan §2.3
   expiresAt    DateTime // 15 min
   attemptCount Int       @default(0) // invalidated at 5
   consumedAt   DateTime?
@@ -637,6 +638,7 @@ model RadiografiaEmailCheck {
 
   @@index([profileId])
   @@index([email, createdAt]) // backs the DB-based rate limit + 60s resend cooldown
+  @@index([requestIp, createdAt])
 }
 
 // An opaque capability token scoped to ONE radiografía — never a session, never

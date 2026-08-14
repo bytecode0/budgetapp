@@ -4,6 +4,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { budgetAppEnabled } from "./lib/featureFlags.js";
 import { xrayRouter } from "./routes/xray.js";
+import { radiografiaRouter } from "./routes/radiografia.js";
 
 const app = express();
 const PORT = process.env.SERVER_PORT || 3002;
@@ -42,6 +43,7 @@ app.use(cookieParser());
 // route. The Radiografía is the ONE exception, and it's listed here
 // explicitly rather than being an implicit exception buried in a router file.
 app.use("/api/xray", xrayRouter);
+app.use("/api/radiografia", radiografiaRouter);
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
