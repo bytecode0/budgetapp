@@ -36,6 +36,8 @@ export function useOnboardingState() {
   const [accessToken, setAccessTokenState] = useState<string | null>(() => sessionStorage.getItem(STORAGE_TOKEN));
   const [emailVerified, setEmailVerified] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  const [stageId, setStageId] = useState<string | null>(null);
+  const [branchId, setBranchId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const initialized = useRef(false);
 
@@ -83,6 +85,7 @@ export function useOnboardingState() {
         if (data) {
           setEmailVerified(data.emailVerified);
           setEmail(data.email ?? null);
+          setStageId(data.stageId ?? null);
           if (data.onboardingStep) {
             setStepState(data.onboardingStep as OnboardingStep);
             sessionStorage.setItem(STORAGE_STEP, data.onboardingStep);
@@ -96,5 +99,5 @@ export function useOnboardingState() {
     })();
   }, []);
 
-  return { step, setStep, accessToken, setAccessToken, emailVerified, setEmailVerified, email, setEmail, loading };
+  return { step, setStep, accessToken, setAccessToken, emailVerified, setEmailVerified, email, setEmail, stageId, setStageId, branchId, setBranchId, loading };
 }

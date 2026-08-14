@@ -11,6 +11,13 @@ export interface OnboardingProfile {
   incomeType: string;
   emailVerified: boolean;
   email?: string | null;
+  stageId?: string | null;
+}
+
+export interface StageStatus {
+  stageId: string | null;
+  branchId: string | null;
+  classifiable: boolean;
 }
 
 interface ApiResult<T> {
@@ -62,7 +69,7 @@ export function saveFields(
   payload: { fields: FieldInput[]; debts: DebtInput[]; debtsNone: boolean },
   accessToken: string | null,
 ) {
-  return call<{ completeness: { pct: number; missing: string[]; classifiable: boolean } }>(
+  return call<{ completeness: { pct: number; missing: string[]; classifiable: boolean }; stage: StageStatus }>(
     '/profile/fields',
     { method: 'POST', body: JSON.stringify(payload) },
     accessToken,

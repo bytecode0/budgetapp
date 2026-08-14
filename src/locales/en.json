@@ -5,6 +5,32 @@
   },
   "radiografia": {
     "hydrating": "Setting up your account with your data…",
+    "methodStage": {
+      "cimientos": {
+        "name": "Foundations",
+        "description": "You're building your cushion — the first step before anything else."
+      },
+      "cerrando_la_brecha": {
+        "name": "Foundations",
+        "description": "Right now your expenses exceed your income. The first goal is closing that gap."
+      },
+      "liberacion": {
+        "name": "Liberation",
+        "description": "You already have your cushion. Now it's time to free yourself from debt."
+      },
+      "terreno_firme": {
+        "name": "Solid Ground",
+        "description": "You're debt-free. Time to build your emergency fund."
+      },
+      "fortaleza": {
+        "name": "Stronghold",
+        "description": "Debt-free with a full emergency fund. Your base is solid."
+      },
+      "multiplicacion": {
+        "name": "Multiplication",
+        "description": "Debt-free, with an emergency fund, and investing. You're growing what you have."
+      }
+    },
     "onboarding": {
       "block1": {
         "badge": "Your radiografía",
@@ -63,7 +89,8 @@
       "result": {
         "title": "We've got it!",
         "subtitle": "We're preparing your full radiografía.",
-        "subtitleWithEmail": "We'll send it to {{email}} as soon as it's ready."
+        "subtitleWithEmail": "We'll send it to {{email}} as soon as it's ready.",
+        "stageBadge": "Your stage"
       }
     },
     "landing": {
@@ -1281,6 +1308,7 @@
       "bnpl": "Buy now, pay later",
       "payday_loan": "Payday loan",
       "auto_loan": "Auto loan",
+      "mortgage": "Mortgage",
       "other": "Other"
     },
     "payoffTitle": "Payoff planner",

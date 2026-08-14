@@ -24,7 +24,8 @@ import {
   RESEND_COOLDOWN_MS,
 } from "../lib/radiografia/emailCheck.js";
 import { sendRadiografiaEmailCode } from "../lib/mailer.js";
-import { DEBTS_NONE_FLAG, computeCompleteness, findField } from "../lib/radiografia/fields/registry.v1.js";
+import { DEBTS_NONE_FLAG, findField } from "../lib/radiografia/fields/registry.v1.js";
+import { recalculateStage } from "../lib/radiografia/stage/recalculate.js";
 
 export const radiografiaRouter = Router();
 
@@ -277,6 +278,7 @@ radiografiaRouter.get("/profile", async (req: Request, res: Response) => {
       incomeType: profile.incomeType,
       emailVerified: !!profile.emailVerifiedAt,
       email: profile.emailVerifiedAt ? profile.email : null,
+      stageId: profile.stageCache,
     },
   });
 });
@@ -380,17 +382,12 @@ radiografiaRouter.post("/profile/fields", async (req: Request, res: Response) =>
     }
   });
 
-  const [presentRows, debtCount] = await Promise.all([
-    prisma.profileFieldValue.findMany({ where: { profileId: profile.id } }),
-    prisma.profileDebt.count({ where: { profileId: profile.id } }),
-  ]);
-  const presentFieldKeys = new Set(presentRows.map(r => r.fieldKey));
-  const completeness = computeCompleteness({
-    presentFieldKeys,
-    hasDebtsAnswer: presentFieldKeys.has(DEBTS_NONE_FLAG) || debtCount > 0,
-  });
+  const { completeness, stage } = await recalculateStage(
+    profile.id,
+    profile.stageCache === null ? "new_radiografia" : "threshold_cross",
+  );
 
-  res.json({ data: { completeness } });
+  res.json({ data: { completeness, stage: { stageId: stage.stageId, branchId: stage.branchId, classifiable: stage.classifiable } } });
 });
 
 // DELETE /api/radiografia/profile — borrado a petición (plan §4.5). Requires

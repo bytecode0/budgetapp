@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'motion/react';
-import { Plus, Trash2, CreditCard, Calendar, ShoppingBag, AlertCircle, Car, Wallet } from 'lucide-react';
+import { Plus, Trash2, CreditCard, Calendar, ShoppingBag, AlertCircle, Car, Home, Wallet } from 'lucide-react';
 import { XRayMark } from '../XRayMark';
 import type { DebtKind } from '../types';
 import type { FieldInput, DebtInput } from './onboardingApi';
 
-// Same taxonomy as XRayQuickEstimate/the authenticated Debts module. No
-// "mortgage" kind yet — the stage engine's own hipoteca/consumo_caro/etc.
-// taxonomy doesn't map onto this one 1:1 (plan Q7, still open); adding a kind
-// here would be inventing an answer to a question that isn't mine to answer.
-const DEBT_KINDS: DebtKind[] = ['credit_card', 'installment', 'bnpl', 'payday_loan', 'auto_loan', 'other'];
+// Same taxonomy as XRayQuickEstimate/the authenticated Debts module, plus
+// "mortgage" — the stage engine excludes it from "libre de deudas" (a
+// mortgage is a long-term secured commitment, not consumer debt; same
+// treatment server/lib/xray/debts.ts already gives it for the statement
+// path), so manual entry needs a way to mark a row as one.
+const DEBT_KINDS: DebtKind[] = ['credit_card', 'installment', 'bnpl', 'payday_loan', 'auto_loan', 'mortgage', 'other'];
 
 function kindIcon(kind: DebtKind) {
   switch (kind) {
@@ -19,6 +20,7 @@ function kindIcon(kind: DebtKind) {
     case 'bnpl': return ShoppingBag;
     case 'payday_loan': return AlertCircle;
     case 'auto_loan': return Car;
+    case 'mortgage': return Home;
     default: return Wallet;
   }
 }

@@ -21,7 +21,7 @@ export function OnboardingFlow() {
   const { i18n } = useTranslation();
   useEffect(() => { if (i18n.language !== 'es') i18n.changeLanguage('es'); }, [i18n]);
 
-  const { step, setStep, accessToken, setAccessToken, emailVerified, setEmailVerified, email, setEmail, loading } = useOnboardingState();
+  const { step, setStep, accessToken, setAccessToken, emailVerified, setEmailVerified, email, setEmail, stageId, setStageId, branchId, setBranchId, loading } = useOnboardingState();
   const [draft, setDraft] = useState<Block1Draft>(() => loadDraft() ?? emptyBlock1Draft());
   const [submitting, setSubmitting] = useState(false);
 
@@ -39,7 +39,11 @@ export function OnboardingFlow() {
     setEmailVerified(true);
     setEmail(verifiedEmail);
     setSubmitting(true);
-    await saveFields(draftToPayload(draft), token);
+    const { data } = await saveFields(draftToPayload(draft), token);
+    if (data) {
+      setStageId(data.stage.stageId);
+      setBranchId(data.stage.branchId);
+    }
     setSubmitting(false);
     clearDraft();
     setStep('block3_enrichment');
@@ -57,7 +61,7 @@ export function OnboardingFlow() {
           {step === 'block2_email' && !emailVerified && <EmailBlock onVerified={handleEmailVerified} />}
           {step === 'block2_email' && emailVerified && <EnrichmentBlock onSkip={() => setStep('result')} />}
           {step === 'block3_enrichment' && <EnrichmentBlock onSkip={() => setStep('result')} />}
-          {step === 'result' && <ResultPlaceholder email={email} />}
+          {step === 'result' && <ResultPlaceholder email={email} stageId={stageId} branchId={branchId} />}
         </motion.div>
       </AnimatePresence>
     </div>

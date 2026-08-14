@@ -20,7 +20,7 @@ export interface HealthPillar {
   caption: string;
 }
 
-export type DebtKind = 'credit_card' | 'installment' | 'bnpl' | 'payday_loan' | 'auto_loan' | 'other';
+export type DebtKind = 'credit_card' | 'installment' | 'bnpl' | 'payday_loan' | 'auto_loan' | 'mortgage' | 'other';
 
 export interface HealthIndex {
   score: number;

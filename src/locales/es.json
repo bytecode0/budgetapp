@@ -5,6 +5,32 @@
   },
   "radiografia": {
     "hydrating": "Preparando tu cuenta con tus datos…",
+    "methodStage": {
+      "cimientos": {
+        "name": "Cimientos",
+        "description": "Estás construyendo tu colchón — el primer paso antes de cualquier otra cosa."
+      },
+      "cerrando_la_brecha": {
+        "name": "Cimientos",
+        "description": "Ahora mismo tus gastos superan tus ingresos. El primer objetivo es cerrar esa brecha."
+      },
+      "liberacion": {
+        "name": "Liberación",
+        "description": "Ya tienes tu colchón. Ahora toca liberarte de tus deudas."
+      },
+      "terreno_firme": {
+        "name": "Terreno Firme",
+        "description": "Estás libre de deudas. Es momento de construir tu fondo de emergencia."
+      },
+      "fortaleza": {
+        "name": "Fortaleza",
+        "description": "Libre de deudas y con tu fondo de emergencia completo. Tu base es sólida."
+      },
+      "multiplicacion": {
+        "name": "Multiplicación",
+        "description": "Libre de deudas, con fondo de emergencia, e invirtiendo. Estás haciendo crecer lo que tienes."
+      }
+    },
     "onboarding": {
       "block1": {
         "badge": "Tu radiografía",
@@ -63,7 +89,8 @@
       "result": {
         "title": "¡Ya la tenemos!",
         "subtitle": "Estamos preparando tu radiografía completa.",
-        "subtitleWithEmail": "Te la enviamos a {{email}} en cuanto esté lista."
+        "subtitleWithEmail": "Te la enviamos a {{email}} en cuanto esté lista.",
+        "stageBadge": "Tu etapa"
       }
     },
     "landing": {
@@ -1281,6 +1308,7 @@
       "bnpl": "Compra ahora, paga después",
       "payday_loan": "Préstamo rápido",
       "auto_loan": "Préstamo de coche",
+      "mortgage": "Hipoteca",
       "other": "Otro"
     },
     "payoffTitle": "Plan de pago",

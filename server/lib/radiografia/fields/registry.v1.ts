@@ -111,6 +111,14 @@ export interface CompletenessInput {
   presentFieldKeys: Set<string>;
   /** True if the profile has ≥1 ProfileDebt row OR the DEBTS_NONE_FLAG field is present. */
   hasDebtsAnswer: boolean;
+  /**
+   * income_floor's `required: false` in the registry is conditional, not
+   * optional: it's the required income field for an irregular-income
+   * profile, in place of income_regular (which such a profile never fills
+   * in). Without this, an irregular-income profile could never satisfy
+   * completeness — income_regular would always be "missing".
+   */
+  incomeType: "regular" | "irregular";
 }
 
 export interface Completeness {
@@ -119,13 +127,19 @@ export interface Completeness {
   classifiable: boolean; // true iff every MIN_INPUTS_FOR_STAGE key is present AND debts are answered
 }
 
+function incomeAdjusted(keys: readonly string[], incomeType: "regular" | "irregular"): string[] {
+  if (incomeType !== "irregular") return [...keys];
+  return keys.map((k) => (k === "income_regular" ? "income_floor" : k));
+}
+
 /** Calculated, never stored (plan §2.1: "Completitud calculada, no almacenada"). */
 export function computeCompleteness(input: CompletenessInput): Completeness {
-  const required = requiredFields().map((f) => f.key);
+  const required = incomeAdjusted(requiredFields().map((f) => f.key), input.incomeType);
   const missing = required.filter((k) => !input.presentFieldKeys.has(k));
   if (!input.hasDebtsAnswer) missing.push("debts");
 
-  const minInputsMissing = MIN_INPUTS_FOR_STAGE.filter((k) => !input.presentFieldKeys.has(k));
+  const minInputs = incomeAdjusted(MIN_INPUTS_FOR_STAGE, input.incomeType);
+  const minInputsMissing = minInputs.filter((k) => !input.presentFieldKeys.has(k));
   const classifiable = minInputsMissing.length === 0 && input.hasDebtsAnswer;
 
   const totalRequired = required.length + 1; // +1 for the debts answer
