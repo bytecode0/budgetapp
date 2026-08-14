@@ -5,6 +5,67 @@
   },
   "radiografia": {
     "hydrating": "Setting up your account with your data…",
+    "onboarding": {
+      "block1": {
+        "badge": "Your radiografía",
+        "title": "Let's start with the essentials",
+        "subtitle": "A few minutes. None of this leaves here without your permission.",
+        "incomeRegular": "Regular income",
+        "incomeIrregular": "Irregular income",
+        "incomeLabel": "Monthly income",
+        "incomeFloorLabel": "Minimum you can count on each month",
+        "housingLabel": "Housing (rent or mortgage)",
+        "essentialsLabel": "Essential expenses (food, utilities, transport)",
+        "accountBalanceLabel": "Checking account balance",
+        "cuasiEfectivoLabel": "Available savings (high-yield accounts, on-demand deposits)",
+        "showOptional": "Add enjoyment, saving, investment and giving",
+        "hideOptional": "Hide optional fields",
+        "enjoymentLabel": "Enjoyment (leisure, treats)",
+        "savingLabel": "Monthly saving",
+        "investmentLabel": "Monthly investment",
+        "givingLabel": "Monthly giving",
+        "mercadoVolatilLabel": "Volatile-market investments (funds, stocks, crypto)",
+        "bloqueadoLabel": "Locked assets (pension plans, real estate)",
+        "debtsLabel": "Debts",
+        "noDebts": "I have no debts",
+        "submit": "Continue",
+        "submitting": "Saving…"
+      },
+      "email": {
+        "badge": "Confirm your email",
+        "title": "Where should we send your full report?",
+        "subtitle": "We only use this to confirm it's yours and to send you your radiografía.",
+        "codeTitle": "Check your inbox",
+        "codeSubtitle": "We sent you a 6-digit code. It expires in 15 minutes.",
+        "placeholder": "you@email.com",
+        "send": "Send code",
+        "sending": "Sending…",
+        "verify": "Confirm",
+        "verifying": "Confirming…",
+        "changeEmail": "Use a different email",
+        "errors": {
+          "invalid_email": "That email doesn't look valid.",
+          "resend_cooldown": "Wait a moment before requesting another code.",
+          "rate_limited": "Too many attempts. Try again later.",
+          "send_failed": "We couldn't send the email. Please try again.",
+          "wrong_code": "Wrong code.",
+          "too_many_attempts": "Too many attempts. Request a new code.",
+          "code_expired": "This code expired. Request a new one.",
+          "no_pending_code": "Request a code first.",
+          "invalid_code": "Enter the 6-digit code."
+        }
+      },
+      "enrichment": {
+        "title": "Want to fine-tune the detail?",
+        "subtitle": "You can upload a bank statement later for a more precise analysis. For now, this is enough to calculate your radiografía.",
+        "skip": "See my radiografía"
+      },
+      "result": {
+        "title": "We've got it!",
+        "subtitle": "We're preparing your full radiografía.",
+        "subtitleWithEmail": "We'll send it to {{email}} as soon as it's ready."
+      }
+    },
     "landing": {
       "badge": "Financial X-Ray",
       "title": "Every bank statement tells a story. Let's read it together.",

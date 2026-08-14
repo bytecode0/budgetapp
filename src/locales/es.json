@@ -5,6 +5,67 @@
   },
   "radiografia": {
     "hydrating": "Preparando tu cuenta con tus datos…",
+    "onboarding": {
+      "block1": {
+        "badge": "Tu radiografía",
+        "title": "Empecemos por lo esencial",
+        "subtitle": "Unos minutos. Nada de esto sale de aquí sin tu permiso.",
+        "incomeRegular": "Ingreso regular",
+        "incomeIrregular": "Ingreso irregular",
+        "incomeLabel": "Ingreso mensual",
+        "incomeFloorLabel": "Ingreso mínimo que puedes contar cada mes",
+        "housingLabel": "Vivienda (alquiler o hipoteca)",
+        "essentialsLabel": "Gastos esenciales (comida, suministros, transporte)",
+        "accountBalanceLabel": "Saldo en cuenta corriente",
+        "cuasiEfectivoLabel": "Ahorro disponible (cuentas remuneradas, depósitos a la vista)",
+        "showOptional": "Añadir disfrute, ahorro, inversión y generosidad",
+        "hideOptional": "Ocultar campos opcionales",
+        "enjoymentLabel": "Disfrute (ocio, caprichos)",
+        "savingLabel": "Ahorro mensual",
+        "investmentLabel": "Inversión mensual",
+        "givingLabel": "Generosidad mensual",
+        "mercadoVolatilLabel": "Inversiones en mercado volátil (fondos, acciones, cripto)",
+        "bloqueadoLabel": "Activos bloqueados (planes de pensiones, inmuebles)",
+        "debtsLabel": "Deudas",
+        "noDebts": "No tengo deudas",
+        "submit": "Continuar",
+        "submitting": "Guardando…"
+      },
+      "email": {
+        "badge": "Confirma tu email",
+        "title": "¿A qué email te enviamos el informe completo?",
+        "subtitle": "Solo lo usamos para confirmar que es tuyo y enviarte tu radiografía.",
+        "codeTitle": "Revisa tu bandeja de entrada",
+        "codeSubtitle": "Te enviamos un código de 6 dígitos. Caduca en 15 minutos.",
+        "placeholder": "tu@email.com",
+        "send": "Enviar código",
+        "sending": "Enviando…",
+        "verify": "Confirmar",
+        "verifying": "Confirmando…",
+        "changeEmail": "Usar otro email",
+        "errors": {
+          "invalid_email": "Ese email no parece válido.",
+          "resend_cooldown": "Espera un momento antes de pedir otro código.",
+          "rate_limited": "Demasiados intentos. Prueba de nuevo más tarde.",
+          "send_failed": "No pudimos enviar el correo. Inténtalo de nuevo.",
+          "wrong_code": "Código incorrecto.",
+          "too_many_attempts": "Demasiados intentos. Pide un código nuevo.",
+          "code_expired": "Este código caducó. Pide uno nuevo.",
+          "no_pending_code": "Pide un código primero.",
+          "invalid_code": "Introduce los 6 dígitos del código."
+        }
+      },
+      "enrichment": {
+        "title": "¿Quieres afinar el detalle?",
+        "subtitle": "Puedes subir un extracto bancario más adelante para un análisis más preciso. Por ahora, con esto ya podemos calcular tu radiografía.",
+        "skip": "Ver mi radiografía"
+      },
+      "result": {
+        "title": "¡Ya la tenemos!",
+        "subtitle": "Estamos preparando tu radiografía completa.",
+        "subtitleWithEmail": "Te la enviamos a {{email}} en cuanto esté lista."
+      }
+    },
     "landing": {
       "badge": "Radiografía Financiera",
       "title": "Cada extracto bancario cuenta una historia. Vamos a leerla juntos.",

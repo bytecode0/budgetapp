@@ -24,8 +24,14 @@ import {
   RESEND_COOLDOWN_MS,
 } from "../lib/radiografia/emailCheck.js";
 import { sendRadiografiaEmailCode } from "../lib/mailer.js";
+import { DEBTS_NONE_FLAG, computeCompleteness, findField } from "../lib/radiografia/fields/registry.v1.js";
 
 export const radiografiaRouter = Router();
+
+// The 4 onboarding blocks (plan §5, F3). Duplicated as a literal list on the
+// client (src/radiografia/onboarding) rather than shared — crossing the
+// server/src boundary isn't worth it for four ids that the plan itself fixes.
+const ONBOARDING_STEPS = ["block1", "block2_email", "block3_enrichment", "result"] as const;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ANON_COOKIE = "radiografia_anon";
@@ -64,6 +70,23 @@ async function resolveProfileFromCookie(req: Request) {
   const anonId = req.cookies?.[ANON_COOKIE];
   if (typeof anonId !== "string" || !anonId) return null;
   return prisma.financialProfile.findUnique({ where: { anonId } });
+}
+
+// Resolves "who is this" for endpoints reachable both before AND after email
+// confirmation: the Bearer capability token (issued at /email/verify, held in
+// the client's sessionStorage) takes precedence — it's what lets a returning
+// tab/device without the anon cookie resume a confirmed profile. Falls back
+// to the anon cookie for a profile that hasn't confirmed an email yet.
+async function resolveProfile(req: Request) {
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice("Bearer ".length);
+    const row = await prisma.radiografiaAccessToken.findUnique({ where: { token }, include: { profile: true } });
+    if (!row) return null;
+    if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null;
+    return row.profile;
+  }
+  return resolveProfileFromCookie(req);
 }
 
 // POST /api/radiografia/profile — bootstrap or resume an anonymous profile.
@@ -238,4 +261,134 @@ radiografiaRouter.post("/email/verify", async (req: Request, res: Response) => {
 
   res.clearCookie(ANON_COOKIE, ANON_COOKIE_OPTS);
   res.json({ data: { profileId: finalProfileId, accessToken: token, email: check.email } });
+});
+
+// GET /api/radiografia/profile — current state, resolved by cookie OR Bearer
+// token. The Bearer path is what makes "resume on another device/tab" work
+// (plan F3): the anon cookie never travels, the capability token does.
+radiografiaRouter.get("/profile", async (req: Request, res: Response) => {
+  const profile = await resolveProfile(req);
+  if (!profile) return res.status(404).json({ error: "profile_not_found" });
+  res.json({
+    data: {
+      profileId: profile.id,
+      onboardingStep: profile.onboardingStep,
+      currency: profile.currency,
+      incomeType: profile.incomeType,
+      emailVerified: !!profile.emailVerifiedAt,
+      email: profile.emailVerifiedAt ? profile.email : null,
+    },
+  });
+});
+
+// PATCH /api/radiografia/profile/step — persists which onboarding block the
+// user last completed, so a refresh or a resume-elsewhere lands on the right
+// screen. This is progress-position only; the actual answers for an
+// unconfirmed email stay in the client's sessionStorage (plan §2.5 point 1) —
+// there's nothing legitimate to persist server-side about an anonymous
+// visitor beyond "how far did they get".
+radiografiaRouter.patch("/profile/step", async (req: Request, res: Response) => {
+  if (rateLimited(clientIp(req))) return res.status(429).json({ error: "rate_limited" });
+  const profile = await resolveProfile(req);
+  if (!profile) return res.status(404).json({ error: "profile_not_found" });
+
+  const { step } = req.body ?? {};
+  if (typeof step !== "string" || !(ONBOARDING_STEPS as readonly string[]).includes(step)) {
+    return res.status(400).json({ error: "invalid_step" });
+  }
+  await prisma.financialProfile.update({ where: { id: profile.id }, data: { onboardingStep: step } });
+  res.json({ data: { onboardingStep: step } });
+});
+
+interface FieldInput { key: string; valueCents: number }
+interface DebtInput { kind: string; monthlyPayment: number; outstandingBalance?: number; apr?: number }
+
+function isValidFieldInput(f: unknown): f is FieldInput {
+  if (typeof f !== "object" || f === null) return false;
+  const { key, valueCents } = f as Record<string, unknown>;
+  if (typeof key !== "string") return false;
+  const def = findField(key);
+  // Derived fields (base_mensual) are never submitted directly — they're
+  // computed from the fields that ARE submitted (plan §2.2).
+  if (!def || def.derivableFrom) return false;
+  return typeof valueCents === "number" && Number.isInteger(valueCents) && valueCents >= 0;
+}
+
+function isValidDebtInput(d: unknown): d is DebtInput {
+  if (typeof d !== "object" || d === null) return false;
+  const { kind, monthlyPayment, outstandingBalance, apr } = d as Record<string, unknown>;
+  if (typeof kind !== "string" || !kind) return false;
+  if (typeof monthlyPayment !== "number" || !Number.isInteger(monthlyPayment) || monthlyPayment < 0) return false;
+  if (outstandingBalance !== undefined && (typeof outstandingBalance !== "number" || !Number.isInteger(outstandingBalance))) return false;
+  if (apr !== undefined && typeof apr !== "number") return false;
+  return true;
+}
+
+// POST /api/radiografia/profile/fields — Bloque 1 (plan F4): persists the
+// mandatory fields + the 3 asset buckets + debts, all with source: "manual".
+// Only reachable once the email is confirmed (Bearer token) OR still anon —
+// same authorization as everything else here: resolveProfile(), never a
+// client-supplied profileId. Re-submitting replaces the current MANUAL debts
+// list wholesale (this is "save the whole form again", not an incremental
+// patch) but never touches rows with source "extracto"/"derivado" — those
+// keep their own provenance (principio 3).
+radiografiaRouter.post("/profile/fields", async (req: Request, res: Response) => {
+  if (rateLimited(clientIp(req))) return res.status(429).json({ error: "rate_limited" });
+  const profile = await resolveProfile(req);
+  if (!profile) return res.status(404).json({ error: "profile_not_found" });
+
+  const { fields, debts, debtsNone } = req.body ?? {};
+  if (!Array.isArray(fields) || !fields.every(isValidFieldInput)) {
+    return res.status(400).json({ error: "invalid_fields" });
+  }
+  if (debts !== undefined && (!Array.isArray(debts) || !debts.every(isValidDebtInput))) {
+    return res.status(400).json({ error: "invalid_debts" });
+  }
+  if (typeof debtsNone !== "boolean") return res.status(400).json({ error: "invalid_debts_none" });
+  if (debtsNone && debts?.length) return res.status(400).json({ error: "debts_and_debts_none_conflict" });
+
+  await prisma.$transaction(async tx => {
+    for (const f of fields as FieldInput[]) {
+      await tx.profileFieldValue.upsert({
+        where: { profileId_fieldKey_source: { profileId: profile.id, fieldKey: f.key, source: "manual" } },
+        create: { profileId: profile.id, fieldKey: f.key, valueCents: f.valueCents, source: "manual" },
+        update: { valueCents: f.valueCents, capturedAt: new Date() },
+      });
+    }
+
+    await tx.profileDebt.deleteMany({ where: { profileId: profile.id, source: "manual" } });
+    if (debtsNone) {
+      await tx.profileFieldValue.upsert({
+        where: { profileId_fieldKey_source: { profileId: profile.id, fieldKey: DEBTS_NONE_FLAG, source: "manual" } },
+        create: { profileId: profile.id, fieldKey: DEBTS_NONE_FLAG, valueCents: 1, source: "manual" },
+        update: { capturedAt: new Date() },
+      });
+    } else {
+      await tx.profileFieldValue.deleteMany({ where: { profileId: profile.id, fieldKey: DEBTS_NONE_FLAG, source: "manual" } });
+      if (debts?.length) {
+        await tx.profileDebt.createMany({
+          data: (debts as DebtInput[]).map(d => ({
+            profileId: profile.id,
+            kind: d.kind,
+            monthlyPayment: d.monthlyPayment,
+            outstandingBalance: d.outstandingBalance ?? null,
+            apr: d.apr ?? null,
+            source: "manual",
+          })),
+        });
+      }
+    }
+  });
+
+  const [presentRows, debtCount] = await Promise.all([
+    prisma.profileFieldValue.findMany({ where: { profileId: profile.id } }),
+    prisma.profileDebt.count({ where: { profileId: profile.id } }),
+  ]);
+  const presentFieldKeys = new Set(presentRows.map(r => r.fieldKey));
+  const completeness = computeCompleteness({
+    presentFieldKeys,
+    hasDebtsAnswer: presentFieldKeys.has(DEBTS_NONE_FLAG) || debtCount > 0,
+  });
+
+  res.json({ data: { completeness } });
 });

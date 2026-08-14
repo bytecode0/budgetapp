@@ -9,6 +9,15 @@ const XRayFlow = lazy(() =>
   import('../radiografia/XRayFlow').then((m) => ({ default: m.XRayFlow }))
 );
 
+// New unified onboarding (plan docs/plan-onboarding-radiografia.md, F3+),
+// built to coexist with the live /radiografia flow above rather than replace
+// it — reachable only at /radiografia/onboarding, and only with this flag on,
+// until it's complete enough to cut over.
+const onboardingV2Enabled = import.meta.env.VITE_ENABLE_ONBOARDING_V2 === 'true';
+const OnboardingFlow = onboardingV2Enabled
+  ? lazy(() => import('../radiografia/onboarding/OnboardingFlow').then((m) => ({ default: m.OnboardingFlow })))
+  : null;
+
 // Épica 0 (docs/scope-release.md): the BudgetApp is not launching 12 Sep 2026 —
 // only the Radiografía is public. `import.meta.env.VITE_ENABLE_BUDGETAPP` is
 // inlined by Vite as a string literal at build time; when it's statically
@@ -51,14 +60,16 @@ export default function App() {
   // Public, unauthenticated lead-magnet flow. Checked before the authenticated
   // app mounts so its auth-only data hooks never fire for anonymous visitors.
   if (typeof window !== 'undefined' && window.location.pathname.startsWith('/radiografia')) {
+    const isOnboardingV2 = OnboardingFlow && window.location.pathname === '/radiografia/onboarding';
     // No LanguageProvider here: it persists the language to localStorage, which
-    // would leak into the authenticated app. XRayFlow forces Spanish at runtime
-    // (the lead magnet's audience) without touching the saved preference.
+    // would leak into the authenticated app. XRayFlow/OnboardingFlow force
+    // Spanish at runtime (the lead magnet's audience) without touching the
+    // saved preference.
     return (
       <>
         <Toaster richColors position="top-right" />
         <Suspense fallback={<LoadingSpinner />}>
-          <XRayFlow />
+          {isOnboardingV2 ? <OnboardingFlow /> : <XRayFlow />}
         </Suspense>
       </>
     );
