@@ -35,7 +35,7 @@ function DraggableRow({
   index: number;
   moveRow: (from: number, to: number) => void;
   onDragEnd: () => void;
-  children: (handleRef: React.RefObject<HTMLDivElement | null>) => React.ReactNode;
+  children: (handleRef: React.RefObject<HTMLDivElement>) => React.ReactNode;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<HTMLDivElement>(null);
@@ -209,7 +209,7 @@ export function Debts() {
     else toast.success(t('debts.deletedOk'));
   };
 
-  const renderRow = (d: Debt, handleRef?: React.RefObject<HTMLDivElement | null>) => {
+  const renderRow = (d: Debt, handleRef?: React.RefObject<HTMLDivElement>) => {
     const Icon = kindIcon(d.kind);
     const progress = d.installmentsTotal
       ? `${d.installmentsPaid}/${d.installmentsTotal}`

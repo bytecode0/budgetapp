@@ -18,18 +18,46 @@ export interface MovementClass { type: MovementType; kind: MovementKind }
 
 // Brokers, robo-advisors, crypto exchanges, pensions, funds.
 const INVESTMENT = [
+  // Brokers & robo-advisors
   "indexa", "myinvestor", "my investor", "trade republic", "traderepublic", "degiro",
   "xtb", "etoro", "interactive brokers", "renta 4", "renta4", "scalable", "trading 212",
-  "trading212", "coinbase", "binance", "kraken", "bit2me", "bitpanda", "finizens",
-  "plan de pensiones", "pension", "pensiones", "fondo", "fondos", "broker", "inversion",
-  "bolsa", "acciones", "etf", "openbank invest", "traspaso a fondo",
+  "trading212", "finizens", "openbank invest", "inbestme", "ninety nine", "freedom24",
+  "lightyear", "revolut trading", "heytrade", "activotrade", "clicktrade", "selfbank",
+  // Crypto exchanges & assets
+  "coinbase", "binance", "kraken", "bit2me", "bitpanda", "bitstamp", "bitso", "gemini",
+  "crypto", "cripto", "criptomoneda", "criptomonedas", "bitcoin", "btc", "ethereum",
+  // Funds, index products, pensions. NOTE: bare "fondo"/"fondos" is deliberately
+  // NOT here — in Spanish it is ambiguous ("fondo de emergencia" is savings,
+  // "fondo Maritza" is a Bizum to a person). Only qualified phrases count.
+  "plan de pensiones", "pension", "pensiones", "broker", "inversion",
+  "inversiones", "bolsa", "acciones", "etf", "etfs", "indexado", "indexados",
+  "vanguard", "ishares", "amundi", "msci", "sp 500", "s p 500",
+  "fondo indexado", "fondo de inversion", "fondos de inversion", "traspaso a fondo",
+  // Crowdlending / real-estate platforms
+  "urbanitae", "housers", "mintos", "wecity",
 ];
-const SAVINGS = ["ahorro", "hucha", "cuenta de ahorro", "objetivo de ahorro", "savings"];
+const SAVINGS = [
+  "ahorro", "ahorros", "hucha", "cuenta de ahorro", "objetivo de ahorro",
+  "saving", "savings", "fondo de emergencia", "colchon",
+];
 // Tithing, offerings, donations to churches/NGOs — stewardship, not spending.
 const GIVING = [
   "diezmo", "diezmos", "ofrenda", "ofrendas", "donacion", "donaciones", "donativo", "donativos",
   "limosna", "iglesia", "parroquia", "caritas", "cruz roja", "unicef", "manos unidas",
   "aldeas infantiles", "world vision", "ong", "fundacion", "mision", "misiones", "diaconia",
+];
+// Unambiguous real-world obligations. A transfer or Bizum that names one of
+// these is NOT an ambiguous movement — it's spending, and must be counted as
+// such. Without this, rent paid by bank transfer (very common) lands in
+// "uncertain", gets excluded from consumption, and inflates the savings rate to
+// something absurd. Kept to words that can't plausibly be a person's name, and
+// matched whole-word, so "Bizum a Ana" never trips it.
+const REAL_EXPENSE = [
+  "alquiler", "hipoteca", "fianza", "comunidad de propietarios", "administrador de fincas",
+  "colegio", "guarderia", "matricula", "universidad", "academia",
+  "seguro", "abogado", "abogados", "gestoria", "asesoria", "notaria",
+  "multa", "impuesto", "impuestos", "irpf", "hacienda", "autonomos", "seguridad social",
+  "dentista", "clinica", "veterinario", "gimnasio", "comedor",
 ];
 const TRANSFER = ["transferencia", "traspaso", "bizum", "envio de dinero", "envio a", "transf"];
 const CASH = ["cajero", "reintegro", "retirada de efectivo", "retirada efectivo", "disposicion efectivo", "atm", "efectivo"];
@@ -43,13 +71,15 @@ const CASH = ["cajero", "reintegro", "retirada de efectivo", "retirada efectivo"
 // A lowercase→uppercase transition reliably marks that boundary, so we split
 // there before anything else — this can only ADD word breaks, never merge
 // two real words together, so it's safe for every existing keyword list too.
-function norm(s: string): string {
+// Exported so income.ts can reuse the exact same whole-word matching semantics
+// instead of re-implementing (and risking a subtly different) normalizer.
+export function norm(s: string): string {
   const spaced = (s ?? "").replace(/([a-z])([A-Z])/g, "$1 $2");
   return ` ${spaced.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim()} `;
 }
 
 // A needle matches only as a whole word / phrase, bounded by spaces.
-function hits(haystack: string, needles: string[]): boolean {
+export function hits(haystack: string, needles: string[]): boolean {
   return needles.some(n => haystack.includes(` ${n} `));
 }
 
@@ -58,6 +88,8 @@ export function classifyMovement(concept: string): MovementClass {
   if (hits(c, GIVING)) return { type: "wealth", kind: "giving" };
   if (hits(c, INVESTMENT)) return { type: "wealth", kind: "investment" };
   if (hits(c, SAVINGS)) return { type: "wealth", kind: "savings" };
+  // Checked before TRANSFER: a named obligation outranks the transfer heuristic.
+  if (hits(c, REAL_EXPENSE)) return { type: "consumption", kind: null };
   if (hits(c, TRANSFER)) return { type: "uncertain", kind: "transfer" };
   if (hits(c, CASH)) return { type: "uncertain", kind: "cash" };
   return { type: "consumption", kind: null };

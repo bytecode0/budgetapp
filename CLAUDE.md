@@ -1,5 +1,44 @@
 # LifePlan BudgetApp — Project Guidelines for Claude
 
+## ⚠️ READ FIRST: this repo contains TWO products
+
+| | **Radiografía Financiera** | **LifePlan BudgetApp** |
+|---|---|---|
+| Status | **Launching 12 Sep 2026** | Not launched, unfinished |
+| Auth | **Public, no login** | Authenticated (`requireAuth`) |
+| Location | `src/radiografia/` | everything else |
+| Production | Enabled | **Disabled via feature flag** |
+
+**Until further notice, all work targets the Radiografía.** The BudgetApp is out of scope: do not refactor it, do not "improve" it, do not touch its modules. If a task seems to require changing a BudgetApp module, stop and ask.
+
+### The import boundary (never violate)
+
+- `src/radiografia/` **may** import from the shared design system: `components/ui`, Tailwind tokens, i18n, shared utils.
+- `src/radiografia/` **must never** import from a BudgetApp module.
+- BudgetApp modules **must never** import from `src/radiografia/`.
+
+One-way dependency. This is what keeps the two products from re-entangling.
+
+### Feature flag
+
+`VITE_ENABLE_BUDGETAPP` — `true` in local dev, `false` in production.
+
+When `false`:
+- Frontend: BudgetApp routes are **not registered in the router**. Not a hidden menu link — the route must not exist in the production bundle.
+- Backend: BudgetApp routes are **not mounted**. `/api/plans` must return **404, not 401** — a 401 confirms something is there.
+
+---
+
+## Do not modify without asking
+
+- The existing Radiografía calculation logic — it is finished and verified. Building the report generator is not a licence to refactor the calculation.
+- `prisma/schema.prisma` — propose the change, do not apply it silently. Apply with `db push`, never with migrations (see Prisma workflow).
+- The database. Never run `npm run db:reset` or any `--force-reset`.
+- Any BudgetApp module.
+- Auth middleware, Stripe integration, OAuth setup.
+
+---
+
 ## Stack
 
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS v4, shadcn/ui (Radix primitives), Motion (Framer Motion v12)
@@ -10,11 +49,135 @@
 
 ---
 
+## Commands
+
+```bash
+npm run dev:all          # frontend (5173) + backend (3002) together
+npm run dev              # frontend only
+npm run dev:server       # backend only
+npm run build            # production build of the frontend → dist/
+npm run prisma:generate  # regenerate the Prisma client
+```
+
+**Type check:** there is no script for it. Use `npx tsc --noEmit`.
+**Lint:** there is no lint script in this project.
+**Tests:** there are none. Verification is manual — run `npm run dev:all` and walk the flow in the browser at http://localhost:5173. State what you verified and what you could not.
+
+> **TODO (Luis, 30 min, high value):** add `"typecheck": "tsc --noEmit"` to `package.json`. Shipping a public financial tool with no automated check of any kind means the browser is your only test suite. One script gives an agent a way to prove its work compiles.
+
+Production: `npm run build` outputs `dist/`, served statically. The backend runs separately on `SERVER_PORT`. **The feature flag must be enforced in both** — a disabled frontend route with a live API endpoint is not disabled.
+
+### Prisma workflow — READ THIS, IT IS NOT STANDARD
+
+**Never run `prisma migrate dev` or `npm run prisma:migrate`.** The migration history in this project is incomplete and fails on the shadow database (P3006/P1014). Instinct will reach for migrations. It breaks here.
+
+Schema changes are applied with `db push`:
+
+```bash
+npx prisma db push      # additive: adds tables/columns without data loss
+npm run prisma:generate # regenerate the client afterwards
+```
+
+**Never run `npm run db:reset`.** It is `db push --force-reset`: it drops every table and deletes the entire database, irreversibly. It is a human-only command. If you believe a reset is needed, stop and ask.
+
+After any schema change: `db push`, then `prisma:generate`, then verify the app still boots.
+
+### Project structure
+
+> **TODO (Luis): paste the output of `tree -L 2 src`.** Still the last real gap. Without it an agent guesses where files go, and in a repo with two products that guess is the one that re-entangles them.
+
+### Environment variables
+
+Documented in `.env.example`. Relevant ones:
+
+| Var | Note |
+|---|---|
+| `DATABASE_URL` | PostgreSQL |
+| `JWT_SECRET` | Auth — BudgetApp only |
+| `RESEND_API_KEY`, `SENDER_EMAIL` | **Report delivery depends on these.** Must be set in production with a verified sending domain |
+| `APP_URL` | Must point to the production URL, not localhost, or report links will break |
+| `VITE_API_URL` | Must point to the production API |
+| `STRIPE_*`, `GOOGLE_*` | BudgetApp only. Not needed for launch |
+| `ANTHROPIC_API_KEY` | AI expense classification — see cost warning below |
+| `VITE_ENABLE_BUDGETAPP` | `false` in production |
+
+- **Never** write a secret into source code. Never commit `.env`.
+- If a required env var is missing, **stop and ask**. Do not invent a fallback value or a placeholder key.
+
+### ⚠️ Cost and abuse risk: AI classification on a public route
+
+The bank-statement import can call the Anthropic API to classify expenses (`ANTHROPIC_API_KEY`, Phase J). In the BudgetApp that route sits behind `requireAuth`. In the Radiografía it would sit on a **public, unauthenticated** route.
+
+An unauthenticated endpoint that spends money per request is an open invoice. Before launch, whichever is true must be decided explicitly:
+
+- **Option A (recommended for 12 Sep):** AI classification stays disabled on the public path. Unset `ANTHROPIC_API_KEY` in production, or gate the feature behind the auth flag. The manual form is the public path; heuristic parsing handles the statement upload.
+- **Option B:** it stays enabled, with per-IP rate limiting, a hard daily spend cap, a file-size limit, and a monitored budget alert.
+
+Do not leave this implicit.
+
+---
+
+## Money handling — non-negotiable
+
+This is a financial app. Rounding bugs here destroy user trust faster than anything else.
+
+> **TODO (Luis): confirm which of these is true today, then delete the other.**
+> - Amounts are stored as **integer cents** (`Int`) — recommended.
+> - Amounts are stored as Prisma `Decimal`.
+>
+> **Never `Float`.** If any existing field is a float, flag it.
+
+- Do all arithmetic on integers or `Decimal`. Convert to display format only at the render layer.
+- Round only when displaying, never mid-calculation.
+- Currency symbol must come from i18n, not hardcoded. The `€` in the input example below is a placeholder and violates this rule — fix it when touched.
+
+### The 10/50/20/20 framework
+
+The diagnostic framework and its thresholds are the domain core. They live in **one place** (`src/radiografia/domain/`) and are imported from there. Never re-derive or re-hardcode a threshold inside a component.
+
+| Area | Target |
+|---|---|
+| Generosity / tithe | 10% |
+| Essentials (incl. housing) | 50% |
+| Saving + investing | 20% |
+| Enjoyment | 20% |
+
+---
+
+## Radiografía-specific rules (exceptions to the general conventions)
+
+The general conventions below were written for the authenticated BudgetApp. The Radiografía is a public, single-session funnel tool, so four of them do **not** apply:
+
+**1. No auth.** Radiografía endpoints are the only public routes in the project. They must be listed explicitly and visibly, not treated as an implicit exception. Rate-limit them by IP.
+
+**2. No FAB.** The manual form is a linear step-by-step wizard. It uses "Back" / "Next" buttons, not a floating action button. The FAB rule applies to create/add actions in list-based modules only.
+
+**3. No `MonthContext`.** The Radiografía is a point-in-time snapshot, not a monthly view. Do not wire it to the global month selector.
+
+**4. No Tailwind in email templates.** The report email uses **tables and inline CSS**. Email clients do not support modern CSS. A Tailwind-styled email looks perfect in the browser and broken in Outlook. This is the single most common mistake here.
+
+### Privacy: what gets persisted
+
+Store **percentages and triggered thresholds only — never raw amounts.** No salary, no debt balances, no rent figures.
+
+Raw amounts live in browser memory for the duration of the form and are discarded. There is no business reason to store anyone's salary, and not storing it removes most GDPR exposure.
+
+---
+
+## Git workflow
+
+- One branch per epic: `feature/epica-0-aislamiento`, `feature/radiografia-manual`, `feature/informe-email`, `feature/landing`
+- Commit style: `type(scope): message` — e.g. `feat(radiografia): add manual income step`
+- Never commit directly to `main`
+- Never commit `.env`, credentials, or generated build output
+
+---
+
 ## UI/UX Patterns — follow these in every new module
 
 ### 1. Floating Action Button (FAB) — primary create/add action
 
-Every module that lets the user create or add something uses a **fixed FAB** at bottom-right. Never put the primary create action in a header button or inside a card.
+Applies to **list-based modules where the user creates or adds items**. Does **not** apply to linear wizards (see Radiografía rule 2). Never put the primary create action in a header button or inside a card.
 
 ```tsx
 import { motion } from 'motion/react';
@@ -41,7 +204,7 @@ import { Plus } from 'lucide-react';
 - Spring entrance: `delay: 0.5, type: 'spring', stiffness: 200`
 - `whileHover: scale 1.1`, `whileTap: scale 0.9`
 
-**Where it's used today:** Activity, Plans (PlanningDashboard), Allocations (AllocationFlow).
+**Where it's used today:** Activity, Plans (PlanningDashboard), Allocations (AllocationFlow) — all BudgetApp.
 
 ---
 
@@ -94,6 +257,8 @@ Every new screen/module starts with a staggered fade-in pattern.
 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
 ```
 
+**Radiografía note:** keep step transitions fast (≤200 ms). Slow animations on a 7-step wizard add up and increase abandonment.
+
 ---
 
 ### 4. Cards
@@ -142,6 +307,8 @@ import { GripVertical } from 'lucide-react';
 
 Persist order with a `PATCH /api/<resource>/reorder` endpoint that accepts `{ order: [{id, sortOrder}] }` and does a transaction batch update. The GET endpoint should always sort by `sortOrder ASC`.
 
+The debt list in the Radiografía is **not** reorderable — order carries no meaning there. Do not add drag-and-drop to it.
+
 ---
 
 ### 6. Month selector — global context
@@ -155,6 +322,8 @@ const { selectedMonth, isCurrentMonth, isFutureMonth } = useMonth();
 ```
 
 Allowed range: one month back (unlimited) ↔ one month ahead of today.
+
+**BudgetApp only.** The Radiografía does not use this.
 
 ---
 
@@ -193,9 +362,9 @@ When a list has no items, show a centered empty state with an icon, a short mess
 // Text / number input
 <input className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm" />
 
-// With currency prefix
+// With currency prefix — symbol must come from i18n, not hardcoded
 <div className="relative">
-  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
+  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currencySymbol}</span>
   <input className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary" />
 </div>
 
@@ -208,6 +377,8 @@ When a list has no items, show a centered empty state with an icon, a short mess
 // Destructive button
 <button className="border border-destructive/20 text-destructive hover:bg-destructive/5 rounded-lg transition-colors">
 ```
+
+**Numeric inputs in the Radiografía:** accept `0`, show thousands separators, use `inputMode="decimal"` so mobile shows the numeric keypad.
 
 ---
 
@@ -233,6 +404,7 @@ When a list has no items, show a centered empty state with an icon, a short mess
 - Keys live in `src/locales/en.json` and `src/locales/es.json`
 - Always add both locales when adding a new key — never leave one missing
 - Use i18next interpolation for dynamic values: `t('key', { amount: n })`
+- **Public-facing Radiografía copy is Spanish-first.** English keys may exist but Spanish is the reviewed source of truth for launch.
 
 ---
 
@@ -242,6 +414,16 @@ When a list has no items, show a centered empty state with an icon, a short mess
 - Batch operations use named sub-routes placed **before** `/:id`: e.g. `PATCH /api/allocations/reorder`
 - All responses: `{ data }` on success, `{ error: string }` on failure
 - Auth: every route uses `requireAuth` middleware — `req.userId` is always available inside
+- **Exception:** Radiografía routes are public. Maintain the explicit list below.
+
+### Public routes (the only ones without `requireAuth`)
+
+```
+POST /api/radiografia          # save result + email, trigger report
+GET  /api/radiografia/:token   # permanent report page
+```
+
+Both must be rate-limited by IP.
 
 ---
 
@@ -262,3 +444,18 @@ Status colours follow the same semantic pattern across the app:
 - **Green** (`emerald`) = good / under budget / contributed
 - **Amber** = warning / pending / out of sync
 - **Red** = over budget / missed / error
+
+---
+
+## Analytics events
+
+Plausible, no cookies, no consent banner needed. Fire from `src/radiografia/`:
+
+```ts
+plausible('radiografia_iniciada');
+plausible('paso_completado', { props: { paso: 3 } });
+plausible('radiografia_completada');
+plausible('email_capturado');
+```
+
+Never send financial amounts or email addresses as event properties.

@@ -29,14 +29,104 @@ const PILLAR: Record<string, { en: string; es: string }> = {
   leaks: { en: "Leaks", es: "Fugas" },
   commitments: { en: "Commitments", es: "Compromisos" },
   stability: { en: "Stability", es: "Estabilidad" },
+  debtLoad: { en: "Committed future", es: "Futuro comprometido" },
 };
 
+// Score bands. Kept for the numeric read-out; the user-facing identity is the
+// ARCHETYPE below, which is computed on its own axes (see archetype.ts).
 const STAGE: Record<string, { en: string; es: string }> = {
   building: { en: "Building", es: "En construcción" },
   balancing: { en: "Finding balance", es: "Buscando equilibrio" },
   growing: { en: "Growing", es: "En crecimiento" },
   solid: { en: "Solid", es: "Sólido" },
 };
+
+// Archetypes, not adjectives. People share an identity, not a number — "El
+// Esclavo del Mes" gets screenshotted, "62/100" doesn't.
+const ARCHETYPE: Record<string, { en: string; es: string }> = {
+  slave: { en: "The Month's Slave", es: "El Esclavo del Mes" },
+  juggler: { en: "The Juggler", es: "El Malabarista" },
+  builder: { en: "The Silent Builder", es: "El Constructor Silencioso" },
+  sower: { en: "The Sower", es: "El Sembrador" },
+  braveGiver: { en: "The Brave Giver", es: "El Dador Valiente" },
+  steward: { en: "The Faithful Steward", es: "El Mayordomo Fiel" },
+  multiplier: { en: "The Steward Who Multiplies", es: "El Mayordomo que Multiplica" },
+};
+
+const ARCHETYPE_DESC: Record<string, { en: string; es: string }> = {
+  slave: {
+    en: "Your month is spoken for before it starts. Not a discipline problem — an arithmetic one.",
+    es: "Tu mes ya está vendido antes de empezar. No es un problema de disciplina, es de aritmética.",
+  },
+  juggler: {
+    en: "You reach the end of the month, but with nothing behind you. One slip and it all comes down.",
+    es: "Llegas a fin de mes, pero sin nada detrás. Un tropiezo y se cae todo.",
+  },
+  builder: {
+    en: "Nobody sees it yet, but you're already building. Your money is safe — now make it work.",
+    es: "Nadie lo ve todavía, pero ya estás construyendo. Tu dinero está a salvo — ahora ponlo a trabajar.",
+  },
+  sower: {
+    en: "You don't just keep what's left over, you plant it. Now add the part that isn't for you.",
+    es: "No solo guardas lo que sobra, lo siembras. Ahora suma la parte que no es para ti.",
+  },
+  braveGiver: {
+    en: "You give faithfully before securing yourself. Admirable and fragile at once — you need a cushion.",
+    es: "Das con fidelidad antes de asegurarte a ti mismo. Admirable y frágil a la vez — te falta un colchón.",
+  },
+  steward: {
+    en: "You give faithfully and still keep margin. You own your money instead of owing it.",
+    es: "Das con fidelidad y aun así te queda margen. Tu dinero es tuyo, no de tus deudas.",
+  },
+  multiplier: {
+    en: "You give faithfully and put the rest to work. This is what stewardship looks like compounding.",
+    es: "Das con fidelidad y pones el resto a trabajar. Así es la mayordomía cuando se multiplica.",
+  },
+};
+
+export function archetypeLabel(key: string, lang: Lang): string {
+  return ARCHETYPE[key]?.[lang] ?? key;
+}
+export function archetypeDescription(key: string, lang: Lang): string {
+  return ARCHETYPE_DESC[key]?.[lang] ?? "";
+}
+
+// One line that explains the archetype back to the person, so the label lands as
+// recognition ("that's me") rather than a verdict.
+const STAGE_DESC: Record<string, { en: string; es: string }> = {
+  building: {
+    en: "Your month is spoken for before it starts. Not a discipline problem — an arithmetic one.",
+    es: "Tu mes ya está vendido antes de empezar. No es un problema de disciplina, es de aritmética.",
+  },
+  balancing: {
+    en: "You keep every ball in the air, but one slip and it all comes down. You need slack, not effort.",
+    es: "Mantienes todas las bolas en el aire, pero un tropiezo y se cae todo. Te falta margen, no esfuerzo.",
+  },
+  growing: {
+    en: "Nobody sees it yet, but you're already building. Keep going — this compounds.",
+    es: "Nadie lo ve todavía, pero ya estás construyendo. Sigue — esto se acumula.",
+  },
+  solid: {
+    en: "You own your money instead of owing it. Now it's about purpose, not survival.",
+    es: "Tu dinero es tuyo, no de tus deudas. Ahora la pregunta es el propósito, no la supervivencia.",
+  },
+};
+
+// Traffic light for the shareable card: at a glance, am I OK or not?
+export type StageLight = "red" | "amber" | "green";
+const STAGE_LIGHT: Record<string, StageLight> = {
+  building: "red",
+  balancing: "amber",
+  growing: "green",
+  solid: "green",
+};
+
+export function stageDescription(key: string, lang: Lang): string {
+  return STAGE_DESC[key]?.[lang] ?? "";
+}
+export function stageLight(key: string): StageLight {
+  return STAGE_LIGHT[key] ?? "amber";
+}
 
 export function categoryLabel(key: string, lang: Lang): string {
   return CATEGORY[key]?.[lang] ?? key;

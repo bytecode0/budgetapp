@@ -17,7 +17,7 @@ import { categoryLabel } from "./labels.js";
 import type { ParsedTxn } from "../parsers/bbva.js";
 import type { XRayResult, Overrides } from "./analyze.js";
 
-interface StoredTxn { date: string; concept: string; amount: number; balance: number | null; fileIndex?: number }
+interface StoredTxn { date: string; concept: string; amount: number; balance: number | null; fileIndex?: number; extra?: string }
 
 const FIXED_KEYS = new Set(["housing", "utilities", "insurance"]);
 
@@ -70,7 +70,7 @@ export async function hydrateFromXraySession(userId: string, sessionId: string):
   // Prepare transactions (same normalization + movement classification the
   // analyzer used, honoring the user's reclassifications via the same dual key).
   const prepared = stored
-    .map(s => ({ t: { date: new Date(s.date), concept: s.concept, amount: s.amount, balance: s.balance } as ParsedTxn, fileIndex: s.fileIndex ?? 0 }))
+    .map(s => ({ t: { date: new Date(s.date), concept: s.concept, amount: s.amount, balance: s.balance, extra: s.extra } as ParsedTxn, fileIndex: s.fileIndex ?? 0 }))
     .filter(p => p.t.amount !== 0 && !isNaN(p.t.date.getTime()))
     .map(p => {
       const merchant = normalizeMerchant(p.t.concept);

@@ -67,17 +67,68 @@ test("analyze: health index is a valid 0–100 composite", () => {
   const r = analyze(sampleStatement());
   assert.ok(r.health.score >= 0 && r.health.score <= 100);
   assert.ok(["building", "balancing", "growing", "solid"].includes(r.health.stage));
-  // stability pillar is available (3 months) → 5 pillars, weights sum to 1
-  assert.equal(r.health.pillars.length, 5);
+  // stability + debtLoad both available (3 months, debtLoad is never N/A) → 6 pillars
+  assert.equal(r.health.pillars.length, 6);
   assert.ok(Math.abs(r.health.pillars.reduce((s, p) => s + p.weight, 0) - 1) < 0.001);
 });
 
-test("analyze: single-month statement drops the stability pillar", () => {
+test("analyze: single-month statement drops the stability pillar but keeps debtLoad", () => {
   const oneMonth = sampleStatement().filter(t => t.date.getMonth() === 4); // May only
   const r = analyze(oneMonth);
   assert.equal(r.period.months, 1);
-  assert.equal(r.health.pillars.length, 4, "no stability pillar without ≥2 months");
+  assert.equal(r.health.pillars.length, 5, "no stability pillar without ≥2 months, debtLoad still present");
   assert.ok(!r.health.pillars.some(p => p.key === "stability"));
+  assert.ok(r.health.pillars.some(p => p.key === "debtLoad"), "debtLoad is never dropped for missing history");
+  assert.ok(Math.abs(r.health.pillars.reduce((s, p) => s + p.weight, 0) - 1) < 0.001);
+});
+
+test("analyze: zero debt detected always scores debtLoad 100, never N/A", () => {
+  const r = analyze(sampleStatement());
+  assert.equal(r.debts.monthlyTotal, 0);
+  const debtLoad = r.health.pillars.find(p => p.key === "debtLoad");
+  assert.ok(debtLoad, "debtLoad pillar is always present");
+  assert.equal(debtLoad!.score, 100);
+});
+
+test("analyze: detects debt/cuota payments without changing totalExpenses or savingsRate invariants", () => {
+  const base = analyze(sampleStatement());
+  const rows = sampleStatement();
+  for (const month of [5, 6, 7]) {
+    rows.push(txn(2026, month, 8, "KLARNA*PEDIDO 4471", -45));
+    rows.push(txn(2026, month, 9, "COFIDIS PRESTAMO PERSONAL", -120));
+  }
+  const withDebt = analyze(rows);
+
+  // The only addition is `result.debts` — debt payments stay counted as
+  // expenses exactly like today, nothing is excluded because of this feature.
+  const debtMonthly = 45 + 120;
+  assert.equal(
+    withDebt.summary.totalExpenses,
+    Math.round((base.summary.totalExpenses + debtMonthly * 3) * 100) / 100,
+  );
+  assert.ok(withDebt.summary.savingsRate < base.summary.savingsRate, "more spending → lower savings rate, as before");
+
+  assert.equal(withDebt.debts.monthlyTotal, debtMonthly);
+  assert.equal(withDebt.debts.items.length, 2);
+  assert.ok(withDebt.debts.items.some(i => i.kind === "bnpl"));
+  assert.ok(withDebt.debts.items.some(i => i.kind === "installment"));
+  assert.equal(withDebt.debts.mortgage, null);
+  assert.ok(withDebt.debts.pctOfIncome > 0);
+
+  // The debt merchants still show up in categories/expenses as before — this
+  // feature only ADDS `debts`, it never removes anything from consumption.
+  assert.ok(withDebt.health.pillars.length === 6);
+});
+
+test("analyze: mortgage is detected but excluded from debts.monthlyTotal and pctOfIncome", () => {
+  const rows = sampleStatement();
+  for (const month of [5, 6, 7]) rows.push(txn(2026, month, 4, "HIPOTECA VIVIENDA BANCO", -800));
+  const r = analyze(rows);
+  assert.equal(r.debts.monthlyTotal, 0, "mortgage alone doesn't count toward futuro comprometido");
+  assert.ok(r.debts.mortgage?.detected);
+  assert.equal(r.debts.mortgage?.monthlyAmount, 800);
+  // But it's still a real expense, same as before this feature existed.
+  assert.ok(r.summary.totalExpenses > 0);
 });
 
 test("analyze: savings/investment transfers are NOT counted as expenses", () => {
@@ -105,10 +156,12 @@ test("analyze: ambiguous transfers land in 'uncertain', identified and flippable
   assert.ok(base.uncertain.total > 0, "uncertain bucket populated");
   const item = base.uncertain.items[0];
   assert.equal(item.detail, "Juan", "counterparty identified from concept");
-  assert.equal(item.key, "t:juan");
+  // 3 identical €50 Bizums → one repeated-amount row keyed by counterparty#cents.
+  assert.deepEqual(item.keys, ["t:juan#5000"]);
+  assert.equal(item.amountEach, 50);
   const expBefore = base.summary.totalExpenses;
   // Flip via the stable key (not the empty merchant).
-  const after = analyze(rows, undefined, { [item.key]: "consumption" });
+  const after = analyze(rows, undefined, { [item.keys[0]]: "consumption" });
   assert.ok(after.summary.totalExpenses > expBefore, "marking as spending increases expenses");
   assert.ok(after.uncertain.total < base.uncertain.total, "moved out of uncertain");
 });
@@ -196,4 +249,132 @@ test("analyze: produces opportunities backed by numbers", () => {
   for (let i = 1; i < r.opportunities.length; i++) {
     assert.ok(r.opportunities[i - 1].annualSaving >= r.opportunities[i].annualSaving);
   }
+});
+
+test("analyze: same counterparty splits by repeated amount, one-offs stay together", () => {
+  // The real case: recurring €150 to "Luis Vespa" is a tithe, €300 to the same
+  // name is a move to his own savings. One answer can't be right for both.
+  const rows = sampleStatement();
+  for (const m of [3, 4, 5, 6]) rows.push(txn(2026, m, 5, "TRANSFERENCIA A LUIS VESPA", -150));
+  for (const m of [3, 4]) rows.push(txn(2026, m, 6, "TRANSFERENCIA A LUIS VESPA", -300));
+  // Three one-off amounts to the same person must NOT become three questions.
+  rows.push(txn(2026, 3, 7, "TRANSFERENCIA A LUIS VESPA", -17.5));
+  rows.push(txn(2026, 4, 7, "TRANSFERENCIA A LUIS VESPA", -23.9));
+  rows.push(txn(2026, 5, 7, "TRANSFERENCIA A LUIS VESPA", -41.2));
+
+  const r = analyze(rows);
+  const mine = r.uncertain.items.filter(i => i.detail === "Luis Vespa");
+  assert.equal(mine.length, 3, "two repeated amounts + one assorted row");
+
+  const rep150 = mine.find(i => i.amountEach === 150);
+  assert.ok(rep150, "150 row exists");
+  assert.equal(rep150.count, 4);
+  assert.deepEqual(rep150.keys, ["t:luis-vespa#15000"]);
+
+  const assorted = mine.find(i => i.amountEach === null);
+  assert.ok(assorted, "assorted row exists");
+  assert.equal(assorted.count, 3, "all three one-offs collapsed into one question");
+  assert.equal(assorted.keys.length, 3, "but it still carries every key it covers");
+});
+
+test("analyze: answering one amount-subgroup leaves the others untouched", () => {
+  const rows = sampleStatement();
+  for (const m of [3, 4, 5, 6]) rows.push(txn(2026, m, 5, "TRANSFERENCIA A LUIS VESPA", -150));
+  for (const m of [3, 4]) rows.push(txn(2026, m, 6, "TRANSFERENCIA A LUIS VESPA", -300));
+
+  const after = analyze(rows, undefined, { "t:luis-vespa#15000": "giving" });
+  assert.equal(after.wealth.giving, 600, "4 × 150 became giving");
+  // The €300 pair is a different arrangement and must stay unresolved.
+  assert.ok(
+    after.uncertain.items.some(i => i.amountEach === 300 && i.detail === "Luis Vespa"),
+    "the 300 subgroup is still awaiting an answer",
+  );
+});
+
+test("analyze: an override on the whole counterparty still applies (old sessions)", () => {
+  const rows = sampleStatement();
+  for (const m of [3, 4, 5]) rows.push(txn(2026, m, 5, "TRANSFERENCIA A LUIS VESPA", -150));
+  // Sessions stored before per-amount keys existed used the bare group key.
+  const after = analyze(rows, undefined, { "t:luis-vespa": "giving" });
+  assert.equal(after.wealth.giving, 450);
+});
+
+test("analyze: tax refund is excluded from totalIncome automatically", () => {
+  const base = analyze(sampleStatement());
+  const rows = sampleStatement();
+  rows.push(txn(2026, 6, 20, "Transferencia recibida", 3991.05)); // no keyword → would count
+  rows[rows.length - 1].concept = "Transferencia recibida"; // AEAT-style refund below carries it via extra-like concept
+  rows.push(txn(2026, 6, 21, "AEAT             apl:declaracion", 1269.65));
+  const r = analyze(rows);
+  // Only the unlabeled transfer counts; the AEAT refund does not.
+  assert.equal(r.summary.totalIncome, Math.round((base.summary.totalIncome + 3991.05) * 100) / 100);
+  assert.equal(r.income.excluded.total, 1269.65);
+  assert.ok(r.income.excluded.items.some(i => i.reason === "taxRefund"));
+});
+
+test("analyze: a received loan is excluded from totalIncome, not counted as earnings", () => {
+  const base = analyze(sampleStatement());
+  const rows = sampleStatement();
+  rows.push(txn(2026, 6, 20, "Bizum | Recibido: prestamo", 200));
+  const r = analyze(rows);
+  assert.equal(r.summary.totalIncome, base.summary.totalIncome, "loan proceeds don't inflate income");
+  assert.equal(r.income.excluded.total, 200);
+  assert.ok(r.income.excluded.items.some(i => i.reason === "loanReceived"));
+});
+
+test("analyze: a card refund (positive amount, 'pago con tarjeta') is excluded", () => {
+  const base = analyze(sampleStatement());
+  const rows = sampleStatement();
+  rows.push(txn(2026, 6, 20, "Nuva Arganda P4 | Pago con tarjeta 4188202152150916 NUVA ARGANDA P4", 300));
+  const r = analyze(rows);
+  assert.equal(r.summary.totalIncome, base.summary.totalIncome);
+  assert.ok(r.income.excluded.items.some(i => i.reason === "refund"));
+});
+
+test("analyze: a cash re-deposit is ambiguous — NOT counted until the user confirms", () => {
+  const base = analyze(sampleStatement());
+  const rows = sampleStatement();
+  rows.push(txn(2026, 6, 20, "Ingreso en efectivo | Bbva oficina", 500));
+  const r = analyze(rows);
+  assert.equal(r.summary.totalIncome, base.summary.totalIncome, "unconfirmed cash deposit doesn't count yet");
+  assert.equal(r.income.uncertain.total, 500);
+  const item = r.income.uncertain.items[0];
+  assert.ok(item, "shows up for the user to resolve");
+
+  const confirmed = analyze(rows, undefined, { [item.keys[0]]: "income" });
+  assert.equal(confirmed.summary.totalIncome, Math.round((base.summary.totalIncome + 500) * 100) / 100);
+  assert.equal(confirmed.income.uncertain.total, 0);
+
+  const denied = analyze(rows, undefined, { [item.keys[0]]: "notIncome" });
+  assert.equal(denied.summary.totalIncome, base.summary.totalIncome, "marked as not-income stays excluded");
+  assert.equal(denied.income.excluded.total, 500);
+});
+
+test("analyze: a transfer from a known other-bank account is ambiguous, named by source", () => {
+  const rows = sampleStatement();
+  rows.push(txn(2026, 6, 20, "Transferencia recibida | Enviada desde N26", 126));
+  const r = analyze(rows);
+  assert.equal(r.income.uncertain.total, 126);
+  assert.equal(r.income.uncertain.items[0].detail, "N26");
+});
+
+test("analyze: excluding inflated income lowers savingsRate and giving %, not just the display number", () => {
+  // The real bug this fixes: an inflated denominator makes generosity/savings
+  // look smaller than they are. Confirm the archetype-relevant ratio moves too.
+  const rows = sampleStatement();
+  const withRefund = [...rows, txn(2026, 6, 20, "Transferencia recibida | Declaracion IRPF", 5000)];
+  const base = analyze(rows);
+  const inflated = analyze(withRefund);
+  assert.equal(inflated.summary.totalIncome, base.summary.totalIncome, "refund never enters the denominator");
+});
+
+test("analyze: 'I.R.P.F.' with dots is still recognized as a tax refund", () => {
+  // Punctuation-run normalization turns "i.r.p.f" into four single-letter
+  // tokens — the keyword must match that exact space-joined form too.
+  const base = analyze(sampleStatement());
+  const rows = sampleStatement();
+  rows.push(txn(2026, 6, 20, "Transferencia recibida | Declaracion I.R.P.F.", 3991.05));
+  const r = analyze(rows);
+  assert.equal(r.summary.totalIncome, base.summary.totalIncome, "IRPF refund with dots is still excluded");
+  assert.ok(r.income.excluded.items.some(i => i.reason === "taxRefund"));
 });

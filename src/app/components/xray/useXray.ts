@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { XRayResult, Overrides } from './types';
+import type { XRayResult, Overrides, DebtKind } from './types';
 
 // File → base64 (strips the "data:...;base64," prefix), same approach as useImport.
 function fileToBase64(file: File): Promise<string> {
@@ -39,6 +39,27 @@ export function useXray() {
       return { error: 'network' };
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  // Manual quick-estimate: no file, just a monthly income + a list of debts.
+  // Same public/no-credentials pattern as analyze() — lands in an XRaySession
+  // too, so the funnel (email capture, PDF, account CTA) is identical.
+  const quickEstimate = async (
+    monthlyIncome: number,
+    debts: { name: string; kind: DebtKind; monthlyPayment: number }[],
+  ): Promise<{ error?: string; sessionId?: string; result?: XRayResult }> => {
+    try {
+      const res = await fetch('/api/xray/quick-estimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monthlyIncome, debts }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { error: data.error || 'analyze_failed' };
+      return { sessionId: data.sessionId as string, result: data.result as XRayResult };
+    } catch {
+      return { error: 'network' };
     }
   };
 
@@ -105,5 +126,5 @@ export function useXray() {
     } catch { /* ignore */ }
   };
 
-  return { analyzing, analyze, addAccount, reclassify, submitLead, track };
+  return { analyzing, analyze, quickEstimate, addAccount, reclassify, submitLead, track };
 }

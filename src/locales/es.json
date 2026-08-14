@@ -19,7 +19,22 @@
       "howStep1": "Entra en la web o la app de tu banco.",
       "howStep2": "Abre los movimientos de tu cuenta y elige un rango de fechas — lo ideal son los últimos 1–3 meses.",
       "howStep3": "Expórtalos o descárgalos en Excel o CSV.",
-      "supportedBanks": "Compatible con extractos de"
+      "supportedBanks": "Compatible con extractos de",
+      "noStatementCta": "¿No tienes el extracto a mano? Haz una estimación rápida"
+    },
+    "quickEstimate": {
+      "badge": "Estimación rápida",
+      "title": "¿Cuánto de tu ingreso ya está comprometido?",
+      "subtitle": "Sin extracto — solo tu ingreso mensual y tus cuotas actuales.",
+      "incomeLabel": "Ingreso mensual",
+      "addDebt": "Añadir otra cuota",
+      "debtName": "Nombre (p. ej. Tarjeta Visa, Klarna)",
+      "debtKind": "Tipo",
+      "debtAmount": "Importe mensual",
+      "removeDebt": "Eliminar",
+      "submit": "Ver mi resultado",
+      "submitting": "Calculando…",
+      "back": "Atrás"
     },
     "errors": {
       "generic": "Algo salió mal. Inténtalo de nuevo.",
@@ -51,6 +66,11 @@
       "runway": "Eso cubre unos {{months}} meses de tus gastos.",
       "account": "Cuenta {{n}}",
       "balanceNote": "Saldo líquido de las cuentas que subiste — no incluye deudas ni otros bienes.",
+      "debtsTitle": "Tu futuro comprometido",
+      "debtsReframe_one": "Eso son {{amount}}/mes ya destinados — cerca de {{count}} día de trabajo cada mes solo para pagar compras que ya hiciste.",
+      "debtsReframe_other": "Eso son {{amount}}/mes ya destinados — cerca de {{count}} días de trabajo cada mes solo para pagar compras que ya hiciste.",
+      "debtsNone": "No detectamos cuotas ni deuda fragmentada. Eso es margen real para lo que venga.",
+      "mortgageNote": "También detectamos una hipoteca ({{amount}}/mes) — la dejamos fuera de este porcentaje a propósito; no es el tipo de deuda del que habla esta métrica.",
       "categoriesTitle": "A dónde va realmente tu dinero",
       "categoriesSubtitle": "Tus gastos por categoría, proyectados a un año completo.",
       "perYear": "{{amount}} / año",
@@ -87,7 +107,8 @@
       "givingCardTitle": "Generosidad",
       "givingReframe": "Esto no es gasto — es siembra.",
       "investmentCardTitle": "Inversión",
-      "investmentReframe": "Dinero que estás poniendo a trabajar para tu futuro."
+      "investmentReframe": "Dinero que estás poniendo a trabajar para tu futuro.",
+      "incomeExcludedNote": "No contamos {{amount}} como ingreso ({{reasons}}) — no es dinero que hayas ganado."
     },
     "stage": {
       "building": "En construcción",
@@ -100,7 +121,8 @@
       "structure": "Estructura",
       "leaks": "Fugas",
       "commitments": "Compromisos",
-      "stability": "Estabilidad"
+      "stability": "Estabilidad",
+      "debtLoad": "Futuro comprometido"
     },
     "category": {
       "supermarket": "Supermercado",
@@ -152,6 +174,58 @@
       "createAccount": "Mantenlo vivo — crea una cuenta gratis",
       "createAccountHint": "Cargaremos estos movimientos en tu cuenta, así empiezas sin configurar nada.",
       "closingLine": "No estamos aquí para que ganes más. Estamos aquí para que encuentres paz con lo que ya tienes."
+    },
+    "classify": {
+      "badge": "Un paso más",
+      "title": "Hay dinero que no puedo interpretar por ti",
+      "intro": "Antes de darte tu diagnóstico, necesito que confirmes un par de cosas — así el resultado es real, no una suposición.",
+      "outflowTitle": "Dinero que salió sin explicación clara",
+      "outflowSubtitle": "{{amount}} salieron de tu cuenta sin que el banco diga a dónde. Si lo adivino, tu veredicto de ahorro sería mentira. Dime qué eran:",
+      "incomeTitle": "Dinero que entró sin explicación clara",
+      "incomeSubtitle": "{{amount}} entraron en tu cuenta de forma ambigua — podría ser dinero nuevo, o dinero tuyo que ya tenías. Dime qué era:",
+      "noName": "Transferencia sin nombre",
+      "answer": {
+        "consumption": "Gasto",
+        "savings": "Ahorro",
+        "investment": "Inversión",
+        "giving": "Generosidad",
+        "income": "Es ingreso real",
+        "notIncome": "No es ingreso"
+      },
+      "showRest_one": "Ver {{count}} grupo pequeño más",
+      "showRest_other": "Ver {{count}} grupos pequeños más",
+      "submit": "Ver mi diagnóstico",
+      "pending_one": "Falta {{count}} por clasificar",
+      "pending_other": "Faltan {{count}} por clasificar",
+      "why": "Solo te pregunto lo que cambia el resultado. El resto lo estimo.",
+      "repeated_one": "{{count}} pago de {{amount}} al mismo destino",
+      "repeated_other": "{{count}} pagos de {{amount}} al mismo destino",
+      "assorted_one": "{{count}} movimiento de importe suelto",
+      "assorted_other": "{{count}} movimientos de importes distintos"
+    },
+    "archetype": {
+      "slave": "El Esclavo del Mes",
+      "juggler": "El Malabarista",
+      "builder": "El Constructor Silencioso",
+      "sower": "El Sembrador",
+      "braveGiver": "El Dador Valiente",
+      "steward": "El Mayordomo Fiel",
+      "multiplier": "El Mayordomo que Multiplica"
+    },
+    "archetypeDesc": {
+      "slave": "Tu mes ya está vendido antes de empezar. No es un problema de disciplina, es de aritmética.",
+      "juggler": "Llegas a fin de mes, pero sin nada detrás. Un tropiezo y se cae todo.",
+      "builder": "Nadie lo ve todavía, pero ya estás construyendo. Tu dinero está a salvo — ahora ponlo a trabajar.",
+      "sower": "No solo guardas lo que sobra, lo siembras. Ahora suma la parte que no es para ti.",
+      "braveGiver": "Das con fidelidad antes de asegurarte a ti mismo. Admirable y frágil a la vez — te falta un colchón.",
+      "steward": "Das con fidelidad y aun así te queda margen. Tu dinero es tuyo, no de tus deudas.",
+      "multiplier": "Das con fidelidad y pones el resto a trabajar. Así es la mayordomía cuando se multiplica."
+    },
+    "archetypeUnassessed": "Con menos de 3 meses de datos no puedo valorar tu constancia dando. Sube un extracto más largo para afinarlo.",
+    "incomeReason": {
+      "taxRefund": "Devolución de Hacienda",
+      "loanReceived": "Préstamo recibido",
+      "refund": "Devolución de una compra"
     }
   },
   "nav": {

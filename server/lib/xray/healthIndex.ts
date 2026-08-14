@@ -7,7 +7,7 @@
 // All monetary inputs are EUROS (the analyzer already converted from cents).
 
 export interface HealthPillar {
-  key: "savings" | "structure" | "leaks" | "commitments" | "stability";
+  key: "savings" | "structure" | "leaks" | "commitments" | "stability" | "debtLoad";
   label: string;              // i18n key suffix, resolved client-side
   score: number;              // 0–100
   weight: number;             // 0–1 (effective, after redistribution)
@@ -29,6 +29,7 @@ export interface HealthInput {
   recurringCount: number;     // number of distinct recurring merchants
   monthlyNet: number[];       // net (income − expense) per calendar month, chronological
   months: number;             // distinct months covered by the statement
+  debtPctOfIncome: number;    // 0–1+, share of income already committed to debt/cuotas (mortgage excluded)
 }
 
 const clamp = (n: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, n));
@@ -66,6 +67,19 @@ function commitmentsScore(count: number): number {
   return clamp(lerpScore(count, 3, 12) * 0.6 + 40, 40, 100);
 }
 
+// The product's differentiator pillar: % of income already reserved to
+// fragmented consumer debt (cards, BNPL, payday loans, car finance — mortgage
+// excluded, see debts.ts). Stepped bands, not a lerp: crossing a threshold
+// (e.g. 20% → 21%) is a meaningfully different situation, not a smooth slide.
+// Zero debt is always a valid, positive 100 — never N/A.
+export function debtLoadScore(pct: number): number {
+  if (pct <= 0.10) return 100;
+  if (pct <= 0.20) return 80;
+  if (pct <= 0.35) return 60;
+  if (pct <= 0.50) return 35;
+  return 10;
+}
+
 function stabilityScore(monthlyNet: number[]): number | null {
   if (monthlyNet.length < 2) return null;       // not enough data to judge
   const mean = monthlyNet.reduce((s, n) => s + n, 0) / monthlyNet.length;
@@ -75,7 +89,7 @@ function stabilityScore(monthlyNet: number[]): number | null {
   return lerpScore(cv, 0.15, 1.0);              // steady → 100; wildly swinging → 0
 }
 
-function stageFor(score: number): HealthIndex["stage"] {
+export function stageFor(score: number): HealthIndex["stage"] {
   if (score < 40) return "building";
   if (score < 60) return "balancing";
   if (score < 80) return "growing";
@@ -84,16 +98,23 @@ function stageFor(score: number): HealthIndex["stage"] {
 
 export function computeHealthIndex(input: HealthInput): HealthIndex {
   const raw = [
-    { key: "savings" as const, label: "savings", weight: 0.30, caption: "savings",
+    { key: "savings" as const, label: "savings", weight: 0.25, caption: "savings",
       score: savingsScore(input.monthlyIncome, input.monthlyExpenses) },
-    { key: "structure" as const, label: "structure", weight: 0.25, caption: "structure",
+    { key: "structure" as const, label: "structure", weight: 0.20, caption: "structure",
       score: structureScore(input.monthlyIncome, input.monthlyRecurring) },
-    { key: "leaks" as const, label: "leaks", weight: 0.15, caption: "leaks",
+    { key: "leaks" as const, label: "leaks", weight: 0.10, caption: "leaks",
       score: leaksScore(input.monthlyAnt, input.monthlyExpenses) },
-    { key: "commitments" as const, label: "commitments", weight: 0.15, caption: "commitments",
+    { key: "commitments" as const, label: "commitments", weight: 0.10, caption: "commitments",
       score: commitmentsScore(input.recurringCount) },
-    { key: "stability" as const, label: "stability", weight: 0.15, caption: "stability",
+    { key: "stability" as const, label: "stability", weight: 0.10, caption: "stability",
       score: stabilityScore(input.monthlyNet) },
+    // The pivot's headline pillar — weighted second only to savings, on purpose.
+    // Unlike stability, "zero debt detected" is always a valid, positive answer
+    // (score 100), never unavailable, so it never participates in the dropout
+    // redistribution below as the DROPPED pillar (its score is never null) —
+    // it only ever RECEIVES redistributed weight, same as every other pillar.
+    { key: "debtLoad" as const, label: "debtLoad", weight: 0.25, caption: "debtLoad",
+      score: debtLoadScore(input.debtPctOfIncome) },
   ];
 
   // Stability may be unavailable (single-month statement). Drop it and

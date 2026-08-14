@@ -6,7 +6,7 @@
 // €, á, ñ, ¿…), so no external fonts are bundled.
 import PDFDocument from "pdfkit";
 import type { XRayResult } from "./analyze.js";
-import { categoryLabel, pillarLabel, stageLabel, opportunityText, type Lang } from "./labels.js";
+import { categoryLabel, pillarLabel, archetypeLabel, archetypeDescription, opportunityText, type Lang } from "./labels.js";
 
 const NAVY = "#1E3A8A";
 const GREEN = "#10B981";
@@ -66,13 +66,18 @@ export function generateXrayPdf(result: XRayResult, lang: Lang = "es"): Promise<
       doc.fillColor(GREY).font("Helvetica").fontSize(9)
         .text(T.internalNote(result.internalTransfers.count, money(result.internalTransfers.total)), left, doc.y, { width: contentW });
     }
+    if (result.debts.monthlyTotal > 0) {
+      doc.fillColor(AMBER).font("Helvetica-Bold").fontSize(11)
+        .text(T.debtsLine(money(result.debts.monthlyTotal), Math.round(result.debts.pctOfIncome * 100)), left, doc.y, { width: contentW });
+    }
     doc.moveDown(0.6);
 
     // ── Health index ──
     sectionTitle(doc, left, T.healthTitle);
     doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(34).text(`${result.health.score}`, { continued: true })
       .fillColor(LIGHT).font("Helvetica").fontSize(14).text(" / 100");
-    doc.fillColor(GREEN).font("Helvetica-Bold").fontSize(13).text(stageLabel(result.health.stage, lang));
+    doc.fillColor(GREEN).font("Helvetica-Bold").fontSize(13).text(archetypeLabel(result.archetype.key, lang));
+    doc.fillColor("#555").font("Helvetica").fontSize(9).text(archetypeDescription(result.archetype.key, lang), { width: 320 });
     doc.fillColor(GREY).font("Helvetica").fontSize(10)
       .text(result.health.pillars.map(p => `${pillarLabel(p.key, lang)} ${p.score}`).join("   ·   "));
     doc.moveDown(1);
@@ -174,7 +179,9 @@ function pretty(m: string): string {
 const STRINGS = {
   es: {
     title: "Radiografía Financiera",
-    period: (m: number, from: string, to: string) => `Tu informe personalizado · ${m} meses (${from} → ${to})`,
+    period: (m: number, from: string, to: string) => from && to
+      ? `Tu informe personalizado · ${m} meses (${from} → ${to})`
+      : `Tu informe personalizado · ${m} meses`,
     income: "Ingresos", expenses: "Gastos", saved: "Ahorraste", overspent: "Gastaste de más", savingsRate: "Tasa de ahorro",
     healthTitle: "Tu Índice de Salud Financiera",
     categoriesTitle: "A dónde va tu dinero",
@@ -188,6 +195,7 @@ const STRINGS = {
     savings: "Ahorro", giving: "Generosidad", investment: "Inversión",
     internalNote: (c: number, a: string) => `${c} traspasos entre tus cuentas reconciliados (${a}) — fuera de ingresos, gastos y ahorro.`,
     balanceLine: (total: string, months: number | null) => `Patrimonio líquido: ${total}${months != null ? ` · cubre ~${months} meses de gastos` : ""}`,
+    debtsLine: (total: string, pct: number) => `Futuro comprometido: ${total}/mes en cuotas — el ${pct}% de tu ingreso ya está reservado a deuda.`,
     recurringTitle: "Recurrentes y suscripciones",
     recurringSub: (c: number, a: string) => `${c} pagos recurrentes · ${a} al mes.`,
     opportunitiesTitle: "Tus oportunidades",
@@ -197,7 +205,9 @@ const STRINGS = {
   },
   en: {
     title: "Financial X-Ray",
-    period: (m: number, from: string, to: string) => `Your personalized report · ${m} months (${from} → ${to})`,
+    period: (m: number, from: string, to: string) => from && to
+      ? `Your personalized report · ${m} months (${from} → ${to})`
+      : `Your personalized report · ${m} months`,
     income: "Income", expenses: "Expenses", saved: "You saved", overspent: "You overspent", savingsRate: "Savings rate",
     healthTitle: "Your Financial Health Index",
     categoriesTitle: "Where your money goes",
@@ -211,6 +221,7 @@ const STRINGS = {
     savings: "Savings", giving: "Giving", investment: "Investment",
     internalNote: (c: number, a: string) => `${c} transfers between your accounts reconciled (${a}) — left out of income, spending and savings.`,
     balanceLine: (total: string, months: number | null) => `Liquid net worth: ${total}${months != null ? ` · covers ~${months} months of spending` : ""}`,
+    debtsLine: (total: string, pct: number) => `Committed future: ${total}/month in installments — ${pct}% of your income is already reserved for debt.`,
     recurringTitle: "Recurring & subscriptions",
     recurringSub: (c: number, a: string) => `${c} recurring payments · ${a} per month.`,
     opportunitiesTitle: "Your opportunities",

@@ -13,7 +13,35 @@ const NOISE_TOKENS = new Set([
   "sa", "sl", "slu", "sau", "sln", "scp", "sc",
   "sociedad", "limitada", "ltda", "ltd", "inc", "llc", "co",
   "pago", "compra", "recibo", "tarj", "tarjeta", "transferencia", "bizum",
+  // Bank boilerplate on transfer rows. Never part of a merchant's identity, and
+  // leaving them in produced merchant keys like "realizada" for every transfer.
+  "realizada", "realizado", "emitida", "emitido", "recibida", "recibido",
+  "enviado", "enviada", "traspaso",
 ]);
+
+/**
+ * True when a description carries no merchant identity at all — every token is
+ * bank boilerplate (e.g. "Transferencia realizada", "Bizum"). Callers with a
+ * richer detail field should prefer that instead of this label.
+ */
+// Connectors are ignored for this check only — deliberately NOT added to
+// NOISE_TOKENS, since removing them would change merchant keys that are already
+// stored (and that recurring detection groups by) across the whole app.
+const CONNECTORS = new Set(["con", "de", "del", "la", "el", "los", "las", "en", "por", "para", "al", "y"]);
+
+export function isNoiseOnly(input: string | null | undefined): boolean {
+  if (!input) return true;
+  const tokens = input
+    .toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (tokens.length === 0) return true;
+  return tokens.every(
+    tok => NOISE_TOKENS.has(tok) || CONNECTORS.has(tok) || /^\d+$/.test(tok) || tok.length === 1
+  );
+}
 
 // Revolut (and similar neobanks) export card purchases as a full sentence with
 // the amount baked in, e.g. "Card Transaction Of 15.00 EUR Issued By Iglesia

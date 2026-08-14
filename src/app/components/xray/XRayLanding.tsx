@@ -9,11 +9,12 @@ const MAX_FILES = 5;
 
 interface Props {
   onFiles: (files: File[]) => void;
+  onManual: () => void;
   analyzing: boolean;
   error: string | null;
 }
 
-export function XRayLanding({ onFiles, analyzing, error }: Props) {
+export function XRayLanding({ onFiles, onManual, analyzing, error }: Props) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -91,6 +92,18 @@ export function XRayLanding({ onFiles, analyzing, error }: Props) {
             {selected.length > 0 ? t('radiografia.landing.addMore') : t('radiografia.landing.cta')}
           </div>
           <p className="text-xs text-muted-foreground mt-3">{t('radiografia.landing.multiHint')}</p>
+        </div>
+
+        {/* Secondary entry point — no statement handy? A quick manual estimate
+            still lands in the same email-capture funnel. Deliberately understated
+            so it never competes with the primary upload CTA. */}
+        <div className="text-center mt-4">
+          <button
+            onClick={onManual}
+            className="text-sm text-muted-foreground hover:text-primary underline underline-offset-4 transition-colors"
+          >
+            {t('radiografia.landing.noStatementCta')}
+          </button>
         </div>
 
         {/* Selected files + analyze button */}

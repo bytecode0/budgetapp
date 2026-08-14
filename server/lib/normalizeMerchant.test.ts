@@ -1,7 +1,7 @@
 // Run with:  npx tsx --test server/lib/normalizeMerchant.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeMerchant } from "./normalizeMerchant.js";
+import { normalizeMerchant, isNoiseOnly } from "./normalizeMerchant.js";
 
 test("uppercase collapses to lowercase key", () => {
   assert.equal(normalizeMerchant("MERCADONA"), "mercadona");
@@ -36,4 +36,21 @@ test("same shop with different formatting maps to the same key", () => {
 
 test("numeric-only description falls back to cleaned digits rather than empty", () => {
   assert.equal(normalizeMerchant("1234"), "1234");
+});
+
+test("isNoiseOnly: pure bank boilerplate carries no merchant identity", () => {
+  for (const s of ["Transferencia realizada", "Bizum", "TRASPASO", "Pago con tarjeta", "", "  ", "4188202152150916"]) {
+    assert.equal(isNoiseOnly(s), true, s);
+  }
+});
+
+test("isNoiseOnly: anything naming a real counterparty is not noise", () => {
+  for (const s of ["Alquiler los valles", "Mercadona", "Diezmo - Luis Vespa", "Bizum Iberdrola"]) {
+    assert.equal(isNoiseOnly(s), false, s);
+  }
+});
+
+test("normalizeMerchant: strips transfer boilerplate so it can't become the key", () => {
+  assert.equal(normalizeMerchant("Transferencia realizada Alquiler los valles"), "alquiler los valles");
+  assert.equal(normalizeMerchant("Bizum Enviado: Luis Vespa"), "luis vespa");
 });

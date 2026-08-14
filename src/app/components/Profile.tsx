@@ -1,6 +1,14 @@
-import { User, Bell, Moon, Sun, Shield, HelpCircle, LogOut, ChevronRight } from 'lucide-react';
+import { User, Bell, Moon, Sun, Shield, HelpCircle, LogOut, ChevronRight, LucideIcon } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState } from 'react';
+
+interface SettingsItem {
+  icon: LucideIcon;
+  label: string;
+  value: string | boolean;
+  toggle?: boolean;
+  key?: string;
+}
 
 export function Profile({ darkMode, onToggleDarkMode }: { darkMode: boolean; onToggleDarkMode: () => void }) {
   const [notifications, setNotifications] = useState({
@@ -10,7 +18,7 @@ export function Profile({ darkMode, onToggleDarkMode }: { darkMode: boolean; onT
     goalReminders: true,
   });
 
-  const settingsSections = [
+  const settingsSections: { title: string; items: SettingsItem[] }[] = [
     {
       title: 'Account',
       items: [

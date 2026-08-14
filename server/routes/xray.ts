@@ -18,6 +18,9 @@ import { analyze, type XRayResult, type Overrides, type TaggedTxn } from "../lib
 import { hydrateFromXraySession } from "../lib/xray/hydrate.js";
 import { generateXrayPdf } from "../lib/xray/pdf.js";
 import { sendXrayReportEmail } from "../lib/mailer.js";
+import { computeFuturoComprometido, type DebtKind } from "../lib/xray/debts.js";
+import { debtLoadScore, stageFor, type HealthIndex, type HealthPillar } from "../lib/xray/healthIndex.js";
+import { computeArchetype } from "../lib/xray/archetype.js";
 
 export const xrayRouter = Router();
 
@@ -38,7 +41,10 @@ function rateLimited(ip: string): boolean {
 
 const MAX_FILES = 5;
 interface FileInput { filename: string; dataBase64: string }
-interface StoredTxn { date: string; concept: string; amount: number; balance: number | null; fileIndex?: number }
+// `extra` must round-trip: it carries the bank's other detail columns, which is
+// where most of the meaning lives. Dropping it here would make reclassify and
+// add-account re-analyze with less information than the first analysis did.
+interface StoredTxn { date: string; concept: string; amount: number; balance: number | null; fileIndex?: number; extra?: string }
 
 // Parse one uploaded file into tagged transactions: deterministic BBVA parser
 // first, AI column-mapping fallback second. Never throws.
@@ -85,7 +91,11 @@ function filesFromBody(body: any): FileInput[] | null {
 }
 
 const storableTxns = (txns: TaggedTxn[]) =>
-  txns.map(t => ({ date: t.date.toISOString(), concept: t.concept, amount: t.amount, balance: t.balance, fileIndex: t.fileIndex ?? 0 }));
+  txns.map(t => ({ date: t.date.toISOString(), concept: t.concept, amount: t.amount, balance: t.balance, fileIndex: t.fileIndex ?? 0, extra: t.extra }));
+
+/** Rehydrate stored rows back into analyzable transactions (keeps `extra`). */
+const storedToTagged = (stored: StoredTxn[]): TaggedTxn[] =>
+  stored.map(s => ({ date: new Date(s.date), concept: s.concept, amount: s.amount, balance: s.balance, fileIndex: s.fileIndex ?? 0, extra: s.extra }));
 
 // POST /api/xray/analyze — { filename, dataBase64 } | { files:[{filename,dataBase64}] } → { sessionId, result }
 xrayRouter.post("/analyze", async (req: Request, res: Response) => {
@@ -135,6 +145,101 @@ xrayRouter.post("/analyze", async (req: Request, res: Response) => {
   return res.json({ sessionId: session.id, result });
 });
 
+const DEBT_KINDS = new Set<DebtKind>(["credit_card", "installment", "bnpl", "payday_loan", "auto_loan", "other"]);
+const MAX_QUICK_DEBTS = 20;
+
+// POST /api/xray/quick-estimate — { monthlyIncome, debts:[{name,kind,monthlyPayment}] }
+// → { sessionId, result }. No file, no parsing, no AI: the alternative entry
+// point for a visitor who doesn't have a bank statement handy. Pure arithmetic
+// over the same computeFuturoComprometido/debtLoadScore used by the full
+// analyze() path, mapped into a reduced XRayResult (only `debts` + a
+// single-pillar `health` are real; everything else is empty/zeroed) so it
+// lands in the SAME XRaySession-backed funnel (email capture, PDF, account CTA)
+// as the file-upload flow.
+xrayRouter.post("/quick-estimate", async (req: Request, res: Response) => {
+  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
+  if (rateLimited(ip)) return res.status(429).json({ error: "rate_limited" });
+
+  const { monthlyIncome, debts } = req.body ?? {};
+  if (typeof monthlyIncome !== "number" || !Number.isFinite(monthlyIncome) || monthlyIncome < 0) {
+    return res.status(400).json({ error: "invalid_input" });
+  }
+  if (!Array.isArray(debts) || debts.length === 0) return res.status(400).json({ error: "invalid_input" });
+  if (debts.length > MAX_QUICK_DEBTS) return res.status(400).json({ error: "too_many_debts" });
+
+  const clean: { name: string; kind: DebtKind; monthlyPayment: number }[] = [];
+  for (const d of debts) {
+    if (
+      !d || typeof d.name !== "string" || !d.name.trim() ||
+      !DEBT_KINDS.has(d.kind) ||
+      typeof d.monthlyPayment !== "number" || !Number.isFinite(d.monthlyPayment) || d.monthlyPayment < 0
+    ) {
+      return res.status(400).json({ error: "invalid_input" });
+    }
+    clean.push({ name: d.name.trim().slice(0, 80), kind: d.kind, monthlyPayment: d.monthlyPayment });
+  }
+
+  const monthlyDebtTotal = clean.reduce((s, d) => s + d.monthlyPayment, 0);
+  const { pctOfIncome } = computeFuturoComprometido(monthlyDebtTotal, monthlyIncome);
+  const score = Math.round(debtLoadScore(pctOfIncome));
+  const pillar: HealthPillar = { key: "debtLoad", label: "debtLoad", score, weight: 1, caption: "debtLoad" };
+  const health: HealthIndex = { score, stage: stageFor(score), pillars: [pillar], strongestKey: "debtLoad" };
+  // A manual estimate only knows about debt: there's no giving history to judge
+  // and no surplus to see, so the archetype comes out on the debt axis alone and
+  // says so via givingAssessed: false.
+  const archetype = computeArchetype({
+    monthsCovered: 1,
+    incomeCents: Math.round(monthlyIncome * 100),
+    givingMonths: 0,
+    givingAmounts: [],
+    savingsCents: 0,
+    investmentCents: 0,
+    debtPctOfIncome: pctOfIncome,
+  });
+
+  const result: XRayResult = {
+    period: { from: "", to: "", months: 1 },
+    summary: {
+      totalIncome: monthlyIncome,
+      totalExpenses: monthlyDebtTotal,
+      net: monthlyIncome - monthlyDebtTotal,
+      savingsRate: monthlyIncome > 0 ? (monthlyIncome - monthlyDebtTotal) / monthlyIncome : 0,
+      transactionCount: clean.length,
+    },
+    categories: [],
+    antExpenses: { monthlyAvg: 0, annualized: 0, items: [] },
+    recurring: { monthlyTotal: 0, annualized: 0, count: 0, items: [] },
+    wealth: { total: 0, savings: 0, giving: 0, investment: 0, items: [] },
+    uncertain: { total: 0, items: [] },
+    income: { excluded: { total: 0, items: [] }, uncertain: { total: 0, items: [] } },
+    internalTransfers: { count: 0, total: 0, items: [] },
+    balances: { hasData: false, total: 0, accounts: [], runwayMonths: null },
+    debts: {
+      monthlyTotal: monthlyDebtTotal,
+      pctOfIncome,
+      items: clean.map(d => ({ merchant: d.name, kind: d.kind, monthlyAmount: d.monthlyPayment })),
+      mortgage: null,
+    },
+    topMerchants: [],
+    health,
+    archetype,
+    opportunities: [],
+  };
+
+  const session = await prisma.xRaySession.create({
+    data: {
+      result: result as unknown as object,
+      transactions: [] as unknown as object,
+      bank: "manual",
+      txnCount: 0,
+      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+    },
+    select: { id: true },
+  });
+
+  return res.json({ sessionId: session.id, result });
+});
+
 // POST /api/xray/add-account — { sessionId, files:[…] } → append account(s) to an
 // existing session and re-analyze the combined set (detects internal transfers).
 xrayRouter.post("/add-account", async (req: Request, res: Response) => {
@@ -152,7 +257,7 @@ xrayRouter.post("/add-account", async (req: Request, res: Response) => {
   if (session.claimedByUserId) return res.status(409).json({ error: "already_claimed" });
 
   const stored = (session.transactions as unknown as StoredTxn[]) ?? [];
-  const existing: TaggedTxn[] = stored.map(s => ({ date: new Date(s.date), concept: s.concept, amount: s.amount, balance: s.balance, fileIndex: s.fileIndex ?? 0 }));
+  const existing: TaggedTxn[] = storedToTagged(stored);
   const nextIndex = existing.reduce((m, t) => Math.max(m, t.fileIndex ?? 0), 0) + 1;
 
   let added: TaggedTxn[] = [];
@@ -197,11 +302,20 @@ xrayRouter.post("/reclassify", async (req: Request, res: Response) => {
   // Sanitize overrides to the expected shape.
   const clean: Overrides = {};
   for (const [m, v] of Object.entries(overrides as Record<string, unknown>)) {
-    if (v === "consumption" || v === "wealth") clean[m] = v;
+    // "wealth" is still accepted: sessions created before savings/investment
+    // were separate answers stored it, and their results must keep resolving.
+    // "income"/"notIncome" answer the OTHER axis — is an ambiguous inflow real
+    // income or money that was already yours moving around.
+    if (
+      v === "consumption" || v === "savings" || v === "investment" || v === "giving" || v === "wealth" ||
+      v === "income" || v === "notIncome"
+    ) {
+      clean[m] = v;
+    }
   }
 
   const stored = (session.transactions as unknown as StoredTxn[]) ?? [];
-  const txns: TaggedTxn[] = stored.map(s => ({ date: new Date(s.date), concept: s.concept, amount: s.amount, balance: s.balance, fileIndex: s.fileIndex ?? 0 }));
+  const txns: TaggedTxn[] = storedToTagged(stored);
   const ai = (session.aiCategories as unknown as any[]) ?? undefined;
   const result = analyze(txns, ai, clean);
 
@@ -260,6 +374,9 @@ xrayRouter.post("/claim", requireAuth, async (req: AuthRequest, res: Response) =
 const EVENTS = new Set([
   "page_view", "analyze_started", "analyze_completed", "results_viewed",
   "wow_reached", "email_captured", "account_cta_clicked", "share_clicked", "reclassified", "add_account",
+  // Drop-off on the mandatory classification gate is the number to watch: it's
+  // the one step that trades funnel completion for an honest verdict.
+  "classify_completed",
 ]);
 
 // POST /api/xray/event — { event, sessionId? } — anonymous funnel analytics. Fire-and-forget.

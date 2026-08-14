@@ -63,7 +63,7 @@ function DraggableRow({
   index: number;
   moveRow: (from: number, to: number) => void;
   onDragEnd: () => void;
-  children: (handleRef: React.RefObject<HTMLDivElement | null>) => React.ReactNode;
+  children: (handleRef: React.RefObject<HTMLDivElement>) => React.ReactNode;
 }) {
   const rowRef  = useRef<HTMLDivElement>(null);
   const handleRef = useRef<HTMLDivElement>(null);

@@ -1,6 +1,7 @@
 node_modules
 .env
 dist
+.claude/.verify-pending
 
 # Bank statements / spreadsheets (never commit financial data)
 *.xlsx

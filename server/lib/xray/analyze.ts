@@ -14,13 +14,16 @@
 // Internally we work in integer cents (no float drift); the returned payload is
 // in euros, rounded to 2 decimals, ready to serialize as JSON.
 import type { ParsedTxn } from "../parsers/bbva.js";
-import { normalizeMerchant } from "../normalizeMerchant.js";
+import { normalizeMerchant, isNoiseOnly } from "../normalizeMerchant.js";
 import { detectRecurringFrom, type RecurringInput } from "../recurring.js";
 import { classifyLocal } from "./categories.js";
 import { classifyMovement, type MovementType, type MovementKind } from "./wealth.js";
+import { classifyIncome, describeIncomeUncertain, type IncomeReason, type IncomeClass } from "./income.js";
 import { describeMovement } from "./transferDetail.js";
 import { reconcile, type ReconInput } from "./reconcile.js";
 import { computeHealthIndex, type HealthIndex } from "./healthIndex.js";
+import { computeArchetype, type ArchetypeResult } from "./archetype.js";
+import { detectDebtPayments, computeFuturoComprometido, type DebtKind } from "./debts.js";
 import type { SuggestedCategory } from "../ai/suggestCategories.js";
 
 // A parsed transaction tagged with which uploaded file it came from (multi-account).
@@ -32,7 +35,17 @@ const ANT_MIN_COUNT = 3;             // repeated at least 3× over the window
 const RECURRING_MIN_CENTS = 400;     // €4 — below this a stable charge is a leak, not a subscription
 
 // User reclassification of a merchant's movement type (from the correction card).
-export type Overrides = Record<string, "consumption" | "wealth">;
+// What the user can tell us a movement really was. "giving" is its own answer,
+// not a flavour of spending: money given away is stewardship in this product's
+// model (and drives the Mayordomo Fiel archetype), so it must not be lumped in
+// with consumption.
+// The four things an outflow can actually be. "wealth" is the legacy value kept
+// so overrides stored by earlier sessions still resolve — it means "savings".
+export type MovementAnswer = "consumption" | "savings" | "investment" | "giving";
+// The two things an ambiguous INFLOW can actually be: real income, or money
+// that was already yours moving around (own-account transfer, cash redeposit).
+export type IncomeAnswer = "income" | "notIncome";
+export type Overrides = Record<string, MovementAnswer | IncomeAnswer | "wealth">;
 
 export interface XRayCategory {
   key: string;
@@ -43,6 +56,23 @@ export interface XRayCategory {
   annualized: number;
   pct: number;
   txnCount: number;
+}
+
+// Shared by both ambiguous-movement lists (outflow transfers/cash AND inflow
+// cash-deposits/self-transfers) — same shape, same amount-subgrouping logic.
+export interface AmbiguousItem {
+  // Every override key this row stands for. Usually one; an "assorted amounts"
+  // row carries all the one-off amounts it collapsed together, so a single
+  // answer applies to all of them.
+  keys: string[];
+  detail: string | null;
+  merchant: string;
+  total: number;
+  count: number;
+  // Set when the row is a repeated exact amount (e.g. 4 × €150), null for the
+  // assorted-amounts row. Lets the UI show the standing arrangement.
+  amountEach: number | null;
+  kind: "transfer" | "cash";
 }
 
 export interface XRayResult {
@@ -74,10 +104,20 @@ export interface XRayResult {
     investment: number;
     items: { merchant: string; total: number; kind: "savings" | "giving" | "investment" }[];
   };
-  // Ambiguous movements (transfers, cash) awaiting user confirmation.
+  // Ambiguous OUTFLOWS (transfers, cash) awaiting user confirmation.
   uncertain: {
     total: number;
-    items: { key: string; detail: string | null; merchant: string; total: number; count: number; kind: "transfer" | "cash" }[];
+    items: AmbiguousItem[];
+  };
+  // Inflows that are NOT counted in summary.totalIncome, split into two piles:
+  // `excluded` was dropped automatically (tax refunds, loan disbursements,
+  // card refunds — unambiguous, no user input needed) and is purely
+  // informational; `uncertain` needs the user's answer (income vs. not) and
+  // is NOT counted until they give it, the same conservative default already
+  // used for ambiguous outflows.
+  income: {
+    excluded: { total: number; items: { reason: IncomeReason; total: number; count: number }[] };
+    uncertain: { total: number; items: AmbiguousItem[] };
   };
   // Transfers between the user's OWN uploaded accounts, reconciled out of everything.
   internalTransfers: {
@@ -93,8 +133,20 @@ export interface XRayResult {
     accounts: { fileIndex: number; balance: number }[];
     runwayMonths: number | null;   // total balance ÷ avg monthly consumption
   };
+  // Debt/cuota payments detected among the recurring commitments — the
+  // "futuro comprometido" (% of income already reserved to fragmented debt).
+  // Mortgage is detected but excluded from monthlyTotal/pctOfIncome (see debts.ts).
+  debts: {
+    monthlyTotal: number;
+    pctOfIncome: number;
+    items: { merchant: string; kind: DebtKind; monthlyAmount: number }[];
+    mortgage: { detected: boolean; monthlyAmount: number } | null;
+  };
   topMerchants: { merchant: string; total: number; count: number }[];
   health: HealthIndex;
+  // Who this person is with money, computed on its own axes. `health.stage` is
+  // still the score band; this is the identity shown to the user.
+  archetype: ArchetypeResult;
   opportunities: { id: string; annualSaving: number; params: Record<string, number> }[];
 }
 
@@ -112,11 +164,15 @@ interface PreparedTxn {
   kind: "expense" | "income";
   movementType: MovementType;
   movementKind: MovementKind;
-  movementKey: string;      // grouping/override key: merchant, or "t:"/"c:" for uncertain
+  movementKey: string;      // grouping/override key: merchant, "t:"/"c:" for uncertain outflows, "in:" for uncertain inflows
   detail: string | null;    // display detail for uncertain (name / "••1234")
   categoryKey: string;
   icon: string;
   label: string | null;
+  // Only meaningful when kind === "income". Defaults to "income" for expenses
+  // so nothing else has to branch on kind first.
+  incomeType: "income" | "excluded" | "uncertain";
+  incomeReason: IncomeReason | null;
 }
 
 function aiLookup(ai?: SuggestedCategory[]): Map<string, { label: string; icon: string }> {
@@ -126,40 +182,142 @@ function aiLookup(ai?: SuggestedCategory[]): Map<string, { label: string; icon: 
   return map;
 }
 
+// Groups ambiguous movements by counterparty (movementKey), used for BOTH
+// ambiguous outflows (transfers/cash) and ambiguous inflows (cash deposits,
+// self-transfers) — the shape and the reasoning are identical either direction.
+//
+// Same counterparty, different intent: a recurring €150 to "Luis Vespa" can be
+// a tithe while a €300 to the same name is a move to his own savings. So within
+// each counterparty we split out every REPEATED amount as its own row — a
+// repeated exact amount is a standing arrangement, and the user can answer it
+// in one go. One-off amounts collapse into a single "assorted" row: splitting
+// those would turn 40 nameless Bizums into 40 questions without telling us
+// anything more.
+function groupAmbiguousMovements(txns: PreparedTxn[]): AmbiguousItem[] {
+  const groups = new Map<string, PreparedTxn[]>();
+  for (const e of txns) {
+    const list = groups.get(e.movementKey);
+    if (list) list.push(e); else groups.set(e.movementKey, [e]);
+  }
+
+  const items: AmbiguousItem[] = [];
+  for (const [groupKey, txnsInGroup] of groups) {
+    const first = txnsInGroup[0];
+    const kind = first.movementKind === "cash" ? "cash" : ("transfer" as "transfer" | "cash");
+    const base = { detail: first.detail, merchant: first.merchant, kind };
+
+    const byAmount = new Map<number, PreparedTxn[]>();
+    for (const e of txnsInGroup) {
+      const list = byAmount.get(e.cents);
+      if (list) list.push(e); else byAmount.set(e.cents, [e]);
+    }
+
+    const oneOffs: PreparedTxn[] = [];
+    for (const [cents, list] of byAmount) {
+      if (list.length >= 2) {
+        items.push({
+          ...base,
+          keys: [`${groupKey}#${cents}`],
+          total: eur(cents * list.length),
+          count: list.length,
+          amountEach: eur(cents),
+        });
+      } else {
+        oneOffs.push(...list);
+      }
+    }
+    if (oneOffs.length > 0) {
+      items.push({
+        ...base,
+        // Answering this row applies to every amount inside it.
+        keys: oneOffs.map(e => `${groupKey}#${e.cents}`),
+        total: eur(sum(oneOffs.map(e => e.cents))),
+        count: oneOffs.length,
+        amountEach: null,
+      });
+    }
+  }
+  return items.sort((a, b) => b.total - a.total);
+}
+
 export function analyze(txns: TaggedTxn[], aiCategories?: SuggestedCategory[], overrides: Overrides = {}): XRayResult {
   const ai = aiLookup(aiCategories);
 
   const prepared: PreparedTxn[] = txns
     .filter(t => t.amount !== 0)
     .map(t => {
-      const merchant = normalizeMerchant(t.concept);
-      const local = classifyLocal(merchant);
+      // All the text the bank gave us. `concept` alone is often a generic label
+      // ("Transferencia realizada", "Bizum") with the real meaning in the extra
+      // detail columns, so every keyword decision below reads the full text.
+      const fullText = t.extra ? `${t.concept} ${t.extra}` : t.concept;
+      // Merchant identity normally comes from `concept` — for a card payment that
+      // IS the shop, and using the full text would duplicate the name. But when
+      // the label is pure bank boilerplate it names nothing ("realizada"), so the
+      // detail text is the only place the counterparty appears.
+      const merchant = isNoiseOnly(t.concept) ? normalizeMerchant(fullText) : normalizeMerchant(t.concept);
+      // Category from the merchant; if that says "other", retry against the full
+      // text so a transfer labelled "Alquiler los valles" still lands in housing.
+      let local = classifyLocal(merchant);
+      if (local.key === "other") {
+        const fromDetail = classifyLocal(normalizeMerchant(fullText));
+        if (fromDetail.key !== "other") local = fromDetail;
+      }
       const aiOv = ai.get(merchant);
       const kind = (t.amount < 0 ? "expense" : "income") as "expense" | "income";
 
       // Base movement type (outflows only), then the grouping/override key: for
       // uncertain movements it's a namespaced "t:"/"c:" key; otherwise the merchant.
-      let mv = kind === "expense" ? classifyMovement(t.concept) : { type: "consumption" as MovementType, kind: null as MovementKind };
+      let mv = kind === "expense" ? classifyMovement(fullText) : { type: "consumption" as MovementType, kind: null as MovementKind };
       let movementKey = merchant;
       let detail: string | null = null;
       if (kind === "expense" && mv.type === "uncertain") {
-        const md = describeMovement(t.concept, mv.kind === "cash" ? "cash" : "transfer");
+        const md = describeMovement(fullText, mv.kind === "cash" ? "cash" : "transfer");
         movementKey = md.movementKey;
         detail = md.detail;
       }
 
+      // Income-side classification: is this actually earned money, or your own
+      // money coming back (tax refund, loan disbursement, card refund — auto-
+      // excluded), or genuinely ambiguous (cash redeposit, an inflow from
+      // another account of yours — surfaced for the user to confirm)?
+      let incomeClass: IncomeClass = { type: "income" };
+      if (kind === "income") {
+        incomeClass = classifyIncome(fullText);
+        if (incomeClass.type === "uncertain") {
+          const d = describeIncomeUncertain(fullText, incomeClass.reason);
+          movementKey = d.key;
+          detail = d.detail;
+        }
+      }
+
       // Apply the user's reclassification (uncertain → keyed by movementKey;
       // consumption/wealth → keyed by merchant — the namespaces never collide).
-      const ov = overrides[movementKey] ?? overrides[merchant];
+      // Most specific first: this counterparty at this exact amount, then the
+      // whole counterparty, then the merchant. The fallbacks keep answers stored
+      // by older sessions (which had no per-amount keys) working.
+      const ov = overrides[`${movementKey}#${Math.abs(toCents(t.amount))}`]
+        ?? overrides[movementKey]
+        ?? overrides[merchant];
       if (kind === "expense" && ov) {
-        mv = ov === "wealth"
-          ? { type: "wealth", kind: mv.kind === "investment" ? "investment" : "savings" }
-          : { type: "consumption", kind: null };
+        if (ov === "investment") mv = { type: "wealth", kind: "investment" };
+        else if (ov === "savings") mv = { type: "wealth", kind: "savings" };
+        else if (ov === "giving") mv = { type: "wealth", kind: "giving" };
+        // Legacy "wealth": keep whatever we detected, defaulting to savings.
+        else if (ov === "wealth") mv = { type: "wealth", kind: mv.kind === "investment" ? "investment" : "savings" };
+        else mv = { type: "consumption", kind: null };
+      } else if (kind === "income" && incomeClass.type === "uncertain" && ov) {
+        // The reason is kept either way — it's the label shown for the
+        // "excluded" case, not just a marker for the still-open question.
+        if (ov === "income") incomeClass = { type: "income" };
+        else if (ov === "notIncome") incomeClass = { type: "excluded", reason: incomeClass.reason };
       }
 
       return {
         merchant,
-        concept: t.concept,
+        // The full bank text, not just the primary label: everything downstream
+        // that reads `concept` (reconcile, debt detection) is keyword matching,
+        // never display, so it should see all the detail the bank gave us.
+        concept: fullText,
         date: t.date,
         cents: Math.abs(toCents(t.amount)),
         fileIndex: t.fileIndex ?? 0,
@@ -171,6 +329,8 @@ export function analyze(txns: TaggedTxn[], aiCategories?: SuggestedCategory[], o
         categoryKey: aiOv ? slug(aiOv.label) : local.key,
         icon: aiOv?.icon ?? local.icon,
         label: aiOv?.label ?? null,
+        incomeType: incomeClass.type,
+        incomeReason: incomeClass.type === "income" ? null : incomeClass.reason,
       };
     });
 
@@ -186,7 +346,12 @@ export function analyze(txns: TaggedTxn[], aiCategories?: SuggestedCategory[], o
   const internalTxns = reconcile(reconInput);
   const active = prepared.filter((_, i) => !internalTxns.internal.has(i));
 
-  const incomes = active.filter(p => p.kind === "income");
+  // Only confirmed real income counts toward totalIncome — excluded (tax
+  // refunds, loans, card refunds) and unresolved-uncertain inflows are handled
+  // separately below and must not inflate the denominator every ratio uses.
+  const incomes = active.filter(p => p.kind === "income" && p.incomeType === "income");
+  const incomeExcludedTxns = active.filter(p => p.kind === "income" && p.incomeType === "excluded");
+  const incomeUncertainTxns = active.filter(p => p.kind === "income" && p.incomeType === "uncertain");
   const outflows = active.filter(p => p.kind === "expense");
   const consumption = outflows.filter(p => p.movementType === "consumption");
   const wealthTxns = outflows.filter(p => p.movementType === "wealth");
@@ -228,6 +393,15 @@ export function analyze(txns: TaggedTxn[], aiCategories?: SuggestedCategory[], o
   const recurringMerchants = new Set(recurring.map(r => r.merchant));
   const recurringMonthlyC = sum(recurring.map(r => r.avgAmount));
 
+  // ---- Debt / cuota detection ("futuro comprometido") ----
+  // Debt payments stay counted in expenses/categories exactly like today —
+  // this only ADDS a new field, it doesn't remove anything from consumption.
+  const debtDetection = detectDebtPayments(
+    recurring.map(r => ({ merchant: r.merchant, avgAmount: r.avgAmount })),
+    consumption.map(e => ({ merchant: e.merchant, concept: e.concept, amount: e.cents })),
+  );
+  const futuroComprometido = computeFuturoComprometido(debtDetection.monthlyTotal, totalIncomeC / months);
+
   // ---- Gastos hormiga (small, frequent, discretionary consumption) ----
   const antExcludeKeys = new Set(["cash", "housing", "utilities", "insurance", "health"]);
   const byMerchant = new Map<string, { cents: number; count: number }>();
@@ -257,21 +431,29 @@ export function analyze(txns: TaggedTxn[], aiCategories?: SuggestedCategory[], o
     .map(([merchant, v]) => ({ merchant, total: eur(v.cents), kind: v.kind }))
     .sort((a, b) => b.total - a.total);
   const savingsC = sum(wealthTxns.filter(e => e.movementKind !== "investment" && e.movementKind !== "giving").map(e => e.cents));
-  const givingC = sum(wealthTxns.filter(e => e.movementKind === "giving").map(e => e.cents));
+  const givingTxns = wealthTxns.filter(e => e.movementKind === "giving");
+  const givingC = sum(givingTxns.map(e => e.cents));
+  // The archetype's giving axis needs the *shape* of the habit, not just a total:
+  // in how many distinct months it happened, and how stable the amounts are.
+  const givingMonths = new Set(givingTxns.map(e => monthKey(e.date))).size;
+  const givingAmounts = givingTxns.map(e => e.cents);
   const investmentC = sum(wealthTxns.filter(e => e.movementKind === "investment").map(e => e.cents));
 
-  // ---- Uncertain (transfers + cash), grouped by the stable movementKey so a
-  // no-name transfer is identifiable and each group toggles independently ----
-  const uncByKey = new Map<string, { detail: string | null; merchant: string; cents: number; count: number; kind: "transfer" | "cash" }>();
-  for (const e of uncertainTxns) {
-    const kind = e.movementKind === "cash" ? "cash" : "transfer";
-    const cur = uncByKey.get(e.movementKey) ?? { detail: e.detail, merchant: e.merchant, cents: 0, count: 0, kind };
+  // ---- Ambiguous outflows (transfers + cash) and ambiguous inflows (cash
+  // deposits, self-transfers) share the exact same grouping shape — see
+  // groupAmbiguousMovements below — so both use the one function.
+  const uncertainItems = groupAmbiguousMovements(uncertainTxns);
+  const incomeUncertainItems = groupAmbiguousMovements(incomeUncertainTxns);
+
+  const incomeExcludedByReason = new Map<IncomeReason, { cents: number; count: number }>();
+  for (const e of incomeExcludedTxns) {
+    const cur = incomeExcludedByReason.get(e.incomeReason!) ?? { cents: 0, count: 0 };
     cur.cents += e.cents;
     cur.count += 1;
-    uncByKey.set(e.movementKey, cur);
+    incomeExcludedByReason.set(e.incomeReason!, cur);
   }
-  const uncertainItems = [...uncByKey.entries()]
-    .map(([key, v]) => ({ key, detail: v.detail, merchant: v.merchant, total: eur(v.cents), count: v.count, kind: v.kind }))
+  const incomeExcludedItems = [...incomeExcludedByReason.entries()]
+    .map(([reason, v]) => ({ reason, total: eur(v.cents), count: v.count }))
     .sort((a, b) => b.total - a.total);
 
   // ---- Top merchants (consumption) ----
@@ -302,6 +484,18 @@ export function analyze(txns: TaggedTxn[], aiCategories?: SuggestedCategory[], o
     recurringCount: recurring.length,
     monthlyNet,
     months,
+    debtPctOfIncome: futuroComprometido.pctOfIncome,
+  });
+
+  // ---- Archetype (identity, on its own two axes — NOT derived from the score) ----
+  const archetype = computeArchetype({
+    monthsCovered: months,
+    incomeCents: totalIncomeC,
+    givingMonths,
+    givingAmounts,
+    savingsCents: savingsC,
+    investmentCents: investmentC,
+    debtPctOfIncome: futuroComprometido.pctOfIncome,
   });
 
   // ---- Opportunities ----
@@ -379,14 +573,33 @@ export function analyze(txns: TaggedTxn[], aiCategories?: SuggestedCategory[], o
       total: eur(sum(uncertainTxns.map(e => e.cents))),
       items: uncertainItems,
     },
+    income: {
+      excluded: {
+        total: eur(sum(incomeExcludedTxns.map(e => e.cents))),
+        items: incomeExcludedItems,
+      },
+      uncertain: {
+        total: eur(sum(incomeUncertainTxns.map(e => e.cents))),
+        items: incomeUncertainItems,
+      },
+    },
     internalTransfers: {
       count: internalTxns.count,
       total: eur(internalTxns.totalCents),
       items: internalTxns.items,
     },
     balances,
+    debts: {
+      monthlyTotal: eur(debtDetection.monthlyTotal),
+      pctOfIncome: futuroComprometido.pctOfIncome,
+      items: debtDetection.items.map(i => ({ merchant: i.merchant, kind: i.kind, monthlyAmount: eur(i.monthlyAmount) })),
+      mortgage: debtDetection.mortgage
+        ? { detected: true, monthlyAmount: eur(debtDetection.mortgage.monthlyAmount) }
+        : null,
+    },
     topMerchants,
     health,
+    archetype,
     opportunities,
   };
 }

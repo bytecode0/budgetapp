@@ -35,7 +35,7 @@ function DraggableRow({
   index: number;
   moveRow: (from: number, to: number) => void;
   onDragEnd: () => void;
-  children: (handleRef: React.RefObject<HTMLDivElement | null>) => React.ReactNode;
+  children: (handleRef: React.RefObject<HTMLDivElement>) => React.ReactNode;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<HTMLDivElement>(null);
@@ -240,7 +240,7 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
     else toast.success(t('accounts.deletedOk'));
   };
 
-  const renderRow = (a: Account, handleRef?: React.RefObject<HTMLDivElement | null>) => {
+  const renderRow = (a: Account, handleRef?: React.RefObject<HTMLDivElement>) => {
     const Icon = typeIcon(a.type);
     return (
       <div className="bg-card border border-border rounded-2xl p-5 flex items-center gap-4">

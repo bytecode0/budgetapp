@@ -43,7 +43,7 @@ export interface SmartRecommendation {
   description: string;
   impact: 'high' | 'medium' | 'low';
   type: 'opportunity' | 'warning' | 'insight';
-  action?: string;
+  action?: string | null;
 }
 
 export interface DeviationAlert {

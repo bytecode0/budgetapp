@@ -11,6 +11,13 @@ export interface ParsedTxn {
   concept: string;
   amount: number;        // euros, signed (negative = charge/expense, positive = credit)
   balance: number | null;
+  // Text from the OTHER detail columns (BBVA ships three: Concepto / Movimiento /
+  // Observaciones). `concept` stays the primary label so merchant names keep
+  // reading cleanly; `extra` carries the rest for keyword classification, which
+  // is where the meaning usually lives — BBVA puts a generic label in Concepto
+  // ("Transferencia realizada", "Bizum") and the user's own reference text in
+  // Movimiento ("Diezmo - Luis Vespa", "Saving", "Alquiler los valles").
+  extra?: string;
 }
 
 const DATE_HEADERS = ["fecha", "fecha valor", "fecha operacion", "fecha contable", "f valor"];
@@ -61,7 +68,7 @@ export function parseDate(raw: unknown): Date | null {
   return null;
 }
 
-interface ColumnMap { date: number; concept: number; amount: number; balance: number; }
+interface ColumnMap { date: number; concepts: number[]; amount: number; balance: number; }
 
 function findHeader(grid: unknown[][]): { rowIdx: number; cols: ColumnMap } | null {
   for (let r = 0; r < Math.min(grid.length, 25); r++) {
@@ -77,7 +84,9 @@ function findHeader(grid: unknown[][]): { rowIdx: number; cols: ColumnMap } | nu
       cols: {
         date,
         amount,
-        concept: cells.findIndex(c => matches(c, CONCEPT_HEADERS)),
+        // ALL detail columns, not just the first: taking only the first one threw
+        // away the column that actually identifies the movement.
+        concepts: cells.flatMap((c, i) => (matches(c, CONCEPT_HEADERS) ? [i] : [])),
         balance: cells.findIndex(c => matches(c, BALANCE_HEADERS)),
       },
     };
@@ -98,10 +107,25 @@ export function gridToTransactions(grid: unknown[][]): ParsedTxn[] {
     const amount = parseAmount(row[cols.amount]);
     if (!date || amount === null) continue; // skip blanks / totals / footer rows
 
+    // Collect every detail cell, de-duplicated case-insensitively: banks often
+    // repeat the same text across columns (Observaciones is usually the uppercased
+    // Movimiento), and a merchant name repeated twice mangles the merchant key.
+    const parts: string[] = [];
+    const seen = new Set<string>();
+    for (const ci of cols.concepts) {
+      const v = String(row[ci] ?? "").trim();
+      if (!v) continue;
+      const fingerprint = v.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      if (!fingerprint || seen.has(fingerprint)) continue;
+      seen.add(fingerprint);
+      parts.push(v);
+    }
+
     out.push({
       date,
       amount,
-      concept: cols.concept >= 0 ? String(row[cols.concept] ?? "").trim() : "",
+      concept: parts[0] ?? "",
+      extra: parts.slice(1).join(" ") || undefined,
       balance: cols.balance >= 0 ? parseAmount(row[cols.balance]) : null,
     });
   }

@@ -6,26 +6,55 @@
 
 interface CardData {
   score: number;
-  stageLabel: string;
+  // The translated archetype name — the identity line people screenshot.
+  archetypeLabel: string;
+  // The archetype KEY, which drives the traffic light independently of language.
+  archetypeKey: string;
+  // One line of recognition under the archetype ("that's me"), which is what
+  // actually makes someone screenshot it.
+  archetypeDesc?: string;
   savingsRatePct: number;   // 0–100
   strongestLabel: string;
   lang: 'es' | 'en';
+  // The pivot's most "shareable" number — % of income already committed to
+  // debt/cuotas. Optional: only present when the user has debt (monthlyTotal > 0).
+  debtPctOfIncome?: number; // 0–100
 }
 
 const FOREST = '#1F3D30';
 const FOREST_DEEP = '#12241C';
 const GOLD = '#D9B872';
 
-function stageEmoji(score: number): string {
-  if (score >= 80) return '💪';
-  if (score >= 60) return '🌱';
-  if (score >= 40) return '⚖️';
-  return '🧭';
+// Traffic light: the answer to "am I OK?" before anyone reads a single number.
+// Mirrors stageLight() in server/lib/xray/labels.ts — keep the two in sync.
+const LIGHTS = { red: '#E5484D', amber: '#E8A33D', green: '#3FA97A' } as const;
+type Light = keyof typeof LIGHTS;
+
+// Mirrors archetypeLight() in server/lib/xray/archetype.ts — keep in sync.
+function lightForArchetype(key: string): Light {
+  if (key === 'slave') return 'red';
+  // A faithful giver with no cushion is genuinely fragile, however admirable.
+  if (key === 'juggler' || key === 'braveGiver') return 'amber';
+  return 'green';
+}
+
+// One glyph per identity, so the card is recognisable at a glance.
+function archetypeEmoji(key: string): string {
+  switch (key) {
+    case 'slave': return '⛓️';
+    case 'juggler': return '🤹';
+    case 'builder': return '🧱';
+    case 'sower': return '🌱';
+    case 'braveGiver': return '🕊️';
+    case 'steward': return '🗝️';
+    case 'multiplier': return '📈';
+    default: return '🧭';
+  }
 }
 
 const COPY = {
-  es: { title: 'Mi Salud Financiera', of: 'de 100', savings: 'Tasa de ahorro', strength: 'Mi fortaleza', made: 'Hecho con Radiografía Financiera' },
-  en: { title: 'My Financial Health', of: 'out of 100', savings: 'Savings rate', strength: 'My strength', made: 'Made with Financial X-Ray' },
+  es: { title: 'Mi Salud Financiera', of: 'de 100', savings: 'Tasa de ahorro', strength: 'Mi fortaleza', debtLoad: 'Futuro comprometido', made: 'Hecho con Radiografía Financiera' },
+  en: { title: 'My Financial Health', of: 'out of 100', savings: 'Savings rate', strength: 'My strength', debtLoad: 'Committed future', made: 'Made with Financial X-Ray' },
 };
 
 /** Draw the share card onto a 1080×1080 canvas. */
@@ -69,7 +98,10 @@ export function renderShareCard(canvas: HTMLCanvasElement, d: CardData): void {
   ctx.arc(cx, ringY, radius, 0, Math.PI * 2);
   ctx.stroke();
 
-  ctx.strokeStyle = GOLD;
+  // The ring itself carries the traffic light, so the verdict reads instantly
+  // even at thumbnail size where no text is legible.
+  const light = LIGHTS[lightForArchetype(d.archetypeKey)];
+  ctx.strokeStyle = light;
   ctx.beginPath();
   ctx.arc(cx, ringY, radius, -Math.PI / 2, -Math.PI / 2 + (d.score / 100) * Math.PI * 2);
   ctx.stroke();
@@ -82,22 +114,56 @@ export function renderShareCard(canvas: HTMLCanvasElement, d: CardData): void {
   ctx.font = '500 34px system-ui, sans-serif';
   ctx.fillText(t.of, cx, ringY + 110);
 
-  // Stage
+  // Archetype — the identity line. This is the part people screenshot, so it
+  // gets the largest type after the score itself.
   ctx.fillStyle = GOLD;
   ctx.font = '700 58px system-ui, sans-serif';
-  ctx.fillText(`${stageEmoji(d.score)}  ${d.stageLabel}`, cx, 730);
+  ctx.fillText(`${archetypeEmoji(d.archetypeKey)}  ${d.archetypeLabel}`, cx, 716);
 
-  // Two stats
-  const statY = 850;
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
-  ctx.font = '500 30px system-ui, sans-serif';
-  ctx.fillText(t.savings.toUpperCase(), cx - 240, statY);
-  ctx.fillText(t.strength.toUpperCase(), cx + 240, statY);
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = '700 62px system-ui, sans-serif';
-  ctx.fillText(`${d.savingsRatePct}%`, cx - 240, statY + 66);
-  ctx.font = '700 48px system-ui, sans-serif';
-  ctx.fillText(d.strongestLabel, cx + 240, statY + 62);
+  // One line of recognition, wrapped to at most two lines so the layout can't
+  // overflow into the stats row no matter how long the translation is.
+  if (d.archetypeDesc) {
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '400 30px system-ui, sans-serif';
+    const maxWidth = S - 200;
+    const lines: string[] = [];
+    let line = '';
+    for (const word of d.archetypeDesc.split(/\s+/)) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (ctx.measureText(candidate).width > maxWidth && line) {
+        lines.push(line);
+        line = word;
+        if (lines.length === 2) break;
+      } else {
+        line = candidate;
+      }
+    }
+    if (lines.length < 2 && line) lines.push(line);
+    lines.slice(0, 2).forEach((l, i) => ctx.fillText(l, cx, 768 + i * 38));
+  }
+
+  // Stats row — two by default (savings rate + strongest pillar), or three when
+  // the futuro comprometido % is available (the pivot's most shareable number).
+  const stats: { label: string; value: string }[] = [
+    { label: t.savings, value: `${d.savingsRatePct}%` },
+    { label: t.strength, value: d.strongestLabel },
+  ];
+  if (d.debtPctOfIncome != null) stats.push({ label: t.debtLoad, value: `${d.debtPctOfIncome}%` });
+
+  const statY = 878;
+  const spread = stats.length === 3 ? 320 : 240;
+  const labelSize = stats.length === 3 ? 26 : 30;
+  const valueSize = stats.length === 3 ? 50 : 62;
+  const labelSmallSize = stats.length === 3 ? 38 : 48;
+  stats.forEach((s, i) => {
+    const x = cx + (i - (stats.length - 1) / 2) * spread;
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = `500 ${labelSize}px system-ui, sans-serif`;
+    ctx.fillText(s.label.toUpperCase(), x, statY);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `700 ${/^\d+%$/.test(s.value) ? valueSize : labelSmallSize}px system-ui, sans-serif`;
+    ctx.fillText(s.value, x, statY + 62);
+  });
 
   // Footer brand
   ctx.fillStyle = 'rgba(255,255,255,0.5)';

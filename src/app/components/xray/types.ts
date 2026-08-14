@@ -13,12 +13,14 @@ export interface XRayCategory {
 }
 
 export interface HealthPillar {
-  key: 'savings' | 'structure' | 'leaks' | 'commitments' | 'stability';
+  key: 'savings' | 'structure' | 'leaks' | 'commitments' | 'stability' | 'debtLoad';
   label: string;
   score: number;
   weight: number;
   caption: string;
 }
+
+export type DebtKind = 'credit_card' | 'installment' | 'bnpl' | 'payday_loan' | 'auto_loan' | 'other';
 
 export interface HealthIndex {
   score: number;
@@ -32,6 +34,23 @@ export interface XRayOpportunity {
   annualSaving: number;
   params: Record<string, number>;
 }
+
+// Shared by ambiguous outflows (transfers/cash) and ambiguous inflows (cash
+// deposits, self-transfers) — same shape either direction.
+export interface AmbiguousItem {
+  // All override keys this row stands for (an "assorted amounts" row covers
+  // several); answering it applies to every one of them.
+  keys: string[];
+  detail: string | null;
+  merchant: string;
+  total: number;
+  count: number;
+  // Repeated exact amount (e.g. 4 × €150), or null for assorted amounts.
+  amountEach: number | null;
+  kind: 'transfer' | 'cash';
+}
+
+export type IncomeReason = 'taxRefund' | 'loanReceived' | 'refund' | 'cashDeposit' | 'selfTransfer';
 
 export interface XRayResult {
   period: { from: string; to: string; months: number };
@@ -63,7 +82,15 @@ export interface XRayResult {
   };
   uncertain: {
     total: number;
-    items: { key: string; detail: string | null; merchant: string; total: number; count: number; kind: 'transfer' | 'cash' }[];
+    items: AmbiguousItem[];
+  };
+  // Inflows NOT counted in summary.totalIncome. `excluded` was dropped
+  // automatically (tax refunds, loans received, card refunds — informational
+  // only). `uncertain` needs the user's answer (income vs. not) and isn't
+  // counted until they give it — same conservative default as outflow `uncertain`.
+  income: {
+    excluded: { total: number; items: { reason: IncomeReason; total: number; count: number }[] };
+    uncertain: { total: number; items: AmbiguousItem[] };
   };
   internalTransfers: {
     count: number;
@@ -76,11 +103,37 @@ export interface XRayResult {
     accounts: { fileIndex: number; balance: number }[];
     runwayMonths: number | null;
   };
+  debts: {
+    monthlyTotal: number;
+    pctOfIncome: number;
+    items: { merchant: string; kind: DebtKind; monthlyAmount: number }[];
+    mortgage: { detected: boolean; monthlyAmount: number } | null;
+  };
   topMerchants: { merchant: string; total: number; count: number }[];
   health: HealthIndex;
+  archetype: ArchetypeResult;
   opportunities: XRayOpportunity[];
 }
 
-export type Overrides = Record<string, 'consumption' | 'wealth'>;
+export type Archetype =
+  | 'slave' | 'juggler' | 'builder' | 'sower' | 'braveGiver' | 'steward' | 'multiplier';
 
-export type XRayStep = 'landing' | 'processing' | 'results' | 'email';
+export interface ArchetypeResult {
+  key: Archetype;
+  /** False when the statement is too short to judge giving consistency. */
+  givingAssessed: boolean;
+  faithfulGiver: boolean;
+  givingPctOfIncome: number;
+}
+
+export type MovementAnswer = 'consumption' | 'savings' | 'investment' | 'giving';
+// The two things an ambiguous INFLOW can actually be.
+export type IncomeAnswer = 'income' | 'notIncome';
+// 'wealth' is a legacy value (meaning savings) kept so overrides stored by
+// earlier sessions still resolve server-side.
+export type Overrides = Record<string, MovementAnswer | IncomeAnswer | 'wealth'>;
+
+export type XRayStep = 'landing' | 'manual' | 'processing' | 'classify' | 'results' | 'email';
+
+/** An ambiguous movement group the user has to resolve before seeing the verdict. */
+export type UncertainItem = XRayResult['uncertain']['items'][number];

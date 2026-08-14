@@ -2,8 +2,11 @@ import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'motion/react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { TrendingUp, TrendingDown, Bug, Repeat, Lightbulb, ArrowRight, PiggyBank, Landmark, HelpCircle, Banknote, ArrowRightLeft, Share2, Wallet, Plus, HeartHandshake } from 'lucide-react';
-import type { XRayResult, XRayCategory, Overrides } from './types';
+import {
+  TrendingUp, TrendingDown, Bug, Repeat, Lightbulb, ArrowRight, PiggyBank, Landmark, HelpCircle, Banknote,
+  ArrowRightLeft, Share2, Wallet, Plus, HeartHandshake, CreditCard, Calendar, ShoppingBag, AlertCircle, Car,
+} from 'lucide-react';
+import type { XRayResult, XRayCategory, Overrides, DebtKind } from './types';
 import { money, pct, prettyMerchant } from './format';
 import { shareCard } from './shareCard';
 import { XRayMark } from './XRayMark';
@@ -12,12 +15,29 @@ const DONUT = ['#1F3D30', '#A9822F', '#6B8F7A', '#8C6A4A', '#55707A', '#B0906A',
 
 interface Props {
   result: XRayResult;
+  // True for a manual quick-estimate result (no statement uploaded): hides the
+  // sections that need real transaction data (hero summary, category chart) so
+  // the debts/health sections — the only real numbers — stand on their own.
+  reduced?: boolean;
   lang: string;
   sessionId: string | null;
   track: (event: string, sessionId?: string | null) => void;
   onReclassify: (overrides: Overrides) => Promise<void>;
   onAddAccount: (files: File[]) => Promise<{ error?: string }>;
   onEmailCta: () => void;
+}
+
+// Mirrors Debts.tsx's kindIcon() for the same icon-per-kind mapping. Not
+// imported directly — Debts.tsx is an authenticated component, this is public.
+function debtKindIcon(kind: DebtKind) {
+  switch (kind) {
+    case 'credit_card': return CreditCard;
+    case 'installment': return Calendar;
+    case 'bnpl': return ShoppingBag;
+    case 'payday_loan': return AlertCircle;
+    case 'auto_loan': return Car;
+    default: return Wallet;
+  }
 }
 
 function Section({ children, className = '' }: { children: React.ReactNode; className?: string }) {
@@ -70,9 +90,9 @@ function WealthSection({ icon, bg, border, fg, title, total, reframe, items, lan
   );
 }
 
-export function XRayResults({ result, lang, sessionId, track, onReclassify, onAddAccount, onEmailCta }: Props) {
+export function XRayResults({ result, reduced = false, lang, sessionId, track, onReclassify, onAddAccount, onEmailCta }: Props) {
   const { t } = useTranslation();
-  const { summary, categories, antExpenses, recurring, wealth, internalTransfers, balances, health, opportunities } = result;
+  const { summary, categories, antExpenses, recurring, wealth, internalTransfers, balances, debts, health, archetype, income, opportunities } = result;
 
   const addInputRef = useRef<HTMLInputElement>(null);
   const [adding, setAdding] = useState(false);
@@ -95,10 +115,13 @@ export function XRayResults({ result, lang, sessionId, track, onReclassify, onAd
     setSharing(true);
     await shareCard({
       score: health.score,
-      stageLabel: t(`radiografia.stage.${health.stage}`),
+      archetypeLabel: t(`radiografia.archetype.${archetype.key}`),
+      archetypeKey: archetype.key,
+      archetypeDesc: t(`radiografia.archetypeDesc.${archetype.key}`, ''),
       savingsRatePct: Math.max(0, Math.round(summary.savingsRate * 100)),
       strongestLabel: t(`radiografia.pillar.${health.strongestKey}`),
       lang: lang === 'es' ? 'es' : 'en',
+      debtPctOfIncome: debts.monthlyTotal > 0 ? Math.round(debts.pctOfIncome * 100) : undefined,
     });
     setSharing(false);
   };
@@ -109,8 +132,9 @@ export function XRayResults({ result, lang, sessionId, track, onReclassify, onAd
   const [overrides, setOverrides] = useState<Overrides>({});
   const [busy, setBusy] = useState(false);
 
-  const setOverride = async (merchant: string, value: 'consumption' | 'wealth') => {
-    const next = { ...overrides, [merchant]: value };
+  const setOverride = async (keys: string[], value: 'consumption' | 'wealth') => {
+    const next = { ...overrides };
+    for (const k of keys) next[k] = value;
     setOverrides(next);
     setBusy(true);
     await onReclassify(next);
@@ -122,38 +146,51 @@ export function XRayResults({ result, lang, sessionId, track, onReclassify, onAd
     <div className="min-h-screen bg-background pb-32">
       <div className="px-6 py-16 space-y-24">
 
-        {/* 1 — Summary hero */}
-        <Section>
-          <p className="text-sm text-muted-foreground text-center mb-3">
-            {t('radiografia.results.periodLabel', { months: result.period.months })}
-          </p>
-          <div className="bg-primary text-primary-foreground rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-32 -mt-32" />
-            <div className="relative z-10 space-y-6">
-              <p className="text-lg opacity-90">{t('radiografia.results.heroLead')}</p>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <p className="text-sm opacity-70">{t('radiografia.results.income')}</p>
-                  <p className="text-3xl md:text-4xl font-display">{money(summary.totalIncome, lang)}</p>
+        {/* 1 — Summary hero (needs a real statement — hidden in reduced/manual mode) */}
+        {!reduced && (
+          <Section>
+            <p className="text-sm text-muted-foreground text-center mb-3">
+              {t('radiografia.results.periodLabel', { months: result.period.months })}
+            </p>
+            <div className="bg-primary text-primary-foreground rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-32 -mt-32" />
+              <div className="relative z-10 space-y-6">
+                <p className="text-lg opacity-90">{t('radiografia.results.heroLead')}</p>
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-sm opacity-70">{t('radiografia.results.income')}</p>
+                    <p className="text-3xl md:text-4xl font-display">{money(summary.totalIncome, lang)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm opacity-70">{t('radiografia.results.expenses')}</p>
+                    <p className="text-3xl md:text-4xl font-display">{money(summary.totalExpenses, lang)}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm opacity-70">{t('radiografia.results.expenses')}</p>
-                  <p className="text-3xl md:text-4xl font-display">{money(summary.totalExpenses, lang)}</p>
+                <div className="pt-4 border-t border-white/20 flex items-end justify-between">
+                  <div>
+                    <p className="text-sm opacity-70">{positive ? t('radiografia.results.saved') : t('radiografia.results.overspent')}</p>
+                    <p className="text-5xl font-display flex items-center gap-2">
+                      {positive ? <TrendingUp className="w-8 h-8" /> : <TrendingDown className="w-8 h-8" />}
+                      {money(Math.abs(summary.net), lang)}
+                    </p>
+                  </div>
+                  <p className="text-2xl font-display opacity-90">{pct(summary.savingsRate, lang)}</p>
                 </div>
-              </div>
-              <div className="pt-4 border-t border-white/20 flex items-end justify-between">
-                <div>
-                  <p className="text-sm opacity-70">{positive ? t('radiografia.results.saved') : t('radiografia.results.overspent')}</p>
-                  <p className="text-5xl font-display flex items-center gap-2">
-                    {positive ? <TrendingUp className="w-8 h-8" /> : <TrendingDown className="w-8 h-8" />}
-                    {money(Math.abs(summary.net), lang)}
-                  </p>
-                </div>
-                <p className="text-2xl font-display opacity-90">{pct(summary.savingsRate, lang)}</p>
               </div>
             </div>
-          </div>
-        </Section>
+            {/* Transparency: a smaller income than the raw statement total isn't a
+                bug — say exactly what was excluded and why, so the number is
+                trusted rather than second-guessed. */}
+            {income.excluded.total > 0 && (
+              <p className="text-xs text-muted-foreground text-center mt-3">
+                {t('radiografia.results.incomeExcludedNote', {
+                  amount: money(income.excluded.total, lang),
+                  reasons: income.excluded.items.map(i => t(`radiografia.incomeReason.${i.reason}`)).join(', '),
+                })}
+              </p>
+            )}
+          </Section>
+        )}
 
         {/* 1.5 — Liquid net worth (from the account balances) */}
         {balances.hasData && (
@@ -184,35 +221,82 @@ export function XRayResults({ result, lang, sessionId, track, onReclassify, onAd
           </Section>
         )}
 
-        {/* 2 — Where the money goes */}
+        {/* 1.6 — Futuro comprometido (debt/cuota detection) — the pivot's headline
+             metric. Always shown, even at zero: a "no debt detected" reading is
+             valuable and shareable, not a gap to hide. */}
         <Section>
-          <h2 className="text-2xl font-display mb-1">{t('radiografia.results.categoriesTitle')}</h2>
-          <p className="text-muted-foreground mb-6">{t('radiografia.results.categoriesSubtitle')}</p>
-          <div className="grid md:grid-cols-2 gap-6 items-center">
-            <div className="h-60">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={categories} dataKey="total" nameKey="key" innerRadius={62} outerRadius={100} paddingAngle={2} stroke="none">
-                    {categories.map((_, i) => <Cell key={i} fill={DONUT[i % DONUT.length]} />)}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+          <div
+            className="rounded-3xl p-8 md:p-10"
+            style={{
+              background: debts.monthlyTotal > 0 ? 'var(--xray-warn-bg)' : 'var(--xray-good-bg)',
+              border: `1px solid ${debts.monthlyTotal > 0 ? 'var(--xray-warn-border)' : 'var(--xray-good-border)'}`,
+            }}
+          >
+            <div className="flex items-center gap-2 mb-3" style={{ color: debts.monthlyTotal > 0 ? 'var(--xray-warn-fg)' : 'var(--xray-good-fg)' }}>
+              <CreditCard className="w-5 h-5" />
+              <span className="font-display">{t('radiografia.results.debtsTitle')}</span>
             </div>
-            <div className="space-y-3">
-              {categories.slice(0, 6).map((c, i) => (
-                <div key={c.key} className="flex items-center gap-3">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: DONUT[i % DONUT.length] }} />
-                  <span className="text-lg">{c.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-display truncate">{catLabel(c)}</p>
-                    <p className="text-xs text-muted-foreground">{t('radiografia.results.perYear', { amount: money(c.annualized, lang) })}</p>
-                  </div>
-                  <p className="text-sm font-display shrink-0">{money(c.total, lang)}</p>
+            {debts.monthlyTotal > 0 ? (
+              <>
+                <p className="text-4xl md:text-5xl font-display">{pct(debts.pctOfIncome, lang)}</p>
+                <p className="text-muted-foreground mt-2">
+                  {t('radiografia.results.debtsReframe', { count: Math.max(1, Math.round(debts.pctOfIncome * 30)), amount: money(debts.monthlyTotal, lang, { decimals: true }) })}
+                </p>
+                <div className="mt-6 space-y-2">
+                  {debts.items.map((item, i) => {
+                    const Icon = debtKindIcon(item.kind);
+                    return (
+                      <div key={`${i}-${item.merchant}`} className="flex items-center gap-3 text-sm bg-card/60 rounded-xl px-4 py-2.5">
+                        <Icon className="w-4 h-4 shrink-0" />
+                        <span className="font-display truncate flex-1">{prettyMerchant(item.merchant)}</span>
+                        <span className="text-muted-foreground shrink-0">{money(item.monthlyAmount, lang, { decimals: true })}</span>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
+              </>
+            ) : (
+              <p className="text-muted-foreground">{t('radiografia.results.debtsNone')}</p>
+            )}
+            {debts.mortgage?.detected && (
+              <p className="text-xs text-muted-foreground mt-4">
+                {t('radiografia.results.mortgageNote', { amount: money(debts.mortgage.monthlyAmount, lang, { decimals: true }) })}
+              </p>
+            )}
           </div>
         </Section>
+
+        {/* 2 — Where the money goes (needs a real statement — hidden in reduced/manual mode) */}
+        {!reduced && (
+          <Section>
+            <h2 className="text-2xl font-display mb-1">{t('radiografia.results.categoriesTitle')}</h2>
+            <p className="text-muted-foreground mb-6">{t('radiografia.results.categoriesSubtitle')}</p>
+            <div className="grid md:grid-cols-2 gap-6 items-center">
+              <div className="h-60">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={categories} dataKey="total" nameKey="key" innerRadius={62} outerRadius={100} paddingAngle={2} stroke="none">
+                      {categories.map((_, i) => <Cell key={i} fill={DONUT[i % DONUT.length]} />)}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="space-y-3">
+                {categories.slice(0, 6).map((c, i) => (
+                  <div key={c.key} className="flex items-center gap-3">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: DONUT[i % DONUT.length] }} />
+                    <span className="text-lg">{c.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-display truncate">{catLabel(c)}</p>
+                      <p className="text-xs text-muted-foreground">{t('radiografia.results.perYear', { amount: money(c.annualized, lang) })}</p>
+                    </div>
+                    <p className="text-sm font-display shrink-0">{money(c.total, lang)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Section>
+        )}
 
         {/* 3 — Gastos hormiga (the bomb) */}
         {antExpenses.items.length > 0 && (
@@ -325,10 +409,10 @@ export function XRayResults({ result, lang, sessionId, track, onReclassify, onAd
               <p className="text-muted-foreground mb-6">{t('radiografia.results.reviewSubtitle')}</p>
               <div className="space-y-2">
                 {uncertainList.map(item => {
-                  const cls = classOf(item.key);
+                  const cls = classOf(item.keys[0] ?? '');
                   const label = item.detail ?? (prettyMerchant(item.merchant) || t('radiografia.results.transferGeneric'));
                   return (
-                    <div key={item.key} className="flex items-center gap-3 bg-muted/40 rounded-xl px-4 py-3">
+                    <div key={item.keys[0]} className="flex items-center gap-3 bg-muted/40 rounded-xl px-4 py-3">
                       <span className="w-8 h-8 rounded-lg bg-background flex items-center justify-center shrink-0">
                         {item.kind === 'cash' ? <Banknote className="w-4 h-4 text-muted-foreground" /> : <ArrowRightLeft className="w-4 h-4 text-muted-foreground" />}
                       </span>
@@ -339,7 +423,7 @@ export function XRayResults({ result, lang, sessionId, track, onReclassify, onAd
                       <div className="flex gap-1 bg-background rounded-lg p-1 shrink-0">
                         <button
                           disabled={busy}
-                          onClick={() => setOverride(item.key, 'wealth')}
+                          onClick={() => setOverride(item.keys, 'wealth')}
                           style={cls === 'wealth' ? { background: 'var(--xray-good-fg)', color: 'var(--primary-foreground)' } : undefined}
                           className={`px-3 py-1.5 rounded-md text-xs font-display transition-colors ${cls === 'wealth' ? '' : 'text-muted-foreground hover:bg-muted'}`}
                         >
@@ -347,7 +431,7 @@ export function XRayResults({ result, lang, sessionId, track, onReclassify, onAd
                         </button>
                         <button
                           disabled={busy}
-                          onClick={() => setOverride(item.key, 'consumption')}
+                          onClick={() => setOverride(item.keys, 'consumption')}
                           className={`px-3 py-1.5 rounded-md text-xs font-display transition-colors ${cls === 'consumption' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
                         >
                           {t('radiografia.results.isSpending')}
@@ -403,7 +487,15 @@ export function XRayResults({ result, lang, sessionId, track, onReclassify, onAd
             <h2 className="text-2xl font-display">{t('radiografia.results.healthTitle')}</h2>
             <ScoreRing score={health.score} />
             <div>
-              <p className="text-xl font-display" style={{ color: 'var(--xray-film-gold)' }}>{t(`radiografia.stage.${health.stage}`)}</p>
+              <p className="text-xl font-display" style={{ color: 'var(--xray-film-gold)' }}>{t(`radiografia.archetype.${archetype.key}`)}</p>
+                  <p className="text-sm mt-2 max-w-md mx-auto" style={{ color: 'var(--xray-film-muted)' }}>
+                    {t(`radiografia.archetypeDesc.${archetype.key}`)}
+                  </p>
+                  {!archetype.givingAssessed && (
+                    <p className="text-xs mt-3 max-w-md mx-auto" style={{ color: 'var(--xray-film-muted)' }}>
+                      {t('radiografia.archetypeUnassessed')}
+                    </p>
+                  )}
               <p className="mt-1 max-w-md mx-auto" style={{ color: 'var(--xray-film-muted)' }}>
                 {t('radiografia.results.strongest', { pillar: t(`radiografia.pillar.${health.strongestKey}`) })}
               </p>

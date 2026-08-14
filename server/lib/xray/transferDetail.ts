@@ -16,6 +16,14 @@ export interface MovementDetail {
 
 const KEYWORDS = ["transferencia", "transf", "bizum", "traspaso", "envio"];
 const CONNECTORS = new Set(["a", "de", "para", "favor", "al", "la", "el", "los", "las", "del", "d", "en", "por"]);
+// Bank boilerplate that sits between the keyword and the actual counterparty
+// ("Transferencia realizada Luis Vespa", "Bizum enviado: Ana"). Skipped like a
+// connector so the label reads "Luis Vespa", not "Realizada Luis Vespa" — this
+// text is shown to the user when they classify their own movements.
+const BOILERPLATE = new Set([
+  "realizada", "realizado", "emitida", "emitido", "recibida", "recibido",
+  "enviado", "enviada", "concepto", "sin", "compra", "pago", "devuelta",
+]);
 
 const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 const titleCase = (s: string) => s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
@@ -32,7 +40,9 @@ function lastAccountTail(concept: string): string | null {
 // the first token containing a digit (account/reference). Names have no digits.
 function extractName(concept: string): string | null {
   const tokens = concept.split(/\s+/).filter(Boolean);
-  const folded = tokens.map(fold);
+  // Strip punctuation for the set lookups — banks write "Enviado:" / "favor,",
+  // and a trailing colon must not stop a token from being recognised as noise.
+  const folded = tokens.map(t => fold(t).replace(/[^a-z0-9]/g, ""));
   let start = -1;
   for (let i = 0; i < folded.length; i++) {
     if (KEYWORDS.some(k => folded[i].startsWith(k))) { start = i; break; }
@@ -43,6 +53,9 @@ function extractName(concept: string): string | null {
   for (let i = start + 1; i < tokens.length && name.length < 3; i++) {
     const f = folded[i];
     if (CONNECTORS.has(f)) { if (name.length > 0) break; else continue; }
+    // Boilerplate before the name is noise; once a name has started, it marks
+    // the end of it (e.g. "… Ana Compra" → "Ana").
+    if (BOILERPLATE.has(f)) { if (name.length > 0) break; else continue; }
     if (/\d/.test(f)) break;        // account/reference token → stop
     if (!/[a-z]/.test(f)) continue; // punctuation-only → skip
     name.push(tokens[i]);

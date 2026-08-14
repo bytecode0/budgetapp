@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LayoutDashboard, Sparkles, Wallet, Target, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight, Landmark, Users, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -23,7 +23,13 @@ import { useAllocations } from './hooks/useAllocations';
 import { useAnalytics } from './hooks/useAnalytics';
 import { useHousehold } from './hooks/useHousehold';
 import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/usePartner';
-import { XRayFlow } from './components/xray/XRayFlow';
+
+// Code-split the Radiografía lead-magnet flow (and its recharts-heavy subtree)
+// into its own chunk — most authenticated users never hit /radiografia, so it
+// shouldn't inflate the main bundle.
+const XRayFlow = lazy(() =>
+  import('./components/xray/XRayFlow').then((m) => ({ default: m.XRayFlow }))
+);
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
 
@@ -246,9 +252,7 @@ function AppInner() {
                         setMobileMenuOpen(false);
                       }}
                       className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                        item.highlighted
-                          ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
-                          : isActive
+                        isActive
                           ? 'bg-primary text-primary-foreground shadow-md'
                           : 'hover:bg-muted text-foreground'
                       }`}
@@ -311,9 +315,7 @@ function AppInner() {
                 whileHover={{ scale: isActive ? 1 : 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  item.highlighted
-                    ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg hover:shadow-xl'
-                    : isActive
+                  isActive
                     ? 'bg-primary text-primary-foreground shadow-md'
                     : 'hover:bg-muted text-foreground'
                 }`}
@@ -412,7 +414,15 @@ export default function App() {
     return (
       <>
         <Toaster richColors position="top-right" />
-        <XRayFlow />
+        <Suspense
+          fallback={
+            <div className="size-full min-h-screen bg-background flex items-center justify-center">
+              <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+            </div>
+          }
+        >
+          <XRayFlow />
+        </Suspense>
       </>
     );
   }
