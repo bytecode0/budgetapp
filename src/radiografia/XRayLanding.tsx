@@ -94,6 +94,11 @@ export function XRayLanding({ onFiles, onManual, analyzing, error }: Props) {
           <p className="text-xs text-muted-foreground mt-3">{t('radiografia.landing.multiHint')}</p>
         </div>
 
+        <p className="text-xs text-muted-foreground text-center mt-3 flex items-center justify-center gap-1.5">
+          <Trash2 className="w-3.5 h-3.5 shrink-0" />
+          {t('radiografia.landing.uploadDisclosure')}
+        </p>
+
         {/* Secondary entry point — no statement handy? A quick manual estimate
             still lands in the same email-capture funnel. Deliberately understated
             so it never competes with the primary upload CTA. */}

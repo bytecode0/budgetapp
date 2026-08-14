@@ -75,6 +75,7 @@
       "cta": "Elegir archivo",
       "addMore": "Añadir otro archivo",
       "multiHint": "Puedes añadir varias cuentas (p. ej. gastos + ahorro)",
+      "uploadDisclosure": "Tu archivo se procesa y se borra. Guardamos solo los totales, nunca tus movimientos.",
       "analyze_one": "Analizar {{count}} archivo",
       "analyze_other": "Analizar {{count}} archivos",
       "trustNoSignup": "Sin registro",

@@ -392,3 +392,28 @@ radiografiaRouter.post("/profile/fields", async (req: Request, res: Response) =>
 
   res.json({ data: { completeness } });
 });
+
+// DELETE /api/radiografia/profile — borrado a petición (plan §4.5). Requires
+// the Bearer capability token, never just "I know the email" — the token is
+// already proof the email was confirmed by OTP once, which is a stronger bar
+// than the plan's minimum ("no basta con conocer el email"), so this doesn't
+// need a second, parallel OTP flow just for deletion. The anon cookie is
+// deliberately NOT accepted here: an unconfirmed, cookie-only profile has
+// nothing worth an explicit delete flow for — it already ages out via the
+// 7-day purge (/api/internal/purge).
+radiografiaRouter.delete("/profile", async (req: Request, res: Response) => {
+  if (rateLimited(clientIp(req))) return res.status(429).json({ error: "rate_limited" });
+
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader !== "string" || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "access_token_required" });
+  }
+  const token = authHeader.slice("Bearer ".length);
+  const row = await prisma.radiografiaAccessToken.findUnique({ where: { token } });
+  if (!row || (row.expiresAt && row.expiresAt.getTime() < Date.now())) {
+    return res.status(404).json({ error: "profile_not_found" });
+  }
+
+  await prisma.financialProfile.delete({ where: { id: row.profileId } });
+  res.json({ data: { deleted: true } });
+});

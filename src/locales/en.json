@@ -75,6 +75,7 @@
       "cta": "Choose file",
       "addMore": "Add another file",
       "multiHint": "You can add several accounts (e.g. checking + savings)",
+      "uploadDisclosure": "Your file is processed and deleted. We only keep the totals, never your transactions.",
       "analyze_one": "Analyze {{count}} file",
       "analyze_other": "Analyze {{count}} files",
       "trustNoSignup": "No sign-up required",
