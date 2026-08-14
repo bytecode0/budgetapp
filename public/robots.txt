@@ -1,0 +1,10 @@
+# Épica 0 (docs/scope-release.md): only the Radiografía is public until the
+# BudgetApp launches. Everything else on this domain — the authenticated SPA,
+# every /dashboard-style screen it serves from "/" — must not be indexed.
+#
+# TODO (Épica 2/3): once the permanent report page and the luisvespa.com
+# landing exist, add their paths here too. Longest-match wins regardless of
+# rule order, so `Allow: /radiografia` overrides the blanket `Disallow: /`.
+User-agent: *
+Allow: /radiografia
+Disallow: /

@@ -1,4 +1,8 @@
 {
+  "notFound": {
+    "title": "Page not found",
+    "body": "This section isn't available."
+  },
   "radiografia": {
     "hydrating": "Setting up your account with your data…",
     "landing": {

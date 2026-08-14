@@ -4,9 +4,25 @@
 // analyze it in-memory, persist an ephemeral session (TTL) and return the
 // result. No requireAuth. Because it's public and does real work, it carries a
 // light per-IP rate limit and relies on the global 12mb body cap.
+//
+// Épica 0 (docs/scope-release.md), point 4: every route in this project uses
+// requireAuth by convention. This router is THE explicit, listed exception —
+// not an implicit one buried in a comment. Every endpoint below, rate limit
+// tier, and why:
+//   POST /analyze         — costly (parses a file, may call AI)
+//   POST /quick-estimate   — costly (persists a session)
+//   POST /add-account      — costly (parses more files into an existing session)
+//   POST /reclassify       — costly (re-analyzes + writes)
+//   POST /lead             — costly (sends an email)
+//   POST /event            — light (fire-and-forget funnel beacon)
+//   GET  /:id              — light (page refresh / share link)
+//   POST /claim            — requireAuth AND gated behind budgetAppEnabled():
+//                            it writes BudgetApp models, not the Radiografía.
+//   GET  /metrics          — requireAuth (internal analytics, no rate limit).
 import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
+import { budgetAppEnabled } from "../lib/featureFlags.js";
 import { readGrid, externalIdFor } from "../lib/importStatement.js";
 import { gridToTransactions } from "../lib/parsers/bbva.js";
 import { mapColumnsWithAI } from "../lib/xray/aiColumnMap.js";
@@ -28,15 +44,39 @@ const SESSION_TTL_MS = 48 * 60 * 60 * 1000;   // 48h
 const MAX_TXNS = 5000;                        // sanity cap on a single upload
 
 // --- Minimal in-memory per-IP rate limit (public endpoint abuse guard) ---
+// Two tiers: the default is for state-mutating/costly operations (parses a
+// file, may call the AI column-mapper, sends email). A lighter, much higher
+// cap covers read/beacon endpoints (viewing your own report, funnel
+// tracking) — sharing ONE counter across every endpoint would let a few page
+// views + step-completed beacons burn through the same budget a real upload
+// needs, breaking normal use of the funnel it's meant to protect.
 const RATE_WINDOW_MS = 60 * 60 * 1000;        // 1h window
-const RATE_MAX = 20;                          // analyses per IP per window
+const RATE_MAX = 20;                          // costly ops per IP per window
+const LIGHT_RATE_MAX = 300;                   // reads/beacons per IP per window
 const hits = new Map<string, number[]>();
-function rateLimited(ip: string): boolean {
+const lightHits = new Map<string, number[]>();
+
+function checkRate(store: Map<string, number[]>, ip: string, max: number): boolean {
   const now = Date.now();
-  const recent = (hits.get(ip) ?? []).filter(t => now - t < RATE_WINDOW_MS);
+  const recent = (store.get(ip) ?? []).filter(t => now - t < RATE_WINDOW_MS);
   recent.push(now);
-  hits.set(ip, recent);
-  return recent.length > RATE_MAX;
+  store.set(ip, recent);
+  return recent.length > max;
+}
+function rateLimited(ip: string): boolean {
+  return checkRate(hits, ip, RATE_MAX);
+}
+function rateLimitedLight(ip: string): boolean {
+  return checkRate(lightHits, ip, LIGHT_RATE_MAX);
+}
+
+// Client IP for rate-limiting only (never for anything security-critical).
+// Relies on `app.set("trust proxy", ...)` in server/index.ts — with that set,
+// Express validates/trims the X-Forwarded-For chain itself, so `req.ip` is
+// safe to use directly instead of reading the header by hand (which a client
+// can set to whatever they like when there's no proxy validating it).
+function clientIp(req: Request): string {
+  return req.ip || "unknown";
 }
 
 const MAX_FILES = 5;
@@ -99,7 +139,7 @@ const storedToTagged = (stored: StoredTxn[]): TaggedTxn[] =>
 
 // POST /api/xray/analyze — { filename, dataBase64 } | { files:[{filename,dataBase64}] } → { sessionId, result }
 xrayRouter.post("/analyze", async (req: Request, res: Response) => {
-  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
+  const ip = clientIp(req);
   if (rateLimited(ip)) return res.status(429).json({ error: "rate_limited" });
 
   const files = filesFromBody(req.body);
@@ -157,7 +197,7 @@ const MAX_QUICK_DEBTS = 20;
 // lands in the SAME XRaySession-backed funnel (email capture, PDF, account CTA)
 // as the file-upload flow.
 xrayRouter.post("/quick-estimate", async (req: Request, res: Response) => {
-  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
+  const ip = clientIp(req);
   if (rateLimited(ip)) return res.status(429).json({ error: "rate_limited" });
 
   const { monthlyIncome, debts } = req.body ?? {};
@@ -243,6 +283,7 @@ xrayRouter.post("/quick-estimate", async (req: Request, res: Response) => {
 // POST /api/xray/add-account — { sessionId, files:[…] } → append account(s) to an
 // existing session and re-analyze the combined set (detects internal transfers).
 xrayRouter.post("/add-account", async (req: Request, res: Response) => {
+  if (rateLimited(clientIp(req))) return res.status(429).json({ error: "rate_limited" });
   const { sessionId } = req.body ?? {};
   const files = filesFromBody(req.body);
   if (typeof sessionId !== "string" || !files) return res.status(400).json({ error: "invalid_input" });
@@ -287,6 +328,7 @@ xrayRouter.post("/add-account", async (req: Request, res: Response) => {
 // movement corrections (merchant → consumption|wealth), persist, return the new
 // result. Keeps analyze() the single source of truth so the PDF + hydration match.
 xrayRouter.post("/reclassify", async (req: Request, res: Response) => {
+  if (rateLimited(clientIp(req))) return res.status(429).json({ error: "rate_limited" });
   const { sessionId, overrides } = req.body ?? {};
   if (typeof sessionId !== "string" || typeof overrides !== "object" || overrides === null) {
     return res.status(400).json({ error: "invalid_input" });
@@ -330,6 +372,7 @@ xrayRouter.post("/reclassify", async (req: Request, res: Response) => {
 // The PDF + eBook send (Resend) lands in R4; here we just capture the lead.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 xrayRouter.post("/lead", async (req: Request, res: Response) => {
+  if (rateLimited(clientIp(req))) return res.status(429).json({ error: "rate_limited" });
   const { sessionId, email } = req.body ?? {};
   if (typeof sessionId !== "string" || typeof email !== "string" || !EMAIL_RE.test(email)) {
     return res.status(400).json({ error: "invalid_input" });
@@ -358,17 +401,30 @@ xrayRouter.post("/lead", async (req: Request, res: Response) => {
 
 // POST /api/xray/claim — { sessionId } → hydrate the authenticated user's brand-new
 // account from the x-ray transactions. One-shot & idempotent (guarded server-side).
-xrayRouter.post("/claim", requireAuth, async (req: AuthRequest, res: Response) => {
-  const { sessionId } = req.body ?? {};
-  if (typeof sessionId !== "string") return res.status(400).json({ error: "missing_session" });
-  try {
-    const result = await hydrateFromXraySession(req.authUserId!, sessionId);
-    return res.json(result);
-  } catch (err) {
-    console.error("[xray/claim]", err);
-    return res.status(500).json({ error: "hydrate_failed" });
-  }
-});
+// BudgetApp functionality (writes Allocation/Expense/Income), not launching
+// 12 Sep 2026 — gated even though it lives inside the otherwise-public xrayRouter.
+// The flag check MUST run as its own middleware ahead of requireAuth: an
+// unauthenticated request hitting requireAuth first gets a 401, which is
+// exactly the "something's there" leak the flag exists to prevent.
+xrayRouter.post(
+  "/claim",
+  (_req: Request, res: Response, next) => {
+    if (!budgetAppEnabled()) return res.status(404).json({ error: "not_found" });
+    next();
+  },
+  requireAuth,
+  async (req: AuthRequest, res: Response) => {
+    const { sessionId } = req.body ?? {};
+    if (typeof sessionId !== "string") return res.status(400).json({ error: "missing_session" });
+    try {
+      const result = await hydrateFromXraySession(req.authUserId!, sessionId);
+      return res.json(result);
+    } catch (err) {
+      console.error("[xray/claim]", err);
+      return res.status(500).json({ error: "hydrate_failed" });
+    }
+  },
+);
 
 // Whitelisted funnel steps (R6). Anything else is ignored.
 const EVENTS = new Set([
@@ -381,6 +437,10 @@ const EVENTS = new Set([
 
 // POST /api/xray/event — { event, sessionId? } — anonymous funnel analytics. Fire-and-forget.
 xrayRouter.post("/event", async (req: Request, res: Response) => {
+  // Light limiter: this is a fire-and-forget beacon fired several times per
+  // real session (page_view + one paso_completado per step + ...). The
+  // 20/hour costly-op limiter would throttle a single legitimate visitor.
+  if (rateLimitedLight(clientIp(req))) return res.status(204).end();
   const { event, sessionId } = req.body ?? {};
   if (typeof event !== "string" || !EVENTS.has(event)) return res.status(204).end();
   try {
@@ -424,6 +484,7 @@ xrayRouter.get("/metrics", requireAuth, async (_req: AuthRequest, res: Response)
 
 // GET /api/xray/:id — re-fetch a result (page refresh / share link). Not the raw rows.
 xrayRouter.get("/:id", async (req: Request, res: Response) => {
+  if (rateLimitedLight(clientIp(req))) return res.status(429).json({ error: "rate_limited" });
   const session = await prisma.xRaySession.findUnique({
     where: { id: req.params.id },
     select: { result: true, expiresAt: true, bank: true, txnCount: true },
