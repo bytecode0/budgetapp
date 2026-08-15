@@ -75,3 +75,31 @@ export function saveFields(
     accessToken,
   );
 }
+
+// File → base64 (strips the "data:...;base64," prefix), same approach as useXray.ts.
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const s = String(reader.result);
+      resolve(s.slice(s.indexOf(',') + 1));
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+export interface ExtractoDetected {
+  monthlyIncome: number;
+  accountBalance: number | null;
+  debtsCount: number;
+}
+
+export async function uploadExtracto(files: File[], accessToken: string | null) {
+  const uploaded = await Promise.all(files.map(async f => ({ filename: f.name, dataBase64: await fileToBase64(f) })));
+  return call<{ completeness: { pct: number; missing: string[]; classifiable: boolean }; stage: StageStatus; detected: ExtractoDetected }>(
+    '/profile/extracto',
+    { method: 'POST', body: JSON.stringify({ files: uploaded }) },
+    accessToken,
+  );
+}

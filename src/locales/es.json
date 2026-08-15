@@ -83,8 +83,29 @@
       },
       "enrichment": {
         "title": "¿Quieres afinar el detalle?",
-        "subtitle": "Puedes subir un extracto bancario más adelante para un análisis más preciso. Por ahora, con esto ya podemos calcular tu radiografía.",
-        "skip": "Ver mi radiografía"
+        "subtitle": "Sube un extracto bancario para un análisis más preciso — es opcional, con lo que ya nos diste podemos calcular tu radiografía igual.",
+        "dropTitle": "Suelta tu extracto aquí",
+        "dropHint": "o haz clic para elegir un archivo",
+        "cta": "Elegir archivo",
+        "addMore": "Añadir otro archivo",
+        "multiHint": "Puedes añadir varias cuentas",
+        "uploadDisclosure": "Tu archivo se procesa y se borra. Guardamos solo los totales, nunca tus movimientos.",
+        "analyze": "Analizar extracto",
+        "analyzing": "Analizando…",
+        "detectedTitle": "Esto detectamos en tu extracto:",
+        "detectedIncome": "Ingreso mensual: {{amount}}",
+        "detectedBalance": "Saldo: {{amount}}",
+        "detectedDebts_one": "{{count}} deuda detectada",
+        "detectedDebts_other": "{{count}} deudas detectadas",
+        "continue": "Continuar",
+        "skip": "Ver mi radiografía",
+        "errors": {
+          "missing_file": "Elige al menos un archivo.",
+          "too_many_files": "Máximo 5 archivos.",
+          "unrecognized_format": "No pudimos leer este formato de extracto.",
+          "unreadable_file": "No pudimos abrir el archivo.",
+          "too_many_transactions": "El extracto tiene demasiados movimientos."
+        }
       },
       "result": {
         "title": "¡Ya la tenemos!",

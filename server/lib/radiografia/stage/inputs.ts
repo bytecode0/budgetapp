@@ -16,13 +16,20 @@ export interface StageInputs {
 }
 
 export interface FieldValueRow { fieldKey: string; valueCents: number; source: string }
-export interface DebtRow { kind: string; monthlyPayment: number }
+export interface DebtRow { kind: string; monthlyPayment: number; source: string }
 
-// Q6 (plan §6) — precedence between manual/extracto/derivado when the same
-// field has values from more than one source — is still open. Inconsequential
-// today: F11 (extracto in the new onboarding) doesn't exist yet, so "manual"
-// is the only source that ever appears. Revisit when it does.
-const SOURCE_PRECEDENCE = ["manual", "extracto", "derivado"];
+// Q6 (plan §6), resolved: extracto wins for spending/debt/balance — a bank
+// statement observes what actually happened, and is more reliable than a
+// remembered estimate. Manual wins for income — a short statement window can
+// miss irregular or multi-source income, and the user knows their own net
+// better than a few months of deposits do. Both values are always stored
+// (principio 3, discrepancies are an asset); this only decides which one the
+// engine computes with.
+const INCOME_KEYS = new Set(["income_regular", "income_floor"]);
+
+function precedenceFor(fieldKey: string): string[] {
+  return INCOME_KEYS.has(fieldKey) ? ["manual", "extracto", "derivado"] : ["extracto", "manual", "derivado"];
+}
 
 function resolveFieldValues(rows: FieldValueRow[]): Map<string, number> {
   const byField = new Map<string, FieldValueRow[]>();
@@ -32,7 +39,7 @@ function resolveFieldValues(rows: FieldValueRow[]): Map<string, number> {
   }
   const resolved = new Map<string, number>();
   for (const [key, group] of byField) {
-    for (const source of SOURCE_PRECEDENCE) {
+    for (const source of precedenceFor(key)) {
       const hit = group.find((g) => g.source === source);
       if (hit) {
         resolved.set(key, hit.valueCents);
@@ -41,6 +48,17 @@ function resolveFieldValues(rows: FieldValueRow[]): Map<string, number> {
     }
   }
   return resolved;
+}
+
+// Same precedence idea applied to a row SET rather than a single value: debts
+// can't be reconciled field-by-field the way ProfileFieldValue can (they're N
+// rows, not one number), so if the statement detected any debts at all, its
+// view wins wholesale over the manual list — including overriding a manual
+// "no tengo deudas" answer, which is exactly the kind of discrepancy this
+// exists to surface rather than hide.
+function resolveDebts(debts: DebtRow[]): DebtRow[] {
+  const extracto = debts.filter((d) => d.source === "extracto");
+  return extracto.length > 0 ? extracto : debts.filter((d) => d.source === "manual");
 }
 
 export function buildStageInputs(params: {
@@ -78,7 +96,8 @@ export function buildStageInputs(params: {
   const investmentMonthly = values.get("investment_monthly") ?? 0;
 
   const excludedKinds: readonly string[] = STAGE_CONFIG_V1.debtExcludedKinds;
-  const nonMortgageDebts = params.debts.filter((d) => !excludedKinds.includes(d.kind));
+  const resolvedDebts = resolveDebts(params.debts);
+  const nonMortgageDebts = resolvedDebts.filter((d) => !excludedKinds.includes(d.kind));
   const nonMortgageDebtMonthlyTotal = nonMortgageDebts.reduce((sum, d) => sum + d.monthlyPayment, 0);
 
   return {

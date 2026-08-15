@@ -49,6 +49,12 @@ export function OnboardingFlow() {
     setStep('block3_enrichment');
   };
 
+  const handleEnrichmentDone = (newStageId: string | null, newBranchId: string | null) => {
+    setStageId(newStageId);
+    setBranchId(newBranchId);
+    setStep('result');
+  };
+
   if (loading) return <LoadingSpinner />;
 
   return (
@@ -59,8 +65,12 @@ export function OnboardingFlow() {
             <Block1Form draft={draft} onChange={updateDraft} onSubmit={handleBlock1Submit} submitting={submitting} />
           )}
           {step === 'block2_email' && !emailVerified && <EmailBlock onVerified={handleEmailVerified} />}
-          {step === 'block2_email' && emailVerified && <EnrichmentBlock onSkip={() => setStep('result')} />}
-          {step === 'block3_enrichment' && <EnrichmentBlock onSkip={() => setStep('result')} />}
+          {step === 'block2_email' && emailVerified && (
+            <EnrichmentBlock accessToken={accessToken} onDone={handleEnrichmentDone} onSkip={() => setStep('result')} />
+          )}
+          {step === 'block3_enrichment' && (
+            <EnrichmentBlock accessToken={accessToken} onDone={handleEnrichmentDone} onSkip={() => setStep('result')} />
+          )}
           {step === 'result' && <ResultPlaceholder email={email} stageId={stageId} branchId={branchId} />}
         </motion.div>
       </AnimatePresence>

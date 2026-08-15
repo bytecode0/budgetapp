@@ -83,8 +83,29 @@
       },
       "enrichment": {
         "title": "Want to fine-tune the detail?",
-        "subtitle": "You can upload a bank statement later for a more precise analysis. For now, this is enough to calculate your radiografía.",
-        "skip": "See my radiografía"
+        "subtitle": "Upload a bank statement for a more precise analysis — it's optional, we can already calculate your radiografía with what you gave us.",
+        "dropTitle": "Drop your statement here",
+        "dropHint": "or click to choose a file",
+        "cta": "Choose file",
+        "addMore": "Add another file",
+        "multiHint": "You can add several accounts",
+        "uploadDisclosure": "Your file is processed and deleted. We only keep the totals, never your transactions.",
+        "analyze": "Analyze statement",
+        "analyzing": "Analyzing…",
+        "detectedTitle": "This is what we detected in your statement:",
+        "detectedIncome": "Monthly income: {{amount}}",
+        "detectedBalance": "Balance: {{amount}}",
+        "detectedDebts_one": "{{count}} debt detected",
+        "detectedDebts_other": "{{count}} debts detected",
+        "continue": "Continue",
+        "skip": "See my radiografía",
+        "errors": {
+          "missing_file": "Choose at least one file.",
+          "too_many_files": "5 files maximum.",
+          "unrecognized_format": "We couldn't read this statement format.",
+          "unreadable_file": "We couldn't open the file.",
+          "too_many_transactions": "This statement has too many transactions."
+        }
       },
       "result": {
         "title": "We've got it!",

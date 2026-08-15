@@ -66,7 +66,7 @@ test("stage engine: just below the 0.5x floor is still Etapa 1", () => {
 test("stage engine: Etapa 2 (liberación) — has colchón, has non-mortgage debt", () => {
   const result = classify(
     { account_balance: 700, assets_cuasi_efectivo: 0 },
-    [{ kind: "credit_card", monthlyPayment: cents(150) }],
+    [{ kind: "credit_card", monthlyPayment: cents(150), source: "manual" }],
   );
   assert.equal(result.stageId, "liberacion");
 });
@@ -74,7 +74,7 @@ test("stage engine: Etapa 2 (liberación) — has colchón, has non-mortgage deb
 test("stage engine: a mortgage-only debt does NOT count as 'posee deudas' — skips straight past Etapa 2", () => {
   const result = classify(
     { account_balance: 700, assets_cuasi_efectivo: 0 },
-    [{ kind: "mortgage", monthlyPayment: cents(900) }],
+    [{ kind: "mortgage", monthlyPayment: cents(900), source: "manual" }],
   );
   assert.notEqual(result.stageId, "liberacion");
   assert.equal(result.stageId, "terreno_firme");
@@ -123,4 +123,44 @@ test("stage engine: irregular income uses income_floor, not income_regular, for 
 test("stage engine: assets_mercado_volatil never counts toward colchón", () => {
   const result = classify({ account_balance: 0, assets_cuasi_efectivo: 0, assets_mercado_volatil: 100000 });
   assert.equal(result.stageId, "cimientos");
+});
+
+test("stage engine: precedence (Q6) — manual income wins over a conflicting extracto value", () => {
+  const fieldValues: FieldValueRow[] = [
+    { fieldKey: "income_regular", valueCents: cents(2500), source: "manual" },
+    { fieldKey: "income_regular", valueCents: cents(500), source: "extracto" }, // a short/partial statement would understate it
+    { fieldKey: "housing_payment", valueCents: cents(800), source: "manual" },
+    { fieldKey: "essentials_total", valueCents: cents(600), source: "manual" },
+    { fieldKey: "account_balance", valueCents: cents(700), source: "manual" },
+    { fieldKey: "assets_cuasi_efectivo", valueCents: 0, source: "manual" },
+  ];
+  const inputs = buildStageInputs({ fieldValues, debts: [], hasDebtsAnswer: true, incomeType: "regular" });
+  // With the (wrong) extracto income of 500€, cashflow would go negative; with
+  // the manual 2500€ it doesn't — this is really asserting which one won.
+  assert.equal(inputs.cashflowNet, cents(2500) - cents(800 + 600));
+});
+
+test("stage engine: precedence (Q6) — extracto balance wins over a conflicting manual value", () => {
+  const fieldValues: FieldValueRow[] = [
+    ...fields({ account_balance: 100 }), // manual guess: barely anything
+    { fieldKey: "account_balance", valueCents: cents(5000), source: "extracto" }, // the statement says otherwise
+  ];
+  const inputs = buildStageInputs({ fieldValues, debts: [], hasDebtsAnswer: true, incomeType: "regular" });
+  assert.equal(inputs.colchonDisponible, cents(5000));
+});
+
+test("stage engine: precedence (Q6) — extracto debts override a manual 'no tengo deudas' answer", () => {
+  const fieldValues = fields({ account_balance: 700 });
+  const debts: DebtRow[] = [{ kind: "credit_card", monthlyPayment: cents(150), source: "extracto" }];
+  const inputs = buildStageInputs({ fieldValues, debts, hasDebtsAnswer: true, incomeType: "regular" });
+  const result = evaluateStage(inputs);
+  assert.equal(result.stageId, "liberacion");
+});
+
+test("stage engine: precedence (Q6) — manual debts still count when no extracto debts exist", () => {
+  const fieldValues = fields({ account_balance: 700 });
+  const debts: DebtRow[] = [{ kind: "credit_card", monthlyPayment: cents(150), source: "manual" }];
+  const inputs = buildStageInputs({ fieldValues, debts, hasDebtsAnswer: true, incomeType: "regular" });
+  const result = evaluateStage(inputs);
+  assert.equal(result.stageId, "liberacion");
 });

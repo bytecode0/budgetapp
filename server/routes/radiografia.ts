@@ -26,6 +26,8 @@ import {
 import { sendRadiografiaEmailCode } from "../lib/mailer.js";
 import { DEBTS_NONE_FLAG, findField } from "../lib/radiografia/fields/registry.v1.js";
 import { recalculateStage } from "../lib/radiografia/stage/recalculate.js";
+import { parseFile, dedupeTxns, filesFromBody } from "../lib/xray/parseUpload.js";
+import { analyze } from "../lib/xray/analyze.js";
 
 export const radiografiaRouter = Router();
 
@@ -389,6 +391,99 @@ radiografiaRouter.post("/profile/fields", async (req: Request, res: Response) =>
 
   res.json({ data: { completeness, stage: { stageId: stage.stageId, branchId: stage.branchId, classifiable: stage.classifiable } } });
 });
+
+const EXTRACTO_MAX_FILES = 5;
+const EXTRACTO_MAX_TXNS = 5000;
+
+// POST /api/radiografia/profile/extracto — Bloque 3 (plan F11, brought
+// forward from "flagged/waitlist"): the optional bank-statement step. Reuses
+// the SAME parser + analyze() pipeline as the live /api/xray/analyze — that
+// pipeline stays the one place statement analysis happens, per the plan's own
+// "reutilizar, no reconstruir" call for analyze.ts.
+//
+// Deliberately does NOT persist an XRaySession or any raw transaction row:
+// unlike the live flow, this onboarding has no reclassify/add-account step
+// yet that would need them, so there's nothing to keep them for. Only
+// aggregates ever reach ProfileFieldValue/ProfileDebt (source: "extracto") —
+// stricter than plan §4.1's own 60-minute workspace, since here there's no
+// workspace at all.
+radiografiaRouter.post("/profile/extracto", async (req: Request, res: Response) => {
+  if (rateLimited(clientIp(req))) return res.status(429).json({ error: "rate_limited" });
+  const profile = await resolveProfile(req);
+  if (!profile) return res.status(404).json({ error: "profile_not_found" });
+
+  const files = filesFromBody(req.body);
+  if (!files) return res.status(400).json({ error: "missing_file" });
+  if (files.length > EXTRACTO_MAX_FILES) return res.status(400).json({ error: "too_many_files" });
+
+  let merged: Awaited<ReturnType<typeof parseFile>>["txns"] = [];
+  let anyReadable = false;
+  for (let i = 0; i < files.length; i++) {
+    const { txns, bank } = await parseFile(files[i], i);
+    if (bank !== "unreadable") anyReadable = true;
+    if (txns.length) merged.push(...txns);
+  }
+  if (merged.length === 0) return res.status(422).json({ error: anyReadable ? "unrecognized_format" : "unreadable_file" });
+
+  merged = dedupeTxns(merged);
+  if (merged.length > EXTRACTO_MAX_TXNS) return res.status(413).json({ error: "too_many_transactions" });
+
+  const result = analyze(merged);
+  const months = result.period.months;
+  const toCents = (euros: number) => Math.round(euros * 100);
+
+  const fields: FieldInput[] = [
+    { key: "income_regular", valueCents: toCents(result.summary.totalIncome / months) },
+    { key: "saving_monthly", valueCents: toCents(result.wealth.savings / months) },
+    { key: "investment_monthly", valueCents: toCents(result.wealth.investment / months) },
+    { key: "giving_monthly", valueCents: toCents(result.wealth.giving / months) },
+  ];
+  if (result.balances.hasData) {
+    fields.push({ key: "account_balance", valueCents: toCents(result.balances.total) });
+  }
+
+  const debts: DebtInput[] = result.debts.items.map((d) => ({ kind: d.kind, monthlyPayment: toCents(d.monthlyAmount) }));
+  if (result.debts.mortgage?.detected) {
+    debts.push({ kind: "mortgage", monthlyPayment: toCents(result.debts.mortgage.monthlyAmount) });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const f of fields) {
+      await tx.profileFieldValue.upsert({
+        where: { profileId_fieldKey_source: { profileId: profile.id, fieldKey: f.key, source: "extracto" } },
+        create: { profileId: profile.id, fieldKey: f.key, valueCents: f.valueCents, source: "extracto" },
+        update: { valueCents: f.valueCents, capturedAt: new Date() },
+      });
+    }
+    await tx.profileDebt.deleteMany({ where: { profileId: profile.id, source: "extracto" } });
+    if (debts.length) {
+      await tx.profileDebt.createMany({
+        data: debts.map((d) => ({ profileId: profile.id, kind: d.kind, monthlyPayment: d.monthlyPayment, source: "extracto" })),
+      });
+    }
+  });
+
+  const { completeness, stage } = await recalculateStage(
+    profile.id,
+    profile.stageCache === null ? "new_radiografia" : "threshold_cross",
+  );
+
+  res.json({
+    data: {
+      completeness,
+      stage: { stageId: stage.stageId, branchId: stage.branchId, classifiable: stage.classifiable },
+      detected: {
+        monthlyIncome: eurRound(result.summary.totalIncome / months),
+        accountBalance: result.balances.hasData ? eurRound(result.balances.total) : null,
+        debtsCount: debts.length,
+      },
+    },
+  });
+});
+
+function eurRound(n: number): number {
+  return Math.round(n * 100) / 100;
+}
 
 // DELETE /api/radiografia/profile — borrado a petición (plan §4.5). Requires
 // the Bearer capability token, never just "I know the email" — the token is

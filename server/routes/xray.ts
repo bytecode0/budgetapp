@@ -23,11 +23,8 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { budgetAppEnabled } from "../lib/featureFlags.js";
-import { readGrid, externalIdFor } from "../lib/importStatement.js";
-import { gridToTransactions } from "../lib/parsers/bbva.js";
-import { mapColumnsWithAI } from "../lib/xray/aiColumnMap.js";
-import { gridToTransactionsGeneric } from "../lib/xray/genericParser.js";
 import { normalizeMerchant } from "../lib/normalizeMerchant.js";
+import { parseFile, dedupeTxns, filesFromBody, type FileInput } from "../lib/xray/parseUpload.js";
 import { suggestCategories } from "../lib/ai/suggestCategories.js";
 import { aiEnabled } from "../lib/ai/client.js";
 import { analyze, type XRayResult, type Overrides, type TaggedTxn } from "../lib/xray/analyze.js";
@@ -80,55 +77,10 @@ function clientIp(req: Request): string {
 }
 
 const MAX_FILES = 5;
-interface FileInput { filename: string; dataBase64: string }
 // `extra` must round-trip: it carries the bank's other detail columns, which is
 // where most of the meaning lives. Dropping it here would make reclassify and
 // add-account re-analyze with less information than the first analysis did.
 interface StoredTxn { date: string; concept: string; amount: number; balance: number | null; fileIndex?: number; extra?: string }
-
-// Parse one uploaded file into tagged transactions: deterministic BBVA parser
-// first, AI column-mapping fallback second. Never throws.
-async function parseFile(f: FileInput, fileIndex: number): Promise<{ txns: TaggedTxn[]; bank: string }> {
-  let grid: unknown[][];
-  try { grid = readGrid(Buffer.from(f.dataBase64, "base64"), f.filename); }
-  catch { return { txns: [], bank: "unreadable" }; }
-  try {
-    const txns = gridToTransactions(grid).filter(t => t.amount !== 0);
-    return { txns: txns.map(t => ({ ...t, fileIndex })), bank: "bbva" };
-  } catch {
-    const mapping = aiEnabled() ? await mapColumnsWithAI(grid) : null;
-    if (mapping) {
-      const txns = gridToTransactionsGeneric(grid, mapping).filter(t => t.amount !== 0);
-      return { txns: txns.map(t => ({ ...t, fileIndex })), bank: "generic" };
-    }
-    return { txns: [], bank: "unrecognized" };
-  }
-}
-
-// Drop exact duplicate rows (same file uploaded twice, or overlapping ranges).
-function dedupeTxns(txns: TaggedTxn[]): TaggedTxn[] {
-  const seen = new Set<string>();
-  const out: TaggedTxn[] = [];
-  for (const t of txns) {
-    const id = externalIdFor(t, normalizeMerchant(t.concept));
-    if (seen.has(id)) continue;
-    seen.add(id);
-    out.push(t);
-  }
-  return out;
-}
-
-// Accept either { filename, dataBase64 } (back-compat) or { files: [...] }.
-function filesFromBody(body: any): FileInput[] | null {
-  if (Array.isArray(body?.files)) {
-    const fs = body.files.filter((f: any) => typeof f?.filename === "string" && typeof f?.dataBase64 === "string" && f.dataBase64);
-    return fs.length ? fs : null;
-  }
-  if (typeof body?.filename === "string" && typeof body?.dataBase64 === "string" && body.dataBase64) {
-    return [{ filename: body.filename, dataBase64: body.dataBase64 }];
-  }
-  return null;
-}
 
 const storableTxns = (txns: TaggedTxn[]) =>
   txns.map(t => ({ date: t.date.toISOString(), concept: t.concept, amount: t.amount, balance: t.balance, fileIndex: t.fileIndex ?? 0, extra: t.extra }));
