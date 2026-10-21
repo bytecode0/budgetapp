@@ -18,6 +18,14 @@ export const EMPTY_CARD_FIELDS: CardFieldsValue = {
 
 const CARD_PAYMENT_MODES: CardPaymentMode[] = ['full', 'minimum'];
 
+/** i18n key of what's wrong with the card fields, or null if they're valid.
+ *  A card paid by its minimum needs that minimum: without it the debt's
+ *  budget line is 0 and the payoff never ends. */
+export function cardFieldsError(v: CardFieldsValue): string | null {
+  if (v.cardPaymentMode === 'minimum' && !(parseFloat(v.cardMinimumPayment) > 0)) return 'accounts.cardMinimumRequired';
+  return null;
+}
+
 /** The card settings to send with the account (POST/PATCH /api/accounts). */
 export function cardSettingsPayload(v: CardFieldsValue): Required<CardSettingsPayload> {
   return {

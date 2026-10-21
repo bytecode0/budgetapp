@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
 import { useAccounts, type Account, type AccountType } from '../hooks/useAccounts';
-import { CardFields, EMPTY_CARD_FIELDS, cardSettingsPayload, type CardFieldsValue } from './shared/CardFields';
+import { CardFields, EMPTY_CARD_FIELDS, cardFieldsError, cardSettingsPayload, type CardFieldsValue } from './shared/CardFields';
 import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSheet';
 import { useHousehold } from '../hooks/useHousehold';
 import { useBanking, type BankInstitution, type BankProviderAccount, type BankConnection as BankConnectionInfo } from '../hooks/useBanking';
@@ -235,6 +235,8 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
 
   const handleSubmit = async () => {
     if (!form.name.trim()) { toast.error(t('accounts.nameRequired')); return; }
+    const cardError = isCard ? cardFieldsError(form) : null;
+    if (cardError) { toast.error(t(cardError)); return; }
     setSaving(true);
     // Turning an account into a card makes the field mean "owed" — send it.
     const balanceChanged = !form.id || form.currentBalance !== form.loadedBalance || form.type !== form.loadedType;

@@ -9,7 +9,8 @@ interface OnboardingResult {
   committed: number;     // euros
   pctCommitted: number;
   totalOwed: number;     // euros
-  freedomMonths: number | null;
+  hasConsumerDebt: boolean;
+  freedomMonths: number | null; // null: no consumer debt, or never paid off
   payoffOrder: { id: string; name: string; monthPaidOff: number }[];
   budgeted: number;      // euros
   leftover: number;      // euros
@@ -98,12 +99,12 @@ export function ResultScreen({ onDone }: ResultScreenProps) {
             </div>
             <div className="bg-card border border-border rounded-2xl p-6">
               <p className="text-xs text-muted-foreground">{t('onboarding.result.freedomDate')}</p>
-              {freedomDate ? (
+              {!result.hasConsumerDebt ? (
+                <p className="text-sm mt-1">{t('onboarding.result.freedomNone')}</p>
+              ) : freedomDate ? (
                 <p className="text-2xl font-display capitalize">{freedomDate.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}</p>
               ) : (
-                <p className="text-sm mt-1">
-                  {result.payoffOrder.length === 0 ? t('onboarding.result.freedomNone') : t('onboarding.result.freedomUnknown')}
-                </p>
+                <p className="text-sm mt-1 text-red-500">{t('onboarding.result.freedomNever')}</p>
               )}
             </div>
             <div className="bg-card border border-border rounded-2xl p-6">

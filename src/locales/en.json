@@ -604,7 +604,8 @@
     "cardOwedHint": "If you already owe something on this card, enter it here. From now on, every expense \"Paid with\" this card raises the debt, and every payment lowers it.",
     "cardOwedAdjustHint": "If it doesn't match your bank, correct it here. The difference (interest, an unrecorded purchase) counts as previous debt.",
     "payCard": "Pay card",
-    "cardHasMovementsError": "This card already has purchases or payments recorded: it can't change type."
+    "cardHasMovementsError": "This card already has purchases or payments recorded: it can't change type.",
+    "cardMinimumRequired": "Enter the card's minimum payment"
   },
   "editExpense": {
     "title": "Edit expense",
@@ -1110,7 +1111,6 @@
       "totalOwed": "Total debt",
       "freedomDate": "Debt-free date",
       "freedomNone": "No consumer debt",
-      "freedomUnknown": "Current payments never pay it off",
       "leftover": "What is left",
       "leftoverDesc": "After debts and your fixed and variable expenses.",
       "leftoverNegative": "Your plan spends more than comes in: review variable expenses first.",
@@ -1118,7 +1118,8 @@
       "monthN": "month {{n}}",
       "unnamedDebt": "Debt",
       "loadFailed": "Could not calculate the result",
-      "goToDashboard": "Go to my dashboard"
+      "goToDashboard": "Go to my dashboard",
+      "freedomNever": "With these payments the debt is never paid off: raise the payment."
     },
     "bank": {
       "title": "Your bank account",

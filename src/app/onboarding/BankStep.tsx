@@ -1,46 +1,59 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Landmark, Lightbulb } from 'lucide-react';
+import { Landmark, Lightbulb, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAccounts } from '../hooks/useAccounts';
+import { useOnboardingNeeded } from '../hooks/useOnboardingNeeded';
 import { useMoney } from './useMoney';
 
-// Name the server gives the checking account it seeds for every user
-// (DEFAULT_ACCOUNT_NAME in server/lib/onboarding.ts). Shown as an empty field,
-// so the user names their real bank.
-const SEEDED_ACCOUNT_NAME = 'Main account';
-
 // The main bank account: where income lands and card payments come from.
-// Every user already has the seeded checking account, so this step fills that
-// one in (name + balance) instead of adding a second one. Saved on blur.
+// Every user already has a seeded checking account; while it's untouched the
+// server reports it as defaultAccountId, and this step fills it in (name +
+// balance) instead of adding a second one. Coming back to the step edits the
+// same manual account. A bank-linked account is never picked: its name and
+// balance come from the bank — then a new manual account is created.
+// Saved on blur.
 export function BankStep() {
   const { t } = useTranslation();
   const { currency } = useMoney();
-  const { accounts, createAccount, updateAccount } = useAccounts();
+  const { accounts, loading: accountsLoading, createAccount, updateAccount } = useAccounts();
+  const { defaultAccountId, loading: statusLoading } = useOnboardingNeeded(true);
 
-  const checking = accounts.find(a => a.type === 'checking' && !a.isArchived);
+  const manualChecking = accounts.filter(a => a.type === 'checking' && !a.isArchived && !a.bankConnectionId);
+  const target = manualChecking.find(a => a.id === defaultAccountId) ?? manualChecking[0];
+  const ready = !accountsLoading && !statusLoading;
 
   const [name, setName] = useState('');
   const [balance, setBalance] = useState('');
 
   useEffect(() => {
-    if (!checking) return;
-    setName(checking.name === SEEDED_ACCOUNT_NAME ? '' : checking.name);
-    setBalance(checking.currentBalance ? String(checking.currentBalance) : '');
-  }, [checking?.id]);
+    if (!ready || !target) return;
+    // The untouched default shows empty, so the user names their real bank.
+    setName(target.id === defaultAccountId ? '' : target.name);
+    setBalance(target.currentBalance ? String(target.currentBalance) : '');
+  }, [ready, target?.id]);
 
   const persist = async () => {
+    if (!ready) return;
     if (!name.trim() && balance === '') return; // nothing entered yet
     const payload = {
       name: name.trim() || t('onboarding.bank.defaultName'),
       currentBalance: parseFloat(balance) || 0,
     };
-    if (checking && checking.name === payload.name && checking.currentBalance === payload.currentBalance) return;
-    const result = checking
-      ? await updateAccount(checking.id, payload)
+    if (target && target.name === payload.name && target.currentBalance === payload.currentBalance) return;
+    const result = target
+      ? await updateAccount(target.id, payload)
       : await createAccount({ ...payload, type: 'checking' });
     if ('error' in result) toast.error(result.error as string);
   };
+
+  if (!ready) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="bg-card p-8 sm:p-10 rounded-2xl shadow-xl border border-border">

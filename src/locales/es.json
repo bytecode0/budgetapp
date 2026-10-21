@@ -604,7 +604,8 @@
     "cardOwedHint": "Si ya debes algo con esta tarjeta, ponlo aquí. Desde ahora, cada gasto «Pagado con» esta tarjeta sube la deuda, y cada pago la baja.",
     "cardOwedAdjustHint": "Si no coincide con tu banco, corrígelo aquí. La diferencia (intereses, alguna compra sin apuntar) cuenta como deuda previa.",
     "payCard": "Pagar tarjeta",
-    "cardHasMovementsError": "Esta tarjeta ya tiene compras o pagos registrados: no puede cambiar de tipo."
+    "cardHasMovementsError": "Esta tarjeta ya tiene compras o pagos registrados: no puede cambiar de tipo.",
+    "cardMinimumRequired": "Indica el pago mínimo de la tarjeta"
   },
   "editExpense": {
     "title": "Editar gasto",
@@ -1110,7 +1111,6 @@
       "totalOwed": "Deuda total",
       "freedomDate": "Fecha de libertad",
       "freedomNone": "Sin deuda de consumo",
-      "freedomUnknown": "No se salda con los pagos actuales",
       "leftover": "Lo que sobra",
       "leftoverDesc": "Tras las deudas y tus gastos fijos y variables.",
       "leftoverNegative": "Tu plan gasta más de lo que entra: revisa primero los gastos variables.",
@@ -1118,7 +1118,8 @@
       "monthN": "mes {{n}}",
       "unnamedDebt": "Deuda",
       "loadFailed": "No se pudo calcular el resultado",
-      "goToDashboard": "Ir a mi panel"
+      "goToDashboard": "Ir a mi panel",
+      "freedomNever": "Con estos pagos la deuda no se salda nunca: sube el pago."
     },
     "bank": {
       "title": "Tu cuenta del banco",

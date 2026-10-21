@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Loader2, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAccounts } from '../hooks/useAccounts';
-import { CardFields, EMPTY_CARD_FIELDS, cardSettingsPayload, type CardFieldsValue } from '../components/shared/CardFields';
+import { CardFields, EMPTY_CARD_FIELDS, cardFieldsError, cardSettingsPayload, type CardFieldsValue } from '../components/shared/CardFields';
 import { useMoney } from './useMoney';
 
 // Credit cards, exactly as in Accounts: a card is an account (type "card") and
@@ -23,6 +23,8 @@ export function CardsStep() {
 
   const handleSave = async () => {
     if (!name.trim()) { toast.error(t('accounts.nameRequired')); return; }
+    const cardError = cardFieldsError(fields);
+    if (cardError) { toast.error(t(cardError)); return; }
     setSaving(true);
     const result = await createAccount({
       name: name.trim(),

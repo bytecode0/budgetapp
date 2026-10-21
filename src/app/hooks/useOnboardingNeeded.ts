@@ -13,6 +13,8 @@ export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 export function useOnboardingNeeded(enabled: boolean) {
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [missing, setMissing] = useState<OnboardingStep[]>([]);
+  // The seeded checking account while still untouched (server/lib/onboarding.ts).
+  const [defaultAccountId, setDefaultAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -24,6 +26,7 @@ export function useOnboardingNeeded(enabled: boolean) {
       const { data } = await res.json();
       setNeedsOnboarding(Boolean(data.needsOnboarding));
       setMissing(Array.isArray(data.missing) ? data.missing : []);
+      setDefaultAccountId(typeof data.defaultAccountId === 'string' ? data.defaultAccountId : null);
     } catch {
       // Best-effort: if the check fails, don't block the user behind a wizard
       // they can't get past — fall through to the normal dashboard.
@@ -36,5 +39,5 @@ export function useOnboardingNeeded(enabled: boolean) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  return { needsOnboarding, missing, loading, refresh };
+  return { needsOnboarding, missing, defaultAccountId, loading, refresh };
 }

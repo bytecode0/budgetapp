@@ -36,6 +36,7 @@ export interface Account {
   visibility?: 'private' | 'household'; // Epic H2
   householdId?: string | null;
   card?: CardInfo | null;
+  bankConnectionId?: string | null; // set when kept in sync by Open Banking
   createdAt: string;
   updatedAt: string;
 }
