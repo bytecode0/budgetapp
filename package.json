@@ -18,6 +18,7 @@
     "backfill:attribution": "tsx server/scripts/backfillExpenseAttribution.ts",
     "seed:phasef": "tsx server/scripts/seedPhaseF.ts",
     "reset:onboarding": "tsx server/scripts/resetOnboardingForTesting.ts",
+    "backfill:installments": "tsx server/scripts/backfillInstallmentBalances.ts",
     "typecheck:server": "tsc --noEmit -p tsconfig.server.json",
     "typecheck:app": "tsc --noEmit -p tsconfig.json",
     "typecheck": "npm run typecheck:server && npm run typecheck:app",
