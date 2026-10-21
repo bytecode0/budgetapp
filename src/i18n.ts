@@ -20,9 +20,8 @@ i18n
 /**
  * Keep <html lang> in sync with the language actually being rendered.
  *
- * index.html ships lang="es" for the public Radiografía, but the attribute has
- * to follow i18next afterwards: the Radiografía forces 'es' at runtime while the
- * authenticated BudgetApp can be switched to 'en' (LanguageContext). A stale
+ * index.html ships lang="es" (the default), but the app can be switched to
+ * 'en' (LanguageContext), so the attribute follows i18next. A stale
  * `lang` is not cosmetic — it tells a screen reader which pronunciation rules to
  * apply, so Spanish read with English rules becomes hard to follow, and it is
  * what search engines trust to classify the page's language.

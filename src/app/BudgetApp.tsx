@@ -1,8 +1,5 @@
 // The entire authenticated LifePlan BudgetApp tree — providers, shell, and every
-// screen. Lives in its own module (rather than inline in App.tsx) so Rollup can
-// tree-shake this whole subtree out of the production bundle when
-// VITE_ENABLE_BUDGETAPP is statically "false" at build time (see App.tsx).
-// Not launching 12 Sep 2026; only the Radiografía is public. See CLAUDE.md.
+// screen.
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LayoutDashboard, Sparkles, Wallet, Target, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight, Landmark, Users, CreditCard } from 'lucide-react';
@@ -34,7 +31,7 @@ import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/useP
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
 
 function AppInner() {
-  const { user, loading, hydrating, logout, refreshUser } = useAuth();
+  const { user, loading, logout, refreshUser } = useAuth();
   const { needsOnboarding, loading: onboardingLoading, refresh: refreshOnboardingStatus } = useOnboardingNeeded(Boolean(user));
   const { t } = useTranslation();
   const { darkMode, updateDarkMode, dbLanguage, updateLanguage, updatePayday } = useAllocations();
@@ -161,8 +158,8 @@ function AppInner() {
     }
   };
 
-  // Show loading screen while checking auth (or importing the Radiografía data).
-  if (loading || hydrating) {
+  // Show loading screen while checking auth.
+  if (loading) {
     return (
       <div className="size-full bg-background flex items-center justify-center">
         <motion.div
@@ -175,7 +172,6 @@ function AppInner() {
             <Target className="w-11 h-11 text-white" />
           </div>
           <h2 className="text-2xl font-display text-primary mb-2">LifePlan</h2>
-          {hydrating && <p className="text-sm text-muted-foreground mb-4">{t('radiografia.hydrating')}</p>}
           <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto" />
         </motion.div>
       </div>

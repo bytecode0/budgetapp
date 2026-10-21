@@ -39,7 +39,7 @@ function mostCommon(values: (string | null)[]): string | null {
 
 // A single charge, in the shape the pure detector needs. Amounts are integer
 // cents (Phase A). Decoupled from Prisma so the same heuristic can run over an
-// authenticated user's history OR over an anonymous statement (Radiografía).
+// user's history or over a freshly parsed statement.
 export interface RecurringInput {
   merchant: string;
   amount: number;                // cents (positive magnitude)
@@ -55,8 +55,8 @@ export interface RecurringOptions {
 /**
  * Pure recurring-merchant detector. No DB access — give it a flat list of
  * charges and it returns the merchants that look like fixed monthly commitments.
- * The thresholds are overridable so short windows (e.g. a 1–2 month statement in
- * the Radiografía flow) can relax them.
+ * The thresholds are overridable so short windows (e.g. a 1–2 month statement)
+ * can relax them.
  */
 export function detectRecurringFrom(items: RecurringInput[], opts: RecurringOptions = {}): RecurringCandidate[] {
   const minMonths = opts.minMonths ?? MIN_MONTHS;

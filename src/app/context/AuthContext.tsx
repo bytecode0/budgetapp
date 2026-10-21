@@ -14,7 +14,6 @@ export interface AuthUser {
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
-  hydrating: boolean;
   login: (email: string, password: string) => Promise<{ error?: string; code?: string }>;
   register: (name: string, email: string, password: string) => Promise<{ error?: string }>;
   logout: () => Promise<void>;
@@ -26,36 +25,12 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [hydrating, setHydrating] = useState(false);
-
-  // If the user arrived from the Radiografía flow, import that session's data
-  // into their fresh account before we expose them to the app — so the data
-  // hooks mount with everything already in place. One-shot; cleared after.
-  const claimPendingXray = async () => {
-    const sid = localStorage.getItem("xraySessionId");
-    if (!sid) return;
-    setHydrating(true);
-    try {
-      await fetch("/api/xray/claim", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: sid }),
-      });
-    } catch {
-      // Best-effort: a failed hydration must not block sign-in.
-    } finally {
-      localStorage.removeItem("xraySessionId");
-      setHydrating(false);
-    }
-  };
 
   const fetchMe = async () => {
     try {
       const res = await fetch("/api/auth/me", { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
-        await claimPendingXray();
         setUser(data.user);
       } else {
         setUser(null);
@@ -89,7 +64,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     const data = await res.json();
     if (!res.ok) return { error: data.error || "Login failed", code: data.code };
-    await claimPendingXray();
     setUser(data.user);
     return {};
   };
@@ -116,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, hydrating, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
