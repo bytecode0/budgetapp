@@ -22,7 +22,8 @@
     "typecheck:app": "tsc --noEmit -p tsconfig.json",
     "typecheck": "npm run typecheck:server && npm run typecheck:app",
     "test": "node --import tsx --test \"server/**/*.test.ts\"",
-    "verify": "npm run typecheck && npm run test && npm run build"
+    "verify": "npm run typecheck && npm run test && npm run build",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
@@ -131,5 +132,8 @@
     "overrides": {
       "vite": "6.3.5"
     }
+  },
+  "engines": {
+    "node": "24.x"
   }
 }

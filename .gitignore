@@ -6,3 +6,7 @@ dist
 # Bank statements / spreadsheets (never commit financial data)
 *.xlsx
 *.csv
+
+# Vercel CLI link and pulled env files (secrets)
+.vercel
+.env*.local

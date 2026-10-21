@@ -1,6 +1,5 @@
-import { Resend } from "resend";
+import { resend } from "./resendClient.js";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.EMAIL_FROM ?? "LifePlan <onboarding@resend.dev>";
 const APP_URL = process.env.APP_URL ?? "http://localhost:5173";
 

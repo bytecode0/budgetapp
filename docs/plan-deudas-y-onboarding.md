@@ -149,21 +149,23 @@ Sus rutas `/api/radiografia` y `/api/xray` son públicas, sin login, y pueden ga
 - CLAUDE.md: quitar las secciones "legacy — Radiografía".
 
 ### 2.2 Preparar la app para Vercel
-- **Un solo proyecto con Vercel Services:** `frontend` (Vite, build estático, catch-all a `index.html` para la SPA) y `backend` (Express como Vercel Function). Reescrituras: `/api/(.*)` → backend, el resto → frontend. Mismo dominio, así que las cookies de sesión siguen funcionando sin CORS entre dominios. (Si Services da guerra con ambos servicios en la raíz del repo, alternativa: Vite estático + una función `api/[...path].ts` que envuelve la app Express.)
-- `server/index.ts`: exportar la `app` y dejar `app.listen` solo para local.
-- **Prisma + Neon:** `DATABASE_URL` con pooling (serverless) y `DIRECT_URL` sin pooling para `db push`; `prisma generate` en el build (`postinstall`). Seguimos con `db push`, nunca migraciones (CLAUDE.md).
-- Revisar lo que asume un proceso siempre vivo (temporizadores, caché en memoria, la sincronización bancaria): en serverless no existe. Lo que deba ser periódico va a **Vercel Cron Jobs** con `CRON_SECRET`.
+- **Hecho:** un solo proyecto (`vercel.json`): Vite como sitio estático y Express como una Vercel Function en `api/index.ts`. Reescrituras: `/api/(.*)` → la función, el resto → `index.html` (SPA). Mismo dominio, así que las cookies de sesión funcionan sin CORS entre dominios. Región `fra1` (Fráncfort): crear la base de Neon en la misma región.
+- **Hecho:** `server/app.ts` exporta la app; `server/index.ts` solo escucha en local. `/api/health` devuelve el commit desplegado.
+- **Hecho:** el cliente de Resend se crea al primer envío (antes tumbaba toda la app si faltaba `RESEND_API_KEY`). **Pendiente de tu OK:** `server/lib/stripe.ts` tiene el mismo problema sin `STRIPE_SECRET_KEY`, pero el CLAUDE.md pide no tocar Stripe sin preguntar.
+- **Límite de Vercel:** el cuerpo de una petición es de 4,5 MB como máximo. Los extractos se suben en base64 en el body: un fichero de más de ~3 MB fallará con 413. Si pasa en la práctica, subir el fichero a Vercel Blob directamente desde el navegador.
+- **Prisma + Neon:** en runtime, `DATABASE_URL` (con pooling, la que inyecta Neon). Para `db push`, la URL sin pooling (`DATABASE_URL_UNPOOLED`), como hace `/deploy`. Si aparecen errores tipo "prepared statement already exists", añadir `pgbouncer=true` a la URL con pooling. **Hecho:** `prisma generate` en `postinstall`. Seguimos con `db push`, nunca migraciones (CLAUDE.md).
+- Revisado: no hay temporizadores ni trabajos periódicos en el servidor. Si Open Banking vuelve (fase futura), su sincronización periódica irá a **Vercel Cron Jobs** con `CRON_SECRET`.
 - `index.html`: título, descripción y `lang` de la BudgetApp.
 
 ### 2.3 Variables de entorno en Vercel (las pones tú; nunca pasan por el código ni por mí)
-`DATABASE_URL` / `DIRECT_URL` (las inyecta Neon), `JWT_SECRET`, `ENCRYPTION_KEY`, `APP_URL=https://budget.luisvespa.com`, `RESEND_API_KEY` + `EMAIL_FROM` (dominio verificado), `GOOGLE_CLIENT_ID/SECRET` + `GOOGLE_CALLBACK_URL` (añadir la URL nueva en Google Cloud Console), `STRIPE_*` (webhook nuevo apuntando al dominio), `GOCARDLESS_*` / `TINK_*` si se usa Open Banking, `ANTHROPIC_API_KEY` (opcional: ahora todas sus rutas tienen login), `CRON_SECRET`. Separar Production y Preview (Preview con su propia base de Neon).
+`DATABASE_URL` / `DIRECT_URL` (las inyecta Neon), `JWT_SECRET`, `ENCRYPTION_KEY`, `APP_URL=https://budget.luisvespa.com`, `RESEND_API_KEY` + `EMAIL_FROM` (dominio verificado), `GOOGLE_CLIENT_ID/SECRET` + `GOOGLE_CALLBACK_URL` (añadir la URL nueva en Google Cloud Console), `STRIPE_*` (webhook nuevo apuntando al dominio), `GOCARDLESS_*` / `TINK_*` **no** (Open Banking queda apagado en producción hasta su fase; sin esas variables se desactiva solo), `ANTHROPIC_API_KEY` (opcional: ahora todas sus rutas tienen login), `CRON_SECRET`. Separar Production y Preview (Preview con su propia base de Neon).
 
 ### 2.4 Dominio
 En Cloudflare: registro `CNAME budget → cname.vercel-dns.com` con el **proxy desactivado** (nube gris, "DNS only"), para que Vercel emita el certificado. En Vercel: añadir `budget.luisvespa.com` al proyecto.
 
 ### 2.5 CI/CD
 - **GitHub Actions** (`.github/workflows/verify.yml`): en cada PR y push a `main`, `npm ci` + `npm run verify` (typecheck, tests, build). Los tests no necesitan base de datos.
-- **Vercel Git integration** con `bytecode0/budgetapp`: cada PR → preview; `main` → producción. Proteger `main` en GitHub para que solo se fusione con el check en verde.
+- **Vercel Git integration** con `bytecode0/budgetapp`: cada PR → preview; `main` → producción. Vercel despliega aunque el CI falle; por eso `/deploy` corre las mismas comprobaciones en local antes de empujar.
 - Cambios de schema en producción: **no** automáticos. `db push` contra Neon lo lanza `/deploy` con confirmación explícita (ver 2.6).
 
 ### 2.6 Comando `/deploy` (skill de Claude Code en `.claude/skills/deploy/`)
@@ -234,4 +236,6 @@ Cada paso escribe filas reales (como hoy) y se puede saltar. "Atrás" no borra n
 
 ### Abiertas
 
-**G.** ¿Se usa Open Banking (GoCardless/Tink) en producción desde el principio, o queda desactivado hasta más adelante?
+**G.** ~~Open Banking en producción~~ → decidido 21 oct: apagado por ahora; será una fase futura del proyecto.
+
+**H.** `server/lib/stripe.ts` crea el cliente de Stripe al arrancar y tumba la app si falta `STRIPE_SECRET_KEY`. ¿Se hace perezoso (como Resend) o se configura Stripe en producción desde el principio?

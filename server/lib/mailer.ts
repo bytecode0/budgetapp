@@ -1,6 +1,4 @@
-import { Resend } from "resend";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+import { resend } from "./resendClient.js";
 
 // Sin dominio verificado: FROM = onboarding@resend.dev (solo entrega al email de tu cuenta Resend)
 // Con dominio verificado: EMAIL_FROM=LifePlan <noreply@tudominio.com>
