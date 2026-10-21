@@ -4,7 +4,8 @@ import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { createDefaultAllocations } from "../lib/defaults.js";
 import { toCents, toEuros, serializeMoney } from "../lib/money.js";
 import { suggestBudgets } from "../lib/suggestBudgets.js";
-import { clampCycleStartDay } from "../lib/period.js";
+import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/period.js";
+import { debtCommitments } from "../lib/debtBalance.js";
 
 export const allocationsRouter = Router();
 
@@ -22,8 +23,18 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
       prisma.userSettings.findUnique({ where: { userId: req.userId! } }),
     ]);
 
+    // A debt line's amount depends on payments and on which period we're in
+    // (a card paid in full drops to 0 the period after), so it's recomputed on
+    // every read rather than trusted from the stored column.
+    const cycleStartDay = clampCycleStartDay(settings?.cycleStartDay ?? 1);
+    const commitments = await debtCommitments(req.userId!, periodBounds(currentPeriodKey(cycleStartDay), cycleStartDay));
+    const withDebtLines = allocations.map(a =>
+      a.type === "debt" && a.debtId && commitments.has(a.debtId)
+        ? { ...a, allocatedAmount: commitments.get(a.debtId)! }
+        : a);
+
     return res.json(serializeMoney({
-      allocations,
+      allocations: withDebtLines,
       monthlyIncome: settings?.monthlyIncome ?? 0,
       darkMode: settings?.darkMode ?? false,
       language: settings?.language ?? 'es',
@@ -56,7 +67,10 @@ allocationsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response)
       const debt = await prisma.debt.findFirst({ where: { id: debtId, userId: req.userId! } });
       if (!debt) return res.status(400).json({ error: "Debt not found" });
       resolvedDebtId = debt.id;
-      debtAllocatedAmount = debt.minimumPayment ?? debt.installmentAmount ?? 0;
+      const settings = await prisma.userSettings.findUnique({ where: { userId: req.userId! }, select: { cycleStartDay: true } });
+      const cycleStartDay = clampCycleStartDay(settings?.cycleStartDay ?? 1);
+      const commitments = await debtCommitments(req.userId!, periodBounds(currentPeriodKey(cycleStartDay), cycleStartDay));
+      debtAllocatedAmount = commitments.get(debt.id) ?? 0;
     }
 
     const lastOrder = await prisma.allocation.findFirst({

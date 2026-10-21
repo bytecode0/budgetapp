@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { toEuros } from "../lib/money.js";
 import { periodBounds } from "../lib/period.js";
+import { countedAmounts } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 
 export const dashboardRouter = Router();
@@ -35,7 +36,7 @@ dashboardRouter.get("/household", requireAuth, async (req: AuthRequest, res: Res
     const [expenses, incomes, accounts, allocations] = await Promise.all([
       prisma.expense.findMany({
         where: { userId: pool, ...(range ? { date: range } : {}) },
-        select: { amount: true, allocationId: true, scope: true, payerUserId: true, beneficiaryUserId: true, shares: { select: { userId: true, amount: true } } },
+        select: { id: true, amount: true, allocationId: true, scope: true, payerUserId: true, beneficiaryUserId: true, shares: { select: { userId: true, amount: true } } },
       }),
       prisma.income.findMany({
         where: { userId: pool, ...(range ? { date: range } : {}) },
@@ -45,8 +46,13 @@ dashboardRouter.get("/household", requireAuth, async (req: AuthRequest, res: Res
       prisma.allocation.findMany({ where: { userId: pool }, select: { id: true, name: true, icon: true } }),
     ]);
 
+    // A card payment only counts for the part that pays pre-existing debt — the
+    // rest pays for purchases already counted in their category.
+    const counted = await countedAmounts(pool);
+    const spent = (e: { id: string; amount: number }) => counted.get(e.id) ?? e.amount;
+
     const incomeTotal = incomes.reduce((s, i) => s + i.amount, 0);
-    const expenseTotal = expenses.reduce((s, e) => s + e.amount, 0);
+    const expenseTotal = expenses.reduce((s, e) => s + spent(e), 0);
     const savings = incomeTotal - expenseTotal;
     const netWorth = accounts.reduce((s, a) => s + a.currentBalance, 0);
 
@@ -57,10 +63,11 @@ dashboardRouter.get("/household", requireAuth, async (req: AuthRequest, res: Res
     for (const i of incomes) if (i.ownerUserId in incomeBy) incomeBy[i.ownerUserId] += i.amount;
     for (const e of expenses) {
       if (e.scope === "shared" && e.shares.length > 0) {
-        for (const s of e.shares) if (s.userId in spentBy) spentBy[s.userId] += s.amount;
+        const ratio = e.amount > 0 ? spent(e) / e.amount : 1;
+        for (const s of e.shares) if (s.userId in spentBy) spentBy[s.userId] += Math.round(s.amount * ratio);
       } else {
         const who = e.beneficiaryUserId ?? e.payerUserId;
-        if (who && who in spentBy) spentBy[who] += e.amount;
+        if (who && who in spentBy) spentBy[who] += spent(e);
       }
     }
     const byPerson = members.map(m => ({
@@ -78,7 +85,7 @@ dashboardRouter.get("/household", requireAuth, async (req: AuthRequest, res: Res
     const byAlloc: Record<string, number> = {};
     for (const e of expenses) {
       const key = e.allocationId ?? "__unassigned__";
-      byAlloc[key] = (byAlloc[key] ?? 0) + e.amount;
+      byAlloc[key] = (byAlloc[key] ?? 0) + spent(e);
     }
     const byCategory = Object.entries(byAlloc)
       .map(([id, total]) => ({

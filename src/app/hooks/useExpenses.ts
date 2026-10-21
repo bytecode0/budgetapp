@@ -19,6 +19,10 @@ export interface Expense {
   allocationId: string | null;
   accountId: string | null;
   amount: number;
+  // What this counts as spending: less than `amount` only for a card payment
+  // that partly pays purchases already counted in their own category.
+  budgetAmount?: number;
+  debtId?: string | null;
   description: string;
   merchant: string;
   source: string; // "manual" | "import"
@@ -138,11 +142,11 @@ export function useExpenses(month?: string) {
   // Total spent this month grouped by allocationId
   const totalByAllocation = expenses.reduce<Record<string, number>>((acc, e) => {
     const key = e.allocationId ?? '__unassigned__';
-    acc[key] = (acc[key] ?? 0) + e.amount;
+    acc[key] = (acc[key] ?? 0) + (e.budgetAmount ?? e.amount);
     return acc;
   }, {});
 
-  const totalSpent = expenses.reduce((s, e) => s + e.amount, 0);
+  const totalSpent = expenses.reduce((s, e) => s + (e.budgetAmount ?? e.amount), 0);
 
   return {
     expenses, loading, error,

@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { periodBounds } from "../lib/period.js";
+import { countedAmounts, debtCommitments } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 
 export const monthlyBudgetsRouter = Router();
@@ -29,11 +30,15 @@ monthlyBudgetsRouter.get("/", requireAuth, async (req: AuthRequest, res: Respons
         where: { userId: req.userId! },
         orderBy: { sortOrder: "asc" },
       });
+      // A debt line's amount is its commitment for THIS month, not the stored
+      // column (which is only refreshed when the debt itself is edited).
+      const cycleStartDay = await getCycleStartDay(req.userId!);
+      const commitments = await debtCommitments(req.userId!, periodBounds(month, cycleStartDay));
       return res.json(serializeMoney({
         budgets: allocations.map(a => ({
           allocationId: a.id,
           month,
-          allocatedAmount: a.allocatedAmount,
+          allocatedAmount: a.type === "debt" && a.debtId ? commitments.get(a.debtId) ?? a.allocatedAmount : a.allocatedAmount,
           allocation: { id: a.id, name: a.name, icon: a.icon, type: a.type, sortOrder: a.sortOrder },
           saved: false, // flag: not yet saved for this specific month
         })),
@@ -128,13 +133,20 @@ monthlyBudgetsRouter.get("/review", requireAuth, async (req: AuthRequest, res: R
         userId: req.userId!,
         date: { gte: monthStart, lt: monthEnd },
       },
-      select: { allocationId: true, amount: true },
+      select: { id: true, allocationId: true, amount: true },
     });
+
+    // Card payments count only for the part that pays pre-existing debt; debt
+    // lines without a saved budget take the commitment for THIS period.
+    const [counted, commitments] = await Promise.all([
+      countedAmounts(req.userId!),
+      debtCommitments(req.userId!, { start: monthStart, end: monthEnd }),
+    ]);
 
     const actualByAllocation: Record<string, number> = {};
     for (const e of expenses) {
       const key = e.allocationId ?? "__unassigned__";
-      actualByAllocation[key] = (actualByAllocation[key] ?? 0) + e.amount;
+      actualByAllocation[key] = (actualByAllocation[key] ?? 0) + (counted.get(e.id) ?? e.amount);
     }
 
     const budgetMap: Record<string, number> = {};
@@ -143,7 +155,8 @@ monthlyBudgetsRouter.get("/review", requireAuth, async (req: AuthRequest, res: R
     }
 
     const review = allocations.map(a => {
-      const budgeted = budgetMap[a.id] ?? a.allocatedAmount;
+      const fallback = a.type === "debt" && a.debtId ? commitments.get(a.debtId) ?? a.allocatedAmount : a.allocatedAmount;
+      const budgeted = budgetMap[a.id] ?? fallback;
       const actual   = actualByAllocation[a.id] ?? 0;
       return {
         allocationId: a.id,

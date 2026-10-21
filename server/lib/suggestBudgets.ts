@@ -6,6 +6,7 @@
 // categories; turning that history into a number is arithmetic, not a task for
 // an LLM. Works with no API key configured.
 import { prisma } from "./prisma.js";
+import { countedAmounts } from "./debtBalance.js";
 import { periodKeyFor, periodKeyOffset, periodBounds, currentPeriodKey } from "./period.js";
 import { getCycleStartDay } from "./getCycleStartDay.js";
 
@@ -49,7 +50,7 @@ export async function suggestBudgets(userId: string, monthsBack = 6): Promise<Bu
   const [expenses, allocations] = await Promise.all([
     prisma.expense.findMany({
       where: { userId, allocationId: { not: null }, date: { gte: windowStart, lt: windowEnd } },
-      select: { allocationId: true, amount: true, date: true },
+      select: { id: true, allocationId: true, amount: true, date: true },
     }),
     prisma.allocation.findMany({
       where: { userId },
@@ -58,6 +59,9 @@ export async function suggestBudgets(userId: string, monthsBack = 6): Promise<Bu
   ]);
 
   if (expenses.length === 0) return [];
+
+  // A card payment only counts for the part that pays pre-existing debt.
+  const counted = await countedAmounts(userId);
 
   // Don't drag medians down with months before the user had any data: clamp the
   // window to start at the earliest month with spend.
@@ -74,7 +78,7 @@ export async function suggestBudgets(userId: string, monthsBack = 6): Promise<Bu
     const id = e.allocationId!;
     const m = periodKeyFor(e.date, cycleStartDay);
     const inner = byAllocMonth.get(id) ?? new Map<string, number>();
-    inner.set(m, (inner.get(m) ?? 0) + e.amount);
+    inner.set(m, (inner.get(m) ?? 0) + (counted.get(e.id) ?? e.amount));
     byAllocMonth.set(id, inner);
   }
 

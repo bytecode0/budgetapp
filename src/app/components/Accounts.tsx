@@ -236,7 +236,7 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
 
   const handleDelete = async (a: Account) => {
     const result = await deleteAccount(a.id);
-    if (result.error) toast.error(result.error);
+    if (result.error) toast.error(result.code === 'account_backs_debt' ? t('accounts.backsDebtError') : result.error);
     else toast.success(t('accounts.deletedOk'));
   };
 

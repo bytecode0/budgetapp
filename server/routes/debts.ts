@@ -4,13 +4,18 @@ import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { buildDebtTimeline } from "../lib/debtTimeline.js";
 import { simulatePayoff, type PayoffMethod } from "../lib/debtPayoff.js";
-import { clampCycleStartDay } from "../lib/period.js";
+import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/period.js";
+import { getCycleStartDay } from "../lib/getCycleStartDay.js";
+import {
+  loadDebtLedgers, debtState, monthlyCommitment, setLiveValues, syncDebtAllocations, type DebtLedger,
+} from "../lib/debtBalance.js";
 
 export const debtsRouter = Router();
 
 const DEBT_KINDS = new Set(["credit_card", "installment", "bnpl", "payday_loan", "auto_loan", "student_loan", "mortgage", "other"]);
 const DEBT_STATUSES = new Set(["active", "paid_off", "archived"]);
 const VISIBILITIES = new Set(["private", "household"]);
+const PAYMENT_MODES = new Set(["full", "installments", "minimum"]);
 
 // Método Ruta R3: the debt frontier is by TYPE of debt, never by interest rate.
 // Consumer/depreciating-asset debt (R3.1) is always inadmissible and always the
@@ -18,6 +23,37 @@ const VISIBILITIES = new Set(["private", "household"]);
 // sits here too. "mortgage" (R3.2, appreciating/producing asset) and "other"
 // (unclassified) sit outside the attack list — see scope=consumer below.
 const CONSUMER_DEBT_KINDS = new Set(["credit_card", "installment", "bnpl", "payday_loan", "auto_loan", "student_loan"]);
+
+async function currentPeriod(userId: string): Promise<{ start: Date; end: Date }> {
+  const day = await getCycleStartDay(userId);
+  return periodBounds(currentPeriodKey(day), day);
+}
+
+// The API speaks LIVE values: `currentBalance` is what's owed now and
+// `installmentsPaid` counts payments recorded since the anchor. The stored
+// anchor is exposed as `anchorBalance` (see server/lib/debtBalance.ts).
+function withLiveState<T extends { id: string; currentBalance: number }>(debt: T, ledger: DebtLedger | undefined, period: { start: Date; end: Date }) {
+  if (!ledger) return { ...debt, anchorBalance: debt.currentBalance, previousBalance: debt.currentBalance, purchasesTotal: 0, paymentsTotal: 0, monthlyCommitment: 0 };
+  const state = debtState(ledger);
+  return {
+    ...debt,
+    currentBalance: state.balance,
+    anchorBalance: debt.currentBalance,
+    previousBalance: state.previousRemaining,
+    purchasesTotal: state.purchasesTotal,
+    paymentsTotal: state.paymentsTotal,
+    installmentsPaid: state.installmentsPaid,
+    monthlyCommitment: monthlyCommitment(ledger, period),
+  };
+}
+
+async function ledgersById(userId: string): Promise<Map<string, DebtLedger>> {
+  return new Map((await loadDebtLedgers(userId)).map(l => [l.debt.id, l]));
+}
+
+function defaultPaymentMode(kind: string | undefined): string {
+  return !kind || kind === "credit_card" || kind === "other" ? "minimum" : "installments";
+}
 
 function clampDay(n: unknown): number | null {
   const v = parseInt(String(n), 10);
@@ -36,11 +72,14 @@ debtsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     });
 
-    const active = debts.filter(d => d.status === "active");
-    const totalOwed = active.reduce((s, d) => s + d.currentBalance, 0);
-    const totalMinimums = active.reduce((s, d) => s + (d.minimumPayment ?? d.installmentAmount ?? 0), 0);
+    const [ledgers, period] = await Promise.all([ledgersById(req.userId!), currentPeriod(req.userId!)]);
+    const live = debts.map(d => withLiveState(d, ledgers.get(d.id), period));
 
-    return res.json(serializeMoney({ debts, totalOwed, totalMinimums }));
+    const active = live.filter(d => d.status === "active");
+    const totalOwed = active.reduce((s, d) => s + Math.max(0, d.currentBalance), 0);
+    const totalMinimums = active.reduce((s, d) => s + d.monthlyCommitment, 0);
+
+    return res.json(serializeMoney({ debts: live, totalOwed, totalMinimums }));
   } catch (err) {
     console.error("[debts/GET]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -58,13 +97,24 @@ debtsRouter.get("/timeline", requireAuth, async (req: AuthRequest, res: Response
     const [debts, settings] = await Promise.all([
       prisma.debt.findMany({
         where: { userId: req.userId!, OR: [{ ownerUserId: req.authUserId! }, { visibility: "household" }] },
-        select: { id: true, name: true, kind: true, status: true, minimumPayment: true, installmentAmount: true, installmentsTotal: true, installmentsPaid: true },
+        select: { id: true, name: true, kind: true, status: true, paymentMode: true, minimumPayment: true, installmentAmount: true, installmentsTotal: true, installmentsPaid: true },
       }),
       prisma.userSettings.findUnique({ where: { userId: req.userId! }, select: { cycleStartDay: true, monthlyIncome: true } }),
     ]);
 
     const cycleStartDay = clampCycleStartDay(settings?.cycleStartDay ?? 1);
-    const timeline = buildDebtTimeline(debts, settings?.monthlyIncome ?? 0, cycleStartDay, periodsCount);
+    const period = periodBounds(currentPeriodKey(cycleStartDay), cycleStartDay);
+    const ledgers = await ledgersById(req.userId!);
+    // Measured at the period's start, like the budget line, so paying during
+    // this period doesn't make the commitment vanish from it. A card paid in
+    // full commits exactly what its budget line holds this period.
+    const live = debts.map(d => {
+      const ledger = ledgers.get(d.id);
+      if (!ledger) return d;
+      const atStart = debtState(ledger, period.start);
+      return { ...d, installmentsPaid: atStart.installmentsPaid, previousRemaining: monthlyCommitment(ledger, period) };
+    });
+    const timeline = buildDebtTimeline(live, settings?.monthlyIncome ?? 0, cycleStartDay, periodsCount);
 
     return res.json(serializeMoney({ timeline }));
   } catch (err) {
@@ -91,10 +141,19 @@ debtsRouter.get("/payoff", requireAuth, async (req: AuthRequest, res: Response) 
         OR: [{ ownerUserId: req.authUserId! }, { visibility: "household" }],
         ...(scope === "consumer" && { kind: { in: [...CONSUMER_DEBT_KINDS] } }),
       },
-      select: { id: true, name: true, currentBalance: true, apr: true, minimumPayment: true, installmentAmount: true },
+      select: { id: true, name: true, currentBalance: true, apr: true, minimumPayment: true, installmentAmount: true, paymentMode: true },
     });
 
     if (debts.length === 0) return res.json({ snowball: null, avalanche: null });
+
+    // Simulate on live balances. A card paid in full clears its whole balance
+    // each month, so that's its "minimum" for the cascade.
+    const ledgers = await ledgersById(req.userId!);
+    const live = debts.map(({ paymentMode, ...d }) => {
+      const ledger = ledgers.get(d.id);
+      const balance = ledger ? Math.max(0, debtState(ledger).balance) : d.currentBalance;
+      return { ...d, currentBalance: balance, ...(paymentMode === "full" && { minimumPayment: balance }) };
+    });
 
     const nameById = Object.fromEntries(debts.map(d => [d.id, d.name]));
     const withNames = (r: ReturnType<typeof simulatePayoff>) => ({
@@ -103,7 +162,7 @@ debtsRouter.get("/payoff", requireAuth, async (req: AuthRequest, res: Response) 
     });
 
     const methods: PayoffMethod[] = ["snowball", "avalanche"];
-    const [snowball, avalanche] = methods.map(m => withNames(simulatePayoff(debts, m, extraPaymentCents)));
+    const [snowball, avalanche] = methods.map(m => withNames(simulatePayoff(live, m, extraPaymentCents)));
 
     return res.json(serializeMoney({ snowball, avalanche }));
   } catch (err) {
@@ -119,12 +178,15 @@ debtsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
       name, kind, accountId, currentBalance, principal, apr,
       creditLimit, statementDay, paymentDueDay, minimumPayment,
       installmentAmount, installmentsTotal, installmentsPaid, startDate, endDate,
-      visibility,
+      visibility, paymentMode,
     } = req.body;
 
     if (!name) return res.status(400).json({ error: "Name is required" });
     if (kind !== undefined && !DEBT_KINDS.has(kind)) {
       return res.status(400).json({ error: "Invalid debt kind" });
+    }
+    if (paymentMode !== undefined && !PAYMENT_MODES.has(paymentMode)) {
+      return res.status(400).json({ error: "Invalid payment mode" });
     }
     if (visibility !== undefined && !VISIBILITIES.has(visibility)) {
       return res.status(400).json({ error: "Invalid visibility" });
@@ -135,6 +197,25 @@ debtsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     if (accountId) {
       const owned = await prisma.account.findFirst({ where: { id: accountId, userId: req.userId! }, select: { id: true } });
       if (owned) resolvedAccountId = owned.id;
+    }
+
+    // A credit card's purchases are expenses on its own account — that's how
+    // they grow the debt (server/lib/debtBalance.ts). No account given: create
+    // one, so the card shows up in the expense account picker.
+    if (kind === "credit_card" && !resolvedAccountId) {
+      const lastAccount = await prisma.account.findFirst({ where: { userId: req.userId! }, orderBy: { sortOrder: "desc" } });
+      const account = await prisma.account.create({
+        data: {
+          userId: req.userId!,
+          ownerUserId: req.authUserId!,
+          householdId: req.householdId ?? null,
+          name,
+          type: "card",
+          visibility: visibility ?? "household",
+          sortOrder: (lastAccount?.sortOrder ?? -1) + 1,
+        },
+      });
+      resolvedAccountId = account.id;
     }
 
     const lastOrder = await prisma.debt.findFirst({
@@ -150,6 +231,7 @@ debtsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
         visibility: visibility ?? "household",
         name,
         kind: kind ?? "other",
+        paymentMode: paymentMode ?? defaultPaymentMode(kind),
         accountId: resolvedAccountId,
         currentBalance: toCents(currentBalance),
         principal: principal !== undefined ? toCents(principal) : null,
@@ -167,7 +249,8 @@ debtsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
       },
     });
 
-    return res.json(serializeMoney({ debt }));
+    const [ledger] = await loadDebtLedgers(req.userId!, [debt.id]);
+    return res.json(serializeMoney({ debt: withLiveState(debt, ledger, await currentPeriod(req.userId!)) }));
   } catch (err) {
     console.error("[debts/POST]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -206,10 +289,11 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
       name, kind, status, accountId, currentBalance, principal, apr,
       creditLimit, statementDay, paymentDueDay, minimumPayment,
       installmentAmount, installmentsTotal, installmentsPaid, startDate, endDate,
-      visibility, sortOrder,
+      visibility, sortOrder, paymentMode,
     } = req.body;
 
     if (kind !== undefined && !DEBT_KINDS.has(kind)) return res.status(400).json({ error: "Invalid debt kind" });
+    if (paymentMode !== undefined && !PAYMENT_MODES.has(paymentMode)) return res.status(400).json({ error: "Invalid payment mode" });
     if (status !== undefined && !DEBT_STATUSES.has(status)) return res.status(400).json({ error: "Invalid status" });
     if (visibility !== undefined && !VISIBILITIES.has(visibility)) return res.status(400).json({ error: "Invalid visibility" });
 
@@ -222,15 +306,33 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
         if (owned) accountUpdate = { accountId: owned.id };
       }
     }
+    // The linked account decides which expenses are purchases and how past
+    // payments split (server/lib/debtBalance.ts): once anything is recorded,
+    // changing it would rewrite closed months.
+    if (accountUpdate && accountUpdate.accountId !== existing.accountId) {
+      const [ledger] = await loadDebtLedgers(req.userId!, [id]);
+      if (ledger && ledger.payments.length + ledger.purchases.length + ledger.adjustments.length > 0) {
+        return res.status(409).json({ error: "The account of a debt with recorded movements can't change", code: "debt_account_locked" });
+      }
+    }
+
+    // currentBalance / installmentsPaid arrive as LIVE values ("I owe X now"):
+    // a difference becomes a dated adjustment / shifted count. The client only
+    // sends them when the user changed them, so a stale form can't undo a
+    // movement recorded meanwhile.
+    await setLiveValues(req.userId!, id, {
+      ...(currentBalance !== undefined && { balance: toCents(currentBalance) }),
+      ...(installmentsPaid !== undefined && { installmentsPaid: parseInt(installmentsPaid, 10) || 0 }),
+    });
 
     const debt = await prisma.debt.update({
       where: { id },
       data: {
         ...(name !== undefined && { name }),
+        ...(paymentMode !== undefined && { paymentMode }),
         ...(kind !== undefined && { kind }),
         ...(status !== undefined && { status }),
         ...(accountUpdate ?? {}),
-        ...(currentBalance !== undefined && { currentBalance: toCents(currentBalance) }),
         ...(principal !== undefined && { principal: principal === null ? null : toCents(principal) }),
         ...(apr !== undefined && { apr: apr === null ? null : Number(apr) }),
         ...(creditLimit !== undefined && { creditLimit: creditLimit === null ? null : toCents(creditLimit) }),
@@ -239,7 +341,6 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
         ...(minimumPayment !== undefined && { minimumPayment: minimumPayment === null ? null : toCents(minimumPayment) }),
         ...(installmentAmount !== undefined && { installmentAmount: installmentAmount === null ? null : toCents(installmentAmount) }),
         ...(installmentsTotal !== undefined && { installmentsTotal: installmentsTotal === null ? null : parseInt(installmentsTotal, 10) || null }),
-        ...(installmentsPaid !== undefined && { installmentsPaid: parseInt(installmentsPaid, 10) || 0 }),
         ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
         ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
         ...(visibility !== undefined && { visibility }),
@@ -249,27 +350,31 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
 
     // Keep any linked "debt" Allocation's line item in sync with the real
     // commitment — it's a derived value, never independently editable.
-    if (minimumPayment !== undefined || installmentAmount !== undefined) {
-      const monthlyCommitment = debt.minimumPayment ?? debt.installmentAmount ?? 0;
-      await prisma.allocation.updateMany({
-        where: { debtId: debt.id },
-        data: { allocatedAmount: monthlyCommitment },
-      });
-    }
+    const period = await currentPeriod(req.userId!);
+    await syncDebtAllocations(req.userId!, period, [debt.id]);
 
-    return res.json(serializeMoney({ debt }));
+    const fresh = await prisma.debt.findUniqueOrThrow({ where: { id: debt.id } });
+    const [ledger] = await loadDebtLedgers(req.userId!, [debt.id]);
+    return res.json(serializeMoney({ debt: withLiveState(fresh, ledger, period) }));
   } catch (err) {
     console.error("[debts/PATCH]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// DELETE /api/debts/:id  — expenses keep their history (debtId set null)
+// DELETE /api/debts/:id  — only debts with no recorded payments (see below)
 debtsRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const existing = await prisma.debt.findFirst({ where: { id, userId: req.userId! } });
     if (!existing) return res.status(404).json({ error: "Debt not found" });
+
+    // Its payments' budget split (server/lib/debtBalance.ts) needs the debt:
+    // deleting it would make past months count those payments in full.
+    const payments = await prisma.expense.count({ where: { userId: req.userId!, debtId: id } });
+    if (payments > 0) {
+      return res.status(409).json({ error: "This debt has recorded payments and can't be deleted", code: "debt_has_payments" });
+    }
 
     await prisma.debt.delete({ where: { id } });
     return res.json({ success: true });

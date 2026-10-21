@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 export type DebtKind = 'credit_card' | 'installment' | 'bnpl' | 'payday_loan' | 'auto_loan' | 'student_loan' | 'mortgage' | 'other';
 export type DebtStatus = 'active' | 'paid_off' | 'archived';
+export type DebtPaymentMode = 'full' | 'installments' | 'minimum';
 
 export interface Debt {
   id: string;
@@ -12,7 +13,15 @@ export interface Debt {
   status: DebtStatus;
   sortOrder: number;
   accountId: string | null;
+  paymentMode: DebtPaymentMode;
+  // Live values, derived server-side (server/lib/debtBalance.ts): what's owed
+  // now = anchor + card purchases − payments recorded since the anchor.
   currentBalance: number; // euros
+  anchorBalance: number; // euros — the balance last set by hand or bank sync
+  previousBalance: number; // euros — what's left of the pre-existing debt
+  purchasesTotal: number; // euros
+  paymentsTotal: number; // euros
+  monthlyCommitment: number; // euros — this period's budget line
   principal: number | null; // euros
   apr: number | null;
   creditLimit: number | null; // euros
@@ -33,8 +42,9 @@ export interface Debt {
 export interface DebtPayload {
   name: string;
   kind?: DebtKind;
+  paymentMode?: DebtPaymentMode;
   accountId?: string | null;
-  currentBalance?: number;
+  currentBalance?: number; // live balance — the server moves the anchor to match
   principal?: number | null;
   apr?: number | null;
   creditLimit?: number | null;
@@ -106,8 +116,8 @@ export function useDebts() {
 
   const recomputeTotals = (list: Debt[]) => {
     const active = list.filter(d => d.status === 'active');
-    setTotalOwed(active.reduce((s, d) => s + d.currentBalance, 0));
-    setTotalMinimums(active.reduce((s, d) => s + (d.minimumPayment ?? d.installmentAmount ?? 0), 0));
+    setTotalOwed(active.reduce((s, d) => s + Math.max(0, d.currentBalance), 0));
+    setTotalMinimums(active.reduce((s, d) => s + d.monthlyCommitment, 0));
   };
 
   const createDebt = async (payload: DebtPayload) => {
@@ -146,7 +156,10 @@ export function useDebts() {
 
   const deleteDebt = async (id: string) => {
     const res = await fetch(`/api/debts/${id}`, { method: 'DELETE', credentials: 'include' });
-    if (!res.ok) return { error: 'Failed to delete debt' };
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { error: (data.error as string) || 'Failed to delete debt', code: data.code as string | undefined };
+    }
     setDebts(d => {
       const next = d.filter(x => x.id !== id);
       recomputeTotals(next);
@@ -166,6 +179,42 @@ export function useDebts() {
     return {};
   };
 
+  // A payment is an expense on the debt's budget line, paid from a bank
+  // account — the server links it to the debt (server/routes/expenses.ts) and
+  // the live balance drops on the next fetch. Creates the line if the debt has
+  // none yet. Errors come back as a `code` for the caller to translate.
+  const recordPayment = async (
+    debt: Debt,
+    payment: { amount: number; accountId: string; date: string; description: string },
+  ): Promise<{ code?: string }> => {
+    const allocRes = await fetch('/api/allocations', { credentials: 'include' });
+    if (!allocRes.ok) return { code: 'payment_failed' };
+    const { allocations } = await allocRes.json() as { allocations: { id: string; debtId?: string | null }[] };
+    let allocationId = allocations.find(a => a.debtId === debt.id)?.id;
+    if (!allocationId) {
+      const created = await fetch('/api/allocations', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: debt.name, icon: '🔒', type: 'debt', debtId: debt.id }),
+      });
+      const data = await created.json();
+      if (!created.ok) return { code: data.code ?? 'payment_failed' };
+      allocationId = data.allocation.id as string;
+    }
+
+    const res = await fetch('/api/expenses', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payment, allocationId }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { code: data.code ?? 'payment_failed' };
+    await fetchDebts();
+    return {};
+  };
+
   const fetchPayoff = async (extra = 0, scope?: 'consumer'): Promise<{ snowball: PayoffSummary | null; avalanche: PayoffSummary | null } | null> => {
     try {
       const params = new URLSearchParams({ extra: String(extra) });
@@ -180,6 +229,6 @@ export function useDebts() {
 
   return {
     debts, totalOwed, totalMinimums, timeline, loading, error,
-    fetchDebts, createDebt, updateDebt, deleteDebt, reorderDebts, fetchTimeline, fetchPayoff,
+    fetchDebts, createDebt, updateDebt, deleteDebt, reorderDebts, fetchTimeline, fetchPayoff, recordPayment,
   };
 }

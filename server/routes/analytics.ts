@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { serializeMoney } from "../lib/money.js";
 import { periodBounds, periodKeyFor, enumeratePeriods } from "../lib/period.js";
+import { countedAmounts, debtCommitments } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 
 export const analyticsRouter = Router();
@@ -39,7 +40,7 @@ analyticsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
     const [expenses, incomes, allocations, depositsInRange, baselineAgg] = await Promise.all([
       prisma.expense.findMany({
         where: { userId, date: { gte: rangeStart, lt: rangeEnd } },
-        select: { allocationId: true, amount: true, date: true },
+        select: { id: true, allocationId: true, amount: true, date: true },
       }),
       prisma.income.findMany({
         where: { userId, date: { gte: rangeStart, lt: rangeEnd } },
@@ -48,7 +49,7 @@ analyticsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
       prisma.allocation.findMany({
         where: { userId },
         orderBy: { sortOrder: "asc" },
-        select: { id: true, name: true, icon: true, type: true, allocatedAmount: true },
+        select: { id: true, name: true, icon: true, type: true, allocatedAmount: true, debtId: true },
       }),
       prisma.planDeposit.findMany({
         where: { userId, month: { in: months } },
@@ -61,15 +62,19 @@ analyticsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
       }),
     ]);
 
+    // A card payment only counts for the part that pays pre-existing debt.
+    const counted = await countedAmounts(userId);
+    const spent = (e: { id: string; amount: number }) => counted.get(e.id) ?? e.amount;
+
     // ── Spending month over month ──
     const spentByMonth: Record<string, number> = Object.fromEntries(months.map(m => [m, 0]));
     // ── Average spend per category (categorized expenses only) ──
     const totalByAllocation: Record<string, number> = {};
     for (const e of expenses) {
       const mKey = periodKeyFor(e.date, cycleStartDay);
-      if (mKey in spentByMonth) spentByMonth[mKey] += e.amount;
+      if (mKey in spentByMonth) spentByMonth[mKey] += spent(e);
       if (e.allocationId) {
-        totalByAllocation[e.allocationId] = (totalByAllocation[e.allocationId] ?? 0) + e.amount;
+        totalByAllocation[e.allocationId] = (totalByAllocation[e.allocationId] ?? 0) + spent(e);
       }
     }
 
@@ -113,17 +118,19 @@ analyticsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
       prisma.monthlyBudget.findMany({ where: { userId, month: to } }),
       prisma.expense.findMany({
         where: { userId, date: { gte: toBounds.start, lt: toBounds.end } },
-        select: { amount: true },
+        select: { id: true, amount: true },
       }),
     ]);
     const budgetMap: Record<string, number> = Object.fromEntries(
       savedBudgets.map(b => [b.allocationId, b.allocatedAmount])
     );
-    // Budget = saved month budgets, or the current allocation amounts as a fallback.
+    // Budget = saved month budgets, or the current allocation amounts as a
+    // fallback (a debt line's being its commitment for that period).
+    const commitments = await debtCommitments(userId, toBounds);
     const totalBudgeted = allocations.reduce(
-      (s, a) => s + (budgetMap[a.id] ?? a.allocatedAmount), 0
+      (s, a) => s + (budgetMap[a.id] ?? (a.type === "debt" && a.debtId ? commitments.get(a.debtId) : undefined) ?? a.allocatedAmount), 0
     );
-    const totalActual = toExpenses.reduce((s, e) => s + e.amount, 0);
+    const totalActual = toExpenses.reduce((s, e) => s + spent(e), 0);
     const overspend = Math.max(0, totalActual - totalBudgeted);
     const pct = totalBudgeted > 0
       ? clamp(Math.round(100 - (overspend / totalBudgeted) * 100), 0, 100)

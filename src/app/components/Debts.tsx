@@ -3,16 +3,36 @@ import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Plus, X, GripVertical, Pencil, Trash2, CheckCircle2, RotateCcw,
+  Plus, X, GripVertical, Pencil, Trash2, CheckCircle2, RotateCcw, Banknote,
   CreditCard, Calendar, Car, ShoppingBag, AlertCircle, Wallet, Loader2, TrendingDown, Flame, Target, Home, GraduationCap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
-import { useDebts, type Debt, type DebtKind, type PayoffSummary } from '../hooks/useDebts';
+import { useDebts, type Debt, type DebtKind, type DebtPaymentMode, type PayoffSummary } from '../hooks/useDebts';
+import { useAccounts } from '../hooks/useAccounts';
 
 const DEBT_KINDS: DebtKind[] = ['credit_card', 'installment', 'bnpl', 'payday_loan', 'auto_loan', 'student_loan', 'mortgage', 'other'];
 const CARD_LIKE: Set<DebtKind> = new Set(['credit_card']);
+const PAYMENT_MODES: DebtPaymentMode[] = ['full', 'installments', 'minimum'];
+
+// A new card defaults to "paid in full at month end" (the common Spanish
+// card); everything else to fixed installments.
+const defaultModeFor = (kind: DebtKind): DebtPaymentMode =>
+  kind === 'credit_card' ? 'full' : kind === 'other' ? 'minimum' : 'installments';
+
+// What a payment of this debt usually is, to prefill the payment sheet.
+const suggestedPayment = (d: Debt): number =>
+  d.paymentMode === 'full' ? Math.max(0, d.currentBalance)
+  : d.paymentMode === 'installments' ? d.installmentAmount ?? 0
+  : d.minimumPayment ?? 0;
+
+// The user's local calendar day (toISOString would be UTC: yesterday in Spain
+// between midnight and 2am, landing a payment in the previous period).
+const today = () => {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+};
 
 function kindIcon(kind: DebtKind) {
   switch (kind) {
@@ -76,6 +96,7 @@ interface FormState {
   id: string | null;
   name: string;
   kind: DebtKind;
+  paymentMode: DebtPaymentMode;
   currentBalance: string;
   apr: string;
   creditLimit: string;
@@ -84,18 +105,34 @@ interface FormState {
   installmentAmount: string;
   installmentsTotal: string;
   installmentsPaid: string;
+  // As loaded when editing: live values are only sent if the user changed
+  // them, so a form left open can't erase a payment recorded meanwhile.
+  loadedBalance: string;
+  loadedInstallmentsPaid: string;
 }
 
 const EMPTY_FORM: FormState = {
-  id: null, name: '', kind: 'credit_card', currentBalance: '', apr: '', creditLimit: '',
+  id: null, name: '', kind: 'credit_card', paymentMode: 'full', currentBalance: '', apr: '', creditLimit: '',
   paymentDueDay: '', minimumPayment: '', installmentAmount: '', installmentsTotal: '', installmentsPaid: '',
+  loadedBalance: '', loadedInstallmentsPaid: '',
 };
 
 export function Debts() {
   const { t } = useTranslation();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
-  const { debts, totalOwed, totalMinimums, loading, createDebt, updateDebt, deleteDebt, reorderDebts, fetchPayoff } = useDebts();
+  const { debts, totalOwed, totalMinimums, loading, createDebt, updateDebt, deleteDebt, reorderDebts, fetchPayoff, recordPayment } = useDebts();
+  const { accounts } = useAccounts();
+  const currency = t('currency.symbol');
+
+  // Payment sheet
+  const [paying, setPaying] = useState<Debt | null>(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [payAccountId, setPayAccountId] = useState('');
+  const [payDate, setPayDate] = useState(today());
+  const [savingPayment, setSavingPayment] = useState(false);
+  // A card is paid from a bank account, never from itself.
+  const payFromAccounts = accounts.filter(a => !a.isArchived && a.type !== 'card' && a.id !== paying?.accountId);
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -130,7 +167,7 @@ export function Debts() {
   const paidOff = local.filter(d => d.status !== 'active');
 
   const fmtEuro = (v: number) =>
-    `€${v.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+    `${currency}${v.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
   const moveRow = useCallback((from: number, to: number) => {
     setLocal(prev => {
@@ -160,6 +197,7 @@ export function Debts() {
       id: d.id,
       name: d.name,
       kind: d.kind,
+      paymentMode: d.paymentMode,
       currentBalance: String(d.currentBalance),
       apr: d.apr != null ? String(d.apr) : '',
       creditLimit: d.creditLimit != null ? String(d.creditLimit) : '',
@@ -168,11 +206,39 @@ export function Debts() {
       installmentAmount: d.installmentAmount != null ? String(d.installmentAmount) : '',
       installmentsTotal: d.installmentsTotal != null ? String(d.installmentsTotal) : '',
       installmentsPaid: String(d.installmentsPaid ?? 0),
+      loadedBalance: String(d.currentBalance),
+      loadedInstallmentsPaid: String(d.installmentsPaid ?? 0),
     });
     setShowForm(true);
   };
 
   const isCardLike = CARD_LIKE.has(form.kind);
+  const isInstallments = form.paymentMode === 'installments';
+  const isMinimum = form.paymentMode === 'minimum';
+
+  const openPay = (d: Debt) => {
+    setPaying(d);
+    setPayAmount(String(suggestedPayment(d) || ''));
+    setPayAccountId(accounts.find(a => !a.isArchived && a.type !== 'card' && a.id !== d.accountId)?.id ?? '');
+    setPayDate(today());
+  };
+
+  const handlePay = async () => {
+    const amount = parseFloat(payAmount);
+    if (!paying || !amount || amount <= 0 || !payAccountId) return;
+    setSavingPayment(true);
+    const result = await recordPayment(paying, {
+      amount, accountId: payAccountId, date: payDate,
+      description: t('debts.paymentDescription', { name: paying.name }),
+    });
+    setSavingPayment(false);
+    if (result.code) {
+      toast.error(t(result.code === 'paid_from_card' ? 'debts.paidFromCardError' : 'debts.paymentFailed'));
+      return;
+    }
+    toast.success(t('debts.paidOk'));
+    setPaying(null);
+  };
 
   const handleSubmit = async () => {
     if (!form.name.trim()) { toast.error(t('debts.nameRequired')); return; }
@@ -180,14 +246,16 @@ export function Debts() {
     const payload = {
       name: form.name.trim(),
       kind: form.kind,
-      currentBalance: parseFloat(form.currentBalance) || 0,
+      paymentMode: form.paymentMode,
+      ...((!form.id || form.currentBalance !== form.loadedBalance) && { currentBalance: parseFloat(form.currentBalance) || 0 }),
       apr: form.apr ? parseFloat(form.apr) : null,
       creditLimit: isCardLike && form.creditLimit ? parseFloat(form.creditLimit) : null,
-      paymentDueDay: isCardLike && form.paymentDueDay ? parseInt(form.paymentDueDay, 10) : null,
-      minimumPayment: isCardLike && form.minimumPayment ? parseFloat(form.minimumPayment) : null,
-      installmentAmount: !isCardLike && form.installmentAmount ? parseFloat(form.installmentAmount) : null,
-      installmentsTotal: !isCardLike && form.installmentsTotal ? parseInt(form.installmentsTotal, 10) : null,
-      installmentsPaid: !isCardLike ? parseInt(form.installmentsPaid, 10) || 0 : 0,
+      paymentDueDay: form.paymentDueDay ? parseInt(form.paymentDueDay, 10) : null,
+      minimumPayment: isMinimum && form.minimumPayment ? parseFloat(form.minimumPayment) : null,
+      installmentAmount: isInstallments && form.installmentAmount ? parseFloat(form.installmentAmount) : null,
+      installmentsTotal: isInstallments && form.installmentsTotal ? parseInt(form.installmentsTotal, 10) : null,
+      ...(isInstallments && (!form.id || form.installmentsPaid !== form.loadedInstallmentsPaid)
+        && { installmentsPaid: parseInt(form.installmentsPaid, 10) || 0 }),
     };
     const result = form.id
       ? await updateDebt(form.id, payload)
@@ -207,7 +275,7 @@ export function Debts() {
 
   const handleDelete = async (d: Debt) => {
     const result = await deleteDebt(d.id);
-    if (result.error) toast.error(result.error);
+    if (result.error) toast.error(result.code === 'debt_has_payments' ? t('debts.hasPaymentsError') : result.error);
     else toast.success(t('debts.deletedOk'));
   };
 
@@ -233,20 +301,30 @@ export function Debts() {
         <div className="flex-1 min-w-0">
           <p className="font-display truncate">{d.name}</p>
           <p className="text-xs text-muted-foreground">
-            {t(`debts.kind.${d.kind}`)}
+            {t(`debts.kind.${d.kind}`)} · {t(`debts.paymentMode.${d.paymentMode}`)}
             {d.apr != null && ` · ${d.apr}% APR`}
             {progress && ` · ${progress} ${t('debts.installments')}`}
           </p>
+          {d.purchasesTotal > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {t('debts.previousAndPurchases', { previous: fmtEuro(d.previousBalance), purchases: fmtEuro(d.purchasesTotal) })}
+            </p>
+          )}
         </div>
         <div className="text-right shrink-0">
-          <p className="text-lg font-display text-destructive">{fmtEuro(d.currentBalance)}</p>
-          {(d.minimumPayment != null || d.installmentAmount != null) && (
+          <p className="text-lg font-display text-destructive">{fmtEuro(Math.max(0, d.currentBalance))}</p>
+          {d.monthlyCommitment > 0 && (
             <p className="text-xs text-muted-foreground">
-              {fmtEuro(d.minimumPayment ?? d.installmentAmount ?? 0)} {t('debts.perPeriod')}
+              {fmtEuro(d.monthlyCommitment)} {t('debts.perPeriod')}
             </p>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {d.status === 'active' && (
+            <button onClick={() => openPay(d)} className="p-2 rounded-lg hover:bg-muted transition-colors" title={t('debts.recordPayment')}>
+              <Banknote className="w-4 h-4 text-muted-foreground" />
+            </button>
+          )}
           <button onClick={() => openEdit(d)} className="p-2 rounded-lg hover:bg-muted transition-colors" title={t('debts.edit')}>
             <Pencil className="w-4 h-4 text-muted-foreground" />
           </button>
@@ -327,7 +405,7 @@ export function Debts() {
           <div className="flex items-center gap-3">
             <label className="text-xs text-muted-foreground shrink-0">{t('debts.extraPaymentLabel')}</label>
             <div className="relative flex-1 max-w-40">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
               <input
                 type="number"
                 min={0}
@@ -358,7 +436,7 @@ export function Debts() {
                     </div>
                     <p className="text-2xl font-display">{summary.months} <span className="text-sm text-muted-foreground">{t('debts.monthsToDebtFree')}</span></p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {t('debts.totalInterest')}: €{summary.totalInterestPaid.toLocaleString(locale, { maximumFractionDigits: 0 })}
+                      {t('debts.totalInterest')}: {fmtEuro(Math.round(summary.totalInterestPaid))}
                     </p>
                     {summary.payoffOrder.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-border space-y-1">
@@ -455,7 +533,7 @@ export function Debts() {
                     return (
                       <button
                         key={k}
-                        onClick={() => setForm(f => ({ ...f, kind: k }))}
+                        onClick={() => setForm(f => ({ ...f, kind: k, ...(!f.id && { paymentMode: defaultModeFor(k) }) }))}
                         className={`flex flex-col items-center gap-1 py-3 rounded-xl border transition-colors text-xs ${selected ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted'}`}
                       >
                         <Icon className="w-4 h-4" />
@@ -466,19 +544,40 @@ export function Debts() {
                 </div>
               </div>
 
-              {/* Current balance */}
+              {/* How it's paid */}
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">{t('debts.paymentModeLabel')}</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {PAYMENT_MODES.map(m => (
+                    <button
+                      key={m}
+                      onClick={() => setForm(f => ({ ...f, paymentMode: m }))}
+                      className={`py-3 rounded-xl border transition-colors text-xs ${form.paymentMode === m ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted'}`}
+                    >
+                      {t(`debts.paymentMode.${m}`)}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">{t(`debts.paymentModeHint.${form.paymentMode}`)}</p>
+              </div>
+
+              {/* Current balance — editing it moves the anchor (server/lib/debtBalance.ts) */}
               <div className="space-y-2">
                 <label className="text-xs text-muted-foreground">{t('debts.balanceLabel')}</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
                   <input
                     type="number"
+                    inputMode="decimal"
                     value={form.currentBalance}
                     onChange={e => setForm(f => ({ ...f, currentBalance: e.target.value }))}
                     placeholder="0"
                     className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary"
                   />
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  {form.id ? t('debts.balanceAdjustHint') : isCardLike ? t('debts.cardPurchasesHint') : t('debts.balanceNewHint')}
+                </p>
               </div>
 
               {/* APR (all kinds) */}
@@ -497,53 +596,58 @@ export function Debts() {
                 </div>
               </div>
 
-              {isCardLike ? (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <label className="text-xs text-muted-foreground">{t('debts.creditLimitLabel')}</label>
-                      <input
-                        type="number"
-                        value={form.creditLimit}
-                        onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))}
-                        placeholder="0"
-                        className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs text-muted-foreground">{t('debts.paymentDueDayLabel')}</label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={28}
-                        value={form.paymentDueDay}
-                        onChange={e => setForm(f => ({ ...f, paymentDueDay: e.target.value }))}
-                        placeholder="1-28"
-                        className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
-                      />
-                    </div>
+              {isCardLike && (
+                <div className="space-y-2">
+                  <label className="text-xs text-muted-foreground">{t('debts.creditLimitLabel')}</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={form.creditLimit}
+                    onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))}
+                    placeholder="0"
+                    className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">{t('debts.paymentDueDayLabel')}</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={form.paymentDueDay}
+                  onChange={e => setForm(f => ({ ...f, paymentDueDay: e.target.value }))}
+                  placeholder="1-28"
+                  className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+                />
+              </div>
+
+              {isMinimum && (
+                <div className="space-y-2">
+                  <label className="text-xs text-muted-foreground">{t('debts.minimumPaymentLabel')}</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={form.minimumPayment}
+                      onChange={e => setForm(f => ({ ...f, minimumPayment: e.target.value }))}
+                      placeholder="0"
+                      className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary"
+                    />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-muted-foreground">{t('debts.minimumPaymentLabel')}</label>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
-                      <input
-                        type="number"
-                        value={form.minimumPayment}
-                        onChange={e => setForm(f => ({ ...f, minimumPayment: e.target.value }))}
-                        placeholder="0"
-                        className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary"
-                      />
-                    </div>
-                  </div>
-                </>
-              ) : (
+                </div>
+              )}
+
+              {isInstallments && (
                 <>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <label className="text-xs text-muted-foreground">{t('debts.installmentAmountLabel')}</label>
                       <input
                         type="number"
+                        inputMode="decimal"
                         value={form.installmentAmount}
                         onChange={e => setForm(f => ({ ...f, installmentAmount: e.target.value }))}
                         placeholder="0"
@@ -559,6 +663,17 @@ export function Debts() {
                         placeholder="12"
                         className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
                       />
+                      <div className="flex gap-1">
+                        {[6, 10, 12, 24].map(n => (
+                          <button
+                            key={n}
+                            onClick={() => setForm(f => ({ ...f, installmentsTotal: String(n) }))}
+                            className={`flex-1 py-1 rounded-lg border text-[11px] transition-colors ${form.installmentsTotal === String(n) ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted'}`}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -581,6 +696,83 @@ export function Debts() {
               >
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                 {form.id ? t('debts.save') : t('debts.createAction')}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Payment sheet */}
+      <AnimatePresence>
+        {paying && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-4"
+            onClick={e => { if (e.target === e.currentTarget) setPaying(null); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 40, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 40, scale: 0.95 }}
+              className="bg-card border border-border rounded-2xl p-6 w-full max-w-md space-y-5"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-display">{t('debts.payTitle')}</h2>
+                  <p className="text-sm text-muted-foreground">{paying.name} · {fmtEuro(Math.max(0, paying.currentBalance))}</p>
+                </div>
+                <button onClick={() => setPaying(null)} className="p-2 rounded-lg hover:bg-muted transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">{t('debts.payAmountLabel')}</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={payAmount}
+                    onChange={e => setPayAmount(e.target.value)}
+                    placeholder="0"
+                    className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">{t('debts.payFromLabel')}</label>
+                {payFromAccounts.length === 0 ? (
+                  <p className="text-sm text-amber-700 dark:text-amber-500">{t('debts.noPayFromAccount')}</p>
+                ) : (
+                  <select
+                    value={payAccountId}
+                    onChange={e => setPayAccountId(e.target.value)}
+                    className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+                  >
+                    {payFromAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">{t('debts.payDateLabel')}</label>
+                <input
+                  type="date"
+                  value={payDate}
+                  onChange={e => setPayDate(e.target.value)}
+                  className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+                />
+              </div>
+
+              <button
+                onClick={handlePay}
+                disabled={savingPayment || !payAccountId || !(parseFloat(payAmount) > 0)}
+                className="w-full py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {savingPayment && <Loader2 className="w-4 h-4 animate-spin" />}
+                {t('debts.recordPayment')}
               </button>
             </motion.div>
           </motion.div>

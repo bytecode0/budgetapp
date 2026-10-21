@@ -83,7 +83,10 @@ export function useAccounts() {
       method: 'DELETE',
       credentials: 'include',
     });
-    if (!res.ok) return { error: 'Failed to delete account' };
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { error: (data.error as string) || 'Failed to delete account', code: data.code as string | undefined };
+    }
     setAccounts((a) => {
       const next = a.filter((x) => x.id !== id);
       setNetWorth(next.filter((x) => !x.isArchived).reduce((s, x) => s + x.currentBalance, 0));

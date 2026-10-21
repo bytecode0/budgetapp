@@ -1079,7 +1079,8 @@
     "bankLinkedOk": "{{count}} cuenta(s) vinculada(s)",
     "syncNow": "Sincronizar ahora",
     "syncedOk": "Sincronizado — {{expenses}} gasto(s) nuevo(s), {{income}} ingreso(s) nuevo(s)",
-    "reconnect": "Reconectar"
+    "reconnect": "Reconectar",
+    "backsDebtError": "Esta cuenta es la de una tarjeta registrada en Deudas: archívala en vez de borrarla."
   },
   "editExpense": {
     "title": "Editar gasto",
@@ -1491,7 +1492,33 @@
     "monthsToDebtFree": "meses para estar libre de deudas",
     "totalInterest": "Interés total",
     "month": "mes {{count}}",
-    "month_other": "mes {{count}}"
+    "month_other": "mes {{count}}",
+    "paymentModeLabel": "Cómo la pagas",
+    "paymentMode": {
+      "full": "Contado a fin de mes",
+      "installments": "En cuotas",
+      "minimum": "Pago mínimo"
+    },
+    "paymentModeHint": {
+      "full": "Pagas el saldo entero cada mes, sin intereses (p. ej. una tarjeta a fin de mes).",
+      "installments": "Un número fijo de cuotas iguales: 6, 10, 12 meses o las que sean.",
+      "minimum": "Pagas el mínimo y el resto sigue generando intereses (tarjeta revolving)."
+    },
+    "balanceNewHint": "Lo que debes hoy.",
+    "cardPurchasesHint": "Lo que debes hoy. A partir de ahora, apunta las compras con esta tarjeta como gastos normales eligiendo su cuenta: suben el saldo solas.",
+    "balanceAdjustHint": "Si no coincide con tu banco, corrígelo aquí. La diferencia (intereses, alguna compra sin apuntar) cuenta como deuda previa.",
+    "previousAndPurchases": "Deuda previa {{previous}} · compras {{purchases}}",
+    "recordPayment": "Registrar pago",
+    "payTitle": "Registrar pago",
+    "payAmountLabel": "Importe",
+    "payFromLabel": "Pagado desde",
+    "payDateLabel": "Fecha",
+    "noPayFromAccount": "Necesitas una cuenta bancaria desde la que pagar. Añádela en Cuentas.",
+    "paymentDescription": "Pago {{name}}",
+    "paidOk": "Pago registrado",
+    "paidFromCardError": "Un pago de la tarjeta tiene que salir de otra cuenta (la del banco), no de la propia tarjeta.",
+    "paymentFailed": "No se pudo registrar el pago. Inténtalo de nuevo.",
+    "hasPaymentsError": "Esta deuda tiene pagos registrados y se queda en el historial de pagadas: no se puede borrar."
   },
   "onboarding": {
     "stepOf": "Paso {{current}} de {{total}}",
@@ -1594,5 +1621,8 @@
       "debtStateHint": "La hipoteca y otra deuda tolerable no entran aquí — esto es solo sobre deuda de consumo.",
       "goToDashboard": "Ir a mi panel"
     }
+  },
+  "currency": {
+    "symbol": "€"
   }
 }

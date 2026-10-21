@@ -1079,7 +1079,8 @@
     "bankLinkedOk": "{{count}} account(s) linked",
     "syncNow": "Sync now",
     "syncedOk": "Synced — {{expenses}} new expense(s), {{income}} new income",
-    "reconnect": "Reconnect"
+    "reconnect": "Reconnect",
+    "backsDebtError": "This account belongs to a card in Debts: archive it instead of deleting it."
   },
   "editExpense": {
     "title": "Edit expense",
@@ -1491,7 +1492,33 @@
     "monthsToDebtFree": "months to debt-free",
     "totalInterest": "Total interest",
     "month": "month {{count}}",
-    "month_other": "month {{count}}"
+    "month_other": "month {{count}}",
+    "paymentModeLabel": "How you pay it",
+    "paymentMode": {
+      "full": "In full at month end",
+      "installments": "Installments",
+      "minimum": "Minimum payment"
+    },
+    "paymentModeHint": {
+      "full": "You pay the whole balance every month, no interest (e.g. a charge card).",
+      "installments": "A fixed number of equal installments: 6, 10, 12 months or any other.",
+      "minimum": "You pay the minimum and the rest keeps accruing interest (revolving card)."
+    },
+    "balanceNewHint": "What you owe today.",
+    "cardPurchasesHint": "What you owe today. From now on, record purchases with this card as normal expenses on its account: they raise the balance on their own.",
+    "balanceAdjustHint": "If it doesn't match your bank, correct it here. The difference (interest, an unrecorded purchase) counts as previous debt.",
+    "previousAndPurchases": "Previous debt {{previous}} · purchases {{purchases}}",
+    "recordPayment": "Record payment",
+    "payTitle": "Record payment",
+    "payAmountLabel": "Amount",
+    "payFromLabel": "Paid from",
+    "payDateLabel": "Date",
+    "noPayFromAccount": "You need a bank account to pay from. Add one in Accounts.",
+    "paymentDescription": "{{name}} payment",
+    "paidOk": "Payment recorded",
+    "paidFromCardError": "A card payment must come from another account (your bank), not the card itself.",
+    "paymentFailed": "The payment couldn't be recorded. Try again.",
+    "hasPaymentsError": "This debt has recorded payments and stays in the paid-off history: it can't be deleted."
   },
   "onboarding": {
     "stepOf": "Step {{current}} of {{total}}",
@@ -1594,5 +1621,8 @@
       "debtStateHint": "Mortgages and other tolerable debt aren't part of this — this is only about consumer debt.",
       "goToDashboard": "Go to my dashboard"
     }
+  },
+  "currency": {
+    "symbol": "€"
   }
 }

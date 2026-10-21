@@ -12,8 +12,24 @@ import { rebuildExpenseShares } from "../lib/expenseShares.js";
 import { expenseListingFilter } from "../lib/visibility.js";
 import { periodBounds } from "../lib/period.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
+import { countedAmounts, syncDebtStatus } from "../lib/debtBalance.js";
 
 export const expensesRouter = Router();
+
+// `code` lets the client show its own translated message.
+const PAID_FROM_CARD = { error: "A card payment must come from another account, not the card itself", code: "paid_from_card" };
+
+// An expense on a "debt" budget line IS a payment of that debt: the debtId is
+// inherited from the line, never sent by the client. Returns the debt (with its
+// card account, to reject paying a card from itself) or null.
+async function debtForAllocation(userId: string, allocationId: string | null) {
+  if (!allocationId) return null;
+  const alloc = await prisma.allocation.findFirst({
+    where: { id: allocationId, userId, type: "debt", debtId: { not: null } },
+    select: { debt: { select: { id: true, accountId: true } } },
+  });
+  return alloc?.debt ?? null;
+}
 
 // Validate a requested accountId belongs to the user; if none given, fall back
 // to the user's default account (lowest sortOrder, non-archived). Returns null
@@ -71,7 +87,15 @@ expensesRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
       ? await prisma.user.findMany({ where: { id: { in: payerIds } }, select: { id: true, name: true, email: true } })
       : [];
     const payerName = Object.fromEntries(payers.map(u => [u.id, u.name ?? u.email]));
-    const withPayer = expenses.map(e => ({ ...e, payerName: e.payerUserId ? (payerName[e.payerUserId] ?? null) : null }));
+    // budgetAmount: what this expense counts as spending. Differs from amount
+    // only for a card payment that partly pays for purchases already counted
+    // in their own category (server/lib/debtBalance.ts).
+    const counted = await countedAmounts(req.userId!);
+    const withPayer = expenses.map(e => ({
+      ...e,
+      budgetAmount: counted.get(e.id) ?? e.amount,
+      payerName: e.payerUserId ? (payerName[e.payerUserId] ?? null) : null,
+    }));
 
     return res.json(serializeMoney({ expenses: withPayer }));
   } catch (err) {
@@ -127,6 +151,11 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
     // user's default (lowest sortOrder, non-archived) account.
     const resolvedAccountId = await resolveAccountId(req.userId!, accountId);
 
+    const paidDebt = await debtForAllocation(req.userId!, resolvedAllocationId);
+    if (paidDebt && paidDebt.accountId && paidDebt.accountId === resolvedAccountId) {
+      return res.status(400).json(PAID_FROM_CARD);
+    }
+
     // Attribution (Epic H3). Default payer = the account's owner, else the
     // logged-in user. Default scope follows the household model (individual →
     // personal; shared/proportional → shared). All overridable via the body.
@@ -149,6 +178,7 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
         source: "manual",
         allocationId: resolvedAllocationId,
         accountId: resolvedAccountId,
+        debtId: paidDebt?.id ?? null,
         date: date ? new Date(date) : new Date(),
         payerUserId: resolvedPayerId,
         scope: resolvedScope,
@@ -173,6 +203,8 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
         data: { currentAmount: { increment: amountCents } },
       });
     }
+
+    await syncDebtStatus(req.userId!, [expense.debtId]);
 
     return res.json(serializeMoney({ expense }));
   } catch (err) {
@@ -231,6 +263,7 @@ expensesRouter.post("/merge", requireAuth, async (req: AuthRequest, res: Respons
       }
     }
     await prisma.expense.deleteMany({ where: { id: { in: toRemove.map(e => e.id) }, userId: req.userId! } });
+    await syncDebtStatus(req.userId!, toRemove.map(e => e.debtId));
 
     return res.json({ success: true, removed: toRemove.length });
   } catch (err) {
@@ -345,12 +378,24 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
     const expenseRows = rows.filter(r => r.kind === "expense");
     const incomeRows = rows.filter(r => r.kind === "income");
 
+    // Rows put on a "debt" line are payments of that debt (see debtForAllocation).
+    const debtLines = await prisma.allocation.findMany({
+      where: { userId: req.userId!, type: "debt", debtId: { not: null } },
+      select: { id: true, debtId: true, debt: { select: { accountId: true } } },
+    });
+    const debtIdByAllocation = new Map(debtLines.map(a => [a.id, a.debtId]));
+    if (debtLines.some(a => a.debt?.accountId && a.debt.accountId === resolvedAccountId
+      && expenseRows.some(r => r.allocationId === a.id))) {
+      return res.status(400).json(PAID_FROM_CARD);
+    }
+
     const [exp, inc] = await Promise.all([
       prisma.expense.createMany({
         data: expenseRows.map(r => ({
           userId: req.userId!,
           accountId: resolvedAccountId,
           allocationId: r.allocationId || null,
+          debtId: (r.allocationId && debtIdByAllocation.get(r.allocationId)) || null,
           amount: toCents(r.amount),
           description: r.description ?? "",
           merchant: r.merchant || normalizeMerchant(r.description ?? ""),
@@ -393,6 +438,8 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
     } catch (learnErr) {
       console.error("[expenses/import/confirm] learn", learnErr);
     }
+
+    await syncDebtStatus(req.userId!, expenseRows.map(r => r.allocationId && debtIdByAllocation.get(r.allocationId)));
 
     // Attribution for imported expenses (Epic H3): payer = account owner; split
     // across the household when the pool belongs to one. Only touch rows not yet
@@ -504,6 +551,13 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     }) : null;
     const newAmount = amount !== undefined ? toCents(amount) : existing.amount;
 
+    // Moving onto / off a "debt" line makes it / stops it being a payment.
+    const paidDebt = await debtForAllocation(req.userId!, newAllocId);
+    const newAccountId = accountUpdate?.accountId ?? existing.accountId;
+    if (paidDebt && paidDebt.accountId && paidDebt.accountId === newAccountId) {
+      return res.status(400).json(PAID_FROM_CARD);
+    }
+
     // Reverse old plan contribution
     if (existing.allocation?.type === "plan" && existing.allocation.lifePlanId) {
       await prisma.lifePlan.update({
@@ -524,7 +578,7 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
       data: {
         ...(amount !== undefined && { amount: newAmount }),
         ...(description !== undefined && { description, merchant: normalizeMerchant(description) }),
-        ...(allocationId !== undefined && { allocationId: allocationId || null }),
+        ...(allocationId !== undefined && { allocationId: allocationId || null, debtId: paidDebt?.id ?? null }),
         ...(accountUpdate ?? {}),
         ...(date !== undefined && { date: new Date(date) }),
       },
@@ -540,6 +594,8 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
       const effectiveMerchant = description !== undefined ? normalizeMerchant(description) : existing.merchant;
       await learnFromCorrection(req.userId!, effectiveMerchant, newAllocId);
     }
+
+    await syncDebtStatus(req.userId!, [existing.debtId, expense.debtId]);
 
     return res.json(serializeMoney({ expense }));
   } catch (err) {
@@ -559,6 +615,7 @@ expensesRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Respons
     if (!existing) return res.status(404).json({ error: "Expense not found" });
 
     await prisma.expense.delete({ where: { id } });
+    await syncDebtStatus(req.userId!, [existing.debtId]);
 
     // Reverse plan contribution if applicable
     if (existing.allocation?.type === "plan" && existing.allocation.lifePlanId) {

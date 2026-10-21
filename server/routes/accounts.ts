@@ -147,6 +147,13 @@ accountsRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Respons
     const existing = await prisma.account.findFirst({ where: { id, userId: req.userId! } });
     if (!existing) return res.status(404).json({ error: "Account not found" });
 
+    // A card account backs a debt's purchases (server/lib/debtBalance.ts):
+    // without it, the debt's payments would count in full in past months.
+    const linkedDebt = await prisma.debt.findFirst({ where: { userId: req.userId!, accountId: id }, select: { id: true } });
+    if (linkedDebt) {
+      return res.status(409).json({ error: "This account backs a debt — archive it instead", code: "account_backs_debt" });
+    }
+
     await prisma.account.delete({ where: { id } });
     return res.json({ success: true });
   } catch (err) {

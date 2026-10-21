@@ -69,13 +69,16 @@ Valores por defecto al hacer `db push`: `credit_card` → `minimum` (lo que asum
 Nada se resta ni se suma a mano: **derivar, no almacenar**, como el periodo de presupuesto.
 
 - **Ancla** = `currentBalance` en la fecha `balanceAsOf` (lo introduce el usuario al dar de alta la deuda, o lo trae la sincronización bancaria).
-- **Compras** = gastos con `accountId` = cuenta de la tarjeta, sin `debtId`, con `date > balanceAsOf`.
-- **Pagos** = gastos con `debtId` = la deuda, con `date > balanceAsOf`.
-- **Saldo efectivo** = ancla + compras − pagos.
-- **Deuda previa pendiente** = max(0, ancla − pagos).
+- **Compras** = gastos con `accountId` = cuenta de la tarjeta, sin `debtId`, **fechados** después del ancla. Una entrada sin hora (solo el día) del mismo día del ancla cuenta si se apuntó después de fijarlo. Así, importar un extracto antiguo no vuelve a sumar compras que el ancla ya incluye.
+- **Pagos** = gastos con `debtId` = la deuda, con el mismo criterio de fecha.
+- **Ajustes** (`DebtAdjustment`, tabla nueva) = correcciones fechadas del saldo: intereses, una compra sin apuntar, una sincronización bancaria que no cuadra.
+- **Saldo efectivo** = ancla + compras + ajustes − pagos.
+- **Deuda previa pendiente** = ancla + ajustes − la parte de los pagos aplicada a ella (los pagos se reparten en orden cronológico).
 - **Cuotas pagadas** (modo `installments`) = `installmentsPaid` + nº de pagos después del ancla.
-- **Ajustar saldo a X** (intereses, una compra que no se apuntó): `currentBalance += X − saldo efectivo`, sin mover `balanceAsOf`. La diferencia se trata como deuda previa, que es lo que es: dinero que el presupuesto no había visto.
-- Al llegar a 0, `status = paid_off`. Si se borra un pago, vuelve a `active`.
+- **Ajustar saldo a X**: si aún no hay movimientos, se corrige el ancla (y su fecha pasa a hoy). Si ya los hay, la diferencia se guarda como **ajuste fechado hoy**: cuenta como deuda previa desde hoy y **no reparte de nuevo pagos de meses cerrados**. La sincronización bancaria usa el mismo mecanismo.
+- Una deuda que no es tarjeta pasa a `paid_off` al llegar a 0 (o al pagar todas las cuotas), y vuelve a `active` si se borra un pago. La partida se mide al inicio del periodo, así que el mes del último pago conserva su importe.
+- No se puede borrar una deuda con pagos, ni una cuenta vinculada a una deuda, ni cambiar la cuenta de una deuda con movimientos: reescribiría meses cerrados.
+- Límite conocido: "el mismo día del ancla" es el día UTC. Bien para España; un usuario al oeste de UTC que cree la deuda a última hora de su tarde vería excluidas las entradas de esa tarde.
 
 Un único módulo `server/lib/debtBalance.ts` (funciones puras + tests) calcula todo esto. Lo usan `GET /api/debts`, `debtTimeline`, `debtPayoff`, el dashboard y el resultado del onboarding. Ninguno vuelve a leer `currentBalance` en crudo.
 

@@ -61,6 +61,12 @@ const MONEY_KEYS = new Set([
   "expectedIncome",
   "totalInterestPaid",
   "totalPaid",
+  "anchorBalance",
+  "previousBalance",
+  "purchasesTotal",
+  "paymentsTotal",
+  "monthlyCommitment",
+  "budgetAmount",
 ]);
 
 /**

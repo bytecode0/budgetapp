@@ -14,6 +14,9 @@ export interface TimelineDebtInput {
   installmentAmount: number | null; // cents
   installmentsTotal: number | null;
   installmentsPaid: number | null;
+  // Optional so callers that predate payment modes keep their behavior.
+  paymentMode?: string;
+  previousRemaining?: number; // cents — pre-existing debt left (server/lib/debtBalance.ts)
 }
 
 export interface TimelinePeriodItem { debtId: string; name: string; kind: string; amount: number }
@@ -48,7 +51,11 @@ export function buildDebtTimeline(
     const period = periodKeyOffset(current, i);
     const items: TimelinePeriodItem[] = [];
     for (const d of active) {
-      const amount = d.minimumPayment ?? d.installmentAmount ?? 0;
+      // Paid in full: only the pre-existing debt is committed, once, now. New
+      // card purchases are already budgeted spending, not a future commitment.
+      const amount = d.paymentMode === "full"
+        ? (i === 0 ? d.previousRemaining ?? 0 : 0)
+        : d.minimumPayment ?? d.installmentAmount ?? 0;
       if (amount <= 0) continue;
       if (!stillDueAt(d, i)) continue;
       items.push({ debtId: d.id, name: d.name, kind: d.kind, amount });

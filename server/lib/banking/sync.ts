@@ -8,6 +8,7 @@ import { prisma } from "../prisma.js";
 import { normalizeMerchant } from "../normalizeMerchant.js";
 import { categorize, learnFromCorrection } from "../categorize.js";
 import { toCents } from "../money.js";
+import { setLiveValues, syncDebtStatus } from "../debtBalance.js";
 import { getBankingClient } from "./gocardless.js";
 import type { ImportKind, ImportPreview, ImportRow } from "../importStatement.js";
 import type { BankProviderTxn } from "./types.js";
@@ -92,10 +93,22 @@ export async function writeSyncedRows(
   const expenseRows = rows.filter(r => r.kind === "expense");
   const incomeRows = rows.filter(r => r.kind === "income");
 
+  // Rows on a "debt" line are payments of that debt, as in /import/confirm —
+  // except on the card's own account, which can't pay itself.
+  const debtLines = await prisma.allocation.findMany({
+    where: { userId, type: "debt", debtId: { not: null } },
+    select: { id: true, debt: { select: { id: true, accountId: true } } },
+  });
+  const debtByAllocation = new Map(debtLines.map(a => [a.id, a.debt]));
+  const debtIdFor = (allocationId?: string | null) => {
+    const debt = allocationId ? debtByAllocation.get(allocationId) : null;
+    return debt && debt.accountId !== accountId ? debt.id : null;
+  };
+
   const [exp, inc] = await Promise.all([
     prisma.expense.createMany({
       data: expenseRows.map(r => ({
-        userId, accountId, allocationId: r.allocationId || null,
+        userId, accountId, allocationId: r.allocationId || null, debtId: debtIdFor(r.allocationId),
         amount: toCents(r.amount), description: r.description, merchant: r.merchant,
         source: "bank_sync", externalId: r.externalId, date: new Date(r.date),
       })),
@@ -122,6 +135,8 @@ export async function writeSyncedRows(
   } catch (err) {
     console.error("[banking/sync] learn", err);
   }
+
+  await syncDebtStatus(userId, expenseRows.map(r => debtIdFor(r.allocationId)));
 
   return { expenses: exp.count, income: inc.count };
 }
@@ -173,10 +188,13 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
       const balance = await client.getAccountBalance(debt.externalAccountId);
       if (balance) {
         // A card's balance is what's owed, i.e. the positive magnitude of a
-        // typically-negative account balance.
+        // typically-negative account balance. It's the LIVE balance: any gap
+        // with what the app derived becomes a dated adjustment
+        // (server/lib/debtBalance.ts), never a rewrite of the anchor.
+        await setLiveValues(connection.userId, debt.id, { balance: toCents(Math.abs(balance.amount)) });
         await prisma.debt.update({
           where: { id: debt.id },
-          data: { currentBalance: toCents(Math.abs(balance.amount)), balanceSource: "bank_sync", balanceSyncedAt: new Date() },
+          data: { balanceSource: "bank_sync", balanceSyncedAt: new Date() },
         });
         balancesUpdated += 1;
       }

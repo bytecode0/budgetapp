@@ -267,9 +267,15 @@ model Debt {
   sortOrder   Int     @default(0)
 
   accountId      String? // optional link to the card/loan account this debt is drawn on
-  currentBalance Int     @default(0) // cents; what's owed right now
+  // Balance ANCHOR, not the live balance: what was owed at `balanceAsOf`. The
+  // live balance is derived (anchor + card purchases + adjustments − payments
+  // since then) by server/lib/debtBalance.ts — never read this field raw as
+  // "what's owed".
+  currentBalance Int      @default(0) // cents
+  balanceAsOf    DateTime @default(now())
   principal      Int?    // cents; original amount borrowed (for payoff simulations)
   apr            Float?  // annual percentage rate, e.g. 19.9
+  paymentMode    String   @default("minimum") // full (paid in full each month) | installments | minimum
 
   // Credit-card shaped (kind = credit_card)
   creditLimit    Int?
@@ -304,9 +310,27 @@ model Debt {
   bankConnection BankConnection? @relation(fields: [bankConnectionId], references: [id], onDelete: SetNull)
   expenses    Expense[]
   allocations Allocation[]
+  adjustments DebtAdjustment[]
 
   @@index([userId, sortOrder])
   @@index([bankConnectionId])
+}
+
+// A dated correction of a debt's live balance — interest, a purchase never
+// recorded, a bank sync that disagrees. Dated so it adds to the pre-existing
+// debt from that day on, instead of re-splitting payments already made
+// (server/lib/debtBalance.ts).
+model DebtAdjustment {
+  id        String   @id @default(cuid())
+  userId    String   // shared pool, like Debt.userId
+  debtId    String
+  amount    Int      // cents, signed: positive raises what's owed
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  debt Debt @relation(fields: [debtId], references: [id], onDelete: Cascade)
+
+  @@index([userId, debtId])
 }
 
 model Income {
