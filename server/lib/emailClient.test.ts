@@ -1,7 +1,7 @@
 // Run with:  node --import tsx --test server/lib/emailClient.test.ts
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { sendEmail } from "./emailClient.js";
+import { sendEmail, parseSender } from "./emailClient.js";
 
 const ENV_KEYS = ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_EMAIL_API_TOKEN", "EMAIL_FROM"] as const;
 const savedEnv: Record<string, string | undefined> = {};
@@ -17,8 +17,18 @@ function stubFetch(body: unknown, status = 200) {
   }) as typeof fetch;
 }
 
+function sentBody() {
+  return JSON.parse(String(calls[0].init.body));
+}
+
 const message = { to: "ana@example.com", subject: "Hola", html: "<p>Hola</p>", text: "Hola" };
-const ok = { success: true, errors: [], messages: [], result: { delivered: ["ana@example.com"], permanent_bounces: [], queued: [] } };
+const result = (r: Partial<Record<"delivered" | "queued" | "permanent_bounces" | "suppressed_recipients", string[]>>) => ({
+  success: true,
+  errors: [],
+  messages: [],
+  result: { delivered: [], permanent_bounces: [], queued: [], ...r },
+});
+const ok = result({ delivered: ["ana@example.com"] });
 
 beforeEach(() => {
   calls = [];
@@ -36,7 +46,7 @@ afterEach(() => {
   }
 });
 
-test("posts to the Cloudflare send endpoint with bearer auth and the message as JSON", async () => {
+test("posts to the Cloudflare send endpoint with bearer auth, a timeout and the message as JSON", async () => {
   stubFetch(ok);
   await sendEmail(message);
 
@@ -47,13 +57,38 @@ test("posts to the Cloudflare send endpoint with bearer auth and the message as 
   const headers = init.headers as Record<string, string>;
   assert.equal(headers.Authorization, "Bearer tok456");
   assert.equal(headers["Content-Type"], "application/json");
-  assert.deepEqual(JSON.parse(String(init.body)), {
-    from: "LifePlan <contact@luisvespa.com>",
+  assert.ok(init.signal instanceof AbortSignal);
+  assert.deepEqual(sentBody(), {
+    from: { address: "contact@luisvespa.com", name: "LifePlan" },
     to: "ana@example.com",
     subject: "Hola",
     html: "<p>Hola</p>",
     text: "Hola",
   });
+});
+
+test("sends a bare EMAIL_FROM address as a plain string", async () => {
+  process.env.EMAIL_FROM = "contact@luisvespa.com";
+  stubFetch(ok);
+  await sendEmail(message);
+  assert.equal(sentBody().from, "contact@luisvespa.com");
+});
+
+test("parseSender handles named, quoted, bare and invalid senders", () => {
+  assert.deepEqual(parseSender("LifePlan <contact@luisvespa.com>"), { address: "contact@luisvespa.com", name: "LifePlan" });
+  assert.deepEqual(parseSender('"Life Plan" <contact@luisvespa.com>'), { address: "contact@luisvespa.com", name: "Life Plan" });
+  assert.equal(parseSender("<contact@luisvespa.com>"), "contact@luisvespa.com");
+  assert.equal(parseSender("  contact@luisvespa.com "), "contact@luisvespa.com");
+  for (const bad of ["LifePlan", "LifePlan <contact>", "a b@c.d", "LifePlan contact@luisvespa.com"]) {
+    assert.throws(() => parseSender(bad), /EMAIL_FROM must be/);
+  }
+});
+
+test("throws a clear error and sends nothing when EMAIL_FROM cannot be parsed", async () => {
+  process.env.EMAIL_FROM = "LifePlan";
+  stubFetch(ok);
+  await assert.rejects(sendEmail(message), /EMAIL_FROM must be/);
+  assert.equal(calls.length, 0);
 });
 
 test("resolves when the email is delivered", async () => {
@@ -62,7 +97,7 @@ test("resolves when the email is delivered", async () => {
 });
 
 test("resolves when the email is queued", async () => {
-  stubFetch({ ...ok, result: { delivered: [], permanent_bounces: [], queued: ["ana@example.com"] } });
+  stubFetch(result({ queued: ["ana@example.com"] }));
   await assert.doesNotReject(sendEmail(message));
 });
 
@@ -85,9 +120,33 @@ test("throws when success is false even on HTTP 200", async () => {
   await assert.rejects(sendEmail(message), /10002: nope/);
 });
 
-test("throws when the recipient permanently bounces", async () => {
-  stubFetch({ ...ok, result: { delivered: [], permanent_bounces: ["ana@example.com"], queued: [] } });
-  await assert.rejects(sendEmail(message), /permanent bounce for ana@example\.com/);
+test("throws on a permanent bounce, without naming the recipient", async () => {
+  stubFetch(result({ permanent_bounces: ["ana@example.com"] }));
+  await assert.rejects(sendEmail(message), (err: Error) =>
+    /1 permanent bounce/.test(err.message) && !err.message.includes("ana@example.com"));
+});
+
+test("throws when the recipient is on the suppression list, without naming it", async () => {
+  stubFetch(result({ suppressed_recipients: ["ana@example.com"] }));
+  await assert.rejects(sendEmail(message), (err: Error) =>
+    /1 suppressed/.test(err.message) && !err.message.includes("ana@example.com"));
+});
+
+test("throws when the recipient is neither delivered nor queued", async () => {
+  stubFetch(result({ delivered: ["someone-else@example.com"] }));
+  await assert.rejects(sendEmail(message), /did not accept the recipient/);
+});
+
+test("throws when success is true but result is null", async () => {
+  stubFetch({ success: true, errors: [], messages: [], result: null });
+  await assert.rejects(sendEmail(message), /did not accept the recipient/);
+});
+
+test("throws a clear error when the request times out", async () => {
+  globalThis.fetch = (async () => {
+    throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+  }) as typeof fetch;
+  await assert.rejects(sendEmail(message), /did not respond within 10s/);
 });
 
 test("throws a clear error when the response is not JSON", async () => {

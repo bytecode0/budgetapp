@@ -10,6 +10,8 @@ export interface EmailMessage {
   text: string;
 }
 
+type Sender = string | { address: string; name: string };
+
 interface CloudflareSendResponse {
   success: boolean;
   errors?: { code: number; message: string }[];
@@ -17,8 +19,13 @@ interface CloudflareSendResponse {
     delivered?: string[];
     permanent_bounces?: string[];
     queued?: string[];
+    suppressed_recipients?: string[];
   } | null;
 }
+
+const SEND_TIMEOUT_MS = 10_000;
+const BARE_ADDRESS = /^[^\s<>@]+@[^\s<>@]+$/;
+const NAMED_ADDRESS = /^(.*?)\s*<([^\s<>@]+@[^\s<>@]+)>$/;
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -26,19 +33,43 @@ function requireEnv(name: string): string {
   return value;
 }
 
+// The REST API takes `from` as a bare address or { address, name }; the
+// "Name <addr>" form is only for SMTP headers, so EMAIL_FROM is parsed here.
+export function parseSender(raw: string): Sender {
+  const value = raw.trim();
+  if (BARE_ADDRESS.test(value)) return value;
+  const match = NAMED_ADDRESS.exec(value);
+  if (match) {
+    const name = match[1].trim().replace(/^"(.*)"$/, "$1").trim();
+    return name ? { address: match[2], name } : match[2];
+  }
+  throw new Error('[email] EMAIL_FROM must be "address@domain" or "Name <address@domain>"');
+}
+
+const sameAddress = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
 export async function sendEmail({ to, subject, html, text }: EmailMessage): Promise<void> {
   const accountId = requireEnv("CLOUDFLARE_ACCOUNT_ID");
   const token = requireEnv("CLOUDFLARE_EMAIL_API_TOKEN");
-  const from = requireEnv("EMAIL_FROM");
+  const from = parseSender(requireEnv("EMAIL_FROM"));
 
-  const res = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/email/sending/send`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to, subject, html, text }),
-    },
-  );
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/email/sending/send`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from, to, subject, html, text }),
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+      },
+    );
+  } catch (err) {
+    if (err instanceof Error && err.name === "TimeoutError") {
+      throw new Error(`[email] Cloudflare did not respond within ${SEND_TIMEOUT_MS / 1000}s`);
+    }
+    throw err;
+  }
 
   let body: CloudflareSendResponse;
   try {
@@ -54,8 +85,15 @@ export async function sendEmail({ to, subject, html, text }: EmailMessage): Prom
     throw new Error(`[email] Cloudflare rejected the email (HTTP ${res.status}): ${detail}`);
   }
 
-  const bounces = body.result?.permanent_bounces ?? [];
-  if (bounces.length > 0) {
-    throw new Error(`[email] permanent bounce for ${bounces.join(", ")}`);
+  // Accepted means delivered or queued for this recipient; anything else
+  // (permanent bounce, suppression list, missing) is a failed send.
+  const result = body.result ?? {};
+  const accepted = [...(result.delivered ?? []), ...(result.queued ?? [])];
+  if (!accepted.some((addr) => sameAddress(addr, to))) {
+    const bounced = result.permanent_bounces?.length ?? 0;
+    const suppressed = result.suppressed_recipients?.length ?? 0;
+    throw new Error(
+      `[email] Cloudflare did not accept the recipient (${bounced} permanent bounce(s), ${suppressed} suppressed)`,
+    );
   }
 }

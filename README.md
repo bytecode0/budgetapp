@@ -51,6 +51,7 @@ JWT_SECRET=your-secret-key-here
 # Email (Cloudflare Email Sending — Workers Paid plan, verified sending domain)
 CLOUDFLARE_ACCOUNT_ID=your-cloudflare-account-id
 CLOUDFLARE_EMAIL_API_TOKEN=your-send-email-api-token
+# "Name <address>" or a bare address; sent to the API as { address, name }
 EMAIL_FROM="LifePlan <noreply@yourdomain.com>"
 
 # Stripe (https://dashboard.stripe.com)
