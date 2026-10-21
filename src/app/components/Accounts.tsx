@@ -10,7 +10,8 @@ import {
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
-import { useAccounts, type Account, type AccountType, type CardPaymentMode } from '../hooks/useAccounts';
+import { useAccounts, type Account, type AccountType } from '../hooks/useAccounts';
+import { CardFields, EMPTY_CARD_FIELDS, cardSettingsPayload, type CardFieldsValue } from './shared/CardFields';
 import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSheet';
 import { useHousehold } from '../hooks/useHousehold';
 import { useBanking, type BankInstitution, type BankProviderAccount, type BankConnection as BankConnectionInfo } from '../hooks/useBanking';
@@ -72,16 +73,12 @@ function DraggableRow({
   );
 }
 
-interface FormState {
+// For a card, currentBalance (from CardFieldsValue) is what's owed now.
+interface FormState extends CardFieldsValue {
   id: string | null;
   name: string;
   type: AccountType;
-  currentBalance: string; // for a card: what's owed now
   visibility: 'private' | 'household';
-  // Card only — the settings of the debt behind it (server/lib/cardDebt.ts).
-  cardPaymentMode: CardPaymentMode;
-  cardMinimumPayment: string;
-  cardPaymentDueDay: string;
   // As loaded when editing: a card's owed amount is only sent if the user
   // changed it, so a form left open can't erase a purchase recorded meanwhile.
   loadedBalance: string;
@@ -89,10 +86,8 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
-  id: null, name: '', type: 'checking', currentBalance: '', visibility: 'household',
-  cardPaymentMode: 'full', cardMinimumPayment: '', cardPaymentDueDay: '', loadedBalance: '', loadedType: null,
+  ...EMPTY_CARD_FIELDS, id: null, name: '', type: 'checking', visibility: 'household', loadedBalance: '', loadedType: null,
 };
-const CARD_PAYMENT_MODES: CardPaymentMode[] = ['full', 'minimum'];
 
 export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBankToken?: string | null; onConsumedBankToken?: () => void } = {}) {
   const { t } = useTranslation();
@@ -248,11 +243,7 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
       type: form.type,
       ...((!isCard || balanceChanged) && { currentBalance: parseFloat(form.currentBalance) || 0 }),
       visibility: form.visibility,
-      ...(isCard && {
-        cardPaymentMode: form.cardPaymentMode,
-        cardMinimumPayment: form.cardPaymentMode === 'minimum' && form.cardMinimumPayment ? parseFloat(form.cardMinimumPayment) : null,
-        cardPaymentDueDay: form.cardPaymentDueDay ? parseInt(form.cardPaymentDueDay, 10) : null,
-      }),
+      ...(isCard && cardSettingsPayload(form)),
     };
     const result = form.id
       ? await updateAccount(form.id, payload)
@@ -514,69 +505,23 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
                 </div>
               </div>
 
-              {/* Card: how it's paid — its debt is created and kept up to date on its own */}
-              {isCard && (
+              {/* Card: how it's paid and what's owed — its debt is created and kept up to date on its own */}
+              {isCard ? (
+                <CardFields value={form} onChange={patch => setForm(f => ({ ...f, ...patch }))} editing={!!form.id} />
+              ) : (
                 <div className="space-y-2">
-                  <label className="text-xs text-muted-foreground">{t('debts.paymentModeLabel')}</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {CARD_PAYMENT_MODES.map(m => (
-                      <button
-                        key={m}
-                        onClick={() => setForm(f => ({ ...f, cardPaymentMode: m }))}
-                        className={`py-3 rounded-xl border transition-colors text-xs ${form.cardPaymentMode === m ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted'}`}
-                      >
-                        {t(`debts.paymentMode.${m}`)}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground">{t(`debts.paymentModeHint.${form.cardPaymentMode}`)}</p>
-                </div>
-              )}
-
-              {/* Current balance — for a card, what's owed now */}
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">{isCard ? t('accounts.cardOwedLabel') : t('accounts.balanceLabel')}</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={form.currentBalance}
-                    onChange={e => setForm(f => ({ ...f, currentBalance: e.target.value }))}
-                    placeholder="0"
-                    className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary"
-                  />
-                </div>
-                {isCard && <p className="text-xs text-muted-foreground">{t(form.id ? 'accounts.cardOwedAdjustHint' : 'accounts.cardOwedHint')}</p>}
-              </div>
-
-              {isCard && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <label className="text-xs text-muted-foreground">{t('debts.paymentDueDayLabel')}</label>
+                  <label className="text-xs text-muted-foreground">{t('accounts.balanceLabel')}</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
                     <input
                       type="number"
-                      min={1}
-                      max={28}
-                      value={form.cardPaymentDueDay}
-                      onChange={e => setForm(f => ({ ...f, cardPaymentDueDay: e.target.value }))}
-                      placeholder="1-28"
-                      className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+                      inputMode="decimal"
+                      value={form.currentBalance}
+                      onChange={e => setForm(f => ({ ...f, currentBalance: e.target.value }))}
+                      placeholder="0"
+                      className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary"
                     />
                   </div>
-                  {form.cardPaymentMode === 'minimum' && (
-                    <div className="space-y-2">
-                      <label className="text-xs text-muted-foreground">{t('debts.minimumPaymentLabel')}</label>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        value={form.cardMinimumPayment}
-                        onChange={e => setForm(f => ({ ...f, cardMinimumPayment: e.target.value }))}
-                        placeholder="0"
-                        className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
-                      />
-                    </div>
-                  )}
                 </div>
               )}
 
