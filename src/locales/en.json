@@ -1020,9 +1020,12 @@
     "summary": "Summary",
     "amount": "Amount",
     "category": "Category",
-    "account": "Account",
+    "account": "Paid with",
     "note": "Note",
-    "addExpense": "Add Expense"
+    "addExpense": "Add Expense",
+    "bankAccounts": "Accounts",
+    "cards": "Cards",
+    "paidWithCardHint": "It's added to the {{name}} debt: you'll pay it when you settle the card."
   },
   "accounts": {
     "title": "Accounts",

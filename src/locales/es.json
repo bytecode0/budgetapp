@@ -1020,9 +1020,12 @@
     "summary": "Resumen",
     "amount": "Importe",
     "category": "Categoría",
-    "account": "Cuenta",
+    "account": "Pagado con",
     "note": "Nota",
-    "addExpense": "Añadir Gasto"
+    "addExpense": "Añadir Gasto",
+    "bankAccounts": "Cuentas",
+    "cards": "Tarjetas",
+    "paidWithCardHint": "Se suma a la deuda de {{name}}: la pagarás cuando liquides la tarjeta."
   },
   "accounts": {
     "title": "Cuentas",

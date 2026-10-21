@@ -27,6 +27,11 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
   const { createExpense, suggestAllocation } = useExpenses();
 
   const activeAccounts = accounts.filter(a => !a.isArchived);
+  // Cards listed apart: picking one means "paid with this card", which raises
+  // the card's debt instead of taking money out of a bank account
+  // (server/lib/debtBalance.ts).
+  const bankAccounts = activeAccounts.filter(a => a.type !== 'card');
+  const cardAccounts = activeAccounts.filter(a => a.type === 'card');
 
   const [step, setStep] = useState<Step>('amount');
   const [amount, setAmount] = useState('');
@@ -43,10 +48,11 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
   const selectedAllocation = allocations.find(a => a.id === selectedAllocationId) ?? null;
   const selectedAccount = accounts.find(a => a.id === selectedAccountId) ?? null;
 
-  // Default to the first active account once accounts load.
+  // Default to the first bank account once accounts load — never silently to a
+  // card, which would turn the expense into card debt.
   useEffect(() => {
     if (!selectedAccountId && activeAccounts.length > 0) {
-      setSelectedAccountId(activeAccounts[0].id);
+      setSelectedAccountId((bankAccounts[0] ?? activeAccounts[0]).id);
     }
   }, [activeAccounts, selectedAccountId]);
 
@@ -282,10 +288,22 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
                           onChange={e => setSelectedAccountId(e.target.value || null)}
                           className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:border-primary transition-colors text-sm"
                         >
-                          {activeAccounts.map(a => (
-                            <option key={a.id} value={a.id}>{a.name}</option>
-                          ))}
+                          {cardAccounts.length === 0 ? (
+                            activeAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)
+                          ) : (
+                            <>
+                              <optgroup label={t('addExpense.bankAccounts')}>
+                                {bankAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                              </optgroup>
+                              <optgroup label={t('addExpense.cards')}>
+                                {cardAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                              </optgroup>
+                            </>
+                          )}
                         </select>
+                        {selectedAccount?.type === 'card' && (
+                          <p className="text-xs text-muted-foreground mt-2">{t('addExpense.paidWithCardHint', { name: selectedAccount.name })}</p>
+                        )}
                       </div>
                     )}
                     <div>
