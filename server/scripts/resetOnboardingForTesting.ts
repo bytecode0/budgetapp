@@ -4,9 +4,11 @@
 // second account. needsOnboarding is derived live from this data, never a
 // stored flag, so clearing it is all that's needed.
 //
-// Leaves Accounts (savings/investment) and Household/PartnerInvite rows alone
-// by default — pass --accounts to also clear the Savings step's accounts for
-// a fully clean slate.
+// Card accounts always go with their debts (a card account is the debt's
+// other half — server/lib/cardDebt.ts). Other accounts and Household /
+// PartnerInvite rows are left alone by default — pass --accounts to also
+// clear the savings and bank-account steps' accounts (the default checking
+// account is re-created on the next load) for a fully clean slate.
 //
 // Run:  npx tsx server/scripts/resetOnboardingForTesting.ts you@email.com [--accounts]
 import { prisma } from "../lib/prisma.js";
@@ -28,16 +30,17 @@ import { prisma } from "../lib/prisma.js";
     prisma.debt.deleteMany({ where: { userId } }),
     prisma.allocation.deleteMany({ where: { userId } }),
   ]);
+  const cards = await prisma.account.deleteMany({ where: { userId, type: "card" } });
   await prisma.userSettings.update({ where: { userId }, data: { monthlyIncome: 0 } }).catch(() => {});
 
-  console.log(`Deleted ${incomes.count} income row(s), ${debts.count} debt(s), ${allocations.count} allocation(s).`);
+  console.log(`Deleted ${incomes.count} income row(s), ${debts.count} debt(s), ${cards.count} card account(s), ${allocations.count} allocation(s).`);
   console.log("monthlyIncome reset to 0.");
 
   if (resetAccounts) {
-    const accounts = await prisma.account.deleteMany({ where: { userId, type: { in: ["cash", "savings", "investment"] } } });
-    console.log(`Deleted ${accounts.count} cash/savings/investment account(s).`);
+    const accounts = await prisma.account.deleteMany({ where: { userId, type: { in: ["cash", "savings", "investment", "checking"] } } });
+    console.log(`Deleted ${accounts.count} cash/savings/investment/checking account(s).`);
   } else {
-    console.log("Accounts left untouched — pass --accounts to also clear the Savings step's data.");
+    console.log("Accounts left untouched — pass --accounts to also clear the savings and bank-account steps' data.");
   }
 
   console.log(`\nDone. Log back in as ${email} (or just reload the app while logged in) — onboarding should show again.`);
