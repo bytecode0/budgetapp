@@ -61,6 +61,25 @@ function resolveDebts(debts: DebtRow[]): DebtRow[] {
   return extracto.length > 0 ? extracto : debts.filter((d) => d.source === "manual");
 }
 
+// Shared with the report generator (server/lib/radiografia/report.ts) so debt
+// pressure in the email/web report is computed with the EXACT SAME
+// extracto-wins-wholesale resolution the stage engine itself uses, rather than
+// a second, potentially drifting re-derivation of "which debts count".
+export function debtPressure(params: {
+  fieldValues: FieldValueRow[];
+  debts: DebtRow[];
+  incomeType: "regular" | "irregular";
+}): { monthlyTotal: number; pctOfIncome: number } {
+  const values = resolveFieldValues(params.fieldValues);
+  const income = (params.incomeType === "irregular" ? values.get("income_floor") : values.get("income_regular")) ?? 0;
+  const excludedKinds: readonly string[] = STAGE_CONFIG_V1.debtExcludedKinds;
+  const resolvedDebts = resolveDebts(params.debts);
+  const monthlyTotal = resolvedDebts
+    .filter((d) => !excludedKinds.includes(d.kind))
+    .reduce((sum, d) => sum + d.monthlyPayment, 0);
+  return { monthlyTotal, pctOfIncome: income > 0 ? monthlyTotal / income : 0 };
+}
+
 export function buildStageInputs(params: {
   fieldValues: FieldValueRow[];
   debts: DebtRow[];

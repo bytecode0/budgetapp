@@ -15,7 +15,7 @@ Definición de "Listo"
 La release está lista cuando estas 8 cosas son verdad. Ni una más.
 
 En producción, ninguna ruta ni endpoint de la BudgetApp es alcanzable. El único producto público es la Radiografía.
-Un usuario sin extracto bancario puede completar la radiografía a mano, desde el móvil, en menos de 4 minutos.
+Un usuario sube su extracto bancario desde el móvil, completa los huecos que el extracto no puede saber (vivienda, esenciales, colchón disponible) y llega al resultado en menos de 4 minutos. (Decisión del 18 ago: sin extracto la radiografía tiene muy pocos datos para ser útil — el formulario manual deja de ser una entrada alternativa y pasa a ser solo el paso que completa los huecos tras el extracto.)
 Al terminar, ve su resultado en pantalla y puede pedir el informe completo dejando su email.
 El email y el resultado quedan persistidos, y el informe personalizado llega automáticamente en HTML con enlace a la versión web.
 El eBook "De la ansiedad a la paz financiera" se entrega como enlace de descarga en ese mismo email.
@@ -37,7 +37,6 @@ Recalcular o editar una radiografía ya enviada
 Secuencia de nutrición de más de 1 email
 Rediseño del cálculo de la Épica 2, que ya está terminado
 Cualquier trabajo en módulos de la BudgetApp. No se lanza el 12 de septiembre. Tocarla ahora no aporta nada a esta fecha.
-Guardar importes financieros en bruto (ver decisión de privacidad en la Épica 2)
 
 Regla: si una tarea no aparece en las Épicas 1, 2 o 3 de abajo, no se hace antes del 12 de septiembre.
 
@@ -83,9 +82,9 @@ Criterios de aceptación
  Con el flag encendido en local, la BudgetApp sigue funcionando igual que hoy
  Ningún archivo de src/radiografia/ importa de un módulo de la BudgetApp
  robots.txt verificado en producción
-ÉPICA 1 — Radiografía manual (sin extracto bancario)
+ÉPICA 1 — Completar los huecos que el extracto no puede saber
 
-Objetivo: que la falta de extracto bancario deje de ser un motivo de abandono.
+Objetivo cambiado el 18 ago: ya no es "que la falta de extracto deje de ser un motivo de abandono". Se decidió lo contrario — sin extracto la radiografía tiene muy pocos datos para ser útil, así que el extracto pasa a ser obligatorio. Este paso ahora sirve solo para completar lo que el extracto nunca puede saber (vivienda, esenciales, ahorro disponible fuera de cuenta, deudas), inmediatamente después de subirlo. La implementación real es un único paso (FinancialContextBlock.tsx), no el asistente de 7 pantallas descrito abajo — esa lista quedó obsoleta y es solo referencia histórica de los campos que había que cubrir.
 
 Principios de diseño
 Móvil primero. Se diseña a 380px y luego se adapta a escritorio.
@@ -144,7 +143,7 @@ Criterios de aceptación
  Se puede volver atrás sin perder lo ya introducido
  El estado sobrevive a un refresco accidental de la página
  Ninguna combinación de datos rompe el cálculo del resultado (probar: todo en 0, gastos = 3x ingreso, sin deudas, 8 deudas)
- Un usuario que llega por el flujo de extracto bancario ve un enlace visible a "no tengo mi extracto, hacerlo a mano"
+ (Retirado el 18 ago: el extracto es obligatorio, ya no existe un enlace de "hacerlo a mano" sin él.)
 ÉPICA 2 — Informe personalizado y entrega
 
 Estado: el cálculo y la radiografía están terminados. Falta la persistencia, el generador del informe y la entrega.
@@ -159,15 +158,16 @@ Campo	Notas
 id	Token no adivinable, usado en la URL del informe
 email	
 consentimiento	Booleano + timestamp
-resultado	JSON: porcentajes por área y umbrales activados
+resultado	JSON: porcentajes por área, categorías de gasto, gastos hormiga, suscripciones, salud, arquetipo — nunca movimientos ni nombres de comercio
 createdAt	
 origen	Valor del utm_source, para cruzar con la analítica
 
-Decisión de privacidad: guarda los porcentajes y el diagnóstico, no los importes en bruto.
+Decisión de privacidad revocada el 18 ago: con solo porcentajes, el informe no tenía suficiente sustancia ("600€ al año en restaurantes" es lo que hace útil la radiografía, y eso exige un importe, no un porcentaje). Se guardan agregados con importe — categorías de gasto, gastos hormiga, suscripciones, índice de salud, arquetipo — nunca movimientos individuales ni nombres de comercio. Lo que sigue vigente:
 
-El informe solo necesita los porcentajes por área y qué umbrales se activaron. No almacenando cuánto gana exactamente cada persona ni cuánto debe, reduces mucho la exposición: menos daño si hay una filtración, menos obligaciones de RGPD, y la conversación de privacidad se vuelve trivial. No hay ninguna razón de negocio para guardar el salario de nadie.
-
-Los importes viven solo en memoria del navegador durante la sesión del formulario.
+- Los movimientos en bruto (fecha, concepto, importe de cada línea del extracto) nunca entran en la base de datos. Solo agregados calculados a partir de ellos.
+- La categoría `health` (farmacia, clínica, seguro médico) no se desglosa nunca, ni en importe ni en nombre — es dato de salud bajo el artículo 9 del RGPD incluso sin nombre de comercio.
+- Los movimientos de generosidad (diezmo, iglesia, ONG) no aportan nombre de comercio al informe — sería inferir creencia religiosa, también artículo 9.
+- Los nombres de comercio de gastos hormiga y suscripciones viajan del navegador al correo de confirmación (sessionStorage → un único uso) y nunca se escriben en ninguna tabla.
 
 Endpoint: POST /api/radiografia — público, sin requireAuth, con limitación de tasa por IP.
 
@@ -179,16 +179,25 @@ Motivos: nada de infraestructura de generación de PDF, mejor entregabilidad par
 
 El eBook se entrega como enlace de descarga, nunca como adjunto.
 
-Contenido del informe
-Titular — el diagnóstico en una frase, personalizado según el resultado
-Tu dinero en porcentajes — desglose por área con barras visuales
-Contraste con el marco 10/50/20/20 — dónde estás por encima y por debajo
-Los huecos — 2 o 3 fugas concretas detectadas, en lenguaje directo
-Presión de deuda — cuota total mensual como % del ingreso, con umbral de alarma
-Tres pasos siguientes — accionables esta semana, no genéricos
-CTA al eBook — como el paso natural, no como un anuncio pegado al final
+Reparto del contenido (revisado): tres momentos, no un solo correo
 
-Reglas de tono: sin culpa ni sermón. Diagnóstico honesto, no juicio. El marco de mayordomía se siente en el lenguaje, no se cita en cada párrafo.
+Se probó meter todo el desglose dentro del correo de confirmación y resultó redundante con la
+página web — dos sitios mostrando lo mismo, con el riesgo de que se desincronicen. El reparto
+que queda:
+
+1. **Correo de aviso** (al confirmar el código): corto y bonito — nombre de la etapa, una
+   frase, un botón "Ver mi informe completo →". Nada de porcentajes, huecos ni eBook aquí.
+2. **La web, `/informe/<token>`** — el informe completo de verdad, y el único sitio donde vive:
+   titular por diagnóstico, tu dinero en porcentajes con barras, contraste con el marco
+   10/50/20/20, los huecos, presión de deuda, tres pasos siguientes, categorías, gastos
+   hormiga, suscripciones, arquetipo.
+3. **Correo del eBook** (disparado la primera vez que se abre esa página, no antes): el CTA al
+   eBook vive aquí, separado del aviso — así nadie ve el eBook antes de haber visto su propio
+   informe.
+
+Reglas de tono para lo que se muestra (correo de aviso y web por igual): sin culpa ni sermón.
+Diagnóstico honesto, no juicio. El marco de mayordomía se siente en el lenguaje, no se cita en
+cada párrafo.
 
 Implementación
 Plantilla HTML con tablas y CSS inline (los clientes de correo no soportan CSS moderno)

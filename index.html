@@ -1,10 +1,48 @@
-
   <!DOCTYPE html>
-  <html lang="en">
+  <html lang="es">
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>BudgetApp</title>
+
+      <!--
+        Épica 0: the only product public on this domain is the Radiografía, so
+        the static title and description describe it — not the BudgetApp. This
+        matters beyond the browser tab: link crawlers (WhatsApp, LinkedIn,
+        Slack) do NOT execute JavaScript, so anything set later from React is
+        invisible to them. The static tags here are the only ones they read.
+
+        `lang` is kept in sync with the active i18next language at runtime
+        (src/i18n.ts) — "es" is the correct default because the public funnel is
+        Spanish-first (CLAUDE.md § Internationalisation).
+      -->
+      <title>Radiografía Financiera · Tu foto financiera en 4 minutos</title>
+      <meta
+        name="description"
+        content="Sube un extracto de tu banco y descubre en 4 minutos en qué se va tu dinero: gastos hormiga, suscripciones olvidadas y tu diagnóstico 10/50/20/20. Sin registro."
+      />
+
+      <meta property="og:type" content="website" />
+      <meta property="og:locale" content="es_ES" />
+      <meta property="og:site_name" content="Radiografía Financiera" />
+      <meta property="og:title" content="Radiografía Financiera · Tu foto financiera en 4 minutos" />
+      <meta
+        property="og:description"
+        content="Sube un extracto de tu banco y descubre en qué se va tu dinero: gastos hormiga, suscripciones olvidadas y tu diagnóstico 10/50/20/20. Sin registro."
+      />
+      <meta name="twitter:card" content="summary_large_image" />
+      <!--
+        TODO (Luis, before 12 Sep): add og:image + og:url. Both need values this
+        repo doesn't have yet:
+          - og:image — a 1200x630 PNG in public/, referenced as an ABSOLUTE URL
+            (crawlers reject relative paths). Without it the shared link shows
+            as a text-only card; with a broken path it shows worse, which is why
+            no placeholder is committed here.
+          - og:url — the canonical production URL (APP_URL). Not hardcoded
+            because it must not point at localhost.
+        twitter:card is already set to summary_large_image so the image slots in
+        with no further change.
+      -->
+
       <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
     </head>
 
@@ -13,4 +51,3 @@
       <script type="module" src="/src/main.tsx"></script>
     </body>
   </html>
-  

@@ -1,92 +1,116 @@
-/* Scoped visual identity for the public Radiografía Financiera / Financial X-Ray
-   flow. Overrides live under .xray-scope only — the rest of the app keeps the
-   navy/emerald theme defined in src/styles/theme.css untouched. */
+/* Scoped visual identity for the public Radiografía Financiera flow. Overrides
+   live under .xray-scope only — the rest of the app keeps the navy/emerald
+   theme defined in src/styles/theme.css untouched.
 
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Work+Sans:wght@400;500;600;700&display=swap');
+   Palette, type and elevation come from the redesign in Informe_redisenado.html
+   (raíz del repo): cold paper, deep forest green, DM Sans for text and Outfit
+   for display/figures. Everything downstream — the five onboarding screens, the
+   report, the shared primitives in src/radiografia/ui/ — reads its colour from
+   the tokens below and nowhere else. A hex code in a component is a bug. */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap');
 
 .xray-scope {
-  --background: #efeee3;
-  --foreground: #232b24;
-  --card: #f7f5eb;
-  --card-foreground: #232b24;
-  --popover: #f7f5eb;
-  --popover-foreground: #232b24;
-  --primary: #1f3d30;
-  --primary-foreground: #f4f1e6;
-  --secondary: #3f5a45;
-  --secondary-foreground: #f4f1e6;
-  --muted: #e4e1d2;
-  --muted-foreground: #6b7268;
-  --accent: #a9822f;
-  --accent-foreground: #232b24;
-  --destructive: #9a4a3b;
-  --destructive-foreground: #f4f1e6;
-  --border: rgba(35, 43, 36, 0.14);
+  --background: #f7f8f5;
+  --foreground: #17211b;
+  --card: #ffffff;
+  --card-foreground: #17211b;
+  --popover: #ffffff;
+  --popover-foreground: #17211b;
+  --primary: #1f6b4a;
+  --primary-foreground: #ffffff;
+  --secondary: #2f8a61;
+  --secondary-foreground: #ffffff;
+  --muted: #eef1ee;
+  --muted-foreground: #66736b;
+  --accent: #b77721;
+  --accent-foreground: #ffffff;
+  --destructive: #a84d45;
+  --destructive-foreground: #ffffff;
+  --border: #e4e8e4;
   --input: transparent;
-  --input-background: #fbf9f2;
-  --ring: #1f3d30;
-  --chart-1: #1f3d30;
-  --chart-2: #a9822f;
-  --chart-3: #6b8f7a;
-  --chart-4: #8c6a4a;
-  --chart-5: #55707a;
-  --radius: 1.1rem;
+  --input-background: #ffffff;
+  --ring: #1f6b4a;
+  --radius: 24px;
 
-  /* Semantic status — muted, never the saturated red/amber/green of a typical dashboard */
-  --xray-good-bg: #e3e9de;
-  --xray-good-border: #bed0ba;
-  --xray-good-fg: #45664b;
-  --xray-warn-bg: #f2e7d2;
-  --xray-warn-border: #d9c29b;
-  --xray-warn-fg: #8c6934;
-  --xray-bad-bg: #eedad2;
-  --xray-bad-border: #d4ac9b;
-  --xray-bad-fg: #8a4634;
+  /* The allocation bars, in the order giving / essentials / saving / enjoyment.
+     Deliberately NOT four shades of the brand green: these four compete for the
+     same 100%, so they have to be told apart at a glance, not ranked. */
+  --chart-1: #d2b36b;
+  --chart-2: #7f8b84;
+  --chart-3: #4f9270;
+  --chart-4: #bcc8c1;
+  --chart-5: #2f6077;
 
-  /* Generosidad — its own tone, distinct from the sage "good" used for savings
-     and investment: the same warm gold family as the brand accent, one shade
-     softer so it doesn't compete with the accent's single moment-per-screen rule. */
-  --xray-giving-bg: #f2ecdd;
-  --xray-giving-border: #dcc98f;
-  --xray-giving-fg: #8c6d2f;
+  /* Elevation. Wide and soft — the design leans on shadow rather than borders
+     to separate a card from the paper. */
+  --xray-shadow: 0 18px 50px rgba(23, 33, 27, 0.08);
+  --xray-shadow-card: 0 8px 26px rgba(23, 33, 27, 0.04);
+  --xray-shadow-hero: 0 30px 70px rgba(20, 62, 44, 0.24);
+  --xray-shadow-mark: 0 8px 20px rgba(31, 107, 74, 0.22);
 
-  /* The "light table" — a fixed dark ground for diagnostic moments (processing,
-     the health score). Deliberately does not follow light/dark theme toggling:
-     film is always film, like a real negative held up to the light. */
-  --xray-film: #12201a;
-  --xray-film-card: #182620;
-  --xray-film-border: #33403a;
-  --xray-film-line: #ede6d2;
-  --xray-film-muted: #a7b3a9;
-  --xray-film-gold: #d9b872;
+  /* The two dark grounds: the hero at the top of the report, and the archetype
+     panel that closes it. Green, never near-black — this product's dark
+     surfaces are the same forest as its light ones, turned up. */
+  --xray-hero: linear-gradient(135deg, #173c2b 0%, #1f6b4a 58%, #2f8a61 100%);
+  --xray-panel-dark: linear-gradient(135deg, #163d2c, #235f45);
 
-  font-family: 'Work Sans', -apple-system, sans-serif;
+  /* Semantic tints, four families. `info` is the newest: the design uses it for
+     debt pressure, which is neither good news nor a warning — it's a reading. */
+  --xray-good-bg: #e9f3ed;
+  --xray-good-border: #d5e7db;
+  --xray-good-fg: #1f6b4a;
+  --xray-warn-bg: #fbf2df;
+  --xray-warn-border: #f0dfbb;
+  --xray-warn-fg: #8d5f19;
+  --xray-bad-bg: #faecea;
+  --xray-bad-border: #edd1ce;
+  --xray-bad-fg: #a84d45;
+  --xray-info-bg: #e9f1f5;
+  --xray-info-border: #d7e4eb;
+  --xray-info-fg: #2f6077;
+
+  /* Bar tracks and the fill used for every "how much of the whole" bar. */
+  --xray-track: #eef1ee;
+  --xray-bar: linear-gradient(90deg, #275d43, #58a07d);
+
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  /* Tabular figures: money in a column has to line up by digit. */
   font-feature-settings: 'tnum' 1;
-}
-
-.dark .xray-scope {
-  --background: #1a1f1a;
-  --foreground: #eee9db;
-  --card: #212720;
-  --card-foreground: #eee9db;
-  --popover: #212720;
-  --popover-foreground: #eee9db;
-  --primary: #2f5744;
-  --primary-foreground: #f4f1e6;
-  --secondary: #4b6b52;
-  --secondary-foreground: #f4f1e6;
-  --muted: #262c24;
-  --muted-foreground: #a9a793;
-  --accent: #d9b872;
-  --accent-foreground: #1a1f1a;
-  --border: rgba(238, 233, 219, 0.12);
-  --input-background: #262c24;
-  --ring: #2f5744;
+  /* Light, whatever the app-wide toggle says. This is a single-session public
+     funnel printed on paper stock — there is no dark variant of paper, and a
+     visitor who happens to have dark mode on is not asking for a different
+     product. There is deliberately no `.dark .xray-scope` block below. */
+  color-scheme: light;
+  background-color: var(--background);
+  color: var(--foreground);
 }
 
 .xray-scope h1,
 .xray-scope h2,
 .xray-scope h3,
 .xray-scope .font-display {
-  font-family: 'Newsreader', 'Iowan Old Style', Georgia, serif;
+  font-family: 'Outfit', 'DM Sans', system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Print: the report is meant to survive "Guardar como PDF". Colour has to be
+   forced (browsers drop backgrounds by default, which would flatten the hero
+   and every tinted card into white) and nothing may be split down the middle. */
+@media print {
+  .xray-scope {
+    background: #fff;
+  }
+  .xray-scope .no-print {
+    display: none !important;
+  }
+  .xray-scope [data-xray-surface] {
+    break-inside: avoid;
+    box-shadow: none;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .xray-scope section {
+    break-inside: avoid;
+  }
 }

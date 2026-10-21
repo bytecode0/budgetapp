@@ -12,6 +12,16 @@ export interface OnboardingProfile {
   emailVerified: boolean;
   email?: string | null;
   stageId?: string | null;
+  // Server-side evidence that /profile/extracto ever succeeded for this
+  // profile — the authority for whether resuming can land past the upload
+  // step. Never trust the client's own resume-position for this: it's lost
+  // on a device switch and could predate the statement becoming mandatory.
+  hasExtracto: boolean;
+  // Radiografia.id — the permanent web report's token. Present once the
+  // email is confirmed, so a page refresh at the result step still has a
+  // working link to the rich report, not just the response of the one-time
+  // /email/verify call.
+  reportToken?: string | null;
 }
 
 export interface StageStatus {
@@ -46,20 +56,32 @@ export function saveStep(step: string, accessToken: string | null) {
   return call<{ onboardingStep: string }>('/profile/step', { method: 'PATCH', body: JSON.stringify({ step }) }, accessToken);
 }
 
-export function requestEmailCode(email: string, accessToken: string | null) {
+// `consentReport` is the explicit, never-pre-checked GDPR consent for sending
+// the report. The server refuses the request without it — the box is the legal
+// basis for the send, not a UI formality.
+export function requestEmailCode(email: string, consentReport: boolean, accessToken: string | null) {
   return call<{ sentTo: string; expiresInSeconds: number }>(
     '/email/request',
-    { method: 'POST', body: JSON.stringify({ email }) },
+    { method: 'POST', body: JSON.stringify({ email, consentReport }) },
     accessToken,
   );
 }
 
-export function verifyEmailCode(code: string, accessToken: string | null) {
-  return call<{ profileId: string; accessToken: string; email: string }>(
+// `names` are the merchant names read from the statement, held in
+// sessionStorage since the moment it was analyzed — handed over here, at the
+// one moment they're useful (the confirmation email), and never before or
+// after. The server never writes them anywhere (see InsightNames in
+// server/lib/radiografia/report.ts).
+export function verifyEmailCode(code: string, names: InsightNames | null, accessToken: string | null) {
+  return call<{ profileId: string; accessToken: string; email: string; reportSent: boolean; reportToken: string | null }>(
     '/email/verify',
-    { method: 'POST', body: JSON.stringify({ code }) },
+    { method: 'POST', body: JSON.stringify({ code, names }) },
     accessToken,
   );
+}
+
+export function resendReport(accessToken: string | null) {
+  return call<{ delivered: boolean; reportToken: string | null }>('/report/resend', { method: 'POST', body: JSON.stringify({}) }, accessToken);
 }
 
 export interface FieldInput { key: string; valueCents: number }
@@ -90,14 +112,32 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export interface ExtractoDetected {
+  months: number;
+  transactionCount: number;
   monthlyIncome: number;
+  monthlyExpenses: number;
+  savingMonthly: number;
+  investmentMonthly: number;
   accountBalance: number | null;
   debtsCount: number;
 }
 
+// Merchant names for the small-purchases and subscriptions the statement
+// detected. Lives only in sessionStorage between here and email/verify — see
+// InsightNames in server/lib/radiografia/report.ts for the full reasoning.
+export interface InsightNames {
+  ant: { merchant: string; count: number }[];
+  recurring: { merchant: string }[];
+}
+
 export async function uploadExtracto(files: File[], accessToken: string | null) {
   const uploaded = await Promise.all(files.map(async f => ({ filename: f.name, dataBase64: await fileToBase64(f) })));
-  return call<{ completeness: { pct: number; missing: string[]; classifiable: boolean }; stage: StageStatus; detected: ExtractoDetected }>(
+  return call<{
+    completeness: { pct: number; missing: string[]; classifiable: boolean };
+    stage: StageStatus;
+    detected: ExtractoDetected;
+    insightNames: InsightNames;
+  }>(
     '/profile/extracto',
     { method: 'POST', body: JSON.stringify({ files: uploaded }) },
     accessToken,

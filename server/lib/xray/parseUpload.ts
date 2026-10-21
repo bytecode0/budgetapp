@@ -5,6 +5,7 @@
 import { readGrid, externalIdFor } from "../importStatement.js";
 import { gridToTransactions } from "../parsers/bbva.js";
 import { mapColumnsWithAI } from "./aiColumnMap.js";
+import { mapColumnsHeuristically, validateMapping } from "./heuristicColumnMap.js";
 import { gridToTransactionsGeneric } from "./genericParser.js";
 import { normalizeMerchant } from "../normalizeMerchant.js";
 import { aiEnabled } from "../ai/client.js";
@@ -12,8 +13,13 @@ import type { TaggedTxn } from "./analyze.js";
 
 export interface FileInput { filename: string; dataBase64: string }
 
-// Parse one uploaded file into tagged transactions: deterministic BBVA parser
-// first, AI column-mapping fallback second. Never throws.
+// Parse one uploaded file into tagged transactions. Chain: deterministic BBVA
+// parser → deterministic heuristic column mapping → AI column mapping as a
+// last resort (only spent on statements the first two can't place). The AI
+// mapping is re-validated with the SAME check the heuristic already applies
+// to itself (validateMapping) — a mapping that guesses the balance column for
+// the amount column produces a financial diagnosis built on garbage,
+// regardless of which path produced the guess. Never throws.
 export async function parseFile(f: FileInput, fileIndex: number): Promise<{ txns: TaggedTxn[]; bank: string }> {
   let grid: unknown[][];
   try { grid = readGrid(Buffer.from(f.dataBase64, "base64"), f.filename); }
@@ -22,9 +28,15 @@ export async function parseFile(f: FileInput, fileIndex: number): Promise<{ txns
     const txns = gridToTransactions(grid).filter(t => t.amount !== 0);
     return { txns: txns.map(t => ({ ...t, fileIndex })), bank: "bbva" };
   } catch {
-    const mapping = aiEnabled() ? await mapColumnsWithAI(grid) : null;
-    if (mapping) {
-      const txns = gridToTransactionsGeneric(grid, mapping).filter(t => t.amount !== 0);
+    const heuristic = mapColumnsHeuristically(grid);
+    if (heuristic) {
+      const txns = gridToTransactionsGeneric(grid, heuristic).filter(t => t.amount !== 0);
+      return { txns: txns.map(t => ({ ...t, fileIndex })), bank: "generic" };
+    }
+
+    const aiMapping = aiEnabled() ? await mapColumnsWithAI(grid) : null;
+    if (aiMapping && validateMapping(grid, aiMapping)) {
+      const txns = gridToTransactionsGeneric(grid, aiMapping).filter(t => t.amount !== 0);
       return { txns: txns.map(t => ({ ...t, fileIndex })), bank: "generic" };
     }
     return { txns: [], bank: "unrecognized" };

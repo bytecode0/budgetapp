@@ -128,6 +128,58 @@ export function stageLight(key: string): StageLight {
   return STAGE_LIGHT[key] ?? "amber";
 }
 
+// The Radiografía's own 5-stage engine (server/lib/radiografia/stage/engine.ts:
+// cimientos → liberacion → terreno_firme → fortaleza → multiplicacion), NOT the
+// STAGE dict above — that one is the unrelated xray health-index 4-band score
+// (building/balancing/growing/solid). Mirrors radiografia.methodStage.* in
+// src/locales, word for word — that JSON is the reviewed Spanish source of
+// truth for launch copy, so this must never drift from it independently.
+const RADIOGRAFIA_STAGE: Record<string, { en: string; es: string }> = {
+  cimientos: { en: "Foundations", es: "Cimientos" },
+  cerrando_la_brecha: { en: "Foundations", es: "Cimientos" },
+  liberacion: { en: "Liberation", es: "Liberación" },
+  terreno_firme: { en: "Solid Ground", es: "Terreno Firme" },
+  fortaleza: { en: "Stronghold", es: "Fortaleza" },
+  multiplicacion: { en: "Multiplication", es: "Multiplicación" },
+};
+
+const RADIOGRAFIA_STAGE_DESC: Record<string, { en: string; es: string }> = {
+  cimientos: {
+    en: "You're building your cushion — the first step before anything else.",
+    es: "Estás construyendo tu colchón — el primer paso antes de cualquier otra cosa.",
+  },
+  cerrando_la_brecha: {
+    en: "Right now your expenses exceed your income. The first goal is closing that gap.",
+    es: "Ahora mismo tus gastos superan tus ingresos. El primer objetivo es cerrar esa brecha.",
+  },
+  liberacion: {
+    en: "You already have your cushion. Now it's time to free yourself from debt.",
+    es: "Ya tienes tu colchón. Ahora toca liberarte de tus deudas.",
+  },
+  terreno_firme: {
+    en: "You're debt-free. Time to build your emergency fund.",
+    es: "Estás libre de deudas. Es momento de construir tu fondo de emergencia.",
+  },
+  fortaleza: {
+    en: "Debt-free with a full emergency fund. Your base is solid.",
+    es: "Libre de deudas y con tu fondo de emergencia completo. Tu base es sólida.",
+  },
+  multiplicacion: {
+    en: "Debt-free, with an emergency fund, and investing. You're growing what you have.",
+    es: "Libre de deudas, con fondo de emergencia, e invirtiendo. Estás haciendo crecer lo que tienes.",
+  },
+};
+
+// `key` should be `branchId ?? stageId` — a branch (e.g. cerrando_la_brecha) is
+// a more specific message than its parent stage, same precedence the frontend
+// already uses in ResultPlaceholder.tsx.
+export function radiografiaStageLabel(key: string, lang: Lang): string {
+  return RADIOGRAFIA_STAGE[key]?.[lang] ?? key;
+}
+export function radiografiaStageDescription(key: string, lang: Lang): string {
+  return RADIOGRAFIA_STAGE_DESC[key]?.[lang] ?? "";
+}
+
 export function categoryLabel(key: string, lang: Lang): string {
   return CATEGORY[key]?.[lang] ?? key;
 }

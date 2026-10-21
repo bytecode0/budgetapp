@@ -449,7 +449,12 @@ export async function sendXrayReportEmail(email: string, pdf: Buffer, score: num
 // System fonts + flat colors only. Also not a "verify your account" message —
 // there's no account, per docs/plan-onboarding-radiografia.md §0.2.
 
-function radiografiaWrapper(content: string): string {
+// `footerNote` defaults to the OTP-code disclaimer since that's this
+// wrapper's original and most frequent caller; the report email (which
+// shares this wrapper) passes its own, since "if you didn't request this
+// code, ignore this email" makes no sense under a report that was requested
+// minutes earlier by confirming that exact email address.
+function radiografiaWrapper(content: string, footerNote = "Si no solicitaste este código, ignora este correo."): string {
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -475,7 +480,7 @@ function radiografiaWrapper(content: string): string {
           <tr>
             <td style="padding:24px 0 0;text-align:center;">
               <p style="margin:0;font-size:11px;color:#8A8578;">
-                Si no solicitaste este código, ignora este correo.
+                ${footerNote}
               </p>
             </td>
           </tr>
@@ -533,6 +538,165 @@ export async function sendRadiografiaEmailCode(email: string, code: string) {
   });
 
   if (error) { console.error("[mailer/sendRadiografiaEmailCode]", error); throw new Error(error.message); }
+}
+
+// The rich report (server/lib/radiografia/report.ts) shared by this email
+// and the permanent web page. Both consumers pass the SAME object shape —
+// one generator, so the numbers and the copy can never drift between them.
+type RadiografiaAllocation = { pct: number; targetPct: number; deviation: number };
+type RadiografiaReportEmail = {
+  stageId: 'cimientos' | 'liberacion' | 'terreno_firme' | 'fortaleza' | 'multiplicacion' | null;
+  stageName: string | null;
+  stageDescription: string | null;
+  headline: string;
+  allocations: {
+    giving: RadiografiaAllocation;
+    essentials: RadiografiaAllocation;
+    savingsAndInvestment: RadiografiaAllocation;
+    enjoyment: RadiografiaAllocation;
+  };
+  categories: { key: string; label: string; monthlyEur: number; annualEur: number; pct: number }[];
+  antExpenses: { monthlyEur: number; annualEur: number; names: string[] } | null;
+  recurring: { monthlyEur: number; annualEur: number; count: number; names: string[] } | null;
+  debtPressure: { monthlyEur: number; pctOfIncome: number; alarming: boolean } | null;
+  nextSteps: { title: string; detail: string; annualSaving: number }[];
+  archetype: { key: string; label: string; description: string; givingAssessed: boolean } | null;
+};
+
+const EBOOK_URL = process.env.EBOOK_URL ?? null;
+// The book's cover, hosted externally — never inlined as base64. A 1.9MB
+// data: URI (the size of the cover PNG embedded that way) blows well past
+// Gmail's ~102KB clipping threshold, so the image lives at a URL instead.
+// Unset in local dev on purpose: the email still reads well without a cover,
+// which is why every place that uses this checks for it rather than assuming
+// it's there.
+const EBOOK_COVER_URL = process.env.EBOOK_COVER_URL ?? null;
+const PRIVACY_URL = process.env.PRIVACY_URL ?? `${APP_URL}/privacidad`;
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Flat-color button for the Radiografía's own emails — deliberately NOT the
+// shared `ctaButton()` above, which uses a blue/green CSS gradient from the
+// authenticated app's palette. radiografiaWrapper's whole point is avoiding
+// gradients (they degrade in Outlook); a button living inside it must keep
+// that promise too.
+function radiografiaButton(label: string, href: string, bg = '#1F3D30', fg = '#ffffff'): string {
+  return `<table cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr>
+    <td style="border-radius:10px;background:${bg};">
+      <a href="${href}" target="_blank" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:700;color:${fg};text-decoration:none;">${label}</a>
+    </td>
+  </tr></table>`;
+}
+
+// Transactional delivery for the public onboarding — deliberately a short
+// NOTIFICATION now, not a copy of the report. All the rich detail
+// (categorías, gastos hormiga, suscripciones, presión de deuda, próximos
+// pasos, arquetipo) lives ONLY on the permanent web page from here on; this
+// email's one job is to say it's ready and hand over the link. Splitting it
+// this way means the numbers and copy can never drift between two places
+// that show them, because only one place shows them.
+//
+// `accessToken` links back to the person's own results page as a fallback;
+// `reportToken` (a DIFFERENT token — Radiografia.id, not
+// RadiografiaAccessToken) is the primary link, straight to the rich report.
+// By the time this sends, the statement upload is mandatory and always ran
+// first, so reportToken should always be set.
+//
+// Pure builder, extracted so a preview script (server/scripts/previewReportEmail.ts)
+// can render this exact HTML/text to a file without sending anything — there
+// was otherwise no way to look at this email without actually mailing it.
+export function buildRadiografiaReportEmailContent(report: RadiografiaReportEmail, accessToken: string | null, reportToken: string | null): { subject: string; html: string; text: string } {
+  const resumeUrl = reportToken ? `${APP_URL}/informe/${reportToken}` : accessToken ? `${APP_URL}/radiografia?t=${accessToken}` : APP_URL;
+
+  const html = radiografiaWrapper(`
+    <tr>
+      <td style="padding:40px 32px 32px;text-align:center;">
+        <p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:1px;color:#7C6B47;text-transform:uppercase;">Tu informe está listo</p>
+        <h1 style="margin:0 0 10px;font-size:24px;font-weight:700;color:#1F3D30;line-height:1.3;">${report.stageName ? escapeHtml(report.stageName) : 'Tu Radiografía Financiera'}</h1>
+        <p style="margin:0 0 28px;font-size:14px;color:#6B6558;line-height:1.6;">${escapeHtml(report.headline)}</p>
+        ${radiografiaButton('Ver mi informe completo →', resumeUrl)}
+      </td>
+    </tr>
+    <tr><td style="padding:0 32px 32px;text-align:center;">
+      <p style="margin:0;font-size:11px;color:#8A8578;">
+        <a href="${PRIVACY_URL}" style="color:#8A8578;text-decoration:underline;">Política de privacidad</a>
+      </p>
+    </td></tr>
+  `, "Recibiste este correo porque confirmaste tu email en la Radiografía Financiera.");
+
+  const text = [
+    report.stageName ?? 'Tu Radiografía Financiera',
+    report.headline,
+    '',
+    `Ver tu informe completo: ${resumeUrl}`,
+    `Política de privacidad: ${PRIVACY_URL}`,
+  ].filter(Boolean).join('\n');
+
+  const subject = report.stageName ? `Tu Radiografía Financiera — ${report.stageName}` : 'Tu Radiografía Financiera está lista';
+  return { subject, html, text };
+}
+
+export async function sendRadiografiaReportEmail(email: string, report: RadiografiaReportEmail, accessToken: string | null, reportToken: string | null) {
+  const { subject, html, text } = buildRadiografiaReportEmailContent(report, accessToken, reportToken);
+  const { error } = await resend.emails.send({ from: FROM, to: email, subject, html, text });
+  if (error) { console.error('[mailer/sendRadiografiaReportEmail]', error); throw new Error(error.message); }
+}
+
+// ─── 6b. eBook delivery — triggered by opening the full report ──────────────
+//
+// Adapted from the design in ~/Downloads/email_ebook/email_ebook_restauracion_financiera.html
+// (not imported as-is: that file is 1.9MB because its cover image is a
+// base64 data: URI, well past Gmail's ~102KB clipping threshold, and its
+// download button points at a relative path that can't resolve inside a mail
+// client). Same headline, same copy, same dark/gold palette — rebuilt as
+// flat-color tables so it survives Outlook, with the cover as an external
+// image that's simply omitted if EBOOK_COVER_URL isn't set yet.
+export function buildEbookEmailContent(): { subject: string; html: string; text: string } {
+  const coverImg = EBOOK_COVER_URL
+    ? `<img src="${EBOOK_COVER_URL}" width="200" alt="Portada de Tu Plan de Restauración Financiera" style="display:block;width:200px;max-width:100%;height:auto;border:0;border-radius:8px;margin:0 auto 8px;">`
+    : '';
+
+  const html = radiografiaWrapper(`
+    <tr>
+      <td style="padding:44px 36px 36px;text-align:center;background:#0b1513;">
+        <p style="margin:0 0 14px;font-size:12px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#e5b75f;">Después de tu Radiografía Financiera</p>
+        <h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-size:32px;line-height:1.15;color:#ffffff;font-weight:700;">Tu Plan de<br>Restauración Financiera</h1>
+        <p style="margin:0 0 24px;font-size:16px;line-height:1.55;color:#f3efe6;">5 principios bíblicos para interpretar tu diagnóstico, ordenar tu dinero y comenzar tu camino hacia la paz financiera.</p>
+        ${coverImg}
+        ${EBOOK_URL ? radiografiaButton('DESCARGAR EL EBOOK', EBOOK_URL, '#e5b75f', '#13211d') : ''}
+        <p style="margin:14px 0 0;font-size:12px;color:#d7d0c4;">PDF · Tu Plan de Restauración Financiera · Luis Vespa</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:32px 32px 8px;">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#8b6a34;">El siguiente paso</p>
+        <h2 style="margin:0 0 10px;font-family:Georgia,'Times New Roman',serif;font-size:20px;line-height:1.3;color:#17231f;font-weight:700;">Lo que viste no es un veredicto. Es un punto de partida.</h2>
+        <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#4c514e;">Este plan fue diseñado para ayudarte a interpretar lo que tu radiografía reveló, entender las raíces de lo que estás viviendo y comenzar hoy un camino de restauración.</p>
+        <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#17231f;">Empieza con 5 pasos:</p>
+        <p style="margin:0;font-size:13px;line-height:1.6;color:#4c514e;">Contentamiento · Presupuesto · Generosidad · Deudas · Ahorro y patrimonio</p>
+      </td>
+    </tr>
+  `, "Recibiste este correo porque abriste tu Radiografía Financiera completa.");
+
+  const text = [
+    'Tu Plan de Restauración Financiera',
+    '5 principios bíblicos para interpretar tu diagnóstico, ordenar tu dinero y comenzar tu camino hacia la paz financiera.',
+    '',
+    'Lo que viste no es un veredicto. Es un punto de partida.',
+    'Empieza con 5 pasos: Contentamiento · Presupuesto · Generosidad · Deudas · Ahorro y patrimonio',
+    '',
+    EBOOK_URL ? `Descargar el eBook: ${EBOOK_URL}` : '',
+  ].filter(Boolean).join('\n');
+
+  return { subject: 'Tu Plan de Restauración Financiera está listo para descargar', html, text };
+}
+
+export async function sendEbookEmail(email: string) {
+  const { subject, html, text } = buildEbookEmailContent();
+  const { error } = await resend.emails.send({ from: FROM, to: email, subject, html, text });
+  if (error) { console.error('[mailer/sendEbookEmail]', error); throw new Error(error.message); }
 }
 
 // ─── 5. Welcome — Google signup ───────────────────────────────────────────────
