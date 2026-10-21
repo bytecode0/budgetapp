@@ -2,10 +2,8 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PiggyBank, TrendingUp, Lightbulb } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAccounts } from '../hooks/useAccounts';
-
-const CASH_ACCOUNT_NAME = 'Ahorros';
-const INVESTMENT_ACCOUNT_NAME = 'Inversiones';
+import { useAccounts, type Account } from '../hooks/useAccounts';
+import { useMoney } from './useMoney';
 
 // Deliberate simplification vs. the earlier (list-of-named-categories) design:
 // this screen asks for two single totals — how much is already saved and how
@@ -14,6 +12,7 @@ const INVESTMENT_ACCOUNT_NAME = 'Inversiones';
 // breakdown. Each total is backed by a single upserted Account.
 export function SavingsStep() {
   const { t } = useTranslation();
+  const { currency } = useMoney();
   const { accounts, createAccount, updateAccount } = useAccounts();
 
   const cashAccount = accounts.find(a => a.type === 'cash' || a.type === 'savings');
@@ -26,11 +25,13 @@ export function SavingsStep() {
   useEffect(() => { if (investmentAccount) setInvestment(String(investmentAccount.currentBalance || '')); }, [investmentAccount?.id]);
 
   const persist = async (
-    existing: typeof cashAccount,
+    existing: Account | undefined,
     name: string,
     type: 'cash' | 'investment',
     value: string,
   ) => {
+    // Nothing typed and nothing saved yet: don't create an empty account.
+    if (!existing && value === '') return;
     const amount = parseFloat(value) || 0;
     const result = existing
       ? await updateAccount(existing.id, { currentBalance: amount })
@@ -47,14 +48,14 @@ export function SavingsStep() {
           </label>
           <p className="text-xs text-muted-foreground mb-2">{t('onboarding.savings.cashDesc')}</p>
           <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">€</span>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">{currency}</span>
             <input
               type="number"
               inputMode="decimal"
               value={cash}
               onChange={e => setCash(e.target.value)}
-              onBlur={() => persist(cashAccount, CASH_ACCOUNT_NAME, 'cash', cash)}
-              placeholder="0.00"
+              onBlur={() => persist(cashAccount, t('onboarding.savings.cashAccountName'), 'cash', cash)}
+              placeholder="0"
               className="block w-full pl-8 pr-4 py-4 text-xl font-display border border-border rounded-xl bg-muted/40 focus:bg-background outline-none focus:border-secondary transition-colors"
             />
           </div>
@@ -66,14 +67,14 @@ export function SavingsStep() {
           </label>
           <p className="text-xs text-muted-foreground mb-2">{t('onboarding.savings.investmentDesc')}</p>
           <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">€</span>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">{currency}</span>
             <input
               type="number"
               inputMode="decimal"
               value={investment}
               onChange={e => setInvestment(e.target.value)}
-              onBlur={() => persist(investmentAccount, INVESTMENT_ACCOUNT_NAME, 'investment', investment)}
-              placeholder="0.00"
+              onBlur={() => persist(investmentAccount, t('onboarding.savings.investmentAccountName'), 'investment', investment)}
+              placeholder="0"
               className="block w-full pl-8 pr-4 py-4 text-xl font-display border border-border rounded-xl bg-muted/40 focus:bg-background outline-none focus:border-secondary transition-colors"
             />
           </div>

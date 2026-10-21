@@ -2,51 +2,50 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, Target } from 'lucide-react';
+import type { OnboardingStep } from '../hooks/useOnboardingNeeded';
 import { WelcomeStep } from './WelcomeStep';
 import { IncomeStep } from './IncomeStep';
 import { SavingsStep } from './SavingsStep';
-import { DebtsStep } from './DebtsStep';
-import { BudgetStep } from './BudgetStep';
+import { BankStep } from './BankStep';
+import { CardsStep } from './CardsStep';
+import { LoansStep } from './LoansStep';
+import { BudgetLinesStep } from './BudgetLinesStep';
 import { ResultScreen } from './ResultScreen';
 
-type OnboardingStep = 'welcome' | 'income' | 'savings' | 'debts' | 'budget' | 'result';
+// Steps between the welcome and the result, with the header's back/continue.
+const WIZARD_STEPS: OnboardingStep[] = ['income', 'savings', 'bank', 'cards', 'loans', 'fixed', 'flexible'];
 
-const WIZARD_STEPS: OnboardingStep[] = ['income', 'savings', 'debts', 'budget'];
-
-const STEP_META: Record<string, { titleKey: string; subtitleKey: string }> = {
+const STEP_META: Partial<Record<OnboardingStep, { titleKey: string; subtitleKey: string }>> = {
   income: { titleKey: 'onboarding.income.title', subtitleKey: 'onboarding.income.subtitle' },
   savings: { titleKey: 'onboarding.savings.title', subtitleKey: 'onboarding.savings.subtitle' },
-  debts: { titleKey: 'onboarding.debts.title', subtitleKey: 'onboarding.debts.subtitle' },
-  budget: { titleKey: 'onboarding.budget.title', subtitleKey: 'onboarding.budget.subtitle' },
+  bank: { titleKey: 'onboarding.bank.title', subtitleKey: 'onboarding.bank.subtitle' },
+  cards: { titleKey: 'onboarding.cards.title', subtitleKey: 'onboarding.cards.subtitle' },
+  loans: { titleKey: 'onboarding.loans.title', subtitleKey: 'onboarding.loans.subtitle' },
+  fixed: { titleKey: 'onboarding.lines.fixed.title', subtitleKey: 'onboarding.lines.fixed.subtitle' },
+  flexible: { titleKey: 'onboarding.lines.flexible.title', subtitleKey: 'onboarding.lines.flexible.subtitle' },
 };
 
 interface BudgetOnboardingProps {
+  /** Where to open — the dashboard's "Completa tu configuración" reopens a given step. */
+  initialStep?: OnboardingStep;
   onDone: () => void;
 }
 
-// The onboarding wizard shown after signup whenever the user has nothing
-// configured yet (income, debts, budget) — see useOnboardingNeeded and
-// server/routes/onboarding.ts. Reuses the app's real hooks (useIncome,
-// useAccounts, useDebts, useAllocations) at every step: nothing here is a
-// staging area that gets submitted at the end — each step writes real rows,
-// so the header's "Siguiente" only ever needs to advance the step index.
-export function BudgetOnboarding({ onDone }: BudgetOnboardingProps) {
+// The onboarding wizard (docs/plan-deudas-y-onboarding.md, epic 3). Every step
+// writes real rows through the app's own hooks as the user fills it in —
+// nothing is staged and submitted at the end — so "Continuar" only advances
+// (skipping a step is just continuing without filling it) and "Atrás" only
+// goes back: neither deletes anything.
+export function BudgetOnboarding({ initialStep = 'welcome', onDone }: BudgetOnboardingProps) {
   const { t } = useTranslation();
-  const [step, setStep] = useState<OnboardingStep>('welcome');
+  const [step, setStep] = useState<OnboardingStep>(initialStep);
 
   const currentIdx = WIZARD_STEPS.indexOf(step);
   const inWizard = currentIdx >= 0;
-  const goTo = (s: OnboardingStep) => setStep(s);
-  const goNext = () => {
-    const next = WIZARD_STEPS[currentIdx + 1];
-    setStep(next ?? 'result');
-  };
-  const goBack = () => {
-    if (currentIdx <= 0) { setStep('welcome'); return; }
-    setStep(WIZARD_STEPS[currentIdx - 1]);
-  };
+  const goNext = () => setStep(WIZARD_STEPS[currentIdx + 1] ?? 'result');
+  const goBack = () => setStep(currentIdx <= 0 ? 'welcome' : WIZARD_STEPS[currentIdx - 1]);
 
-  const meta = inWizard ? STEP_META[step] : null;
+  const meta = STEP_META[step];
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -78,7 +77,7 @@ export function BudgetOnboarding({ onDone }: BudgetOnboardingProps) {
       {inWizard && (
         <div className="w-full h-1.5 bg-muted">
           <div
-            className="h-1.5 bg-secondary transition-all duration-300"
+            className="h-1.5 bg-secondary transition-all duration-200"
             style={{ width: `${((currentIdx + 1) / WIZARD_STEPS.length) * 100}%` }}
           />
         </div>
@@ -86,7 +85,7 @@ export function BudgetOnboarding({ onDone }: BudgetOnboardingProps) {
 
       <main className="flex-1 flex flex-col items-center p-4 sm:p-8">
         <div className={`w-full ${step === 'welcome' ? 'max-w-5xl' : 'max-w-2xl'} mx-auto ${inWizard ? 'mt-4 sm:mt-8' : ''}`}>
-          {meta && (
+          {inWizard && meta && (
             <div className="text-center mb-8">
               <span className="text-secondary font-semibold text-sm tracking-wider uppercase mb-3 block">
                 {t('onboarding.stepOf', { current: currentIdx + 1, total: WIZARD_STEPS.length })}
@@ -104,11 +103,14 @@ export function BudgetOnboarding({ onDone }: BudgetOnboardingProps) {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
             >
-              {step === 'welcome' && <WelcomeStep onStart={() => goTo('income')} />}
+              {step === 'welcome' && <WelcomeStep onStart={() => setStep('income')} />}
               {step === 'income' && <IncomeStep />}
               {step === 'savings' && <SavingsStep />}
-              {step === 'debts' && <DebtsStep onSkip={goNext} />}
-              {step === 'budget' && <BudgetStep />}
+              {step === 'bank' && <BankStep />}
+              {step === 'cards' && <CardsStep />}
+              {step === 'loans' && <LoansStep />}
+              {step === 'fixed' && <BudgetLinesStep type="fixed" />}
+              {step === 'flexible' && <BudgetLinesStep type="flexible" />}
               {step === 'result' && <ResultScreen onDone={onDone} />}
             </motion.div>
           </AnimatePresence>

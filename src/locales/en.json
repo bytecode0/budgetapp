@@ -1084,7 +1084,10 @@
       "invitePending": "Invite pending for {{email}}",
       "partnerLinked": "Your household is linked — their income is already counted.",
       "partnerHint": "We don't ask for their income here — they'll add it themselves when they join.",
-      "privacyNote": "Your information is private. It's only shared with a partner if you explicitly invite them."
+      "privacyNote": "Your information is private. It's only shared with a partner if you explicitly invite them.",
+      "paydayLabel": "Payday",
+      "paydayHint": "Your budget month starts on this day. If you get paid on the 1st, it is the calendar month.",
+      "paydayOption": "Day {{day}}"
     },
     "savings": {
       "title": "Savings & investments",
@@ -1093,62 +1096,101 @@
       "cashDesc": "Money in savings, checking, or easily accessible cash.",
       "investmentTitle": "Investments",
       "investmentDesc": "Stocks, funds, bonds, or other financial assets.",
-      "excludeNote": "Don't include the value of your primary home or personal vehicles here."
+      "excludeNote": "Don't include the value of your primary home or personal vehicles here.",
+      "cashAccountName": "Savings",
+      "investmentAccountName": "Investments"
     },
-    "debts": {
-      "title": "Debts & commitments",
-      "subtitle": "Add your financial commitments so we understand where you stand — we'll guide you through it.",
-      "typeLabel": "Debt type",
-      "nameLabel": "Name or institution",
-      "namePlaceholder": "e.g. Visa card, Car loan",
-      "balanceLabel": "Total balance",
-      "monthlyPaymentLabel": "Monthly payment",
-      "minimumPaymentLabel": "Minimum payment",
-      "installmentLabel": "Monthly installment",
-      "aprLabel": "Interest rate (APR %)",
-      "aprWarning": "This rate is on the high side for a mortgage — worth reviewing if it's really working for you.",
+    "result": {
+      "title": "Your starting point",
+      "subtitle": "No sugar-coating. Now you can see it, and that is what makes changing it possible.",
+      "committedFuture": "Committed future",
+      "committedOf": "{{committed}} of your {{income}} already goes to debt this month, before you spend anything.",
+      "pct": "{{value}}%",
+      "missingIncome": "Add your income to see how much of your future is already committed.",
+      "totalOwed": "Total debt",
+      "freedomDate": "Debt-free date",
+      "freedomNone": "No consumer debt",
+      "freedomUnknown": "Current payments never pay it off",
+      "leftover": "What is left",
+      "leftoverDesc": "After debts and your fixed and variable expenses.",
+      "leftoverNegative": "Your plan spends more than comes in: review variable expenses first.",
+      "attackOrder": "Order to pay off your debts (smallest first)",
+      "monthN": "month {{n}}",
+      "unnamedDebt": "Debt",
+      "loadFailed": "Could not calculate the result",
+      "goToDashboard": "Go to my dashboard"
+    },
+    "bank": {
+      "title": "Your bank account",
+      "subtitle": "The account you get paid into and pay your cards and bills from.",
+      "nameLabel": "Bank or account name",
+      "namePlaceholder": "e.g. BBVA, ING, CaixaBank",
+      "defaultName": "Main account",
+      "balanceLabel": "Balance today",
+      "balanceHint": "What is in the account right now.",
+      "note": "You will record your card and loan payments from this account."
+    },
+    "cards": {
+      "title": "Your credit cards",
+      "subtitle": "For each card: how you pay it and what you owe today. What you buy with it adds to its debt.",
+      "nameLabel": "Card name",
+      "namePlaceholder": "e.g. PASS, BBVA Visa",
+      "add": "Add a card",
+      "save": "Save card",
+      "noCards": "No credit cards? Press Continue.",
+      "createdOk": "Card added"
+    },
+    "loans": {
+      "title": "Loans and installments",
+      "subtitle": "Car, Klarna, payday loan, buy-now-pay-later… Everything you pay in installments.",
+      "add": "Add a loan or installment plan",
       "save": "Save",
-      "addDebt": "Add another debt",
-      "noDebts": "I don't currently have any debts",
-      "noteLabel": "Note",
-      "classificationNote": "Consumer debt and your primary mortgage both belong here — we classify them automatically: a mortgage is treated differently from a credit card or a car loan."
+      "noLoans": "Nothing paid in installments? Press Continue.",
+      "createdOk": "Added",
+      "owedLabel": "Outstanding",
+      "note": "Include your mortgage too: it is treated differently from a card or a consumer loan, and you will not need to add it as a fixed expense."
     },
-    "budget": {
-      "title": "Your budget",
-      "subtitle": "This is where every euro gets a job — starting with generosity, then what you already owe, then everything else.",
-      "totalIncome": "Total income",
-      "unallocated": "Unallocated",
-      "overflowStructural": "This gap is too big to close by trimming subscriptions — it usually means one big line (housing or transport) needs to change, not your everyday spending.",
-      "overflowHabit": "Your budget is over 100% of your income. Try trimming flexible spending first — generosity and what you already owe shouldn't move.",
-      "debtStateNotice": "While you have consumer debt, any extra money is redirected to paying it off — savings and investment goals stay off until it's gone.",
-      "requiredBadge": "Required",
-      "debtBadge": "Locked — edit the payment from the debt itself",
-      "generosityName": "Generosity",
-      "planDisabled": "Savings & investment goals are paused while you have consumer debt",
-      "complete": "Complete budget",
+    "lines": {
+      "income": "Income",
+      "debts": "Debts this month",
+      "leftover": "Unassigned",
+      "add": "Add another",
+      "namePlaceholder": "Name",
+      "addAction": "Add",
+      "remove": "Remove",
+      "fixed": {
+        "title": "Fixed expenses",
+        "subtitle": "What you pay every month no matter what. Fill in the ones you have and leave the rest blank.",
+        "mortgageNote": "Your mortgage is already in your debts, with its payment set aside: do not add it here."
+      },
+      "flexible": {
+        "title": "Variable expenses",
+        "subtitle": "What changes from month to month. Enter what you usually spend in a normal month."
+      },
       "suggested": {
-        "housing": "Housing",
+        "housing": "Rent or mortgage",
+        "utilities": "Electricity, water and gas",
+        "internet": "Internet and phone",
+        "insurance": "Insurance",
+        "subscriptions": "Subscriptions",
+        "school": "School",
         "groceries": "Groceries",
         "transport": "Transport",
-        "utilities": "Utilities",
         "leisure": "Leisure"
       }
     },
-    "result": {
-      "titleDebt": "Here's where you stand",
-      "titleFree": "You're free of consumer debt",
-      "subtitleDebt": "No sugarcoating it — but now you can see it, and that's what makes it possible to change.",
-      "subtitleFree": "Now it's about building — a safety cushion first, then your goals.",
-      "missingIncome": "Add your income to see how much of your future is already committed.",
-      "committedFuture": "Committed future",
-      "committedFutureDesc": "The share of your income already spoken for by debt payments before you spend a cent.",
-      "freedomDate": "Your freedom date",
-      "freedomUnknown": "Add your debts to calculate this",
-      "attackOrder": "Payoff order (smallest balance first)",
-      "unnamedDebt": "Debt",
-      "monthN": "month {{n}}",
-      "debtStateHint": "Mortgages and other tolerable debt aren't part of this — this is only about consumer debt.",
-      "goToDashboard": "Go to my dashboard"
+    "setup": {
+      "title": "Finish your setup",
+      "subtitle": "This is still missing to see your full committed future:",
+      "dismiss": "Hide",
+      "complete": "Complete",
+      "items": {
+        "income": "Your income",
+        "bank": "Your bank account",
+        "cards": "Your credit cards",
+        "loans": "Your loans and installments",
+        "fixed": "Your fixed expenses"
+      }
     }
   },
   "currency": {
