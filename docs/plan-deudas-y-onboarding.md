@@ -138,9 +138,9 @@ Con `statementDay` / `paymentDueDay`, separar "lo que vence este mes" (compras h
 
 Va **antes** del onboarding: así el onboarding se prueba "desde cero" de verdad, con una cuenta nueva sobre una base de datos de producción vacía, en la URL real.
 
-Decisiones del 21 oct: CI/CD automático **y** comando `/deploy`; Postgres en **Neon vía Vercel Marketplace**; **borrar** la Radiografía; DNS de `luisvespa.com` en **Cloudflare**.
+Decisiones del 21 oct: CI/CD automático **y** comando `/deploy`; Postgres en **Neon vía Vercel Marketplace**; **borrar** la Radiografía; DNS de `luisvespa.com` en **Cloudflare**; emails por **Cloudflare Email Sending** en lugar de Resend (2.8); Stripe configurado desde la beta (2.9).
 
-### 2.1 Borrar la Radiografía (requisito para publicar)
+### 2.1 Borrar la Radiografía (requisito para publicar) — HECHO (`233b7ab`)
 Sus rutas `/api/radiografia` y `/api/xray` son públicas, sin login, y pueden gastar en la API de Anthropic.
 - Borrar `src/radiografia/`, `server/lib/radiografia/`, `server/lib/xray/`, `server/routes/radiografia.ts`, `server/routes/xray.ts`, `server/routes/internalPurge.ts` y sus scripts (`radiografiaStats`, `previewReportEmail`), el desvío `/radiografia` y `/informe` de `src/app/App.tsx`, sus claves `radiografia.*` en los locales y su copy en `index.html` (título y meta tags pasan a ser los de la BudgetApp).
 - Antes de borrar: comprobar qué usa la BudgetApp de ahí. La importación de extractos (`server/lib/importStatement.ts`) es de la BudgetApp y se queda; si importa algo de `server/lib/xray/` (parsers, `heuristicColumnMap`), se mueve fuera, no se pierde.
@@ -151,24 +151,24 @@ Sus rutas `/api/radiografia` y `/api/xray` son públicas, sin login, y pueden ga
 ### 2.2 Preparar la app para Vercel
 - **Hecho:** un solo proyecto (`vercel.json`): Vite como sitio estático y Express como una Vercel Function en `api/index.ts`. Reescrituras: `/api/(.*)` → la función, el resto → `index.html` (SPA). Mismo dominio, así que las cookies de sesión funcionan sin CORS entre dominios. Región `fra1` (Fráncfort): crear la base de Neon en la misma región.
 - **Hecho:** `server/app.ts` exporta la app; `server/index.ts` solo escucha en local. `/api/health` devuelve el commit desplegado.
-- **Hecho:** el cliente de Resend se crea al primer envío (antes tumbaba toda la app si faltaba `RESEND_API_KEY`). **Pendiente de tu OK:** `server/lib/stripe.ts` tiene el mismo problema sin `STRIPE_SECRET_KEY`, pero el CLAUDE.md pide no tocar Stripe sin preguntar.
+- **Hecho:** el cliente de Resend se crea al primer envío (antes tumbaba toda la app si faltaba `RESEND_API_KEY`). Resend se sustituye por Cloudflare Email Sending (2.8). `server/lib/stripe.ts` tiene el mismo problema sin `STRIPE_SECRET_KEY`: se arregla en 2.9.
 - **Límite de Vercel:** el cuerpo de una petición es de 4,5 MB como máximo. Los extractos se suben en base64 en el body: un fichero de más de ~3 MB fallará con 413. Si pasa en la práctica, subir el fichero a Vercel Blob directamente desde el navegador.
 - **Prisma + Neon:** en runtime, `DATABASE_URL` (con pooling, la que inyecta Neon). Para `db push`, la URL sin pooling (`DATABASE_URL_UNPOOLED`), como hace `/deploy`. Si aparecen errores tipo "prepared statement already exists", añadir `pgbouncer=true` a la URL con pooling. **Hecho:** `prisma generate` en `postinstall`. Seguimos con `db push`, nunca migraciones (CLAUDE.md).
 - Revisado: no hay temporizadores ni trabajos periódicos en el servidor. Si Open Banking vuelve (fase futura), su sincronización periódica irá a **Vercel Cron Jobs** con `CRON_SECRET`.
 - `index.html`: título, descripción y `lang` de la BudgetApp.
 
 ### 2.3 Variables de entorno en Vercel (las pones tú; nunca pasan por el código ni por mí)
-`DATABASE_URL` / `DIRECT_URL` (las inyecta Neon), `JWT_SECRET`, `ENCRYPTION_KEY`, `APP_URL=https://budget.luisvespa.com`, `RESEND_API_KEY` + `EMAIL_FROM` (dominio verificado), `GOOGLE_CLIENT_ID/SECRET` + `GOOGLE_CALLBACK_URL` (añadir la URL nueva en Google Cloud Console), `STRIPE_*` (webhook nuevo apuntando al dominio), `GOCARDLESS_*` / `TINK_*` **no** (Open Banking queda apagado en producción hasta su fase; sin esas variables se desactiva solo), `ANTHROPIC_API_KEY` (opcional: ahora todas sus rutas tienen login), `CRON_SECRET`. Separar Production y Preview (Preview con su propia base de Neon).
+`DATABASE_URL` / `DIRECT_URL` (las inyecta Neon), `JWT_SECRET`, `ENCRYPTION_KEY`, `APP_URL=https://budget.luisvespa.com`, `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_EMAIL_API_TOKEN` + `EMAIL_FROM` (ver 2.8; sustituyen a `RESEND_API_KEY`), `GOOGLE_CLIENT_ID/SECRET` + `GOOGLE_CALLBACK_URL` (añadir la URL nueva en Google Cloud Console), `STRIPE_SECRET_KEY` + `STRIPE_PREMIUM_PRICE_ID` + `STRIPE_WEBHOOK_SECRET` (ver 2.9), `GOCARDLESS_*` / `TINK_*` **no** (Open Banking queda apagado en producción hasta su fase; sin esas variables se desactiva solo), `ANTHROPIC_API_KEY` (opcional: ahora todas sus rutas tienen login), `CRON_SECRET`. Separar Production y Preview (Preview con su propia base de Neon).
 
 ### 2.4 Dominio
 En Cloudflare: registro `CNAME budget → cname.vercel-dns.com` con el **proxy desactivado** (nube gris, "DNS only"), para que Vercel emita el certificado. En Vercel: añadir `budget.luisvespa.com` al proyecto.
 
-### 2.5 CI/CD
+### 2.5 CI/CD — HECHO (`70baaad`)
 - **GitHub Actions** (`.github/workflows/verify.yml`): en cada PR y push a `main`, `npm ci` + `npm run verify` (typecheck, tests, build). Los tests no necesitan base de datos.
 - **Vercel Git integration** con `bytecode0/budgetapp`: cada PR → preview; `main` → producción. Vercel despliega aunque el CI falle; por eso `/deploy` corre las mismas comprobaciones en local antes de empujar.
 - Cambios de schema en producción: **no** automáticos. `db push` contra Neon lo lanza `/deploy` con confirmación explícita (ver 2.6).
 
-### 2.6 Comando `/deploy` (skill de Claude Code en `.claude/skills/deploy/`)
+### 2.6 Comando `/deploy` (skill de Claude Code en `.claude/skills/deploy/`) — HECHO (`70baaad`)
 1. Comprueba rama y árbol limpios, y corre `npm run verify`.
 2. Si `prisma/schema.prisma` cambió desde el último despliegue: enseña el diff y **pide confirmación** antes de `prisma db push` contra producción (nunca `--force-reset`, nunca `--accept-data-loss` sin preguntar).
 3. Empuja a GitHub (con confirmación) y espera al check de GitHub Actions y al despliegue de Vercel.
@@ -176,7 +176,42 @@ En Cloudflare: registro `CNAME budget → cname.vercel-dns.com` con el **proxy d
 5. Informa con la URL del despliegue y cómo hacer rollback (`vercel rollback`).
 
 ### 2.7 Verificación
-Preview desplegado → health OK → registrarse con un email nuevo → llega el onboarding → login con Google funciona con la URL nueva → un gasto y un pago de tarjeta se guardan. Luego producción con el dominio.
+Preview desplegado → health OK → registrarse con un email nuevo → **llega el email de verificación (2.8)** → llega el onboarding → login con Google funciona con la URL nueva → un gasto y un pago de tarjeta se guardan → **suscripción Premium de prueba de punta a punta (2.9)**. Luego producción con el dominio.
+
+### 2.8 Emails con Cloudflare Email Sending (sustituye a Resend)
+Decisión del 21 oct: los emails salen por **Cloudflare Email Sending**. El DNS de `luisvespa.com` ya está en Cloudflare, así que el dominio se verifica en el mismo panel y desaparece una cuenta externa.
+
+**Hechos verificados (docs de Cloudflare, oct 2026):**
+- Email Sending está en **beta**. Enviar a cualquier destinatario exige el plan **Workers Paid** (5 $/mes): incluye 3.000 emails/mes por cuenta, luego 0,35 $ por 1.000. En el plan gratuito solo se puede enviar a direcciones de destino verificadas de tu cuenta (sirve para probar, no para usuarios reales).
+- Se puede usar desde fuera de Workers con la **API REST**: `POST https://api.cloudflare.com/client/v4/accounts/{account_id}/email/sending/send`, `Authorization: Bearer <token>`, cuerpo JSON con `from`, `to`, `subject`, `html`, `text`. Respuesta `{ success, errors, result: { delivered, queued, permanent_bounces } }`. Mensaje máximo 5 MiB.
+- Cuentan para la cuota los emails aceptados (también los que rebotan); los rechazados en la API o bloqueados por la lista de supresión, no.
+
+**Tareas:**
+1. **Tú, en Cloudflare:** activar Workers Paid, dar de alta `luisvespa.com` en Email Service → Email Sending y dejar que añada los registros SPF/DKIM (y un DMARC `p=none` para empezar). Crear un API token con **solo** el permiso de enviar email en esa cuenta. Remitente: `EMAIL_FROM="LifePlan <contact@luisvespa.com>"` (decisión J).
+2. **`server/lib/emailClient.ts`** (sustituye a `resendClient.ts`): un único `sendEmail({ to, subject, html, text })` con `fetch` a la API REST, sin SDK nuevo. Lee `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_API_TOKEN` y `EMAIL_FROM` **al enviar**, no al importar (mismo motivo que el arreglo de Resend). Si faltan, lanza un error claro; no hay remitente por defecto inventado (quitar el fallback `onboarding@resend.dev`). Si `success: false` o el destinatario sale en `permanent_bounces`, lanza con el código de Cloudflare.
+3. Migrar los 8 envíos a `sendEmail`: `mailer.ts` (verificación, restablecer contraseña, bienvenida, bienvenida Google, invitación de pareja) y `subscriptionEmails.ts` (suscripción activada, cancelada, pago fallido). Las plantillas HTML no cambian. Añadir versión `text` a cada uno (mejora la entregabilidad).
+4. Quitar la dependencia `resend` del `package.json`; actualizar `.env.example` y la tabla de variables del CLAUDE.md (`RESEND_API_KEY` → las de Cloudflare).
+5. **Tests** (`server/lib/emailClient.test.ts`, sin red: `fetch` simulado): construye bien URL, cabeceras y cuerpo; error claro si faltan variables; error si `success: false` o rebote permanente.
+6. **Local:** sin las variables, el registro no debe romper la app. Mismo comportamiento que hoy con Resend (comprobar qué hace hoy el registro si el envío falla y mantenerlo).
+
+**Verificación:** desde el Preview, registrarse con un email real (Gmail y Outlook) → el código llega a la bandeja de entrada, no a spam; en Gmail "Mostrar original" da SPF, DKIM y DMARC `PASS`. Restablecer contraseña también llega.
+
+**Riesgo:** es un producto en beta. Si la entregabilidad o la API fallan, la vuelta atrás es barata porque todo pasa por `sendEmail`: cambiar su implementación, no los 8 envíos.
+
+### 2.9 Stripe configurado desde la beta
+Decisión del 21 oct (cierra la H): Stripe se configura **ya**, en el primer despliegue, no después. Hoy `server/lib/stripe.ts` crea el cliente al importar y tumba la app entera si falta `STRIPE_SECRET_KEY`. Tocar Stripe está en la lista de "no modificar sin preguntar" del CLAUDE.md: esta sección es esa pregunta, y su OK cubre **solo** lo que está aquí.
+
+**Modo de Stripe durante la beta: test (sandbox)** en Preview y en Production (decisión I). El flujo completo funciona con tarjetas de prueba y nadie paga dinero real. Pasar a modo live al salir de la beta es cambiar las tres variables y crear el webhook live, sin tocar código.
+
+**Tareas:**
+1. **Tú, en el panel de Stripe** (en el modo que se decida): producto "LifePlan Premium" con su precio mensual → `STRIPE_PREMIUM_PRICE_ID`. Webhook a `https://budget.luisvespa.com/api/stripe/webhook` con los 5 eventos que maneja hoy `server/routes/stripe.ts`: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`, `invoice.payment_succeeded` → `STRIPE_WEBHOOK_SECRET`. Preview usa otro endpoint de webhook (o ninguno, y se prueba con `stripe listen`), siempre en modo test.
+2. **`server/lib/stripe.ts` perezoso:** el cliente se crea en la primera llamada; si falta la clave, las rutas de Stripe responden `503 { error }` en vez de que caiga la app. Igual con `STRIPE_PREMIUM_PRICE_ID`. Sin cambiar la lógica de checkout, webhook ni suscripciones.
+3. **Revisar el webhook en Vercel:** necesita el cuerpo **crudo** para verificar la firma (`express.raw` en `server/app.ts:50`). Comprobar que la función de Vercel no lo parsea antes; si llega ya parseado, la verificación falla siempre con 400.
+4. **Revisar el uso de la API:** `current_period_end` se lee de la suscripción (`server/routes/stripe.ts:48`); en versiones recientes de la API de Stripe ese campo vive en los items de la suscripción. Comprobar contra la `apiVersion` fijada en `stripe.ts` y que no se guarda `Invalid Date`.
+5. **Portal de cliente:** decidir si se activa el Customer Portal de Stripe para cambiar tarjeta/cancelar o se sigue con las rutas propias (`cancel-subscription`, `reactivate-subscription`). Por defecto, las propias: ya existen.
+6. **Tests:** sin red; el arranque de la app sin variables de Stripe no lanza; `syncSubscription` con un objeto de suscripción de ejemplo guarda bien estado y fechas.
+
+**Verificación (en el Preview, modo test):** hacerse Premium con la tarjeta `4242 4242 4242 4242` → vuelve a Ajustes con Premium activo → llega el webhook (200 en el panel de Stripe) → llega el email "suscripción activada" por Cloudflare (2.8) → cancelar → queda "cancela al final del periodo" → reactivar. Con `4000 0000 0000 0341` (falla al cobrar), llega el email de pago fallido.
 
 ---
 
@@ -238,4 +273,8 @@ Cada paso escribe filas reales (como hoy) y se puede saltar. "Atrás" no borra n
 
 **G.** ~~Open Banking en producción~~ → decidido 21 oct: apagado por ahora; será una fase futura del proyecto.
 
-**H.** `server/lib/stripe.ts` crea el cliente de Stripe al arrancar y tumba la app si falta `STRIPE_SECRET_KEY`. ¿Se hace perezoso (como Resend) o se configura Stripe en producción desde el principio?
+**H.** ~~¿Stripe perezoso o configurado desde el principio?~~ → decidido 21 oct: configurado desde la beta, y además perezoso para que su ausencia no tumbe la app (2.9).
+
+**I.** ~~Stripe durante la beta: ¿test o live?~~ → decidido 21 oct: **modo test** en Preview y Production. Al pasar a live: precio definitivo y textos legales mínimos (términos, privacidad, política de cancelación) antes de cobrar.
+
+**J.** ~~Remitente de los emails~~ → decidido 21 oct: **`contact@luisvespa.com`**.
