@@ -37,7 +37,9 @@ La épica 1 va primero porque el paso de deudas del onboarding tiene que pregunt
 
 ---
 
-## Épica 1: pagos de deuda
+## Épica 1: pagos de deuda — HECHA (rama `feature/deudas-pagos`, pendiente de probar en el navegador)
+
+> **Rediseño del 21 oct (sobre la marcha):** la tarjeta de crédito es una **cuenta** (tipo "Tarjeta de crédito"), no algo que se crea en Deudas. Al crearla en Cuentas se elige la modalidad (contado a fin de mes / pago mínimo) y lo que se debe hoy; el servidor crea y mantiene la deuda detrás (`server/lib/cardDebt.ts`). El menú Deudas queda como vista de todo lo que se debe, y solo se crean ahí préstamos y planes de cuotas. "Pagar tarjeta" (parcial o total) está en el + de Actividad, en cada tarjeta de Cuentas y en cada deuda. Las secciones de abajo describen el modelo de cálculo, que no cambió; 1.3 y 1.6 se ven superadas por este rediseño.
 
 ### Modelo (decisión A: compras en su categoría)
 
@@ -108,7 +110,7 @@ Un helper `monthlyCommitment(debt)` reemplaza a `minimumPayment ?? installmentAm
 
 En `debtTimeline` (futuro comprometido), `full` cuenta la deuda previa en el periodo actual y desaparece. Las compras nuevas no son "futuro comprometido": ya son gasto presupuestado.
 
-### 1.6 UI de Deudas (`src/app/components/Debts.tsx`)
+### 1.6 UI de Deudas (`src/app/components/Debts.tsx`) — superada por el rediseño de arriba
 
 - Selector de modo de pago al crear o editar: Contado fin de mes / En cuotas (6, 10, 12, 18, 24 u otro) / Pago mínimo.
 - Tarjeta de crédito: elegir o crear la cuenta vinculada.
@@ -121,7 +123,12 @@ En `debtTimeline` (futuro comprometido), `full` cuenta la deuda previa en el per
 - Manual, el caso de la PASS: alta en contado con 300 € de deuda previa → partida del mes 300. Compra de 50 € en "Súper" con la PASS → saldo 350, partida sigue en 300, Súper gastado 50. Pago de 350 desde el banco → saldo 0, `paid_off`, partida pagada 300, **gasto total del mes 350, no 400**.
 - Cuotas: 6 × 50 € → pagar 2 → "cuota 2 de 6", saldo 200. Borrar un pago → vuelve a 250.
 
-### 1.8 Después (no en esta épica): ciclo de facturación
+### 1.8 Pendiente para después de la épica 1
+
+- **Fraccionar una compra concreta de la tarjeta en N cuotas** (decidido 21 oct: la modalidad va por tarjeta; fraccionar compras, más adelante).
+- **Ciclo de facturación** (abajo).
+
+### 1.9 Ciclo de facturación
 
 Con `statementDay` / `paymentDueDay`, separar "lo que vence este mes" (compras hasta el corte) de "saldo total" (incluye compras después del corte, que vencen el mes siguiente). Es el diferenciador de "dos ejes de tiempo" de la memoria del producto. Este modelo lo permite sin cambiar el schema.
 
@@ -132,6 +139,7 @@ Con `statementDay` / `paymentDueDay`, separar "lo que vence este mes" (compras h
 El esqueleto está hecho. Falta:
 
 ### 2.1 Paso de deudas (`DebtsStep.tsx`)
+- **Es el sitio donde se registran las deudas que ya se tienen** (decidido 21 oct). Dos bloques: **tarjetas** (se crean como cuentas tipo tarjeta, con modalidad y lo que se debe hoy, igual que en Cuentas) y **préstamos y cuotas** (coche, Klarna, préstamo rápido…).
 - Añadir el modo de pago (épica 1) con la misma UI que en Deudas: contado / cuotas (cuántas y cuántas pagadas) / mínimo.
 - Día de vencimiento (`paymentDueDay`) para que el presupuesto sepa cuándo cae.
 - Lo que se introduce como saldo es la **deuda previa** (ancla). Para tarjetas, crear su cuenta `card` y explicar: "A partir de ahora, apunta las compras con esta tarjeta eligiendo la cuenta «<nombre>»".
