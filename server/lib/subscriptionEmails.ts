@@ -1,6 +1,5 @@
-import { resend } from "./resendClient.js";
+import { sendEmail } from "./emailClient.js";
 
-const FROM = process.env.EMAIL_FROM ?? "LifePlan <onboarding@resend.dev>";
 const APP_URL = process.env.APP_URL ?? "http://localhost:5173";
 
 // ── Brand colors ──────────────────────────────────────────────────────────────
@@ -107,11 +106,31 @@ export async function sendSubscriptionActivatedEmail({
       You can manage or cancel your subscription at any time from <strong>Settings → Billing & Plan</strong>.
     </p>`;
 
-  await resend.emails.send({
-    from: FROM,
+  const text = [
+    "Welcome to LifePlan Premium!",
+    "",
+    `Hi ${name}, your subscription is now active.`,
+    "",
+    "You now have access to:",
+    "- AI-powered financial insights & recommendations",
+    "- PDF export of plans and budget reports",
+    "- Advanced projections with custom interest rates",
+    "- Priority email support",
+    "- LifePlan Premium badge",
+    "",
+    `Next renewal: ${dateStr}`,
+    "Amount: €9.99/mo",
+    "",
+    `Open LifePlan: ${APP_URL}`,
+    "",
+    "You can manage or cancel your subscription at any time from Settings → Billing & Plan.",
+  ].join("\n");
+
+  await sendEmail({
     to,
     subject: "Welcome to LifePlan Premium! 🎉",
     html: baseWrapper(content, PRIMARY),
+    text,
   });
 }
 
@@ -161,11 +180,29 @@ export async function sendSubscriptionCancelledEmail({
       If you have feedback on why you cancelled, we'd love to hear it — just reply to this email.
     </p>`;
 
-  await resend.emails.send({
-    from: FROM,
+  const text = [
+    "Your subscription has been cancelled",
+    "",
+    `Hi ${name}, we've received your cancellation request.`,
+    "",
+    `You still have Premium access until ${dateStr}. No further charges will be made. You can reactivate anytime before this date.`,
+    "",
+    `After ${dateStr}, your account will return to the Free plan. You'll lose access to:`,
+    "- AI-powered financial insights",
+    "- PDF export of reports",
+    "- Advanced projections with custom rates",
+    "- Priority email support",
+    "",
+    `Changed your mind? Reactivate before ${dateStr}: ${APP_URL}/settings`,
+    "",
+    "If you have feedback on why you cancelled, we'd love to hear it — just reply to this email.",
+  ].join("\n");
+
+  await sendEmail({
     to,
     subject: "Your LifePlan Premium subscription has been cancelled",
     html: baseWrapper(content, "#475569"),
+    text,
   });
 }
 
@@ -198,10 +235,21 @@ export async function sendPaymentFailedEmail({
       If you need help, reply to this email or contact us at support@lifeplan.app.
     </p>`;
 
-  await resend.emails.send({
-    from: FROM,
+  const text = [
+    "Action required: Payment failed",
+    "",
+    `Hi ${name}, we were unable to process your payment for LifePlan Premium.`,
+    "Your Premium access may be suspended if payment is not updated soon.",
+    "",
+    `Update your payment method: ${APP_URL}/settings`,
+    "",
+    "If you need help, reply to this email or contact us at support@lifeplan.app.",
+  ].join("\n");
+
+  await sendEmail({
     to,
     subject: "⚠️ Action required: Payment failed for LifePlan Premium",
     html: baseWrapper(content, "#DC2626"),
+    text,
   });
 }

@@ -28,5 +28,5 @@ El presupuesto por categoría/mes **ya existe**: `MonthlyBudget` (`prisma/schema
 - [ ] Strings en `en.json` y `es.json`.
 
 ## Fuera de alcance
-- Alertas por email (Resend) / push — depende de decisión pendiente #4.
+- Alertas por email (Cloudflare Email Sending) / push — depende de decisión pendiente #4.
 - Forecast/previsión (Fase D se ocupa de tendencia histórica, no de predicción).

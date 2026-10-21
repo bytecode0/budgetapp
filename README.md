@@ -48,9 +48,10 @@ DATABASE_URL=postgresql://<user>:<password>@localhost:5432/budgetapp
 # JWT Authentication
 JWT_SECRET=your-secret-key-here
 
-# Email Service (Resend — https://resend.com)
-RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxx
-SENDER_EMAIL=noreply@yourdomain.com
+# Email (Cloudflare Email Sending — Workers Paid plan, verified sending domain)
+CLOUDFLARE_ACCOUNT_ID=your-cloudflare-account-id
+CLOUDFLARE_EMAIL_API_TOKEN=your-send-email-api-token
+EMAIL_FROM="LifePlan <noreply@yourdomain.com>"
 
 # Stripe (https://dashboard.stripe.com)
 STRIPE_SECRET_KEY=sk_test_xxxxxxxxxxxxxxxxxxxx
@@ -212,4 +213,4 @@ Copy the displayed webhook signing secret and set it as `STRIPE_WEBHOOK_SECRET` 
 
 **Database:** PostgreSQL
 
-**Services:** Stripe (payments), Resend (email), Google OAuth (authentication)
+**Services:** Stripe (payments), Cloudflare Email Sending (email), Google OAuth (authentication)

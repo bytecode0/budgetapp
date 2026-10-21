@@ -1,8 +1,7 @@
-import { resend } from "./resendClient.js";
+import { sendEmail } from "./emailClient.js";
 
-// Sin dominio verificado: FROM = onboarding@resend.dev (solo entrega al email de tu cuenta Resend)
-// Con dominio verificado: EMAIL_FROM=LifePlan <noreply@tudominio.com>
-const FROM = process.env.EMAIL_FROM ?? "LifePlan <onboarding@resend.dev>";
+// Each send rejects on failure (missing config, Cloudflare error, permanent
+// bounce); callers decide whether that is fatal for their request.
 const APP_URL = process.env.APP_URL ?? "http://localhost:5173";
 const LOGO_URL = process.env.LOGO_URL ?? null;
 
@@ -169,14 +168,23 @@ export async function sendVerificationEmail(email: string, name: string, otp: st
     </tr>
   `);
 
-  const { error } = await resend.emails.send({
-    from: FROM,
+  const text = [
+    `Welcome, ${firstName}!`,
+    "",
+    "Enter this code to verify your email address and activate your LifePlan account:",
+    "",
+    otp,
+    "",
+    "It expires in 15 minutes and can only be used once.",
+    "If you didn't create a LifePlan account, you can safely ignore this email.",
+  ].join("\n");
+
+  await sendEmail({
     to: email,
     subject: `${otp} is your LifePlan verification code`,
     html,
+    text,
   });
-
-  if (error) { console.error("[mailer/sendVerificationEmail]", error); throw new Error(error.message); }
 }
 
 // ─── 2. Password Reset OTP ───────────────────────────────────────────────────
@@ -239,14 +247,23 @@ export async function sendPasswordResetEmail(email: string, otp: string) {
     </tr>
   `);
 
-  const { error } = await resend.emails.send({
-    from: FROM,
+  const text = [
+    "Reset your password",
+    "",
+    "We received a request to reset your LifePlan password. Use this code to set a new password:",
+    "",
+    otp,
+    "",
+    "It expires in 15 minutes.",
+    "Didn't request this? Someone may have entered your email by mistake. No changes have been made to your account.",
+  ].join("\n");
+
+  await sendEmail({
     to: email,
     subject: `${otp} — Reset your LifePlan password`,
     html,
+    text,
   });
-
-  if (error) { console.error("[mailer/sendPasswordResetEmail]", error); throw new Error(error.message); }
 }
 
 // ─── 3. Welcome — email verified ─────────────────────────────────────────────
@@ -304,14 +321,26 @@ export async function sendWelcomeEmail(email: string, name: string) {
     </tr>
   `);
 
-  const { error } = await resend.emails.send({
-    from: FROM,
+  const text = [
+    `You're in, ${firstName}!`,
+    "",
+    "Your LifePlan account is verified and ready. Start building your financial future today.",
+    "",
+    "What you can do right now:",
+    "- Create life plans: set goals for travel, a car, a house, or a business",
+    "- Track your spending: see how daily expenses align with your goals",
+    "- Allocate income: divide your income across your plans with intention",
+    "- Get smart insights: AI-powered tips to optimize your financial journey",
+    "",
+    `Start planning: ${APP_URL}`,
+  ].join("\n");
+
+  await sendEmail({
     to: email,
     subject: `Welcome to LifePlan, ${firstName}! Your account is ready`,
     html,
+    text,
   });
-
-  if (error) { console.error("[mailer/sendWelcomeEmail]", error); throw new Error(error.message); }
 }
 
 // ─── 4. Partner invite ───────────────────────────────────────────────────────
@@ -381,14 +410,24 @@ export async function sendPartnerInviteEmail(
     </tr>
   `);
 
-  const { error } = await resend.emails.send({
-    from: FROM,
+  const text = [
+    "You've been invited!",
+    "",
+    `${senderName} wants to share their finances with you on LifePlan.`,
+    "Once linked, you'll both see the same plans, expenses, and budget. You can unlink at any time from Settings.",
+    "",
+    `Accept the invitation: ${acceptUrl}`,
+    "",
+    "This invitation expires in 7 days. You'll need to create a LifePlan account or log in to accept.",
+    `If you don't know ${senderName} or didn't expect this invite, you can safely ignore this email.`,
+  ].join("\n");
+
+  await sendEmail({
     to: invitedEmail,
     subject: `${senderName} invited you to share finances on LifePlan`,
     html,
+    text,
   });
-
-  if (error) { console.error("[mailer/sendPartnerInviteEmail]", error); throw new Error(error.message); }
 }
 
 // ─── 5. Welcome — Google signup ───────────────────────────────────────────────
@@ -452,12 +491,24 @@ export async function sendWelcomeGoogleEmail(email: string, name: string) {
     </tr>
   `);
 
-  const { error } = await resend.emails.send({
-    from: FROM,
+  const text = [
+    `Welcome, ${firstName}!`,
+    "",
+    "You've signed in with Google. Your LifePlan account is ready and verified, no extra steps needed.",
+    "",
+    "Get started in seconds:",
+    "- Create life plans: set goals for travel, a car, a house, or a business",
+    "- Track your spending: see how daily expenses align with your goals",
+    "- Allocate income: divide your income across your plans with intention",
+    "- Get smart insights: AI-powered tips to optimize your financial journey",
+    "",
+    `Open LifePlan: ${APP_URL}`,
+  ].join("\n");
+
+  await sendEmail({
     to: email,
     subject: `Welcome to LifePlan, ${firstName}!`,
     html,
+    text,
   });
-
-  if (error) { console.error("[mailer/sendWelcomeGoogleEmail]", error); throw new Error(error.message); }
 }

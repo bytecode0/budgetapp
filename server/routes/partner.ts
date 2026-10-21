@@ -117,7 +117,7 @@ partnerRouter.post("/invite", requireAuth, async (req: AuthRequest, res: Respons
 
     const acceptUrl = `${APP_URL}/?invite=${token}`;
 
-    // Send email — non-fatal: if Resend fails (e.g. unverified domain in dev) we still
+    // Send email — non-fatal: if sending fails (e.g. email env vars unset in dev) we still
     // return the invite so the flow can be tested via the acceptUrl.
     let emailWarning: string | undefined;
     try {

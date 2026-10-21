@@ -27,7 +27,7 @@ The Radiografía Financiera (a public lead magnet) was abandoned and deleted on 
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS v4, shadcn/ui (Radix primitives), Motion (Framer Motion v12)
 - **Backend**: Node.js, Express, TypeScript (`tsx watch`), Prisma ORM
 - **Database**: PostgreSQL
-- **Services**: Stripe (payments), Resend (email), Google OAuth
+- **Services**: Stripe (payments), Cloudflare Email Sending (email), Google OAuth
 - **i18n**: i18next — all user-facing strings must use `t('key')`, never hardcode text
 
 ---
@@ -78,7 +78,7 @@ Documented in `.env.example`. Relevant ones:
 |---|---|
 | `DATABASE_URL` | PostgreSQL |
 | `JWT_SECRET`, `ENCRYPTION_KEY` | Auth sessions / encrypted bank tokens |
-| `RESEND_API_KEY`, `EMAIL_FROM` | Verification, password reset and invite emails. Production needs a verified sending domain |
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_API_TOKEN`, `EMAIL_FROM` | Verification, password reset, invite and subscription emails, sent through Cloudflare Email Sending (`server/lib/emailClient.ts`). Sending to real users needs the Workers Paid plan and a verified sending domain; the token only needs the send-email permission. No fallback sender: if any is missing, sending fails with a clear error |
 | `APP_URL` | The production URL (CORS origin and links in emails), not localhost |
 | `GOOGLE_CLIENT_ID/SECRET`, `GOOGLE_CALLBACK_URL` | Google sign-in; the callback URL must also be registered in Google Cloud Console |
 | `STRIPE_SECRET_KEY`, `STRIPE_PREMIUM_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` | Premium subscription; webhook points at `/api/stripe/webhook`. **Test mode** during the beta. If any is missing, the Stripe routes answer 503; the rest of the app runs |

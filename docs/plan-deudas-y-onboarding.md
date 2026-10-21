@@ -181,6 +181,8 @@ Preview desplegado → health OK → registrarse con un email nuevo → **llega 
 ### 2.8 Emails con Cloudflare Email Sending (sustituye a Resend)
 Decisión del 21 oct: los emails salen por **Cloudflare Email Sending**. El DNS de `luisvespa.com` ya está en Cloudflare, así que el dominio se verifica en el mismo panel y desaparece una cuenta externa.
 
+**Hecho (código, tareas 2–5):** `server/lib/emailClient.ts` + tests, los 8 envíos migrados con versión `text`, `resend` desinstalado, CLAUDE.md y README actualizados. Si el envío falla, cada ruta hace lo mismo que antes (registro: 500 y se puede reintentar; bienvenidas, invitación y emails de suscripción: no bloquean). Pendiente: tarea 1 (Cloudflare), `.env.example` y la verificación en el Preview.
+
 **Hechos verificados (docs de Cloudflare, oct 2026):**
 - Email Sending está en **beta**. Enviar a cualquier destinatario exige el plan **Workers Paid** (5 $/mes): incluye 3.000 emails/mes por cuenta, luego 0,35 $ por 1.000. En el plan gratuito solo se puede enviar a direcciones de destino verificadas de tu cuenta (sirve para probar, no para usuarios reales).
 - Se puede usar desde fuera de Workers con la **API REST**: `POST https://api.cloudflare.com/client/v4/accounts/{account_id}/email/sending/send`, `Authorization: Bearer <token>`, cuerpo JSON con `from`, `to`, `subject`, `html`, `text`. Respuesta `{ success, errors, result: { delivered, queued, permanent_bounces } }`. Mensaje máximo 5 MiB.

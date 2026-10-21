@@ -33,6 +33,6 @@ Tickets por fase (un epic por fase). Orden de implementación recomendado A → 
 7. **Transferencias entre cuentas:** un traspaso es un cargo + un abono que no deben contar como gasto ni ingreso. ¿Se modela con `transferGroupId` que enlaza ambos movimientos y los excluye de los cálculos? — surge con E2/E.
 2. **Fuente de verdad del progreso de planes:** `currentAmount` vs `PlanDeposit` (riesgo de doble conteo) — bloquea C.
 3. **`Float` → céntimos/`Decimal`:** ¿se aborda en A? — lo piden #4 y #5.
-4. **Notificaciones:** ¿alertas sólo in-app o también email (Resend)/push? — define entidad `Notification` y jobs.
+4. **Notificaciones:** ¿alertas sólo in-app o también email (Cloudflare Email Sending)/push? — define entidad `Notification` y jobs.
 5. **Importación bancaria:** BBVA exporta **`.xlsx`** → ticket **G** (CSV/XLSX) primero, open banking (**H**) después. Decidir librería de lectura (SheetJS vs exceljs) y estrategia de `externalId` derivado.
 6. **Divisa:** ¿multi-divisa por cuenta o todo EUR? — afecta E y UI (hoy `€` hardcodeado).
