@@ -8,7 +8,7 @@ import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/perio
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import {
   loadDebtLedgers, debtState, owedNow, monthlyCommitment, setLiveValues, syncDebtAllocations, syncDebtStatus, ensureDebtLine,
-  startingBalanceFor, type DebtLedger,
+  startingBalanceFor, paidOffByHand, type DebtLedger,
 } from "../lib/debtBalance.js";
 
 export const debtsRouter = Router();
@@ -357,6 +357,10 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
       ...(currentBalance !== undefined && { balance: toCents(currentBalance) }),
       ...(installmentsPaid !== undefined && { installmentsPaid: parseInt(installmentsPaid, 10) || 0 }),
     });
+    // Set to 0 by hand: the user says it's paid off (an explicit status in
+    // the same request wins).
+    const zeroedByHand = status === undefined && currentBalance !== undefined
+      && paidOffByHand(finalKind, toCents(currentBalance));
 
     const debt = await prisma.debt.update({
       where: { id },
@@ -365,6 +369,7 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
         ...(paymentMode !== undefined && { paymentMode }),
         ...(kind !== undefined && { kind }),
         ...(status !== undefined && { status }),
+        ...(zeroedByHand && { status: "paid_off" }),
         ...(accountUpdate ?? {}),
         ...(principal !== undefined && { principal: principal === null ? null : toCents(principal) }),
         ...(apr !== undefined && { apr: apr === null ? null : Number(apr) }),
@@ -393,10 +398,9 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
       }
     }
 
-    // A balance (or installment count) set by hand settles the status like a
-    // payment does: setting it to 0 marks the debt paid off. An explicit
-    // status in the same request wins.
-    if (status === undefined && (currentBalance !== undefined || installmentsPaid !== undefined)) {
+    // Any other balance or installment count set by hand settles the status
+    // like a payment does (e.g. reopens a paid-off debt given a balance again).
+    if (status === undefined && !zeroedByHand && (currentBalance !== undefined || installmentsPaid !== undefined)) {
       await syncDebtStatus(req.userId!, [id]);
     }
 

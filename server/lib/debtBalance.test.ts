@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  debtState, splitPayments, monthlyCommitment, inLedger, owedNow, sumOwed, startingBalanceFor, isPaidOff,
+  debtState, splitPayments, monthlyCommitment, inLedger, owedNow, sumOwed, startingBalanceFor, isPaidOff, paidOffByHand,
   type DebtLedger, type LedgerDebt,
 } from "./debtBalance.js";
 
@@ -161,11 +161,54 @@ test("owedNow follows the ledger: 1 payment → 150 €, a correction to 180 €
   assert.equal(debtState(corrected).balance, 18000);
 });
 
-test("a loan set to 0 by hand is paid off and owes nothing", () => {
-  // setLiveValues with no movements moves the anchor to 0.
-  const zeroed: LedgerDebt = { ...klarna, id: "loan", kind: "installment", currentBalance: 0, installmentsTotal: 12, installmentsPaid: 0, installmentAmount: 5000 };
-  assert.equal(isPaidOff(ledger(zeroed)), true);
-  assert.equal(owedNow(ledger({ ...zeroed, status: "paid_off" })), 0);
+test("a loan set to 0 by hand is paid off (route decision) and owes nothing", () => {
+  assert.equal(paidOffByHand("installment", 0), true);
+  assert.equal(paidOffByHand("other", -500), true);
+  assert.equal(paidOffByHand("installment", 18000), false);
+  // The route stores status paid_off; from then on it owes 0.
+  const zeroed: LedgerDebt = { ...klarna, id: "loan", kind: "installment", currentBalance: 0, installmentsTotal: 12, installmentsPaid: 0, status: "paid_off" };
+  assert.equal(owedNow(ledger(zeroed)), 0);
+});
+
+// Debts entered WITHOUT a balance don't go through startingBalanceFor; their
+// first payment takes the balance negative. That's not "paid off".
+test("scenario A: minimum-mode debt with no balance stays active after paying its minimum", () => {
+  const other: LedgerDebt = {
+    id: "other", kind: "other", status: "active", paymentMode: "minimum", accountId: null,
+    currentBalance: 0, installmentsPaid: 0, installmentsTotal: null, installmentAmount: null, minimumPayment: 10000,
+  };
+  const paid = ledger(other, { payments: [{ id: "p", amount: 10000, date: d(10) }] });
+  assert.equal(debtState(paid).balance, -10000);
+  assert.equal(isPaidOff(paid), false);
+  assert.equal(monthlyCommitment(paid, NOV), 10000); // the commitment stays
+});
+
+test("scenario B: cuota with no count and no balance stays active as installments are paid", () => {
+  const plan: LedgerDebt = {
+    id: "plan", kind: "installment", status: "active", paymentMode: "installments", accountId: null,
+    currentBalance: 0, installmentsPaid: 1, installmentsTotal: null, installmentAmount: 5000, minimumPayment: null,
+  };
+  assert.equal(isPaidOff(ledger(plan)), false);
+  assert.equal(isPaidOff(ledger(plan, { payments: [{ id: "p", amount: 5000, date: d(10) }] })), false);
+  assert.equal(monthlyCommitment(ledger(plan), OCT), 5000);
+});
+
+test("a minimum-mode debt with a real balance paid down to 0 is paid off", () => {
+  const loan: LedgerDebt = {
+    id: "loan", kind: "other", status: "active", paymentMode: "minimum", accountId: null,
+    currentBalance: 30000, installmentsPaid: 0, installmentsTotal: null, installmentAmount: null, minimumPayment: 10000,
+  };
+  const pay = (n: number) => ({ id: `p${n}`, amount: 10000, date: d(n) });
+  assert.equal(isPaidOff(ledger(loan, { payments: [pay(1), pay(2)] })), false);
+  assert.equal(isPaidOff(ledger(loan, { payments: [pay(1), pay(2), pay(3)] })), true);
+  // An adjustment is balance information too: a 0-anchor debt corrected up and paid back.
+  const corrected = ledger({ ...loan, currentBalance: 0 }, { adjustments: [{ id: "a", amount: 10000, date: d(1) }], payments: [pay(2)] });
+  assert.equal(isPaidOff(corrected), true);
+});
+
+test("cards are never judged paid off", () => {
+  assert.equal(isPaidOff(ledger(pass, { payments: [{ id: "pay", amount: 30000, date: d(30) }] })), false);
+  assert.equal(paidOffByHand("credit_card", 0), false);
 });
 
 test("isPaidOff: by balance or by installment count; an open plan isn't", () => {

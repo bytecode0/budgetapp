@@ -148,15 +148,30 @@ export function owedNow(ledger: DebtLedger): number {
   return Math.max(0, debtState(ledger).balance);
 }
 
-/** Whether a (non-card) debt is paid off: its live balance reached 0, or all
- *  its installments are paid. Every installment plan now has a starting
- *  balance (startingBalanceFor), so balance alone can be trusted — including
- *  one the user set to 0 by hand. A card isn't judged: it hits 0 every month
- *  in "full" mode and keeps being used. */
+/** Whether a debt is paid off, judged automatically (after payments, bank
+ *  sync, imports, edits):
+ *  - by balance reaching 0 — only if the debt HAS balance information: a
+ *    starting balance > 0, or any adjustment or purchase ever recorded. A debt
+ *    entered without a balance (e.g. only its minimum, or a cuota with no
+ *    count) goes negative with its first payment; that isn't "paid off";
+ *  - by installment count, when the total is known.
+ *  Otherwise never. A card isn't judged: it hits 0 every month in "full" mode
+ *  and keeps being used. Setting the balance to 0 by hand is the user's
+ *  decision and is handled by the route (paidOffByHand), not guessed here. */
 export function isPaidOff(ledger: DebtLedger): boolean {
+  const d = ledger.debt;
+  if (d.kind === "credit_card") return false;
   const { balance, installmentsPaid } = debtState(ledger);
-  const { installmentsTotal } = ledger.debt;
-  return balance <= 0 || (installmentsTotal != null && installmentsPaid >= installmentsTotal);
+  const hasBalanceInfo = d.currentBalance > 0 || ledger.adjustments.length > 0 || ledger.purchases.length > 0;
+  return (hasBalanceInfo && balance <= 0)
+    || (d.installmentsTotal != null && installmentsPaid >= d.installmentsTotal);
+}
+
+/** "I owe 0 now", typed by the user on a debt that isn't a card: it's paid
+ *  off. Decided from the request itself, because setLiveValues may move the
+ *  anchor to 0 and the ledger can no longer tell it apart from "no balance". */
+export function paidOffByHand(kind: string, liveBalanceCents: number): boolean {
+  return kind !== "credit_card" && liveBalanceCents <= 0;
 }
 
 /** Total owed across the active debts — what "Deuda total" shows everywhere. */
