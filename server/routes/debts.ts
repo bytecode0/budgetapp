@@ -29,15 +29,18 @@ async function currentPeriod(userId: string): Promise<{ start: Date; end: Date }
   return periodBounds(currentPeriodKey(day), day);
 }
 
-// The API speaks LIVE values: `currentBalance` is what's owed now and
-// `installmentsPaid` counts payments recorded since the anchor. The stored
-// anchor is exposed as `anchorBalance` (see server/lib/debtBalance.ts).
+// The API speaks LIVE values: `currentBalance` is the live ledger balance
+// (what the edit form sends back as "I owe X now") and `installmentsPaid`
+// counts payments recorded since the anchor. The stored anchor is exposed as
+// `anchorBalance`. `owed` is what the app SHOWS as owed: owedNow(), which also
+// covers a plan entered with only its cuota (see server/lib/debtBalance.ts).
 function withLiveState<T extends { id: string; currentBalance: number }>(debt: T, ledger: DebtLedger | undefined, period: { start: Date; end: Date }) {
-  if (!ledger) return { ...debt, anchorBalance: debt.currentBalance, previousBalance: debt.currentBalance, purchasesTotal: 0, paymentsTotal: 0, monthlyCommitment: 0 };
+  if (!ledger) return { ...debt, owed: Math.max(0, debt.currentBalance), anchorBalance: debt.currentBalance, previousBalance: debt.currentBalance, purchasesTotal: 0, paymentsTotal: 0, monthlyCommitment: 0 };
   const state = debtState(ledger);
   return {
     ...debt,
     currentBalance: state.balance,
+    owed: owedNow(ledger),
     anchorBalance: debt.currentBalance,
     previousBalance: state.previousRemaining,
     purchasesTotal: state.purchasesTotal,
@@ -95,7 +98,7 @@ debtsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
     const live = debts.map(d => withLiveState(d, ledgers.get(d.id), period));
 
     const active = live.filter(d => d.status === "active");
-    const totalOwed = active.reduce((s, d) => s + Math.max(0, d.currentBalance), 0);
+    const totalOwed = active.reduce((s, d) => s + d.owed, 0);
     const totalMinimums = active.reduce((s, d) => s + d.monthlyCommitment, 0);
 
     return res.json(serializeMoney({ debts: live, totalOwed, totalMinimums }));

@@ -1,7 +1,7 @@
 // Run with:  node --import tsx --test server/lib/debtBalance.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { debtState, splitPayments, monthlyCommitment, inLedger, type DebtLedger, type LedgerDebt } from "./debtBalance.js";
+import { debtState, splitPayments, monthlyCommitment, inLedger, owedNow, sumOwed, type DebtLedger, type LedgerDebt } from "./debtBalance.js";
 
 const d = (day: number) => new Date(2026, 9, day); // October 2026
 const nov = (day: number) => new Date(2026, 10, day);
@@ -124,4 +124,29 @@ test("a −X correction followed by +X cancels out (no clamping between events)"
   });
   assert.deepEqual(splitPayments(l).get("pay"), { toPrevious: 30000, toPurchases: 5000 });
   assert.equal(debtState(l).balance, 0);
+});
+
+// ── What's owed (owedNow / sumOwed) — the one "owed" every screen shows ─────
+
+const klarnaNoBalance: LedgerDebt = {
+  id: "klarna", kind: "bnpl", status: "active", paymentMode: "installments", accountId: null,
+  currentBalance: 0, installmentsPaid: 2, installmentsTotal: 6, installmentAmount: 5000, minimumPayment: null,
+};
+
+test("owedNow: a card owes its live balance (purchases included), never below 0", () => {
+  assert.equal(owedNow(ledger(pass)), 30000);
+  assert.equal(owedNow(ledger(pass, { purchases: [{ id: "super", amount: 5000, date: d(22) }] })), 35000);
+  assert.equal(owedNow(ledger(pass, { payments: [{ id: "over", amount: 40000, date: d(30) }] })), 0);
+});
+
+test("owedNow: a plan entered with only its cuota owes its remaining cuotas", () => {
+  assert.equal(owedNow(ledger(klarnaNoBalance)), 20000); // 4 × 50 €
+  assert.equal(owedNow(ledger(klarnaNoBalance, { payments: [{ id: "p3", amount: 5000, date: d(5) }] })), 15000);
+  // Entered with its balance, the live balance is what's owed.
+  assert.equal(owedNow(ledger({ ...klarnaNoBalance, currentBalance: 20000 })), 20000);
+});
+
+test("sumOwed: plan 3.3 as entered (PASS 300 € + Klarna without balance) = 500 €; paid-off debts excluded", () => {
+  assert.equal(sumOwed([ledger(pass), ledger(klarnaNoBalance)]), 50000);
+  assert.equal(sumOwed([ledger(pass), ledger({ ...klarnaNoBalance, status: "paid_off" })]), 30000);
 });

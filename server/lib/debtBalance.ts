@@ -135,6 +135,11 @@ export function owedNow(ledger: DebtLedger): number {
   return Math.max(0, state.balance);
 }
 
+/** Total owed across the active debts — what "Deuda total" shows everywhere. */
+export function sumOwed(ledgers: DebtLedger[]): number {
+  return ledgers.filter(l => l.debt.status === "active").reduce((s, l) => s + owedNow(l), 0);
+}
+
 /** What the debt's budget line should hold for the period [start, end).
  *  Measured at the period's START, so paying during the period — including
  *  the final payment that marks it paid off — doesn't shrink the line it's

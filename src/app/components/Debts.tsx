@@ -15,7 +15,7 @@ import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSh
 
 // What a payment of this debt usually is, to prefill the payment sheet.
 const suggestedPayment = (d: Debt): number =>
-  d.paymentMode === 'full' ? Math.max(0, d.currentBalance)
+  d.paymentMode === 'full' ? d.owed
   : d.paymentMode === 'installments' ? d.installmentAmount ?? 0
   : d.minimumPayment ?? 0;
 
@@ -134,7 +134,7 @@ export function Debts() {
   const openEdit = (d: Debt) => { setForm(debtFormFromDebt(d)); setShowForm(true); };
 
   const openPay = (d: Debt) => setPaying({
-    debtId: d.id, name: d.name, owed: d.currentBalance, suggested: suggestedPayment(d), cardAccountId: d.accountId,
+    debtId: d.id, name: d.name, owed: d.owed, suggested: suggestedPayment(d), cardAccountId: d.accountId,
   });
 
   const handleSubmit = async () => {
@@ -196,7 +196,7 @@ export function Debts() {
           )}
         </div>
         <div className="text-right shrink-0">
-          <p className="text-lg font-display text-destructive">{fmtEuro(Math.max(0, d.currentBalance))}</p>
+          <p className="text-lg font-display text-destructive">{fmtEuro(d.owed)}</p>
           {d.monthlyCommitment > 0 && (
             <p className="text-xs text-muted-foreground">
               {fmtEuro(d.monthlyCommitment)} {t('debts.perPeriod')}

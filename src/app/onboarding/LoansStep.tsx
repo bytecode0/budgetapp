@@ -57,8 +57,8 @@ export function LoansStep() {
               </div>
               <div className="text-right shrink-0">
                 <p className="font-display">{fmt(d.monthlyCommitment)} <span className="text-xs text-muted-foreground">{t('debts.perPeriod')}</span></p>
-                {d.currentBalance > 0 && (
-                  <p className="text-xs text-muted-foreground">{t('onboarding.loans.owedLabel')} {fmt(d.currentBalance)}</p>
+                {d.owed > 0 && (
+                  <p className="text-xs text-muted-foreground">{t('onboarding.loans.owedLabel')} {fmt(d.owed)}</p>
                 )}
               </div>
               <button onClick={() => handleDelete(d.id)} className="p-2 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/5 transition-colors" title={t('debts.delete')}>

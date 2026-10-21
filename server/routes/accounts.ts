@@ -5,7 +5,7 @@ import { createDefaultAccount } from "../lib/defaults.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { currentPeriodKey, periodBounds } from "../lib/period.js";
-import { loadDebtLedgers, debtState, monthlyCommitment } from "../lib/debtBalance.js";
+import { loadDebtLedgers, debtState, owedNow, monthlyCommitment } from "../lib/debtBalance.js";
 import { CARD_PAYMENT_MODES, createCardDebt, updateCardDebt, type CardSettings } from "../lib/cardDebt.js";
 
 export const accountsRouter = Router();
@@ -67,7 +67,7 @@ accountsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
         paymentMode: d.paymentMode,
         minimumPayment: d.minimumPayment,
         paymentDueDay: d.paymentDueDay,
-        owed: ledger ? Math.max(0, debtState(ledger).balance) : 0,
+        owed: ledger ? owedNow(ledger) : 0,
         monthlyCommitment: ledger ? monthlyCommitment(ledger, period) : 0,
       }];
     }));

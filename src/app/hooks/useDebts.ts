@@ -17,7 +17,8 @@ export interface Debt {
   paymentMode: DebtPaymentMode;
   // Live values, derived server-side (server/lib/debtBalance.ts): what's owed
   // now = anchor + card purchases − payments recorded since the anchor.
-  currentBalance: number; // euros
+  currentBalance: number; // euros — live ledger balance (sent back by the edit form)
+  owed: number; // euros — what's owed now (owedNow): what every "owed" / total shows
   anchorBalance: number; // euros — the balance last set by hand or bank sync
   previousBalance: number; // euros — what's left of the pre-existing debt
   purchasesTotal: number; // euros
@@ -117,7 +118,7 @@ export function useDebts() {
 
   const recomputeTotals = (list: Debt[]) => {
     const active = list.filter(d => d.status === 'active');
-    setTotalOwed(active.reduce((s, d) => s + Math.max(0, d.currentBalance), 0));
+    setTotalOwed(active.reduce((s, d) => s + d.owed, 0));
     setTotalMinimums(active.reduce((s, d) => s + d.monthlyCommitment, 0));
   };
 

@@ -5,7 +5,7 @@
 // Nothing here is a stored flag: "what's still missing" is recomputed from
 // the user's real data on every read, so deleting something brings its step
 // back into the checklist.
-import { debtState, monthlyCommitment, owedNow, type DebtLedger } from "./debtBalance.js";
+import { debtState, monthlyCommitment, owedNow, sumOwed, type DebtLedger } from "./debtBalance.js";
 import { buildDebtTimeline } from "./debtTimeline.js";
 import { simulatePayoff } from "./debtPayoff.js";
 import { currentPeriodKey, periodBounds } from "./period.js";
@@ -146,7 +146,7 @@ export function computeOnboardingResult(input: ResultInput): OnboardingResult {
   const committed = timeline[0]?.committed ?? 0;
   const pctCommitted = timeline[0]?.pctCommitted ?? 0;
 
-  const totalOwed = active.reduce((s, d) => s + owedNow(d.ledger), 0);
+  const totalOwed = sumOwed(input.debts.map(d => d.ledger));
 
   // Snowball over consumer debt, as GET /api/debts/payoff?scope=consumer: a
   // card paid in full clears its whole balance each month.
