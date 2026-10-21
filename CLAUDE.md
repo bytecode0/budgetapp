@@ -1,27 +1,19 @@
 # LifePlan BudgetApp — Project Guidelines for Claude
 
-## ⚠️ READ FIRST: this repo contains TWO products
+## ⚠️ READ FIRST: the BudgetApp is the product
 
-| | **Radiografía Financiera** | **LifePlan BudgetApp** |
-|---|---|---|
-| Status | **Launching 12 Sep 2026** | Not launched, unfinished |
-| Auth | **Public, no login** | Authenticated (`requireAuth`) |
-| Location | `src/radiografia/` | everything else |
-| Production | Enabled | **Disabled via feature flag** |
+**Updated 21 Oct 2026:** the Radiografía Financiera (`src/radiografia/`, public no-login lead magnet) has been **abandoned** and will not launch. **All work now targets the LifePlan BudgetApp** (authenticated, `requireAuth`): a tool to get out of over-indebtedness from fragmented installments, built around the "futuro comprometido" metric.
 
-**Until further notice, all work targets the Radiografía.** The BudgetApp is out of scope: do not refactor it, do not "improve" it, do not touch its modules. If a task seems to require changing a BudgetApp module, stop and ask.
+The Radiografía code is still in the repo and its public routes are still mounted. Until it is removed:
+- **Do not extend or fix it.** Don't spend effort on `src/radiografia/`, `server/lib/radiografia/`, `server/routes/radiografia.ts` or `server/lib/xray/` beyond what removing it requires.
+- **Do not import from it** in BudgetApp code. If something in there is worth keeping (e.g. the statement parsers), move it out deliberately — don't reach in.
+- The sections below marked **(legacy — Radiografía)** describe that code; they're kept only so it isn't broken by accident before removal.
 
-### The import boundary (never violate)
-
-- `src/radiografia/` **may** import from the shared design system: `components/ui`, Tailwind tokens, i18n, shared utils.
-- `src/radiografia/` **must never** import from a BudgetApp module.
-- BudgetApp modules **must never** import from `src/radiografia/`.
-
-One-way dependency. This is what keeps the two products from re-entangling.
+> **TODO (Luis):** decide whether to delete the Radiografía code and unmount `/api/radiografia` (public, unauthenticated, rate-limited only by IP — dead public surface is still attack surface).
 
 ### Feature flag
 
-`VITE_ENABLE_BUDGETAPP` — `true` in local dev, `false` in production.
+`VITE_ENABLE_BUDGETAPP` — `true` in local dev. It was `false` in production to hide the BudgetApp while the Radiografía launched; with the Radiografía abandoned, this flag must be `true` (or removed) wherever the BudgetApp is deployed.
 
 When `false`:
 - Frontend: BudgetApp routes are **not registered in the router**. Not a hidden menu link — the route must not exist in the production bundle.
@@ -31,10 +23,8 @@ When `false`:
 
 ## Do not modify without asking
 
-- The existing Radiografía calculation logic — it is finished and verified. Building the report generator is not a licence to refactor the calculation.
 - `prisma/schema.prisma` — propose the change, do not apply it silently. Apply with `db push`, never with migrations (see Prisma workflow).
 - The database. Never run `npm run db:reset` or any `--force-reset`.
-- Any BudgetApp module.
 - Auth middleware, Stripe integration, OAuth setup.
 
 ---
@@ -59,11 +49,12 @@ npm run build            # production build of the frontend → dist/
 npm run prisma:generate  # regenerate the Prisma client
 ```
 
-**Type check:** there is no script for it. Use `npx tsc --noEmit`.
+**Type check:** `npm run typecheck` (server + app).
+**Tests:** `npm run test` (`server/**/*.test.ts`, node test runner). If it fails in the sandbox on the IPC socket, run one file at a time: `node --import tsx --test <file>`.
+**All checks:** `npm run verify` = typecheck + test + build.
 **Lint:** there is no lint script in this project.
-**Tests:** there are none. Verification is manual — run `npm run dev:all` and walk the flow in the browser at http://localhost:5173. State what you verified and what you could not.
 
-> **TODO (Luis, 30 min, high value):** add `"typecheck": "tsc --noEmit"` to `package.json`. Shipping a public financial tool with no automated check of any kind means the browser is your only test suite. One script gives an agent a way to prove its work compiles.
+UI changes still need a manual pass: run `npm run dev:all` and walk the flow in the browser at http://localhost:5173. State what you verified and what you could not.
 
 Production: `npm run build` outputs `dist/`, served statically. The backend runs separately on `SERVER_PORT`. **The feature flag must be enforced in both** — a disabled frontend route with a live API endpoint is not disabled.
 
@@ -104,16 +95,9 @@ Documented in `.env.example`. Relevant ones:
 - **Never** write a secret into source code. Never commit `.env`.
 - If a required env var is missing, **stop and ask**. Do not invent a fallback value or a placeholder key.
 
-### ⚠️ Cost and abuse risk: AI classification on a public route
+### ⚠️ Cost: AI calls (`ANTHROPIC_API_KEY`)
 
-The bank-statement import can call the Anthropic API to classify expenses (`ANTHROPIC_API_KEY`, Phase J). In the BudgetApp that route sits behind `requireAuth`. In the Radiografía it would sit on a **public, unauthenticated** route.
-
-An unauthenticated endpoint that spends money per request is an open invoice. Before launch, whichever is true must be decided explicitly:
-
-- **Option A (recommended for 12 Sep):** AI classification stays disabled on the public path. Unset `ANTHROPIC_API_KEY` in production, or gate the feature behind the auth flag. The manual form is the public path; heuristic parsing handles the statement upload.
-- **Option B:** it stays enabled, with per-IP rate limiting, a hard daily spend cap, a file-size limit, and a monitored budget alert.
-
-Do not leave this implicit.
+Expense classification and the statement column-mapping fallback (`aiColumnMap.ts`) call the Anthropic API. In the BudgetApp they sit behind `requireAuth` — keep it that way: never expose a route that spends money per request without auth. The Radiografía's public `/extracto` route shares the same key gate; while `/api/radiografia` is still mounted, that public route can spend money too (see the TODO at the top).
 
 ---
 
@@ -121,17 +105,14 @@ Do not leave this implicit.
 
 This is a financial app. Rounding bugs here destroy user trust faster than anything else.
 
-> **TODO (Luis): confirm which of these is true today, then delete the other.**
-> - Amounts are stored as **integer cents** (`Int`) — recommended.
-> - Amounts are stored as Prisma `Decimal`.
->
-> **Never `Float`.** If any existing field is a float, flag it.
-
-- Do all arithmetic on integers or `Decimal`. Convert to display format only at the render layer.
+- **Amounts are stored as integer cents (`Int`).** Convert at the API boundary (`server/lib/money.ts`, `toCents`). **Never `Float` for money.** The existing `Float` fields (`Debt.apr`, `Expense.scopeConfidence`) are rates/scores, not amounts.
+- Do all arithmetic on integers. Convert to display format only at the render layer.
 - Round only when displaying, never mid-calculation.
 - Currency symbol must come from i18n, not hardcoded. The `€` in the input example below is a placeholder and violates this rule — fix it when touched.
 
-### The 10/50/20/20 framework
+### The 10/50/20/20 framework (legacy — Radiografía)
+
+The BudgetApp's rules come from the Método Ruta (`metodo-ruta-reglas.md`, referenced as R1…R7 in code comments), not from this table.
 
 The diagnostic framework and its thresholds are the domain core. They live in **one place** (`src/radiografia/domain/`) and are imported from there. Never re-derive or re-hardcode a threshold inside a component.
 
@@ -144,7 +125,7 @@ The diagnostic framework and its thresholds are the domain core. They live in **
 
 ---
 
-## Radiografía-specific rules (exceptions to the general conventions)
+## Radiografía-specific rules (legacy — Radiografía)
 
 The general conventions below were written for the authenticated BudgetApp. The Radiografía is a public, single-session funnel tool, so four of them do **not** apply:
 
@@ -158,16 +139,22 @@ The general conventions below were written for the authenticated BudgetApp. The 
 
 ### Privacy: what gets persisted
 
-Store **percentages and triggered thresholds only — never raw amounts.** No salary, no debt balances, no rent figures.
+**Revoked 18 ago:** "percentages only, never amounts" made the report too thin to be worth asking for a bank statement ("you're spending 600€/year on restaurants" needs an amount, not a percentage). The rule that replaced it:
 
-Raw amounts live in browser memory for the duration of the form and are discarded. There is no business reason to store anyone's salary, and not storing it removes most GDPR exposure.
+- **Aggregates with amounts are fine** — spending by category, gastos hormiga, subscriptions, health index, archetype. What's still never allowed is **raw movements**: no individual transaction (date + concept + amount) ever reaches a database row. Only numbers `analyze()` already aggregated across the whole statement.
+- **`health` is never itemized**, in amount or in name, even in aggregate form — a euro figure next to a pharmacy/insurer is health data under GDPR Article 9 whether or not a merchant name is attached. Its spend is simply dropped from the category breakdown, not folded elsewhere.
+- **Giving movements (diezmo, iglesia, ONG) never carry a merchant name** into the report — the "who" of a tithe is religious-belief data (Article 9). The amount stays in a generic `giving_monthly` bucket, exactly as before.
+- **Merchant names for ant-expenses/subscriptions ARE persisted, under explicit consent** (revoked "never persisted", 18 ago — same reasoning as the amounts above: "600€/year on restaurants" without naming Glovo and Netflix is a report nobody acts on, and a resend or the permanent link showing less than the first email read as a bug every time). They live in the browser's `sessionStorage` from the moment the statement is read until `/email/verify`, and are written into `Radiografia.resultado` there — the first point where the consent checkbox at the email step is backed by a confirmed address. Never at `/profile/extracto`: nothing carries a merchant name before consent exists. The consent copy (`radiografia.onboarding.email.consentLabel`) says so explicitly, and must keep saying so.
+- Nothing above relaxes `health` or giving: they never reach the snapshot at all, in amount or in name.
+
+See `server/lib/radiografia/snapshot.ts` (what gets built) and `server/lib/radiografia/report.ts` (what gets shown) for where each of these is enforced — both, not just one, since a future code path that reads `Radiografia.resultado` without going through the writer must still never surface `health`.
 
 ---
 
 ## Git workflow
 
-- One branch per epic: `feature/epica-0-aislamiento`, `feature/radiografia-manual`, `feature/informe-email`, `feature/landing`
-- Commit style: `type(scope): message` — e.g. `feat(radiografia): add manual income step`
+- One branch per epic, e.g. `feature/deudas-pagos`, `feature/onboarding`
+- Commit style: `type(scope): message` — e.g. `feat(debts): register a payment against a debt`
 - Never commit directly to `main`
 - Never commit `.env`, credentials, or generated build output
 
@@ -416,14 +403,24 @@ When a list has no items, show a centered empty state with an icon, a short mess
 - Auth: every route uses `requireAuth` middleware — `req.userId` is always available inside
 - **Exception:** Radiografía routes are public. Maintain the explicit list below.
 
-### Public routes (the only ones without `requireAuth`)
+### Public routes (the only ones without `requireAuth`) (legacy — Radiografía)
+
+The full list, kept in sync with `server/routes/radiografia.ts` — this went stale once before (it listed two routes; the file has ten), so re-check against the file rather than trusting this list blindly:
 
 ```
-POST /api/radiografia          # save result + email, trigger report
-GET  /api/radiografia/:token   # permanent report page
+POST   /api/radiografia/profile          # bootstrap/resume an anonymous profile
+GET    /api/radiografia/profile          # current state (by cookie or Bearer token)
+PATCH  /api/radiografia/profile/step     # record which onboarding step was reached
+POST   /api/radiografia/profile/extracto # analyze an uploaded statement (mandatory step)
+POST   /api/radiografia/profile/fields   # save the manual gap-filling fields
+POST   /api/radiografia/email/request    # send the 6-digit confirmation code
+POST   /api/radiografia/email/verify     # confirm the code, deliver the report
+POST   /api/radiografia/report/resend    # retry report delivery
+GET    /api/radiografia/report/:token    # permanent report page — the token IS the authorization
+DELETE /api/radiografia/profile          # delete-my-data, Bearer-token authenticated
 ```
 
-Both must be rate-limited by IP.
+All rate-limited by IP (`rateLimited()` in the same file). None of these ever accept a client-supplied `profileId` for authorization — every one resolves "who is this" from the anon cookie or Bearer token, never from the request body.
 
 ---
 
@@ -447,7 +444,7 @@ Status colours follow the same semantic pattern across the app:
 
 ---
 
-## Analytics events
+## Analytics events (legacy — Radiografía)
 
 Plausible, no cookies, no consent banner needed. Fire from `src/radiografia/`:
 
