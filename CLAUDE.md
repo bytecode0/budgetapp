@@ -81,7 +81,7 @@ Documented in `.env.example`. Relevant ones:
 | `RESEND_API_KEY`, `EMAIL_FROM` | Verification, password reset and invite emails. Production needs a verified sending domain |
 | `APP_URL` | The production URL (CORS origin and links in emails), not localhost |
 | `GOOGLE_CLIENT_ID/SECRET`, `GOOGLE_CALLBACK_URL` | Google sign-in; the callback URL must also be registered in Google Cloud Console |
-| `STRIPE_*` | Premium subscription; webhook points at `/api/stripe/webhook` |
+| `STRIPE_SECRET_KEY`, `STRIPE_PREMIUM_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` | Premium subscription; webhook points at `/api/stripe/webhook`. **Test mode** during the beta. If any is missing, the Stripe routes answer 503; the rest of the app runs |
 | `GOCARDLESS_*`, `TINK_*` | Open Banking (optional) |
 | `ANTHROPIC_API_KEY` | AI expense classification — see cost note below |
 | `CRON_SECRET` | Authenticates scheduled jobs |
