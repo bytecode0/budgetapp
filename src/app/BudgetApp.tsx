@@ -25,14 +25,16 @@ import { MonthProvider, useMonth, monthLabel, periodRangeLabel } from './context
 import { useAllocations } from './hooks/useAllocations';
 import { useAnalytics } from './hooks/useAnalytics';
 import { useHousehold } from './hooks/useHousehold';
-import { useOnboardingNeeded } from './hooks/useOnboardingNeeded';
+import { useOnboardingNeeded, type OnboardingStep } from './hooks/useOnboardingNeeded';
 import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/usePartner';
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
 
 function AppInner() {
   const { user, loading, logout, refreshUser } = useAuth();
-  const { needsOnboarding, loading: onboardingLoading, refresh: refreshOnboardingStatus } = useOnboardingNeeded(Boolean(user));
+  const { needsOnboarding, missing: setupMissing, loading: onboardingLoading, refresh: refreshOnboardingStatus } = useOnboardingNeeded(Boolean(user));
+  // Set when the dashboard's "Completa tu configuración" reopens the wizard at a step.
+  const [resumeStep, setResumeStep] = useState<OnboardingStep | null>(null);
   const { t } = useTranslation();
   const { darkMode, updateDarkMode, dbLanguage, updateLanguage, updatePayday } = useAllocations();
   const { household } = useHousehold();
@@ -121,7 +123,7 @@ function AppInner() {
   const renderScreen = () => {
     switch (currentScreen) {
       case 'home':
-        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} />;
+        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} />;
       case 'dashboard':
         return <PlanningDashboard onNavigate={(screen) => setCurrentScreen(screen as Screen)} onViewPlan={handleViewPlan} />;
       case 'activity':
@@ -154,7 +156,7 @@ function AppInner() {
           />
         );
       default:
-        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} />;
+        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} />;
     }
   };
 
@@ -198,8 +200,13 @@ function AppInner() {
       </div>
     );
   }
-  if (needsOnboarding) {
-    return <BudgetOnboarding onDone={() => refreshOnboardingStatus()} />;
+  if (needsOnboarding || resumeStep) {
+    // The wizard may have changed the payday: refresh the month context too.
+    const finishOnboarding = async () => {
+      setResumeStep(null);
+      await Promise.all([refreshOnboardingStatus(), refreshCycleStartDay()]);
+    };
+    return <BudgetOnboarding initialStep={resumeStep ?? 'welcome'} onDone={finishOnboarding} />;
   }
 
   return (
