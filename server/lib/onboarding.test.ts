@@ -5,7 +5,7 @@ import {
   deriveOnboardingStatus, isUntouchedDefaultAccount, computeOnboardingResult, DEFAULT_ACCOUNT_NAME,
   type StatusInput, type StatusAccount, type ResultDebt,
 } from "./onboarding.js";
-import { owedNow, type LedgerDebt } from "./debtBalance.js";
+import { owedNow, startingBalanceFor, type LedgerDebt } from "./debtBalance.js";
 
 // ── Checklist ──────────────────────────────────────────────────────────────
 
@@ -106,6 +106,19 @@ const debt = (d: Partial<LedgerDebt> & { id: string; kind: string }, name: strin
   },
 });
 
+// A plan as POST /api/debts stores it: entered with only its cuota, it gets
+// its remaining cuotas as starting balance.
+const created = (d: Partial<LedgerDebt> & { id: string; kind: string }, name: string) => debt({
+  ...d,
+  currentBalance: startingBalanceFor({
+    paymentMode: d.paymentMode ?? "installments",
+    currentBalance: d.currentBalance ?? 0,
+    installmentAmount: d.installmentAmount ?? null,
+    installmentsTotal: d.installmentsTotal ?? null,
+    installmentsPaid: d.installmentsPaid ?? 0,
+  }),
+}, name);
+
 // Plan §3.3: 2.000 € on day 1, PASS paid in full owing 300 €, Klarna 6×50 € with 2 paid.
 const pass = debt({ id: "pass", kind: "credit_card", paymentMode: "full", accountId: "acc-pass", currentBalance: 30000 }, "PASS");
 const klarna = debt({ id: "klarna", kind: "bnpl", installmentAmount: 5000, installmentsTotal: 6, installmentsPaid: 2, currentBalance: 20000 }, "Klarna");
@@ -135,7 +148,7 @@ test("plan §3.3: futuro comprometido = (300 + 50) / 2000 = 17.5 %", () => {
 });
 
 test("an installment plan entered with only its cuota still owes its remaining cuotas", () => {
-  const noBalance = debt({ id: "k", kind: "bnpl", installmentAmount: 5000, installmentsTotal: 6, installmentsPaid: 2 }, "Klarna");
+  const noBalance = created({ id: "k", kind: "bnpl", installmentAmount: 5000, installmentsTotal: 6, installmentsPaid: 2 }, "Klarna");
   const r = computeOnboardingResult({ debts: [noBalance], monthlyIncome: 200000, cycleStartDay: 1, allocations: [] });
   assert.equal(r.committed, 5000);
   assert.equal(r.freedomMonths, 4); // 4 × 50 €
@@ -166,8 +179,8 @@ test("paid-off debts are ignored", () => {
 
 // ── One definition of "owed" ───────────────────────────────────────────────
 
-test("owedNow: an installment plan entered without a balance owes its remaining cuotas", () => {
-  const noBalance = debt({ id: "k", kind: "bnpl", installmentAmount: 5000, installmentsTotal: 6, installmentsPaid: 2 }, "Klarna");
+test("owedNow: a plan created without a balance owes its remaining cuotas, then follows its payments", () => {
+  const noBalance = created({ id: "k", kind: "bnpl", installmentAmount: 5000, installmentsTotal: 6, installmentsPaid: 2 }, "Klarna");
   assert.equal(owedNow(noBalance.ledger), 20000); // 4 × 50 €
   // A payment since then is one cuota fewer.
   assert.equal(owedNow({ ...noBalance.ledger, payments: [{ id: "p", amount: 5000, date: new Date() }] }), 15000);
@@ -177,7 +190,7 @@ test("owedNow: an installment plan entered without a balance owes its remaining 
 });
 
 test("total owed and the payoff agree for a plan entered without a balance", () => {
-  const noBalance = debt({ id: "k", kind: "bnpl", installmentAmount: 5000, installmentsTotal: 6, installmentsPaid: 2 }, "Klarna");
+  const noBalance = created({ id: "k", kind: "bnpl", installmentAmount: 5000, installmentsTotal: 6, installmentsPaid: 2 }, "Klarna");
   const r = computeOnboardingResult({ debts: [noBalance], monthlyIncome: 200000, cycleStartDay: 1, allocations: [] });
   assert.equal(r.totalOwed, 20000);
   assert.equal(r.freedomMonths, 4);
@@ -185,7 +198,7 @@ test("total owed and the payoff agree for a plan entered without a balance", () 
 });
 
 test("plan §3.3 as a user enters it (Klarna with no balance): 500 € owed, 17.5 %", () => {
-  const klarnaAsEntered = debt({ id: "klarna", kind: "bnpl", installmentAmount: 5000, installmentsTotal: 6, installmentsPaid: 2 }, "Klarna");
+  const klarnaAsEntered = created({ id: "klarna", kind: "bnpl", installmentAmount: 5000, installmentsTotal: 6, installmentsPaid: 2 }, "Klarna");
   const r = computeOnboardingResult({
     debts: [pass, klarnaAsEntered],
     monthlyIncome: 200000,

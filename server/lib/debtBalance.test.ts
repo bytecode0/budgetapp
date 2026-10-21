@@ -1,7 +1,10 @@
 // Run with:  node --import tsx --test server/lib/debtBalance.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { debtState, splitPayments, monthlyCommitment, inLedger, owedNow, sumOwed, type DebtLedger, type LedgerDebt } from "./debtBalance.js";
+import {
+  debtState, splitPayments, monthlyCommitment, inLedger, owedNow, sumOwed, startingBalanceFor, isPaidOff,
+  type DebtLedger, type LedgerDebt,
+} from "./debtBalance.js";
 
 const d = (day: number) => new Date(2026, 9, day); // October 2026
 const nov = (day: number) => new Date(2026, 10, day);
@@ -126,12 +129,22 @@ test("a −X correction followed by +X cancels out (no clamping between events)"
   assert.equal(debtState(l).balance, 0);
 });
 
-// ── What's owed (owedNow / sumOwed) — the one "owed" every screen shows ─────
+// ── What's owed: one ledger, one answer ─────────────────────────────────────
 
-const klarnaNoBalance: LedgerDebt = {
-  id: "klarna", kind: "bnpl", status: "active", paymentMode: "installments", accountId: null,
-  currentBalance: 0, installmentsPaid: 2, installmentsTotal: 6, installmentAmount: 5000, minimumPayment: null,
+const klarnaPlan = { paymentMode: "installments", currentBalance: 0, installmentAmount: 5000, installmentsTotal: 6, installmentsPaid: 2 };
+// As POST /api/debts stores a plan entered with only its cuota.
+const klarna: LedgerDebt = {
+  id: "klarna", kind: "bnpl", status: "active", accountId: null, minimumPayment: null,
+  ...klarnaPlan, currentBalance: startingBalanceFor(klarnaPlan),
 };
+
+test("startingBalanceFor: a plan given only its cuota starts owing its remaining cuotas", () => {
+  assert.equal(startingBalanceFor(klarnaPlan), 20000); // (6 − 2) × 50 €
+  assert.equal(startingBalanceFor({ ...klarnaPlan, currentBalance: 18000 }), 18000); // a balance given wins
+  assert.equal(startingBalanceFor({ ...klarnaPlan, paymentMode: "minimum" }), 0);
+  assert.equal(startingBalanceFor({ ...klarnaPlan, installmentsTotal: null }), 0);
+  assert.equal(startingBalanceFor({ ...klarnaPlan, installmentsPaid: 9 }), 0); // never negative
+});
 
 test("owedNow: a card owes its live balance (purchases included), never below 0", () => {
   assert.equal(owedNow(ledger(pass)), 30000);
@@ -139,14 +152,32 @@ test("owedNow: a card owes its live balance (purchases included), never below 0"
   assert.equal(owedNow(ledger(pass, { payments: [{ id: "over", amount: 40000, date: d(30) }] })), 0);
 });
 
-test("owedNow: a plan entered with only its cuota owes its remaining cuotas", () => {
-  assert.equal(owedNow(ledger(klarnaNoBalance)), 20000); // 4 × 50 €
-  assert.equal(owedNow(ledger(klarnaNoBalance, { payments: [{ id: "p3", amount: 5000, date: d(5) }] })), 15000);
-  // Entered with its balance, the live balance is what's owed.
-  assert.equal(owedNow(ledger({ ...klarnaNoBalance, currentBalance: 20000 })), 20000);
+test("owedNow follows the ledger: 1 payment → 150 €, a correction to 180 € → 180 € (as the edit form shows)", () => {
+  const paid = ledger(klarna, { payments: [{ id: "p3", amount: 5000, date: d(5) }] });
+  assert.equal(owedNow(paid), 15000);
+  // "I owe 180 € now" with movements recorded → a dated adjustment of +30 €.
+  const corrected = ledger(klarna, { payments: [{ id: "p3", amount: 5000, date: d(5) }], adjustments: [{ id: "adj", amount: 3000, date: d(6) }] });
+  assert.equal(owedNow(corrected), 18000);
+  assert.equal(debtState(corrected).balance, 18000);
 });
 
-test("sumOwed: plan 3.3 as entered (PASS 300 € + Klarna without balance) = 500 €; paid-off debts excluded", () => {
-  assert.equal(sumOwed([ledger(pass), ledger(klarnaNoBalance)]), 50000);
-  assert.equal(sumOwed([ledger(pass), ledger({ ...klarnaNoBalance, status: "paid_off" })]), 30000);
+test("a loan set to 0 by hand is paid off and owes nothing", () => {
+  // setLiveValues with no movements moves the anchor to 0.
+  const zeroed: LedgerDebt = { ...klarna, id: "loan", kind: "installment", currentBalance: 0, installmentsTotal: 12, installmentsPaid: 0, installmentAmount: 5000 };
+  assert.equal(isPaidOff(ledger(zeroed)), true);
+  assert.equal(owedNow(ledger({ ...zeroed, status: "paid_off" })), 0);
+});
+
+test("isPaidOff: by balance or by installment count; an open plan isn't", () => {
+  assert.equal(isPaidOff(ledger(klarna)), false);
+  assert.equal(isPaidOff(ledger(klarna, { payments: [1, 2, 3, 4].map(n => ({ id: `p${n}`, amount: 5000, date: d(n) })) })), true);
+  assert.equal(isPaidOff(ledger({ ...klarna, installmentsPaid: 6 })), true);
+});
+
+test("paid-off and archived debts owe nothing; sumOwed only counts active ones", () => {
+  assert.equal(owedNow(ledger({ ...klarna, status: "paid_off" })), 0);
+  assert.equal(owedNow(ledger({ ...klarna, status: "archived" })), 0);
+  // Plan 3.3 as entered (PASS 300 € + Klarna with no balance) = 500 €.
+  assert.equal(sumOwed([ledger(pass), ledger(klarna)]), 50000);
+  assert.equal(sumOwed([ledger(pass), ledger({ ...klarna, status: "paid_off" })]), 30000);
 });

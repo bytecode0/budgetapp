@@ -122,17 +122,41 @@ export function debtState(ledger: DebtLedger, before?: Date): DebtState {
   };
 }
 
-/** What's still owed now — the one definition every total and payoff
- *  simulation uses. The live balance, except for an installment plan entered
- *  with only its cuota (anchor 0, as syncDebtStatus also treats it): that owes
- *  its remaining installments. Never negative. */
+/** The starting balance (anchor, cents) to store for a debt being created —
+ *  or edited before it has any balance information. An installment plan
+ *  given only its cuota owes its remaining installments; that's written into
+ *  the anchor once, so from then on the ledger alone says what's owed (edit
+ *  form, totals, payoff and bank sync all agree). Anything else keeps the
+ *  balance it was given. */
+export function startingBalanceFor(d: {
+  paymentMode: string;
+  currentBalance: number; // cents, as entered
+  installmentAmount: number | null;
+  installmentsTotal: number | null;
+  installmentsPaid: number | null;
+}): number {
+  if (d.currentBalance !== 0 || d.paymentMode !== "installments") return d.currentBalance;
+  if (!d.installmentAmount || d.installmentAmount <= 0 || d.installmentsTotal == null) return d.currentBalance;
+  return Math.max(0, d.installmentsTotal - (d.installmentsPaid ?? 0)) * d.installmentAmount;
+}
+
+/** What's still owed now — the one definition every total and payoff uses:
+ *  the live balance of an active debt, never negative. A paid-off or archived
+ *  debt owes nothing. */
 export function owedNow(ledger: DebtLedger): number {
-  const d = ledger.debt;
-  const state = debtState(ledger);
-  if (d.currentBalance === 0 && d.installmentAmount && d.installmentsTotal != null) {
-    return Math.max(0, d.installmentsTotal - state.installmentsPaid) * d.installmentAmount;
-  }
-  return Math.max(0, state.balance);
+  if (ledger.debt.status !== "active") return 0;
+  return Math.max(0, debtState(ledger).balance);
+}
+
+/** Whether a (non-card) debt is paid off: its live balance reached 0, or all
+ *  its installments are paid. Every installment plan now has a starting
+ *  balance (startingBalanceFor), so balance alone can be trusted — including
+ *  one the user set to 0 by hand. A card isn't judged: it hits 0 every month
+ *  in "full" mode and keeps being used. */
+export function isPaidOff(ledger: DebtLedger): boolean {
+  const { balance, installmentsPaid } = debtState(ledger);
+  const { installmentsTotal } = ledger.debt;
+  return balance <= 0 || (installmentsTotal != null && installmentsPaid >= installmentsTotal);
 }
 
 /** Total owed across the active debts — what "Deuda total" shows everywhere. */
@@ -307,20 +331,16 @@ export async function setLiveValues(
   if (Object.keys(data).length > 0) await prisma.debt.update({ where: { id: debtId }, data });
 }
 
-/** An installment-type debt that reaches zero is paid off (and reopens if a
- *  payment is removed). A credit card isn't: it hits zero every month in "full"
- *  mode and keeps being used. */
+/** A debt that reaches zero is paid off (and reopens if a payment is
+ *  removed) — see isPaidOff. Called after payments and after the user sets
+ *  the live balance by hand. */
 export async function syncDebtStatus(userId: string, debtIds: (string | null | undefined)[]): Promise<void> {
   const ids = [...new Set(debtIds.filter((id): id is string => !!id))];
   if (ids.length === 0) return;
   for (const ledger of await loadDebtLedgers(userId, ids)) {
-    const { kind, status, id, currentBalance, installmentsTotal } = ledger.debt;
+    const { kind, status, id } = ledger.debt;
     if (kind === "credit_card" || status === "archived") continue;
-    const { balance, installmentsPaid } = debtState(ledger);
-    // A debt entered with no balance (only its cuota) can't be judged by
-    // balance — only by its installment count, when known.
-    const paidOff = (currentBalance > 0 && balance <= 0)
-      || (installmentsTotal != null && installmentsPaid >= installmentsTotal);
+    const paidOff = isPaidOff(ledger);
     if (status === "active" && paidOff) {
       await prisma.debt.update({ where: { id }, data: { status: "paid_off" } });
     } else if (status === "paid_off" && !paidOff) {
