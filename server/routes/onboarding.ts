@@ -26,9 +26,9 @@ onboardingRouter.get("/status", requireAuth, async (req: AuthRequest, res: Respo
       prisma.income.count({ where: { userId } }),
       prisma.account.findMany({
         where: visibleTo(req),
-        select: { type: true, name: true, currentBalance: true, isArchived: true, bankConnectionId: true },
+        select: { id: true, type: true, name: true, currentBalance: true, isArchived: true, bankConnectionId: true },
       }),
-      prisma.debt.findMany({ where: visibleTo(req), select: { kind: true } }),
+      prisma.debt.findMany({ where: visibleTo(req), select: { kind: true, status: true } }),
       prisma.allocation.findMany({ where: { userId }, select: { type: true, allocatedAmount: true } }),
     ]);
 

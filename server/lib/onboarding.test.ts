@@ -5,12 +5,12 @@ import {
   deriveOnboardingStatus, isUntouchedDefaultAccount, computeOnboardingResult, DEFAULT_ACCOUNT_NAME,
   type StatusInput, type StatusAccount, type ResultDebt,
 } from "./onboarding.js";
-import type { LedgerDebt } from "./debtBalance.js";
+import { owedNow, type LedgerDebt } from "./debtBalance.js";
 
 // ── Checklist ──────────────────────────────────────────────────────────────
 
 const defaultAccount: StatusAccount = {
-  type: "checking", name: DEFAULT_ACCOUNT_NAME, currentBalance: 0, isArchived: false, bankConnectionId: null,
+  id: "main", type: "checking", name: DEFAULT_ACCOUNT_NAME, currentBalance: 0, isArchived: false, bankConnectionId: null,
 };
 // A brand-new user: only what signup seeds (default account + 0 € default lines).
 const fresh: StatusInput = {
@@ -50,17 +50,30 @@ test("cards count by their account; loans exclude the card's own debt", () => {
   const withCard: StatusInput = {
     ...fresh,
     accounts: [defaultAccount, { ...defaultAccount, type: "card", name: "PASS" }],
-    debts: [{ kind: "credit_card" }],
+    debts: [{ kind: "credit_card", status: "active" }],
   };
   const s = deriveOnboardingStatus(withCard);
   assert.equal(s.checklist.hasCards, true);
   assert.equal(s.checklist.hasDebts, false);
-  assert.equal(deriveOnboardingStatus({ ...withCard, debts: [{ kind: "credit_card" }, { kind: "bnpl" }] }).checklist.hasDebts, true);
+  assert.equal(deriveOnboardingStatus({ ...withCard, debts: [{ kind: "credit_card", status: "active" }, { kind: "bnpl", status: "active" }] }).checklist.hasDebts, true);
 });
 
 test("a fixed budget needs a fixed line with an amount", () => {
   assert.equal(deriveOnboardingStatus({ ...fresh, allocations: [{ type: "flexible", allocatedAmount: 30000 }] }).checklist.hasFixedBudget, false);
   assert.equal(deriveOnboardingStatus({ ...fresh, allocations: [{ type: "fixed", allocatedAmount: 70000 }] }).checklist.hasFixedBudget, true);
+});
+
+test("a mortgage held as a debt covers the fixed budget (housing)", () => {
+  assert.equal(deriveOnboardingStatus({ ...fresh, debts: [{ kind: "mortgage", status: "active" }] }).checklist.hasFixedBudget, true);
+  assert.equal(deriveOnboardingStatus({ ...fresh, debts: [{ kind: "mortgage", status: "paid_off" }] }).checklist.hasFixedBudget, false);
+  assert.equal(deriveOnboardingStatus({ ...fresh, debts: [{ kind: "auto_loan", status: "active" }] }).checklist.hasFixedBudget, false);
+});
+
+test("defaultAccountId: only the untouched seeded account, never a bank-linked one", () => {
+  assert.equal(deriveOnboardingStatus(fresh).defaultAccountId, "main");
+  assert.equal(deriveOnboardingStatus({ ...fresh, accounts: [{ ...defaultAccount, name: "BBVA" }] }).defaultAccountId, null);
+  assert.equal(deriveOnboardingStatus({ ...fresh, accounts: [{ ...defaultAccount, bankConnectionId: "conn" }] }).defaultAccountId, null);
+  assert.equal(deriveOnboardingStatus({ ...fresh, accounts: [{ ...defaultAccount, isArchived: true }] }).defaultAccountId, null);
 });
 
 test("abandoned at the cards step: no wizard, the checklist points at cards", () => {
@@ -148,5 +161,54 @@ test("paid-off debts are ignored", () => {
   const r = computeOnboardingResult({ debts: [done], monthlyIncome: 200000, cycleStartDay: 1, allocations: [] });
   assert.equal(r.committed, 0);
   assert.equal(r.totalOwed, 0);
+  assert.equal(r.freedomMonths, null);
+});
+
+// ── One definition of "owed" ───────────────────────────────────────────────
+
+test("owedNow: an installment plan entered without a balance owes its remaining cuotas", () => {
+  const noBalance = debt({ id: "k", kind: "bnpl", installmentAmount: 5000, installmentsTotal: 6, installmentsPaid: 2 }, "Klarna");
+  assert.equal(owedNow(noBalance.ledger), 20000); // 4 × 50 €
+  // A payment since then is one cuota fewer.
+  assert.equal(owedNow({ ...noBalance.ledger, payments: [{ id: "p", amount: 5000, date: new Date() }] }), 15000);
+  // With a balance, the live balance is what's owed.
+  assert.equal(owedNow(klarna.ledger), 20000);
+  assert.equal(owedNow(pass.ledger), 30000);
+});
+
+test("total owed and the payoff agree for a plan entered without a balance", () => {
+  const noBalance = debt({ id: "k", kind: "bnpl", installmentAmount: 5000, installmentsTotal: 6, installmentsPaid: 2 }, "Klarna");
+  const r = computeOnboardingResult({ debts: [noBalance], monthlyIncome: 200000, cycleStartDay: 1, allocations: [] });
+  assert.equal(r.totalOwed, 20000);
+  assert.equal(r.freedomMonths, 4);
+  assert.equal(r.hasConsumerDebt, true);
+});
+
+test("plan §3.3 as a user enters it (Klarna with no balance): 500 € owed, 17.5 %", () => {
+  const klarnaAsEntered = debt({ id: "klarna", kind: "bnpl", installmentAmount: 5000, installmentsTotal: 6, installmentsPaid: 2 }, "Klarna");
+  const r = computeOnboardingResult({
+    debts: [pass, klarnaAsEntered],
+    monthlyIncome: 200000,
+    cycleStartDay: 1,
+    allocations: [{ type: "fixed", allocatedAmount: 70000 }, { type: "flexible", allocatedAmount: 30000 }],
+  });
+  assert.equal(r.committed, 35000);
+  assert.equal(r.pctCommitted, 17.5);
+  assert.equal(r.totalOwed, 50000);
+  assert.equal(r.leftover, 65000);
+  assert.equal(r.freedomMonths, 2);
+});
+
+test("debt that current payments never pay off: consumer debt, but no freedom date", () => {
+  // A card on "minimum" with the minimum left blank: 1,500 € at 24 % only grows.
+  const card = debt({ id: "c", kind: "credit_card", paymentMode: "minimum", accountId: "acc", currentBalance: 150000 }, "Visa", 24);
+  const r = computeOnboardingResult({ debts: [card], monthlyIncome: 200000, cycleStartDay: 1, allocations: [] });
+  assert.equal(r.hasConsumerDebt, true);
+  assert.equal(r.freedomMonths, null);
+});
+
+test("no consumer debt: the flag is off", () => {
+  const r = computeOnboardingResult({ debts: [], monthlyIncome: 200000, cycleStartDay: 1, allocations: [] });
+  assert.equal(r.hasConsumerDebt, false);
   assert.equal(r.freedomMonths, null);
 });

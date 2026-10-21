@@ -122,6 +122,19 @@ export function debtState(ledger: DebtLedger, before?: Date): DebtState {
   };
 }
 
+/** What's still owed now — the one definition every total and payoff
+ *  simulation uses. The live balance, except for an installment plan entered
+ *  with only its cuota (anchor 0, as syncDebtStatus also treats it): that owes
+ *  its remaining installments. Never negative. */
+export function owedNow(ledger: DebtLedger): number {
+  const d = ledger.debt;
+  const state = debtState(ledger);
+  if (d.currentBalance === 0 && d.installmentAmount && d.installmentsTotal != null) {
+    return Math.max(0, d.installmentsTotal - state.installmentsPaid) * d.installmentAmount;
+  }
+  return Math.max(0, state.balance);
+}
+
 /** What the debt's budget line should hold for the period [start, end).
  *  Measured at the period's START, so paying during the period — including
  *  the final payment that marks it paid off — doesn't shrink the line it's

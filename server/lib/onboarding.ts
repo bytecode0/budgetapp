@@ -5,7 +5,7 @@
 // Nothing here is a stored flag: "what's still missing" is recomputed from
 // the user's real data on every read, so deleting something brings its step
 // back into the checklist.
-import { debtState, monthlyCommitment, type DebtLedger } from "./debtBalance.js";
+import { debtState, monthlyCommitment, owedNow, type DebtLedger } from "./debtBalance.js";
 import { buildDebtTimeline } from "./debtTimeline.js";
 import { simulatePayoff } from "./debtPayoff.js";
 import { currentPeriodKey, periodBounds } from "./period.js";
@@ -20,6 +20,7 @@ export const ONBOARDING_STEPS = [
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 
 export interface StatusAccount {
+  id: string;
   type: string;
   name: string;
   currentBalance: number; // cents
@@ -31,7 +32,7 @@ export interface StatusInput {
   monthlyIncome: number; // cents (UserSettings)
   incomeCount: number;
   accounts: StatusAccount[];
-  debts: { kind: string }[];
+  debts: { kind: string; status: string }[];
   allocations: { type: string; allocatedAmount: number }[];
 }
 
@@ -47,6 +48,9 @@ export interface OnboardingStatus {
   needsOnboarding: boolean;
   checklist: OnboardingChecklist;
   missing: OnboardingStep[]; // in wizard order — the steps that would fill each gap
+  /** The seeded checking account while still untouched — what the bank step
+   *  fills in. Null once named/funded, or if there is none. */
+  defaultAccountId: string | null;
 }
 
 /** The default "Main account" exactly as the server seeded it: never renamed,
@@ -75,7 +79,9 @@ export function deriveOnboardingStatus(input: StatusInput): OnboardingStatus {
     hasCards: open.some(a => a.type === "card"),
     // Loans and installment plans; a card's debt is covered by hasCards.
     hasDebts: input.debts.some(d => d.kind !== "credit_card"),
-    hasFixedBudget: input.allocations.some(a => a.type === "fixed" && a.allocatedAmount > 0),
+    // A mortgage held as a debt already covers housing, the main fixed cost.
+    hasFixedBudget: input.allocations.some(a => a.type === "fixed" && a.allocatedAmount > 0)
+      || input.debts.some(d => d.kind === "mortgage" && d.status === "active"),
   };
   const missing = (Object.keys(CHECKLIST_STEP) as (keyof OnboardingChecklist)[])
     .filter(k => !checklist[k])
@@ -84,7 +90,8 @@ export function deriveOnboardingStatus(input: StatusInput): OnboardingStatus {
   // "Completa tu configuración" card covers what's left.
   const anyBudget = input.allocations.some(a => a.allocatedAmount > 0);
   const needsOnboarding = missing.length === Object.keys(CHECKLIST_STEP).length && !anyBudget;
-  return { needsOnboarding, checklist, missing };
+  const defaultAccountId = open.find(isUntouchedDefaultAccount)?.id ?? null;
+  return { needsOnboarding, checklist, missing, defaultAccountId };
 }
 
 // ── Result step ────────────────────────────────────────────────────────────
@@ -111,22 +118,12 @@ export interface OnboardingResult {
   committed: number;       // cents — this period's debt payments
   pctCommitted: number;    // "futuro comprometido", one decimal
   totalOwed: number;       // cents — every active debt, live
-  freedomMonths: number | null; // months until consumer debt reaches 0
+  hasConsumerDebt: boolean;     // any consumer debt still owed
+  freedomMonths: number | null; // months until consumer debt reaches 0; null if none
+                                // or if current payments never pay it off
   payoffOrder: { id: string; name: string; monthPaidOff: number }[];
   budgeted: number;        // cents — non-debt budget lines (fixed, flexible…)
   leftover: number;        // cents — income − committed − budgeted (may be < 0)
-}
-
-/** What's still owed on a debt for the payoff simulation. A plan entered with
- *  only its cuota (no balance) still owes its remaining installments. */
-function owedForPayoff(ledger: DebtLedger): number {
-  const state = debtState(ledger);
-  if (state.balance > 0) return state.balance;
-  const d = ledger.debt;
-  if (d.installmentAmount && d.installmentsTotal != null) {
-    return Math.max(0, d.installmentsTotal - state.installmentsPaid) * d.installmentAmount;
-  }
-  return 0;
 }
 
 export function computeOnboardingResult(input: ResultInput): OnboardingResult {
@@ -149,13 +146,13 @@ export function computeOnboardingResult(input: ResultInput): OnboardingResult {
   const committed = timeline[0]?.committed ?? 0;
   const pctCommitted = timeline[0]?.pctCommitted ?? 0;
 
-  const totalOwed = active.reduce((s, d) => s + Math.max(0, debtState(d.ledger).balance), 0);
+  const totalOwed = active.reduce((s, d) => s + owedNow(d.ledger), 0);
 
   // Snowball over consumer debt, as GET /api/debts/payoff?scope=consumer: a
   // card paid in full clears its whole balance each month.
   const consumer = active
     .filter(d => CONSUMER_DEBT_KINDS.has(d.ledger.debt.kind))
-    .map(d => ({ ...d, owed: owedForPayoff(d.ledger) }))
+    .map(d => ({ ...d, owed: owedNow(d.ledger) }))
     .filter(d => d.owed > 0);
   let freedomMonths: number | null = null;
   let payoffOrder: OnboardingResult["payoffOrder"] = [];
@@ -181,6 +178,7 @@ export function computeOnboardingResult(input: ResultInput): OnboardingResult {
     committed,
     pctCommitted,
     totalOwed,
+    hasConsumerDebt: consumer.length > 0,
     freedomMonths,
     payoffOrder,
     budgeted,

@@ -7,7 +7,7 @@ import { simulatePayoff, type PayoffMethod } from "../lib/debtPayoff.js";
 import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/period.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import {
-  loadDebtLedgers, debtState, monthlyCommitment, setLiveValues, syncDebtAllocations, ensureDebtLine, type DebtLedger,
+  loadDebtLedgers, debtState, owedNow, monthlyCommitment, setLiveValues, syncDebtAllocations, ensureDebtLine, type DebtLedger,
 } from "../lib/debtBalance.js";
 
 export const debtsRouter = Router();
@@ -170,7 +170,7 @@ debtsRouter.get("/payoff", requireAuth, async (req: AuthRequest, res: Response) 
     const ledgers = await ledgersById(req.userId!);
     const live = debts.map(({ paymentMode, ...d }) => {
       const ledger = ledgers.get(d.id);
-      const balance = ledger ? Math.max(0, debtState(ledger).balance) : d.currentBalance;
+      const balance = ledger ? owedNow(ledger) : d.currentBalance;
       return { ...d, currentBalance: balance, ...(paymentMode === "full" && { minimumPayment: balance }) };
     });
 
