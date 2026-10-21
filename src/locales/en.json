@@ -1065,7 +1065,7 @@
       "savings": "Savings",
       "cash": "Cash",
       "investment": "Investment",
-      "card": "Card"
+      "card": "Credit card"
     },
     "connectBank": "Connect your bank",
     "bankStatusActive": "Connected — syncing automatically",
@@ -1083,7 +1083,13 @@
     "syncNow": "Sync now",
     "syncedOk": "Synced — {{expenses}} new expense(s), {{income}} new income",
     "reconnect": "Reconnect",
-    "backsDebtError": "This account belongs to a card in Debts: archive it instead of deleting it."
+    "backsDebtError": "This account belongs to a card in Debts: archive it instead of deleting it.",
+    "cardOwed": "owed",
+    "cardOwedLabel": "What you owe today",
+    "cardOwedHint": "If you already owe something on this card, enter it here. From now on, every expense \"Paid with\" this card raises the debt, and every payment lowers it.",
+    "cardOwedAdjustHint": "If it doesn't match your bank, correct it here. The difference (interest, an unrecorded purchase) counts as previous debt.",
+    "payCard": "Pay card",
+    "cardHasMovementsError": "This card already has purchases or payments recorded: it can't change type."
   },
   "editExpense": {
     "title": "Edit expense",
@@ -1148,7 +1154,8 @@
     "yesterday": "Yesterday",
     "expense": "Expense",
     "shared": "Shared",
-    "sharedPaidBy": "Shared · paid by {{name}}"
+    "sharedPaidBy": "Shared · paid by {{name}}",
+    "payCard": "Pay card"
   },
   "addIncome": {
     "title": "Add income",
@@ -1521,7 +1528,11 @@
     "paidOk": "Payment recorded",
     "paidFromCardError": "A card payment must come from another account (your bank), not the card itself.",
     "paymentFailed": "The payment couldn't be recorded. Try again.",
-    "hasPaymentsError": "This debt has recorded payments and stays in the paid-off history: it can't be deleted."
+    "hasPaymentsError": "This debt has recorded payments and stays in the paid-off history: it can't be deleted.",
+    "owedNow": "You owe {{amount}}",
+    "payWhichLabel": "Card",
+    "payPartialHint": "You can pay part of it or all of it.",
+    "cardsInAccountsHint": "Credit cards are added in Accounts: their debt shows up here on its own."
   },
   "onboarding": {
     "stepOf": "Step {{current}} of {{total}}",

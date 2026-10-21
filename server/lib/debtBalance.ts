@@ -234,6 +234,29 @@ export async function syncDebtAllocations(userId: string, period: { start: Date;
   }
 }
 
+// Every active debt has its line in the budget, holding this period's
+// commitment — the user never creates it by hand. Skips debts that already
+// have one (e.g. seeded by the onboarding's budget step).
+export async function ensureDebtLine(userId: string, debt: { id: string; name: string; status: string }, period: { start: Date; end: Date }): Promise<void> {
+  if (debt.status !== "active") return;
+  const existing = await prisma.allocation.findFirst({ where: { userId, debtId: debt.id }, select: { id: true } });
+  if (existing) return;
+  const [ledger] = await loadDebtLedgers(userId, [debt.id]);
+  const lastOrder = await prisma.allocation.findFirst({ where: { userId }, orderBy: { sortOrder: "desc" } });
+  await prisma.allocation.create({
+    data: {
+      userId,
+      name: debt.name,
+      icon: "🔒",
+      type: "debt",
+      debtId: debt.id,
+      allocatedAmount: ledger ? monthlyCommitment(ledger, period) : 0,
+      sortOrder: (lastOrder?.sortOrder ?? -1) + 1,
+      isDefault: false,
+    },
+  });
+}
+
 /** Makes the LIVE values equal what the user (or a bank sync) says they are
  *  now. With no movements yet the anchor itself is corrected (a typo at
  *  creation). Otherwise the difference becomes a dated adjustment: pre-existing

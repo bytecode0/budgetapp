@@ -7,7 +7,7 @@ import { simulatePayoff, type PayoffMethod } from "../lib/debtPayoff.js";
 import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/period.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import {
-  loadDebtLedgers, debtState, monthlyCommitment, setLiveValues, syncDebtAllocations, type DebtLedger,
+  loadDebtLedgers, debtState, monthlyCommitment, setLiveValues, syncDebtAllocations, ensureDebtLine, type DebtLedger,
 } from "../lib/debtBalance.js";
 
 export const debtsRouter = Router();
@@ -68,29 +68,6 @@ async function createCardAccount(req: AuthRequest, name: string, visibility?: st
     },
   });
   return account.id;
-}
-
-// Every active debt has its line in the budget, holding this period's
-// commitment — the user never creates it by hand. Skips debts that already
-// have one (e.g. seeded by the onboarding's budget step).
-async function ensureDebtLine(userId: string, debt: { id: string; name: string; status: string }, period: { start: Date; end: Date }): Promise<void> {
-  if (debt.status !== "active") return;
-  const existing = await prisma.allocation.findFirst({ where: { userId, debtId: debt.id }, select: { id: true } });
-  if (existing) return;
-  const [ledger] = await loadDebtLedgers(userId, [debt.id]);
-  const lastOrder = await prisma.allocation.findFirst({ where: { userId }, orderBy: { sortOrder: "desc" } });
-  await prisma.allocation.create({
-    data: {
-      userId,
-      name: debt.name,
-      icon: "🔒",
-      type: "debt",
-      debtId: debt.id,
-      allocatedAmount: ledger ? monthlyCommitment(ledger, period) : 0,
-      sortOrder: (lastOrder?.sortOrder ?? -1) + 1,
-      isDefault: false,
-    },
-  });
 }
 
 function defaultPaymentMode(kind: string | undefined): string {
@@ -415,6 +392,7 @@ debtsRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Response) 
       return res.status(409).json({ error: "This debt has recorded payments and can't be deleted", code: "debt_has_payments" });
     }
 
+    await prisma.allocation.deleteMany({ where: { userId: req.userId!, debtId: id, type: "debt" } });
     await prisma.debt.delete({ where: { id } });
     return res.json({ success: true });
   } catch (err) {

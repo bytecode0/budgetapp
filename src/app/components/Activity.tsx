@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, TrendingDown, TrendingUp, Filter, Trash2, Loader2, Receipt, Pencil, Wand2, Copy, Upload } from 'lucide-react';
+import { Plus, TrendingDown, TrendingUp, Filter, Trash2, Loader2, Receipt, Pencil, Wand2, Copy, Upload, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +15,8 @@ import { EditExpense } from './EditExpense';
 import { RulesManager } from './RulesManager';
 import { Duplicates } from './Duplicates';
 import { ImportStatement } from './ImportStatement';
+import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSheet';
+import { useAccounts } from '../hooks/useAccounts';
 
 type Movement =
   | { kind: 'expense'; id: string; date: string; amount: number; expense: Expense }
@@ -44,6 +46,12 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
+  // Paying a card is a movement of the month too: bank → card, partial or full.
+  const { accounts, fetchAccounts } = useAccounts();
+  const cardChoices: DebtPaymentTarget[] = accounts
+    .filter(a => a.card && !a.isArchived)
+    .map(a => ({ debtId: a.card!.debtId, name: a.name, owed: a.card!.owed, suggested: a.card!.owed, cardAccountId: a.id }));
+  const [payingCard, setPayingCard] = useState<DebtPaymentTarget | null>(null);
   const [showAddIncome, setShowAddIncome] = useState(false);
   const [editingIncome, setEditingIncome] = useState<Income | null>(null);
 
@@ -459,6 +467,15 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
         <AnimatePresence>
           {fabOpen && (
             <>
+              {cardChoices.length > 0 && (
+                <motion.button
+                  initial={{ opacity: 0, y: 10, scale: 0.8 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.8 }}
+                  onClick={() => { setFabOpen(false); setPayingCard(cardChoices[0]); }}
+                  className="flex items-center gap-2 pl-4 pr-5 py-3 bg-card border border-border text-foreground rounded-full shadow-xl hover:bg-muted transition-colors text-sm"
+                >
+                  <CreditCard className="w-5 h-5" /> {t('activity.payCard')}
+                </motion.button>
+              )}
               <motion.button
                 initial={{ opacity: 0, y: 10, scale: 0.8 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.8 }}
                 onClick={() => { setFabOpen(false); setShowAddIncome(true); }}
@@ -486,10 +503,17 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
         </motion.button>
       </div>
 
+      <DebtPaymentSheet
+        target={payingCard}
+        choices={cardChoices}
+        onClose={() => setPayingCard(null)}
+        onPaid={() => { fetchExpenses(currentMonth); fetchAccounts(); }}
+      />
+
       <AddExpense
         isOpen={showAdd}
         onClose={() => setShowAdd(false)}
-        onSaved={() => fetchExpenses(currentMonth)}
+        onSaved={() => { fetchExpenses(currentMonth); fetchAccounts(); }}
       />
 
       <AddIncome

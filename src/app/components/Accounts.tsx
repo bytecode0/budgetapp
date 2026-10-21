@@ -5,11 +5,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, X, GripVertical, Pencil, Trash2, Archive, ArchiveRestore,
   Landmark, PiggyBank, Wallet, TrendingUp, CreditCard, Loader2, Link2, RefreshCw, AlertTriangle,
+  Banknote,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
-import { useAccounts, type Account, type AccountType } from '../hooks/useAccounts';
+import { useAccounts, type Account, type AccountType, type CardPaymentMode } from '../hooks/useAccounts';
+import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSheet';
 import { useHousehold } from '../hooks/useHousehold';
 import { useBanking, type BankInstitution, type BankProviderAccount, type BankConnection as BankConnectionInfo } from '../hooks/useBanking';
 
@@ -74,17 +76,30 @@ interface FormState {
   id: string | null;
   name: string;
   type: AccountType;
-  currentBalance: string;
+  currentBalance: string; // for a card: what's owed now
   visibility: 'private' | 'household';
+  // Card only — the settings of the debt behind it (server/lib/cardDebt.ts).
+  cardPaymentMode: CardPaymentMode;
+  cardMinimumPayment: string;
+  cardPaymentDueDay: string;
+  // As loaded when editing: a card's owed amount is only sent if the user
+  // changed it, so a form left open can't erase a purchase recorded meanwhile.
+  loadedBalance: string;
+  loadedType: AccountType | null;
 }
 
-const EMPTY_FORM: FormState = { id: null, name: '', type: 'checking', currentBalance: '', visibility: 'household' };
+const EMPTY_FORM: FormState = {
+  id: null, name: '', type: 'checking', currentBalance: '', visibility: 'household',
+  cardPaymentMode: 'full', cardMinimumPayment: '', cardPaymentDueDay: '', loadedBalance: '', loadedType: null,
+};
+const CARD_PAYMENT_MODES: CardPaymentMode[] = ['full', 'minimum'];
 
 export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBankToken?: string | null; onConsumedBankToken?: () => void } = {}) {
   const { t } = useTranslation();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
-  const { accounts, netWorth, loading, createAccount, updateAccount, deleteAccount, reorderAccounts } = useAccounts();
+  const currency = t('currency.symbol');
+  const { accounts, netWorth, loading, createAccount, updateAccount, deleteAccount, reorderAccounts, fetchAccounts } = useAccounts();
   const { household } = useHousehold();
   const inHousehold = (household?.members?.length ?? 0) > 1;
 
@@ -178,7 +193,7 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
   const archived = local.filter(a => a.isArchived);
 
   const fmtEuro = (v: number) =>
-    `€${v.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+    `${currency}${v.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
   const moveRow = useCallback((from: number, to: number) => {
     setLocal(prev => {
@@ -205,24 +220,48 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
 
   const openCreate = () => { setForm(EMPTY_FORM); setShowForm(true); };
   const openEdit = (a: Account) => {
-    setForm({ id: a.id, name: a.name, type: a.type, currentBalance: String(a.currentBalance), visibility: a.visibility ?? 'household' });
+    const balance = String(a.card ? a.card.owed : a.currentBalance);
+    setForm({
+      id: a.id, name: a.name, type: a.type, currentBalance: balance, visibility: a.visibility ?? 'household',
+      cardPaymentMode: a.card?.paymentMode ?? 'full',
+      cardMinimumPayment: a.card?.minimumPayment != null ? String(a.card.minimumPayment) : '',
+      cardPaymentDueDay: a.card?.paymentDueDay != null ? String(a.card.paymentDueDay) : '',
+      loadedBalance: balance,
+      loadedType: a.type,
+    });
     setShowForm(true);
   };
+
+  const isCard = form.type === 'card';
+  const [paying, setPaying] = useState<DebtPaymentTarget | null>(null);
+  const openPay = (a: Account) => a.card && setPaying({
+    debtId: a.card.debtId, name: a.name, owed: a.card.owed, suggested: a.card.owed, cardAccountId: a.id,
+  });
 
   const handleSubmit = async () => {
     if (!form.name.trim()) { toast.error(t('accounts.nameRequired')); return; }
     setSaving(true);
+    // Turning an account into a card makes the field mean "owed" — send it.
+    const balanceChanged = !form.id || form.currentBalance !== form.loadedBalance || form.type !== form.loadedType;
     const payload = {
       name: form.name.trim(),
       type: form.type,
-      currentBalance: parseFloat(form.currentBalance) || 0,
+      ...((!isCard || balanceChanged) && { currentBalance: parseFloat(form.currentBalance) || 0 }),
       visibility: form.visibility,
+      ...(isCard && {
+        cardPaymentMode: form.cardPaymentMode,
+        cardMinimumPayment: form.cardPaymentMode === 'minimum' && form.cardMinimumPayment ? parseFloat(form.cardMinimumPayment) : null,
+        cardPaymentDueDay: form.cardPaymentDueDay ? parseInt(form.cardPaymentDueDay, 10) : null,
+      }),
     };
     const result = form.id
       ? await updateAccount(form.id, payload)
       : await createAccount(payload);
     setSaving(false);
-    if (result.error) { toast.error(result.error); return; }
+    if (result.error) {
+      toast.error('code' in result && result.code === 'card_has_movements' ? t('accounts.cardHasMovementsError') : result.error);
+      return;
+    }
     toast.success(form.id ? t('accounts.savedOk') : t('accounts.createdOk'));
     setShowForm(false);
     setForm(EMPTY_FORM);
@@ -258,12 +297,27 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-display truncate">{a.name}</p>
-          <p className="text-xs text-muted-foreground">{t(`accounts.type.${a.type}`)}</p>
+          <p className="text-xs text-muted-foreground">
+            {t(`accounts.type.${a.type}`)}
+            {a.card && ` · ${t(`debts.paymentMode.${a.card.paymentMode}`)}`}
+          </p>
         </div>
-        <p className={`text-lg font-display shrink-0 ${a.currentBalance < 0 ? 'text-red-500' : ''}`}>
-          {fmtEuro(a.currentBalance)}
-        </p>
+        {a.card ? (
+          <div className="text-right shrink-0">
+            <p className={`text-lg font-display ${a.card.owed > 0 ? 'text-red-500' : ''}`}>{fmtEuro(a.card.owed)}</p>
+            <p className="text-xs text-muted-foreground">{t('accounts.cardOwed')}</p>
+          </div>
+        ) : (
+          <p className={`text-lg font-display shrink-0 ${a.currentBalance < 0 ? 'text-red-500' : ''}`}>
+            {fmtEuro(a.currentBalance)}
+          </p>
+        )}
         <div className="flex items-center gap-1 shrink-0">
+          {a.card && !a.isArchived && (
+            <button onClick={() => openPay(a)} className="p-2 rounded-lg hover:bg-muted transition-colors" title={t('accounts.payCard')}>
+              <Banknote className="w-4 h-4 text-muted-foreground" />
+            </button>
+          )}
           <button onClick={() => openEdit(a)} className="p-2 rounded-lg hover:bg-muted transition-colors" title={t('accounts.edit')}>
             <Pencil className="w-4 h-4 text-muted-foreground" />
           </button>
@@ -460,20 +514,71 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
                 </div>
               </div>
 
-              {/* Current balance */}
+              {/* Card: how it's paid — its debt is created and kept up to date on its own */}
+              {isCard && (
+                <div className="space-y-2">
+                  <label className="text-xs text-muted-foreground">{t('debts.paymentModeLabel')}</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {CARD_PAYMENT_MODES.map(m => (
+                      <button
+                        key={m}
+                        onClick={() => setForm(f => ({ ...f, cardPaymentMode: m }))}
+                        className={`py-3 rounded-xl border transition-colors text-xs ${form.cardPaymentMode === m ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted'}`}
+                      >
+                        {t(`debts.paymentMode.${m}`)}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t(`debts.paymentModeHint.${form.cardPaymentMode}`)}</p>
+                </div>
+              )}
+
+              {/* Current balance — for a card, what's owed now */}
               <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">{t('accounts.balanceLabel')}</label>
+                <label className="text-xs text-muted-foreground">{isCard ? t('accounts.cardOwedLabel') : t('accounts.balanceLabel')}</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
                   <input
                     type="number"
+                    inputMode="decimal"
                     value={form.currentBalance}
                     onChange={e => setForm(f => ({ ...f, currentBalance: e.target.value }))}
                     placeholder="0"
                     className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary"
                   />
                 </div>
+                {isCard && <p className="text-xs text-muted-foreground">{t(form.id ? 'accounts.cardOwedAdjustHint' : 'accounts.cardOwedHint')}</p>}
               </div>
+
+              {isCard && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className="text-xs text-muted-foreground">{t('debts.paymentDueDayLabel')}</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={28}
+                      value={form.cardPaymentDueDay}
+                      onChange={e => setForm(f => ({ ...f, cardPaymentDueDay: e.target.value }))}
+                      placeholder="1-28"
+                      className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+                    />
+                  </div>
+                  {form.cardPaymentMode === 'minimum' && (
+                    <div className="space-y-2">
+                      <label className="text-xs text-muted-foreground">{t('debts.minimumPaymentLabel')}</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={form.cardMinimumPayment}
+                        onChange={e => setForm(f => ({ ...f, cardMinimumPayment: e.target.value }))}
+                        placeholder="0"
+                        className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Visibility (Epic H2) — only relevant inside a household */}
               {inHousehold && (
@@ -508,6 +613,8 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
           </motion.div>
         )}
       </AnimatePresence>
+
+      <DebtPaymentSheet target={paying} onClose={() => setPaying(null)} onPaid={fetchAccounts} />
 
       {/* ── Open Banking: institution picker ── */}
       <AnimatePresence>

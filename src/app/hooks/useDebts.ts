@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { recordDebtPayment } from '../lib/debtPayments';
 
 export type DebtKind = 'credit_card' | 'installment' | 'bnpl' | 'payday_loan' | 'auto_loan' | 'student_loan' | 'mortgage' | 'other';
 export type DebtStatus = 'active' | 'paid_off' | 'archived';
@@ -179,40 +180,14 @@ export function useDebts() {
     return {};
   };
 
-  // A payment is an expense on the debt's budget line, paid from a bank
-  // account — the server links it to the debt (server/routes/expenses.ts) and
-  // the live balance drops on the next fetch. Creates the line if the debt has
-  // none yet. Errors come back as a `code` for the caller to translate.
+  // See recordDebtPayment; refetches so the live balance shows the payment.
   const recordPayment = async (
-    debt: Debt,
+    debt: { id: string; name: string },
     payment: { amount: number; accountId: string; date: string; description: string },
   ): Promise<{ code?: string }> => {
-    const allocRes = await fetch('/api/allocations', { credentials: 'include' });
-    if (!allocRes.ok) return { code: 'payment_failed' };
-    const { allocations } = await allocRes.json() as { allocations: { id: string; debtId?: string | null }[] };
-    let allocationId = allocations.find(a => a.debtId === debt.id)?.id;
-    if (!allocationId) {
-      const created = await fetch('/api/allocations', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: debt.name, icon: '🔒', type: 'debt', debtId: debt.id }),
-      });
-      const data = await created.json();
-      if (!created.ok) return { code: data.code ?? 'payment_failed' };
-      allocationId = data.allocation.id as string;
-    }
-
-    const res = await fetch('/api/expenses', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payment, allocationId }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { code: data.code ?? 'payment_failed' };
-    await fetchDebts();
-    return {};
+    const result = await recordDebtPayment(debt, payment);
+    if (!result.code) await fetchDebts();
+    return result;
   };
 
   const fetchPayoff = async (extra = 0, scope?: 'consumer'): Promise<{ snowball: PayoffSummary | null; avalanche: PayoffSummary | null } | null> => {

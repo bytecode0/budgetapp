@@ -10,9 +10,12 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
 import { useDebts, type Debt, type DebtKind, type DebtPaymentMode, type PayoffSummary } from '../hooks/useDebts';
-import { useAccounts } from '../hooks/useAccounts';
+import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSheet';
 
 const DEBT_KINDS: DebtKind[] = ['credit_card', 'installment', 'bnpl', 'payday_loan', 'auto_loan', 'student_loan', 'mortgage', 'other'];
+// Cards are created in Accounts (their debt follows on its own); here only
+// loans and installment plans are created. An existing card can still be edited.
+const NEW_DEBT_KINDS = DEBT_KINDS.filter(k => k !== 'credit_card');
 const CARD_LIKE: Set<DebtKind> = new Set(['credit_card']);
 const PAYMENT_MODES: DebtPaymentMode[] = ['full', 'installments', 'minimum'];
 
@@ -27,12 +30,7 @@ const suggestedPayment = (d: Debt): number =>
   : d.paymentMode === 'installments' ? d.installmentAmount ?? 0
   : d.minimumPayment ?? 0;
 
-// The user's local calendar day (toISOString would be UTC: yesterday in Spain
-// between midnight and 2am, landing a payment in the previous period).
-const today = () => {
-  const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
-};
+
 
 function kindIcon(kind: DebtKind) {
   switch (kind) {
@@ -121,18 +119,10 @@ export function Debts() {
   const { t } = useTranslation();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
-  const { debts, totalOwed, totalMinimums, loading, createDebt, updateDebt, deleteDebt, reorderDebts, fetchPayoff, recordPayment } = useDebts();
-  const { accounts } = useAccounts();
+  const { debts, totalOwed, totalMinimums, loading, createDebt, updateDebt, deleteDebt, reorderDebts, fetchPayoff, fetchDebts } = useDebts();
   const currency = t('currency.symbol');
 
-  // Payment sheet
-  const [paying, setPaying] = useState<Debt | null>(null);
-  const [payAmount, setPayAmount] = useState('');
-  const [payAccountId, setPayAccountId] = useState('');
-  const [payDate, setPayDate] = useState(today());
-  const [savingPayment, setSavingPayment] = useState(false);
-  // A card is paid from a bank account, never from itself.
-  const payFromAccounts = accounts.filter(a => !a.isArchived && a.type !== 'card' && a.id !== paying?.accountId);
+  const [paying, setPaying] = useState<DebtPaymentTarget | null>(null);
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -191,7 +181,7 @@ export function Debts() {
     reorderDebts(order);
   }, [reorderDebts]);
 
-  const openCreate = () => { setForm(EMPTY_FORM); setShowForm(true); };
+  const openCreate = () => { setForm({ ...EMPTY_FORM, kind: 'installment', paymentMode: 'installments' }); setShowForm(true); };
   const openEdit = (d: Debt) => {
     setForm({
       id: d.id,
@@ -216,29 +206,9 @@ export function Debts() {
   const isInstallments = form.paymentMode === 'installments';
   const isMinimum = form.paymentMode === 'minimum';
 
-  const openPay = (d: Debt) => {
-    setPaying(d);
-    setPayAmount(String(suggestedPayment(d) || ''));
-    setPayAccountId(accounts.find(a => !a.isArchived && a.type !== 'card' && a.id !== d.accountId)?.id ?? '');
-    setPayDate(today());
-  };
-
-  const handlePay = async () => {
-    const amount = parseFloat(payAmount);
-    if (!paying || !amount || amount <= 0 || !payAccountId) return;
-    setSavingPayment(true);
-    const result = await recordPayment(paying, {
-      amount, accountId: payAccountId, date: payDate,
-      description: t('debts.paymentDescription', { name: paying.name }),
-    });
-    setSavingPayment(false);
-    if (result.code) {
-      toast.error(t(result.code === 'paid_from_card' ? 'debts.paidFromCardError' : 'debts.paymentFailed'));
-      return;
-    }
-    toast.success(t('debts.paidOk'));
-    setPaying(null);
-  };
+  const openPay = (d: Debt) => setPaying({
+    debtId: d.id, name: d.name, owed: d.currentBalance, suggested: suggestedPayment(d), cardAccountId: d.accountId,
+  });
 
   const handleSubmit = async () => {
     if (!form.name.trim()) { toast.error(t('debts.nameRequired')); return; }
@@ -527,7 +497,7 @@ export function Debts() {
               <div className="space-y-2">
                 <label className="text-xs text-muted-foreground">{t('debts.kindLabel')}</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {DEBT_KINDS.map(k => {
+                  {(form.id ? DEBT_KINDS : NEW_DEBT_KINDS).map(k => {
                     const Icon = kindIcon(k);
                     const selected = form.kind === k;
                     return (
@@ -542,6 +512,7 @@ export function Debts() {
                     );
                   })}
                 </div>
+                {!form.id && <p className="text-xs text-muted-foreground">{t('debts.cardsInAccountsHint')}</p>}
               </div>
 
               {/* How it's paid */}
@@ -702,82 +673,7 @@ export function Debts() {
         )}
       </AnimatePresence>
 
-      {/* Payment sheet */}
-      <AnimatePresence>
-        {paying && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-4"
-            onClick={e => { if (e.target === e.currentTarget) setPaying(null); }}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 40, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 40, scale: 0.95 }}
-              className="bg-card border border-border rounded-2xl p-6 w-full max-w-md space-y-5"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-display">{t('debts.payTitle')}</h2>
-                  <p className="text-sm text-muted-foreground">{paying.name} · {fmtEuro(Math.max(0, paying.currentBalance))}</p>
-                </div>
-                <button onClick={() => setPaying(null)} className="p-2 rounded-lg hover:bg-muted transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">{t('debts.payAmountLabel')}</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={payAmount}
-                    onChange={e => setPayAmount(e.target.value)}
-                    placeholder="0"
-                    className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">{t('debts.payFromLabel')}</label>
-                {payFromAccounts.length === 0 ? (
-                  <p className="text-sm text-amber-700 dark:text-amber-500">{t('debts.noPayFromAccount')}</p>
-                ) : (
-                  <select
-                    value={payAccountId}
-                    onChange={e => setPayAccountId(e.target.value)}
-                    className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
-                  >
-                    {payFromAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                  </select>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">{t('debts.payDateLabel')}</label>
-                <input
-                  type="date"
-                  value={payDate}
-                  onChange={e => setPayDate(e.target.value)}
-                  className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
-                />
-              </div>
-
-              <button
-                onClick={handlePay}
-                disabled={savingPayment || !payAccountId || !(parseFloat(payAmount) > 0)}
-                className="w-full py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {savingPayment && <Loader2 className="w-4 h-4 animate-spin" />}
-                {t('debts.recordPayment')}
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <DebtPaymentSheet target={paying} onClose={() => setPaying(null)} onPaid={fetchDebts} />
     </div>
   );
 }

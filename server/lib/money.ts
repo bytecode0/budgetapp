@@ -67,6 +67,7 @@ const MONEY_KEYS = new Set([
   "paymentsTotal",
   "monthlyCommitment",
   "budgetAmount",
+  "owed",
 ]);
 
 /**

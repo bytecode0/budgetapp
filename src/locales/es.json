@@ -1065,7 +1065,7 @@
       "savings": "Ahorro",
       "cash": "Efectivo",
       "investment": "Inversión",
-      "card": "Tarjeta"
+      "card": "Tarjeta de crédito"
     },
     "connectBank": "Conecta tu banco",
     "bankStatusActive": "Conectado — sincronizando automáticamente",
@@ -1083,7 +1083,13 @@
     "syncNow": "Sincronizar ahora",
     "syncedOk": "Sincronizado — {{expenses}} gasto(s) nuevo(s), {{income}} ingreso(s) nuevo(s)",
     "reconnect": "Reconectar",
-    "backsDebtError": "Esta cuenta es la de una tarjeta registrada en Deudas: archívala en vez de borrarla."
+    "backsDebtError": "Esta cuenta es la de una tarjeta registrada en Deudas: archívala en vez de borrarla.",
+    "cardOwed": "debes",
+    "cardOwedLabel": "Lo que debes hoy",
+    "cardOwedHint": "Si ya debes algo con esta tarjeta, ponlo aquí. Desde ahora, cada gasto «Pagado con» esta tarjeta sube la deuda, y cada pago la baja.",
+    "cardOwedAdjustHint": "Si no coincide con tu banco, corrígelo aquí. La diferencia (intereses, alguna compra sin apuntar) cuenta como deuda previa.",
+    "payCard": "Pagar tarjeta",
+    "cardHasMovementsError": "Esta tarjeta ya tiene compras o pagos registrados: no puede cambiar de tipo."
   },
   "editExpense": {
     "title": "Editar gasto",
@@ -1148,7 +1154,8 @@
     "yesterday": "Ayer",
     "expense": "Gasto",
     "shared": "Compartido",
-    "sharedPaidBy": "Compartido · pagó {{name}}"
+    "sharedPaidBy": "Compartido · pagó {{name}}",
+    "payCard": "Pagar tarjeta"
   },
   "addIncome": {
     "title": "Añadir ingreso",
@@ -1521,7 +1528,11 @@
     "paidOk": "Pago registrado",
     "paidFromCardError": "Un pago de la tarjeta tiene que salir de otra cuenta (la del banco), no de la propia tarjeta.",
     "paymentFailed": "No se pudo registrar el pago. Inténtalo de nuevo.",
-    "hasPaymentsError": "Esta deuda tiene pagos registrados y se queda en el historial de pagadas: no se puede borrar."
+    "hasPaymentsError": "Esta deuda tiene pagos registrados y se queda en el historial de pagadas: no se puede borrar.",
+    "owedNow": "Debes {{amount}}",
+    "payWhichLabel": "Tarjeta",
+    "payPartialHint": "Puedes pagar una parte o el total.",
+    "cardsInAccountsHint": "Las tarjetas de crédito se añaden en Cuentas: su deuda aparece aquí sola."
   },
   "onboarding": {
     "stepOf": "Paso {{current}} de {{total}}",

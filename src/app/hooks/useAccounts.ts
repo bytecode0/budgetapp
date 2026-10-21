@@ -2,6 +2,27 @@ import { useState, useEffect, useCallback } from 'react';
 
 export type AccountType = 'checking' | 'savings' | 'cash' | 'investment' | 'card';
 
+export type CardPaymentMode = 'full' | 'minimum';
+
+// The debt behind a card account (server/lib/cardDebt.ts) — created and kept
+// in step by the server; the user only ever edits the card.
+export interface CardInfo {
+  debtId: string;
+  paymentMode: CardPaymentMode;
+  minimumPayment: number | null; // euros
+  paymentDueDay: number | null;
+  owed: number; // euros — live: purchases raise it, payments lower it
+  monthlyCommitment: number; // euros — this period's budget line
+}
+
+// Card settings sent along with a card account. For a card, currentBalance
+// means what's owed now.
+export interface CardSettingsPayload {
+  cardPaymentMode?: CardPaymentMode;
+  cardMinimumPayment?: number | null;
+  cardPaymentDueDay?: number | null;
+}
+
 export interface Account {
   id: string;
   userId: string;
@@ -14,6 +35,7 @@ export interface Account {
   sortOrder: number;
   visibility?: 'private' | 'household'; // Epic H2
   householdId?: string | null;
+  card?: CardInfo | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,7 +68,7 @@ export function useAccounts() {
     currency?: string;
     currentBalance?: number;
     visibility?: 'private' | 'household';
-  }) => {
+  } & CardSettingsPayload) => {
     const res = await fetch('/api/accounts', {
       method: 'POST',
       credentials: 'include',
@@ -55,12 +77,14 @@ export function useAccounts() {
     });
     const data = await res.json();
     if (!res.ok) return { error: data.error || 'Failed to create account' };
+    // A card's debt info is only in the listing — refetch to get it.
+    if (data.account.type === 'card') { await fetchAccounts(); return { account: data.account }; }
     setAccounts((a) => [...a, data.account]);
     setNetWorth((n) => n + (data.account.isArchived ? 0 : data.account.currentBalance));
     return { account: data.account };
   };
 
-  const updateAccount = async (id: string, payload: Partial<Account>) => {
+  const updateAccount = async (id: string, payload: Partial<Omit<Account, 'card'>> & CardSettingsPayload) => {
     const res = await fetch(`/api/accounts/${id}`, {
       method: 'PATCH',
       credentials: 'include',
@@ -68,7 +92,8 @@ export function useAccounts() {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (!res.ok) return { error: data.error || 'Failed to update account' };
+    if (!res.ok) return { error: data.error || 'Failed to update account', code: data.code as string | undefined };
+    if (data.account.type === 'card' || payload.type !== undefined) { await fetchAccounts(); return { account: data.account }; }
     // Balance / archived may have changed — recompute net worth from the new set.
     setAccounts((a) => {
       const next = a.map((x) => (x.id === id ? data.account : x));
