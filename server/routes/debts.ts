@@ -51,6 +51,25 @@ async function ledgersById(userId: string): Promise<Map<string, DebtLedger>> {
   return new Map((await loadDebtLedgers(userId)).map(l => [l.debt.id, l]));
 }
 
+// A credit card's purchases are expenses on its own account — that's how
+// they grow the debt (server/lib/debtBalance.ts). Creates that account so the
+// card shows up in the expense account picker.
+async function createCardAccount(req: AuthRequest, name: string, visibility?: string): Promise<string> {
+  const lastAccount = await prisma.account.findFirst({ where: { userId: req.userId! }, orderBy: { sortOrder: "desc" } });
+  const account = await prisma.account.create({
+    data: {
+      userId: req.userId!,
+      ownerUserId: req.authUserId!,
+      householdId: req.householdId ?? null,
+      name,
+      type: "card",
+      visibility: visibility ?? "household",
+      sortOrder: (lastAccount?.sortOrder ?? -1) + 1,
+    },
+  });
+  return account.id;
+}
+
 function defaultPaymentMode(kind: string | undefined): string {
   return !kind || kind === "credit_card" || kind === "other" ? "minimum" : "installments";
 }
@@ -199,23 +218,8 @@ debtsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
       if (owned) resolvedAccountId = owned.id;
     }
 
-    // A credit card's purchases are expenses on its own account — that's how
-    // they grow the debt (server/lib/debtBalance.ts). No account given: create
-    // one, so the card shows up in the expense account picker.
     if (kind === "credit_card" && !resolvedAccountId) {
-      const lastAccount = await prisma.account.findFirst({ where: { userId: req.userId! }, orderBy: { sortOrder: "desc" } });
-      const account = await prisma.account.create({
-        data: {
-          userId: req.userId!,
-          ownerUserId: req.authUserId!,
-          householdId: req.householdId ?? null,
-          name,
-          type: "card",
-          visibility: visibility ?? "household",
-          sortOrder: (lastAccount?.sortOrder ?? -1) + 1,
-        },
-      });
-      resolvedAccountId = account.id;
+      resolvedAccountId = await createCardAccount(req, name, visibility);
     }
 
     const lastOrder = await prisma.debt.findFirst({
@@ -314,6 +318,14 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
       if (ledger && ledger.payments.length + ledger.purchases.length + ledger.adjustments.length > 0) {
         return res.status(409).json({ error: "The account of a debt with recorded movements can't change", code: "debt_account_locked" });
       }
+    }
+
+    // A card created before cards got their own account (or edited into a
+    // card) gets one now, as on creation.
+    const finalKind = kind ?? existing.kind;
+    const finalAccountId = accountUpdate ? accountUpdate.accountId : existing.accountId;
+    if (finalKind === "credit_card" && !finalAccountId) {
+      accountUpdate = { accountId: await createCardAccount(req, name ?? existing.name, existing.visibility) };
     }
 
     // currentBalance / installmentsPaid arrive as LIVE values ("I owe X now"):
