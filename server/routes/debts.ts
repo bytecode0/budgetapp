@@ -8,9 +8,16 @@ import { clampCycleStartDay } from "../lib/period.js";
 
 export const debtsRouter = Router();
 
-const DEBT_KINDS = new Set(["credit_card", "installment", "bnpl", "payday_loan", "auto_loan", "other"]);
+const DEBT_KINDS = new Set(["credit_card", "installment", "bnpl", "payday_loan", "auto_loan", "student_loan", "mortgage", "other"]);
 const DEBT_STATUSES = new Set(["active", "paid_off", "archived"]);
 const VISIBILITIES = new Set(["private", "household"]);
+
+// Método Ruta R3: the debt frontier is by TYPE of debt, never by interest rate.
+// Consumer/depreciating-asset debt (R3.1) is always inadmissible and always the
+// snowball's attack target — an existing student loan isn't asset-backed, so it
+// sits here too. "mortgage" (R3.2, appreciating/producing asset) and "other"
+// (unclassified) sit outside the attack list — see scope=consumer below.
+const CONSUMER_DEBT_KINDS = new Set(["credit_card", "installment", "bnpl", "payday_loan", "auto_loan", "student_loan"]);
 
 function clampDay(n: unknown): number | null {
   const v = parseInt(String(n), 10);
@@ -68,16 +75,21 @@ debtsRouter.get("/timeline", requireAuth, async (req: AuthRequest, res: Response
 
 // GET /api/debts/payoff?extra=50  — snowball vs avalanche comparison for the
 // user's active debts, with an optional extra monthly payment (euros).
+// ?scope=consumer restricts the simulation to R3.1 kinds only (Método Ruta):
+// a mortgage sitting in the same cascade would push "months to zero" out by
+// decades, when R4.4-R4.6 only care about consumer debt reaching zero.
 debtsRouter.get("/payoff", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     // Express types a query param as string | string[] | ParsedQs — only a plain
     // string is a meaningful amount here (same narrowing as /banking/institutions).
     const extraPaymentCents = toCents(typeof req.query.extra === "string" ? req.query.extra : 0);
+    const scope = typeof req.query.scope === "string" ? req.query.scope : undefined;
 
     const debts = await prisma.debt.findMany({
       where: {
         userId: req.userId!, status: "active",
         OR: [{ ownerUserId: req.authUserId! }, { visibility: "household" }],
+        ...(scope === "consumer" && { kind: { in: [...CONSUMER_DEBT_KINDS] } }),
       },
       select: { id: true, name: true, currentBalance: true, apr: true, minimumPayment: true, installmentAmount: true },
     });
@@ -234,6 +246,16 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
         ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder, 10) }),
       },
     });
+
+    // Keep any linked "debt" Allocation's line item in sync with the real
+    // commitment — it's a derived value, never independently editable.
+    if (minimumPayment !== undefined || installmentAmount !== undefined) {
+      const monthlyCommitment = debt.minimumPayment ?? debt.installmentAmount ?? 0;
+      await prisma.allocation.updateMany({
+        where: { debtId: debt.id },
+        data: { allocatedAmount: monthlyCommitment },
+      });
+    }
 
     return res.json(serializeMoney({ debt }));
   } catch (err) {

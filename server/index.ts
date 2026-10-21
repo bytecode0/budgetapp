@@ -77,6 +77,7 @@ if (BUDGETAPP_ENABLED) {
     { dashboardRouter },
     { stripeRouter },
     { aiRouter },
+    { onboardingRouter },
   ] = await Promise.all([
     import("./routes/auth.js"),
     import("./routes/plans.js"),
@@ -96,6 +97,7 @@ if (BUDGETAPP_ENABLED) {
     import("./routes/dashboard.js"),
     import("./routes/stripe.js"),
     import("./routes/ai.js"),
+    import("./routes/onboarding.js"),
   ]);
 
   app.use("/api/auth", authRouter);
@@ -116,6 +118,7 @@ if (BUDGETAPP_ENABLED) {
   app.use("/api/dashboard", dashboardRouter);
   app.use("/api/stripe", stripeRouter);
   app.use("/api/ai", aiRouter);
+  app.use("/api/onboarding", onboardingRouter);
 }
 
 // Anything else under /api — including every BudgetApp route when the flag is

@@ -2,15 +2,22 @@ import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Toaster } from 'sonner';
 
-// Code-split the Radiografía onboarding (and its recharts-heavy subtree) into
-// its own chunk — most authenticated users never hit /radiografia, so it
-// shouldn't inflate the main bundle.
+// Code-split the Radiografía onboarding into its own chunk — most
+// authenticated users never hit /radiografia, so it shouldn't inflate the main
+// bundle.
 // The Radiografía onboarding (plan docs/plan-onboarding-radiografia.md) —
 // the only flow at /radiografia now. It briefly coexisted with the old
 // upload-first flow (XRayFlow) behind a flag while being built; that flow
 // has been removed.
 const OnboardingFlow = lazy(() =>
   import('../radiografia/onboarding/OnboardingFlow').then((m) => ({ default: m.OnboardingFlow }))
+);
+
+// The permanent web version of the report (scope-release.md: "enlace
+// permanente... en URL con token no adivinable"). Its own chunk, same
+// reasoning as OnboardingFlow above — most visitors never hit /informe/.
+const ReportPage = lazy(() =>
+  import('../radiografia/report/ReportPage').then((m) => ({ default: m.ReportPage }))
 );
 
 // Épica 0 (docs/scope-release.md): the BudgetApp is not launching 12 Sep 2026 —
@@ -58,13 +65,28 @@ export default function App() {
     // No LanguageProvider here: it persists the language to localStorage, which
     // would leak into the authenticated app. OnboardingFlow forces Spanish at
     // runtime (the lead magnet's audience) without touching the saved preference.
+    //
+    // `xray-scope` wraps the Suspense fallback too, and the Toaster is pinned to
+    // the light theme: both render OUTSIDE the flow's own scope, so without this
+    // the first frame a visitor sees — and every toast after it — arrive in
+    // BudgetApp's navy, which is a different product.
     return (
-      <>
-        <Toaster richColors position="top-right" />
+      <div className="xray-scope size-full">
+        <Toaster richColors position="top-right" theme="light" />
         <Suspense fallback={<LoadingSpinner />}>
           <OnboardingFlow />
         </Suspense>
-      </>
+      </div>
+    );
+  }
+
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/informe/')) {
+    return (
+      <div className="xray-scope size-full">
+        <Suspense fallback={<LoadingSpinner />}>
+          <ReportPage />
+        </Suspense>
+      </div>
     );
   }
 

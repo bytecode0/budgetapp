@@ -21,18 +21,21 @@ import { FamilyDashboard } from './components/FamilyDashboard';
 import { AddExpense } from './components/AddExpense';
 import { AuthFlow } from './components/auth/AuthFlow';
 import { PartnerInviteAccept } from './components/PartnerInviteAccept';
+import { BudgetOnboarding } from './onboarding/BudgetOnboarding';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { MonthProvider, useMonth, monthLabel, periodRangeLabel } from './context/MonthContext';
 import { useAllocations } from './hooks/useAllocations';
 import { useAnalytics } from './hooks/useAnalytics';
 import { useHousehold } from './hooks/useHousehold';
+import { useOnboardingNeeded } from './hooks/useOnboardingNeeded';
 import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/usePartner';
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
 
 function AppInner() {
   const { user, loading, hydrating, logout, refreshUser } = useAuth();
+  const { needsOnboarding, loading: onboardingLoading, refresh: refreshOnboardingStatus } = useOnboardingNeeded(Boolean(user));
   const { t } = useTranslation();
   const { darkMode, updateDarkMode, dbLanguage, updateLanguage, updatePayday } = useAllocations();
   const { household } = useHousehold();
@@ -187,6 +190,20 @@ function AppInner() {
         inviteBanner={inviteDetails ? { senderName: inviteDetails.senderName, senderEmail: inviteDetails.senderEmail } : null}
       />
     );
+  }
+
+  // Show the onboarding wizard whenever the user has nothing configured yet
+  // (income, debts, budget) — a derived state, not a one-time flag, so it
+  // reappears if everything gets deleted later. See useOnboardingNeeded.
+  if (onboardingLoading) {
+    return (
+      <div className="size-full bg-background flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (needsOnboarding) {
+    return <BudgetOnboarding onDone={() => refreshOnboardingStatus()} />;
   }
 
   return (

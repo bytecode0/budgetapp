@@ -26,7 +26,7 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
       allocations,
       monthlyIncome: settings?.monthlyIncome ?? 0,
       darkMode: settings?.darkMode ?? false,
-      language: settings?.language ?? 'en',
+      language: settings?.language ?? 'es',
       cycleStartDay: settings?.cycleStartDay ?? 1,
     }));
   } catch (err) {
@@ -38,7 +38,7 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
 // POST /api/allocations  (create custom allocation)
 allocationsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, icon, type, allocatedAmount, actualAmount, lifePlanId } = req.body;
+    const { name, icon, type, allocatedAmount, actualAmount, lifePlanId, debtId } = req.body;
 
     if (!name) return res.status(400).json({ error: "Name is required" });
 
@@ -46,6 +46,17 @@ allocationsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response)
     if (lifePlanId) {
       const plan = await prisma.lifePlan.findFirst({ where: { id: lifePlanId, userId: req.userId! } });
       if (!plan) return res.status(400).json({ error: "Life plan not found" });
+    }
+
+    // A "debt" allocation mirrors a real Debt's monthly commitment — validate
+    // ownership and derive allocatedAmount from it rather than trusting the body.
+    let resolvedDebtId: string | null = null;
+    let debtAllocatedAmount: number | undefined;
+    if (type === "debt" && debtId) {
+      const debt = await prisma.debt.findFirst({ where: { id: debtId, userId: req.userId! } });
+      if (!debt) return res.status(400).json({ error: "Debt not found" });
+      resolvedDebtId = debt.id;
+      debtAllocatedAmount = debt.minimumPayment ?? debt.installmentAmount ?? 0;
     }
 
     const lastOrder = await prisma.allocation.findFirst({
@@ -60,7 +71,8 @@ allocationsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response)
         icon: icon ?? "💰",
         type: type ?? "flexible",
         lifePlanId: (type === "plan" && lifePlanId) ? lifePlanId : null,
-        allocatedAmount: toCents(allocatedAmount),
+        debtId: resolvedDebtId,
+        allocatedAmount: debtAllocatedAmount ?? toCents(allocatedAmount),
         actualAmount: toCents(actualAmount),
         sortOrder: (lastOrder?.sortOrder ?? -1) + 1,
         isDefault: false,
@@ -190,6 +202,13 @@ allocationsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respo
       if (!plan) return res.status(400).json({ error: "Life plan not found" });
     }
 
+    // A "debt" allocation's amount is derived from the linked Debt (kept in sync
+    // in server/routes/debts.ts on minimumPayment/installmentAmount changes) —
+    // it isn't independently editable, to avoid it drifting from the real cuota.
+    if (existing.type === "debt" && allocatedAmount !== undefined) {
+      return res.status(400).json({ error: "El importe de una línea de deuda se edita desde la deuda vinculada" });
+    }
+
     const newType = type ?? existing.type;
     const allocation = await prisma.allocation.update({
       where: { id },
@@ -221,6 +240,12 @@ allocationsRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Resp
     const { id } = req.params;
     const existing = await prisma.allocation.findFirst({ where: { id, userId: req.userId! } });
     if (!existing) return res.status(404).json({ error: "Allocation not found" });
+
+    // Método Ruta R1: generosity is the first line of the budget and never
+    // disappears — the user can set it to 0, but the line itself is locked.
+    if (existing.type === "generosity") {
+      return res.status(400).json({ error: "La línea de generosidad no se puede eliminar" });
+    }
 
     await prisma.allocation.delete({ where: { id } });
     return res.json({ success: true });

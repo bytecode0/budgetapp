@@ -18,13 +18,7 @@ import { RecurringManager } from './RecurringManager';
 import { BudgetSuggestions } from './BudgetSuggestions';
 import { useLanguage } from '../context/LanguageContext';
 import { useMonth, monthLabel } from '../context/MonthContext';
-
-
-const ALLOCATION_ICONS = [
-  '🏠','🛡️','🎯','💰','🚗','✈️','🎓','💊','🍔','☕',
-  '👕','🎮','🎵','📚','🏋️','💄','🐾','🌱','🔧','💡',
-  '🎁','📱','🖥️','🏖️','🏥','🏦','🛒','🎨','🎭','⚽',
-];
+import { IconPicker, renderAllocationIcon } from './shared/AllocationIcon';
 
 const TYPE_OPTIONS = [
   { value: 'fixed',    label: 'Fixed',    color: 'bg-blue-500' },
@@ -593,7 +587,7 @@ export function AllocationFlow() {
                       >
                         <GripVertical className="w-4 h-4" />
                       </div>
-                      <span className="text-2xl shrink-0 w-10 h-10 flex items-center justify-center">{item.icon}</span>
+                      <span className="text-2xl shrink-0 w-10 h-10 flex items-center justify-center">{renderAllocationIcon(item.icon)}</span>
                       <div className="min-w-0">
                         {editingNameId === item.id ? (
                           <input
@@ -814,14 +808,7 @@ export function AllocationFlow() {
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground mb-2 block">{t('allocation.icon')}</label>
-                  <div className="grid grid-cols-10 gap-1.5">
-                    {ALLOCATION_ICONS.map(emoji => (
-                      <button
-                        key={emoji} onClick={() => setNewIcon(emoji)}
-                        className={`w-9 h-9 text-lg rounded-lg flex items-center justify-center transition-all ${newIcon === emoji ? 'bg-primary/10 ring-2 ring-primary scale-110' : 'hover:bg-muted'}`}
-                      >{emoji}</button>
-                    ))}
-                  </div>
+                  <IconPicker value={newIcon} onChange={setNewIcon} />
                 </div>
               </div>
               <button

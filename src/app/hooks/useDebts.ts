@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
-export type DebtKind = 'credit_card' | 'installment' | 'bnpl' | 'payday_loan' | 'auto_loan' | 'other';
+export type DebtKind = 'credit_card' | 'installment' | 'bnpl' | 'payday_loan' | 'auto_loan' | 'student_loan' | 'mortgage' | 'other';
 export type DebtStatus = 'active' | 'paid_off' | 'archived';
 
 export interface Debt {
@@ -166,9 +166,11 @@ export function useDebts() {
     return {};
   };
 
-  const fetchPayoff = async (extra = 0): Promise<{ snowball: PayoffSummary | null; avalanche: PayoffSummary | null } | null> => {
+  const fetchPayoff = async (extra = 0, scope?: 'consumer'): Promise<{ snowball: PayoffSummary | null; avalanche: PayoffSummary | null } | null> => {
     try {
-      const res = await fetch(`/api/debts/payoff?extra=${extra}`, { credentials: 'include' });
+      const params = new URLSearchParams({ extra: String(extra) });
+      if (scope) params.set('scope', scope);
+      const res = await fetch(`/api/debts/payoff?${params}`, { credentials: 'include' });
       if (!res.ok) return null;
       return await res.json();
     } catch {

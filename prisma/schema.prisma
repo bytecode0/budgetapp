@@ -56,7 +56,7 @@ model UserSettings {
   userId        String  @unique
   monthlyIncome Int     @default(0) // cents
   darkMode      Boolean @default(false)
-  language      String  @default("en")
+  language      String  @default("es")
   linkedUserId  String? // Points to primary user's id when this is a linked (partner) account
   cycleStartDay Int     @default(1) // 1-28; day the budget period starts (payday). 1 = calendar month (unchanged behavior)
 
@@ -94,8 +94,9 @@ model Allocation {
   userId          String
   name            String
   icon            String  @default("💰")
-  type            String  @default("flexible") // fixed | flexible | plan
+  type            String  @default("flexible") // fixed | flexible | plan | debt | generosity
   lifePlanId      String?
+  debtId          String? // set when type = "debt" — links this budget line to the real Debt it represents
   allocatedAmount Int     @default(0) // cents
   actualAmount    Int     @default(0) // cents
   sortOrder       Int     @default(0)
@@ -106,6 +107,7 @@ model Allocation {
 
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   lifePlan       LifePlan?       @relation(fields: [lifePlanId], references: [id], onDelete: SetNull)
+  debt           Debt?           @relation(fields: [debtId], references: [id], onDelete: SetNull)
   expenses       Expense[]
   monthlyBudgets MonthlyBudget[]
   categorizationRules CategorizationRule[]
@@ -300,7 +302,8 @@ model Debt {
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   account        Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
   bankConnection BankConnection? @relation(fields: [bankConnectionId], references: [id], onDelete: SetNull)
-  expenses Expense[]
+  expenses    Expense[]
+  allocations Allocation[]
 
   @@index([userId, sortOrder])
   @@index([bankConnectionId])
@@ -504,6 +507,13 @@ model FinancialProfile {
 
   onboardingStep        String? // which of the 4 blocks/steps this profile last completed
   onboardingCompletedAt DateTime?
+  // High-water mark, 1-indexed over ONBOARDING_STEPS — NEVER decreases, unlike
+  // onboardingStep itself (which "volver al extracto" moves backward). Exists
+  // purely to de-dupe the anonymous RadiografiaFunnelEvent's paso_completado
+  // writes: without it, going back and forward again re-fires the same
+  // checkpoint, since onboardingStep alone can't tell "revisiting" from
+  // "first arrival" once it's been reset by a backward move.
+  maxOnboardingStepReached Int @default(0)
 
   // Two independent consents (never one checkbox for both — plan §4.3).
   consentReportAt           DateTime?
@@ -575,13 +585,20 @@ model Radiografia {
   version   Int
 
   computedAt DateTime @default(now())
-  resultado  Json // percentages + activated thresholds + which blocks were calculable — NEVER raw amounts (scope-release.md privacy rule)
+  resultado  Json // percentages, category/ant-expense/subscription aggregates with amounts, health index, archetype — see server/lib/radiografia/snapshot.ts. NEVER raw movements, and "health" is never itemized (GDPR Art. 9) — CLAUDE.md "Privacy: what gets persisted"
 
   stageAtComputation String?
   frameworkVersion   Int // which version of the 10/50/20/20 thresholds produced this
   engineConfigVersion Int // which StageEngineConfig.version produced stageAtComputation — lets a later reading explain why an old radiografía said something different
 
   origen String? // utm_source
+
+  // Stamped exactly once, atomically (GET /report/:token does an
+  // updateMany({where: {id, ebookSentAt: null}}) and only sends when it wins
+  // that race) — the trigger for the separate eBook email, fired the first
+  // time this report is actually opened. A refresh, a second tab, or a React
+  // double-render of the same first visit must never send it twice.
+  ebookSentAt DateTime?
 
   @@unique([profileId, version])
   @@index([profileId, computedAt])
@@ -654,4 +671,37 @@ model RadiografiaAccessToken {
   createdAt DateTime  @default(now())
 
   @@index([profileId])
+}
+
+// Funnel counts for the future owner-facing dashboard (v2 per scope-release.md,
+// this is only the data foundation). Deliberately has NO profileId and NO
+// relation to FinancialProfile: it must survive both the purge job
+// (internalPurge.ts) and DELETE /api/radiografia/profile untouched, which
+// only works because there is nothing here that identifies a person or that
+// a cascade could ever reach.
+model RadiografiaFunnelEvent {
+  id        String   @id @default(cuid())
+  event     String // "paso_completado" | "radiografia_completada" | "email_capturado"
+  paso      Int? // only set for "paso_completado"
+  origen    String? // utm_source
+  createdAt DateTime @default(now())
+
+  @@index([event, createdAt])
+}
+
+// Brand popularity for the future dashboard ("cuántos usuarios tienen
+// Netflix"), anonymous by design — same reasoning as above, and the same
+// reasoning that already keeps merchant names out of every other table in
+// this app (see server/lib/radiografia/snapshot.ts). One row per brand
+// detected in a statement; no way to join rows back to a person or to each
+// other, so re-uploading a corrected statement double-counts its brands —
+// an accepted cost of never linking this to a profile.
+model RadiografiaBrandInsight {
+  id        String   @id @default(cuid())
+  kind      String // "subscription" | "ant"
+  brand     String // already normalized (lowercase, no punctuation) by normalizeMerchant()
+  origen    String?
+  createdAt DateTime @default(now())
+
+  @@index([kind, brand])
 }

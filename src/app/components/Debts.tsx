@@ -4,14 +4,14 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, X, GripVertical, Pencil, Trash2, CheckCircle2, RotateCcw,
-  CreditCard, Calendar, Car, ShoppingBag, AlertCircle, Wallet, Loader2, TrendingDown, Flame, Target,
+  CreditCard, Calendar, Car, ShoppingBag, AlertCircle, Wallet, Loader2, TrendingDown, Flame, Target, Home, GraduationCap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
 import { useDebts, type Debt, type DebtKind, type PayoffSummary } from '../hooks/useDebts';
 
-const DEBT_KINDS: DebtKind[] = ['credit_card', 'installment', 'bnpl', 'payday_loan', 'auto_loan', 'other'];
+const DEBT_KINDS: DebtKind[] = ['credit_card', 'installment', 'bnpl', 'payday_loan', 'auto_loan', 'student_loan', 'mortgage', 'other'];
 const CARD_LIKE: Set<DebtKind> = new Set(['credit_card']);
 
 function kindIcon(kind: DebtKind) {
@@ -21,6 +21,8 @@ function kindIcon(kind: DebtKind) {
     case 'bnpl':          return ShoppingBag;
     case 'payday_loan':  return AlertCircle;
     case 'auto_loan':    return Car;
+    case 'student_loan': return GraduationCap;
+    case 'mortgage':      return Home;
     default:              return Wallet;
   }
 }

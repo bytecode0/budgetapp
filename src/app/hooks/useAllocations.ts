@@ -5,8 +5,9 @@ export interface Allocation {
   userId: string;
   name: string;
   icon: string;
-  type: string; // 'fixed' | 'flexible' | 'plan'
+  type: string; // 'fixed' | 'flexible' | 'plan' | 'debt' | 'generosity'
   lifePlanId: string | null;
+  debtId: string | null;
   allocatedAmount: number;
   actualAmount: number;
   sortOrder: number;
@@ -27,7 +28,7 @@ export function useAllocations() {
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [monthlyIncome, setMonthlyIncome] = useState(0);
   const [darkMode, setDarkMode] = useState(false);
-  const [dbLanguage, setDbLanguage] = useState<string>('en');
+  const [dbLanguage, setDbLanguage] = useState<string>('es');
   const [cycleStartDay, setCycleStartDay] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export function useAllocations() {
       setAllocations(data.allocations);
       setMonthlyIncome(data.monthlyIncome);
       setDarkMode(data.darkMode ?? false);
-      setDbLanguage(data.language ?? 'en');
+      setDbLanguage(data.language ?? 'es');
       setCycleStartDay(data.cycleStartDay ?? 1);
     } catch (e: any) {
       setError(e.message);
@@ -70,6 +71,7 @@ export function useAllocations() {
     type: string;
     allocatedAmount?: number;
     lifePlanId?: string | null;
+    debtId?: string | null;
   }) => {
     const res = await fetch('/api/allocations', {
       method: 'POST',
