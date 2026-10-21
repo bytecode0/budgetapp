@@ -1,27 +1,38 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Landmark, Lightbulb, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAccounts } from '../hooks/useAccounts';
 import { useOnboardingNeeded } from '../hooks/useOnboardingNeeded';
+import { useAuth } from '../context/AuthContext';
 import { useMoney } from './useMoney';
 
 // The main bank account: where income lands and card payments come from.
 // Every user already has a seeded checking account; while it's untouched the
 // server reports it as defaultAccountId, and this step fills it in (name +
 // balance) instead of adding a second one. Coming back to the step edits the
-// same manual account. A bank-linked account is never picked: its name and
-// balance come from the bank — then a new manual account is created.
-// Saved on blur.
+// same manual account. Only the user's OWN manual checking accounts are
+// candidates: a bank-linked account's name and balance come from the bank,
+// and a household partner never edits the primary's account — either way a
+// new manual account is created for them. Saved on blur; saves run one at a
+// time so two quick blurs can't create two accounts.
 export function BankStep() {
   const { t } = useTranslation();
   const { currency } = useMoney();
   const { accounts, loading: accountsLoading, createAccount, updateAccount } = useAccounts();
   const { defaultAccountId, loading: statusLoading } = useOnboardingNeeded(true);
+  const { user } = useAuth();
 
-  const manualChecking = accounts.filter(a => a.type === 'checking' && !a.isArchived && !a.bankConnectionId);
-  const target = manualChecking.find(a => a.id === defaultAccountId) ?? manualChecking[0];
-  const ready = !accountsLoading && !statusLoading;
+  const ownManualChecking = accounts.filter(a =>
+    a.type === 'checking' && !a.isArchived && !a.bankConnectionId && a.ownerUserId === user?.id);
+  const target = ownManualChecking.find(a => a.id === defaultAccountId) ?? ownManualChecking[0];
+  const ready = !accountsLoading && !statusLoading && !!user;
+
+  // The account this step writes to once it has saved (created or updated),
+  // and the save queue: each blur waits for the previous save.
+  const savedIdRef = useRef<string | null>(null);
+  const lastSavedRef = useRef<{ name: string; currentBalance: number } | null>(null);
+  const queueRef = useRef<Promise<void>>(Promise.resolve());
 
   const [name, setName] = useState('');
   const [balance, setBalance] = useState('');
@@ -33,18 +44,26 @@ export function BankStep() {
     setBalance(target.currentBalance ? String(target.currentBalance) : '');
   }, [ready, target?.id]);
 
-  const persist = async () => {
+  const persist = () => {
     if (!ready) return;
     if (!name.trim() && balance === '') return; // nothing entered yet
     const payload = {
       name: name.trim() || t('onboarding.bank.defaultName'),
       currentBalance: parseFloat(balance) || 0,
     };
-    if (target && target.name === payload.name && target.currentBalance === payload.currentBalance) return;
-    const result = target
-      ? await updateAccount(target.id, payload)
-      : await createAccount({ ...payload, type: 'checking' });
-    if ('error' in result) toast.error(result.error as string);
+    const save = async () => {
+      const id = savedIdRef.current ?? target?.id ?? null;
+      const last = lastSavedRef.current
+        ?? (target && id === target.id ? { name: target.name, currentBalance: target.currentBalance } : null);
+      if (id && last && last.name === payload.name && last.currentBalance === payload.currentBalance) return;
+      const result = id
+        ? await updateAccount(id, payload)
+        : await createAccount({ ...payload, type: 'checking' });
+      if ('error' in result) { toast.error(result.error as string); return; }
+      savedIdRef.current = result.account.id;
+      lastSavedRef.current = payload;
+    };
+    queueRef.current = queueRef.current.then(save);
   };
 
   if (!ready) {

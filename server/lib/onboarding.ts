@@ -21,6 +21,7 @@ export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 
 export interface StatusAccount {
   id: string;
+  ownerUserId: string;
   type: string;
   name: string;
   currentBalance: number; // cents
@@ -29,6 +30,7 @@ export interface StatusAccount {
 }
 
 export interface StatusInput {
+  authUserId: string;    // the signed-in user (a partner acts on the primary's pool)
   monthlyIncome: number; // cents (UserSettings)
   incomeCount: number;
   accounts: StatusAccount[];
@@ -48,8 +50,9 @@ export interface OnboardingStatus {
   needsOnboarding: boolean;
   checklist: OnboardingChecklist;
   missing: OnboardingStep[]; // in wizard order — the steps that would fill each gap
-  /** The seeded checking account while still untouched — what the bank step
-   *  fills in. Null once named/funded, or if there is none. */
+  /** The signed-in user's own seeded checking account while still untouched
+   *  — what the bank step fills in. Null once named/funded, if there is none,
+   *  or if it belongs to someone else (a partner never edits the primary's). */
   defaultAccountId: string | null;
 }
 
@@ -90,7 +93,7 @@ export function deriveOnboardingStatus(input: StatusInput): OnboardingStatus {
   // "Completa tu configuración" card covers what's left.
   const anyBudget = input.allocations.some(a => a.allocatedAmount > 0);
   const needsOnboarding = missing.length === Object.keys(CHECKLIST_STEP).length && !anyBudget;
-  const defaultAccountId = open.find(isUntouchedDefaultAccount)?.id ?? null;
+  const defaultAccountId = open.find(a => a.ownerUserId === input.authUserId && isUntouchedDefaultAccount(a))?.id ?? null;
   return { needsOnboarding, checklist, missing, defaultAccountId };
 }
 

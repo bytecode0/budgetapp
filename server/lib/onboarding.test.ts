@@ -10,10 +10,11 @@ import { owedNow, startingBalanceFor, type LedgerDebt } from "./debtBalance.js";
 // ── Checklist ──────────────────────────────────────────────────────────────
 
 const defaultAccount: StatusAccount = {
-  id: "main", type: "checking", name: DEFAULT_ACCOUNT_NAME, currentBalance: 0, isArchived: false, bankConnectionId: null,
+  id: "main", ownerUserId: "me", type: "checking", name: DEFAULT_ACCOUNT_NAME, currentBalance: 0, isArchived: false, bankConnectionId: null,
 };
 // A brand-new user: only what signup seeds (default account + 0 € default lines).
 const fresh: StatusInput = {
+  authUserId: "me",
   monthlyIncome: 0,
   incomeCount: 0,
   accounts: [defaultAccount],
@@ -74,6 +75,13 @@ test("defaultAccountId: only the untouched seeded account, never a bank-linked o
   assert.equal(deriveOnboardingStatus({ ...fresh, accounts: [{ ...defaultAccount, name: "BBVA" }] }).defaultAccountId, null);
   assert.equal(deriveOnboardingStatus({ ...fresh, accounts: [{ ...defaultAccount, bankConnectionId: "conn" }] }).defaultAccountId, null);
   assert.equal(deriveOnboardingStatus({ ...fresh, accounts: [{ ...defaultAccount, isArchived: true }] }).defaultAccountId, null);
+});
+
+test("defaultAccountId: a household partner never gets the primary's account", () => {
+  // Partner signed in on the primary's pool: the seeded account is the primary's.
+  assert.equal(deriveOnboardingStatus({ ...fresh, authUserId: "partner" }).defaultAccountId, null);
+  const own = { ...defaultAccount, id: "partner-main", ownerUserId: "partner" };
+  assert.equal(deriveOnboardingStatus({ ...fresh, authUserId: "partner", accounts: [defaultAccount, own] }).defaultAccountId, "partner-main");
 });
 
 test("abandoned at the cards step: no wizard, the checklist points at cards", () => {
