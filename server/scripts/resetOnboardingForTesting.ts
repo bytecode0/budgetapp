@@ -4,6 +4,8 @@
 // second account. needsOnboarding is derived live from this data, never a
 // stored flag, so clearing it is all that's needed.
 //
+// Only manual accounts this user owns are ever deleted: a partner's shared
+// accounts and anything linked to a bank connection are always kept.
 // Card accounts always go with their debts (a card account is the debt's
 // other half — server/lib/cardDebt.ts). Other accounts and Household /
 // PartnerInvite rows are left alone by default — pass --accounts to also
@@ -30,14 +32,15 @@ import { prisma } from "../lib/prisma.js";
     prisma.debt.deleteMany({ where: { userId } }),
     prisma.allocation.deleteMany({ where: { userId } }),
   ]);
-  const cards = await prisma.account.deleteMany({ where: { userId, type: "card" } });
+  const ownManual = { userId, ownerUserId: userId, bankConnectionId: null };
+  const cards = await prisma.account.deleteMany({ where: { ...ownManual, type: "card" } });
   await prisma.userSettings.update({ where: { userId }, data: { monthlyIncome: 0 } }).catch(() => {});
 
   console.log(`Deleted ${incomes.count} income row(s), ${debts.count} debt(s), ${cards.count} card account(s), ${allocations.count} allocation(s).`);
   console.log("monthlyIncome reset to 0.");
 
   if (resetAccounts) {
-    const accounts = await prisma.account.deleteMany({ where: { userId, type: { in: ["cash", "savings", "investment", "checking"] } } });
+    const accounts = await prisma.account.deleteMany({ where: { ...ownManual, type: { in: ["cash", "savings", "investment", "checking"] } } });
     console.log(`Deleted ${accounts.count} cash/savings/investment/checking account(s).`);
   } else {
     console.log("Accounts left untouched — pass --accounts to also clear the savings and bank-account steps' data.");
