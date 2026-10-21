@@ -27,16 +27,26 @@ import { prisma } from "../lib/prisma.js";
   if (!user) { console.error(`No user with email ${email}`); process.exit(1); }
   const userId = user.id;
 
-  const [incomes, debts, allocations] = await Promise.all([
-    prisma.income.deleteMany({ where: { userId } }),
-    prisma.debt.deleteMany({ where: { userId } }),
-    prisma.allocation.deleteMany({ where: { userId } }),
-  ]);
   const ownManual = { userId, ownerUserId: userId, bankConnectionId: null };
-  const cards = await prisma.account.deleteMany({ where: { ...ownManual, type: "card" } });
+  // A card account and its debt go together or not at all: only the user's
+  // own manual cards are deleted, and a card debt is deleted only with its
+  // account. Kept cards (a partner's, bank-linked) keep their debt and line.
+  const cardAccountIds = (await prisma.account.findMany({ where: { ...ownManual, type: "card" }, select: { id: true } })).map(a => a.id);
+  const keptCardDebtIds = (await prisma.debt.findMany({
+    where: { userId, kind: "credit_card", accountId: { not: null, notIn: cardAccountIds } },
+    select: { id: true },
+  })).map(d => d.id);
+
+  const incomes = await prisma.income.deleteMany({ where: { userId } });
+  const allocations = await prisma.allocation.deleteMany({
+    where: { userId, OR: [{ debtId: null }, { debtId: { notIn: keptCardDebtIds } }] },
+  });
+  const debts = await prisma.debt.deleteMany({ where: { userId, id: { notIn: keptCardDebtIds } } });
+  const cards = await prisma.account.deleteMany({ where: { id: { in: cardAccountIds } } });
   await prisma.userSettings.update({ where: { userId }, data: { monthlyIncome: 0 } }).catch(() => {});
 
   console.log(`Deleted ${incomes.count} income row(s), ${debts.count} debt(s), ${cards.count} card account(s), ${allocations.count} allocation(s).`);
+  if (keptCardDebtIds.length) console.log(`Kept ${keptCardDebtIds.length} card debt(s) whose account isn't yours or is bank-linked.`);
   console.log("monthlyIncome reset to 0.");
 
   if (resetAccounts) {
