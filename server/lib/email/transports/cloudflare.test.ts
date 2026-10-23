@@ -1,9 +1,11 @@
-// Run with:  node --import tsx --test server/lib/emailClient.test.ts
+// Run with:  node --import tsx --test server/lib/email/transports/cloudflare.test.ts
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { sendEmail, parseSender } from "./emailClient.js";
+import { sendEmail } from "../index.js";
+import { parseSender } from "../sender.js";
 
 const ENV_KEYS = ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_EMAIL_API_TOKEN", "EMAIL_FROM"] as const;
+const SAVED_KEYS = [...ENV_KEYS, "EMAIL_PROVIDER"] as const;
 const savedEnv: Record<string, string | undefined> = {};
 const realFetch = globalThis.fetch;
 
@@ -32,7 +34,8 @@ const ok = result({ delivered: ["ana@example.com"] });
 
 beforeEach(() => {
   calls = [];
-  for (const k of ENV_KEYS) savedEnv[k] = process.env[k];
+  for (const k of SAVED_KEYS) savedEnv[k] = process.env[k];
+  process.env.EMAIL_PROVIDER = "cloudflare";
   process.env.CLOUDFLARE_ACCOUNT_ID = "acc123";
   process.env.CLOUDFLARE_EMAIL_API_TOKEN = "tok456";
   process.env.EMAIL_FROM = "LifePlan <contact@luisvespa.com>";
@@ -40,7 +43,7 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = realFetch;
-  for (const k of ENV_KEYS) {
+  for (const k of SAVED_KEYS) {
     if (savedEnv[k] === undefined) delete process.env[k];
     else process.env[k] = savedEnv[k];
   }
@@ -77,8 +80,8 @@ test("sends a bare EMAIL_FROM address as a plain string", async () => {
 test("parseSender handles named, quoted, bare and invalid senders", () => {
   assert.deepEqual(parseSender("LifePlan <contact@luisvespa.com>"), { address: "contact@luisvespa.com", name: "LifePlan" });
   assert.deepEqual(parseSender('"Life Plan" <contact@luisvespa.com>'), { address: "contact@luisvespa.com", name: "Life Plan" });
-  assert.equal(parseSender("<contact@luisvespa.com>"), "contact@luisvespa.com");
-  assert.equal(parseSender("  contact@luisvespa.com "), "contact@luisvespa.com");
+  assert.deepEqual(parseSender("<contact@luisvespa.com>"), { address: "contact@luisvespa.com" });
+  assert.deepEqual(parseSender("  contact@luisvespa.com "), { address: "contact@luisvespa.com" });
   for (const bad of ["LifePlan", "LifePlan <contact>", "a b@c.d", "LifePlan contact@luisvespa.com"]) {
     assert.throws(() => parseSender(bad), /EMAIL_FROM must be/);
   }
@@ -118,6 +121,18 @@ test("throws with Cloudflare's error code and message when success is false", as
 test("throws when success is false even on HTTP 200", async () => {
   stubFetch({ success: false, errors: [{ code: 10002, message: "nope" }], messages: [], result: null });
   await assert.rejects(sendEmail(message), /10002: nope/);
+});
+
+test("sends reply_to only when the message has a replyTo", async () => {
+  stubFetch(ok);
+  await sendEmail({ ...message, replyTo: "support@example.com" });
+  assert.equal(sentBody().reply_to, "support@example.com");
+});
+
+test("strips addresses that Cloudflare echoes in its error text", async () => {
+  stubFetch({ success: false, errors: [{ code: 10003, message: "recipient ana@example.com is invalid" }], messages: [], result: null }, 400);
+  await assert.rejects(sendEmail(message), (err: Error) =>
+    /10003: recipient \[address\] is invalid/.test(err.message) && !err.message.includes("ana@example.com"));
 });
 
 test("throws on a permanent bounce, without naming the recipient", async () => {

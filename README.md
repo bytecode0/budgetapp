@@ -48,11 +48,18 @@ DATABASE_URL=postgresql://<user>:<password>@localhost:5432/budgetapp
 # JWT Authentication
 JWT_SECRET=your-secret-key-here
 
-# Email (Cloudflare Email Sending — Workers Paid plan, verified sending domain)
-CLOUDFLARE_ACCOUNT_ID=your-cloudflare-account-id
-CLOUDFLARE_EMAIL_API_TOKEN=your-send-email-api-token
-# "Name <address>" or a bare address; sent to the API as { address, name }
-EMAIL_FROM="LifePlan <noreply@yourdomain.com>"
+# Email — provider chosen by EMAIL_PROVIDER: resend | cloudflare | console
+# resend: the beta provider. console: local dev only, prints emails; only with NODE_ENV=development or test, never on Vercel.
+EMAIL_PROVIDER=resend
+# "Name <address>" or a bare address, on a domain verified with the provider
+EMAIL_FROM="LifePlan <contact@luisvespa.com>"
+# Only with EMAIL_PROVIDER=resend
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxx
+# Only with EMAIL_PROVIDER=cloudflare (Workers Paid plan, verified sending domain)
+# CLOUDFLARE_ACCOUNT_ID=your-cloudflare-account-id
+# CLOUDFLARE_EMAIL_API_TOKEN=your-send-email-api-token
+# Optional hosted logo for the email header
+# LOGO_URL=https://yourdomain.com/logo.png
 
 # Stripe (https://dashboard.stripe.com)
 STRIPE_SECRET_KEY=sk_test_xxxxxxxxxxxxxxxxxxxx

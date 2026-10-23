@@ -78,7 +78,11 @@ Documented in `.env.example`. Relevant ones:
 |---|---|
 | `DATABASE_URL` | PostgreSQL |
 | `JWT_SECRET`, `ENCRYPTION_KEY` | Auth sessions / encrypted bank tokens |
-| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_API_TOKEN`, `EMAIL_FROM` | Verification, password reset, invite and subscription emails, sent through Cloudflare Email Sending (`server/lib/emailClient.ts`). Sending to real users needs the Workers Paid plan and a verified sending domain; the token only needs the send-email permission. No fallback sender: if any is missing, sending fails with a clear error |
+| `EMAIL_PROVIDER` | Which transport sends email (see Emails below): `resend` for the beta, `cloudflare`, or `console` for local dev (prints instead of sending; allowed only with `NODE_ENV` exactly `development` or `test` and no `VERCEL`/`VERCEL_ENV`). Read at send time; missing or unknown makes every send fail with a clear error, never a silent fallback |
+| `EMAIL_FROM` | Sender for every provider: `"LifePlan <contact@luisvespa.com>"` or a bare address. Its domain must be verified with the provider. No fallback sender |
+| `RESEND_API_KEY` | Only with `EMAIL_PROVIDER=resend`. Free plan: 3,000/month, 100/day, any recipient once the domain is verified |
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_API_TOKEN` | Only with `EMAIL_PROVIDER=cloudflare`. Needs the Workers Paid plan and a verified sending domain; the token only needs the send-email permission |
+| `LOGO_URL` | Optional hosted logo for the email header |
 | `APP_URL` | The production URL (CORS origin and links in emails), not localhost |
 | `GOOGLE_CLIENT_ID/SECRET`, `GOOGLE_CALLBACK_URL` | Google sign-in; the callback URL must also be registered in Google Cloud Console |
 | `STRIPE_SECRET_KEY`, `STRIPE_PREMIUM_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` | Premium subscription; webhook points at `/api/stripe/webhook`. **Test mode** during the beta. If any is missing, the Stripe routes answer 503; the rest of the app runs |
@@ -90,6 +94,17 @@ The frontend calls the API with relative `/api/...` paths: frontend and backend 
 
 - **Never** write a secret into source code. Never commit `.env`.
 - If a required env var is missing, **stop and ask**. Do not invent a fallback value or a placeholder key.
+
+### Emails (`server/lib/email/`)
+
+Two independent layers: transports know nothing about templates, templates nothing about transports.
+
+- **Send:** `sendEmail({ to, subject, html, text, replyTo? })` from `server/lib/email/index.ts` picks the transport from `EMAIL_PROVIDER` at send time. Transports live in `transports/` (`resend.ts`, `cloudflare.ts`, `console.ts`); all share a 10 s timeout and never put recipient addresses, tokens or keys in errors. Every send rejects on failure; callers decide whether that is fatal.
+- **Add a provider:** one file in `transports/` implementing `EmailTransport` (`types.ts`) plus one line in the registry in `index.ts`. Swapping provider is env-only.
+- **Look:** `theme.ts` (product name, colours, fonts, radii, logo, support email, app URL, Premium price). **Copy:** `locales/es.ts` (source of truth) and `locales/en.ts`, same keys (a test enforces it). Never hardcode text or a currency symbol in a template; money is integer cents formatted by `format.ts`. Copy only describes what the code really does (Premium gates no feature today, so no feature list). Emails that ask the user to reply set `replyTo` to the theme's `supportEmail`. A bad `APP_URL`/`LOGO_URL` drops the logo or footer link (logged once) instead of blocking an OTP; CTA links still throw.
+- **Templates:** `templates/*.ts`, one pure function per email, `(data, locale) => { subject, html, text }`, built from `components.ts` (table-based, inline-styled, escaped; each block has a plain-text twin). The senders called by routes are thin wrappers in `server/lib/mailer.ts` and `server/lib/subscriptionEmails.ts`; pass the user's `UserSettings.language` (`resolveLocale`), default Spanish.
+- **Add an email:** a template file + its keys in both locales + a sample in `samples.ts` + a wrapper in `mailer.ts`/`subscriptionEmails.ts`.
+- **Preview:** `npm run email:preview [dir]` renders every template in both locales with sample data to `./.email-preview/index.html` (gitignored). No network, no DB. Locally, `EMAIL_PROVIDER=console` prints emails (OTPs included) to the server log.
 
 ### ⚠️ Cost: AI calls (`ANTHROPIC_API_KEY`)
 

@@ -11,6 +11,7 @@ import {
   sendWelcomeEmail,
   sendWelcomeGoogleEmail,
 } from "../lib/mailer.js";
+import { parseLocale, resolveLocale } from "../lib/email/locales/index.js";
 
 export const authRouter = Router();
 
@@ -171,10 +172,18 @@ async function createOtp(email: string, type: string) {
 // Register
 authRouter.post("/register", async (req: Request, res: Response) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, language } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Name, email and password are required" });
+    }
+
+    // Optional: the UI language at sign-up, used for the verification email.
+    // UserSettings doesn't exist yet here (createDefaultAllocations creates it on
+    // verify), so it is not persisted.
+    const locale = language === undefined ? "es" : parseLocale(language);
+    if (!locale) {
+      return res.status(400).json({ error: "language must be 'es' or 'en'" });
     }
 
     if (password.length < 8) {
@@ -195,7 +204,7 @@ authRouter.post("/register", async (req: Request, res: Response) => {
     }
 
     const otp = await createOtp(email, "email_verification");
-    await sendVerificationEmail(email, name, otp);
+    await sendVerificationEmail(email, name, otp, locale);
 
     return res.json({ message: "Verification email sent" });
   } catch (err) {
@@ -231,11 +240,12 @@ authRouter.post("/verify-email", async (req: Request, res: Response) => {
     const user = await prisma.user.update({
       where: { email },
       data: { emailVerified: new Date() },
+      include: { settings: { select: { language: true } } },
     });
 
     setAuthCookie(res, user.id);
 
-    sendWelcomeEmail(user.email!, user.name ?? "").catch((e) =>
+    sendWelcomeEmail(user.email!, user.name ?? "", resolveLocale(user.settings?.language)).catch((e) =>
       console.error("[auth/verify-email] welcome email failed:", e)
     );
 
@@ -275,7 +285,10 @@ authRouter.post("/resend-otp", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Email and type are required" });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { settings: { select: { language: true } } },
+    });
     if (!user) {
       return res.json({ message: "If an account exists, a new code was sent" });
     }
@@ -291,10 +304,11 @@ authRouter.post("/resend-otp", async (req: Request, res: Response) => {
 
     const otp = await createOtp(email, type);
 
+    const locale = resolveLocale(user.settings?.language);
     if (type === "email_verification") {
-      await sendVerificationEmail(email, user.name ?? "", otp);
+      await sendVerificationEmail(email, user.name ?? "", otp, locale);
     } else if (type === "password_reset") {
-      await sendPasswordResetEmail(email, otp);
+      await sendPasswordResetEmail(email, otp, locale);
     }
 
     return res.json({ message: "Code sent" });
@@ -310,13 +324,16 @@ authRouter.post("/send-reset", async (req: Request, res: Response) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { settings: { select: { language: true } } },
+    });
     if (!user) {
       return res.json({ message: "If an account exists, a reset code was sent" });
     }
 
     const otp = await createOtp(email, "password_reset");
-    await sendPasswordResetEmail(email, otp);
+    await sendPasswordResetEmail(email, otp, resolveLocale(user.settings?.language));
 
     return res.json({ message: "Reset code sent" });
   } catch (err) {
