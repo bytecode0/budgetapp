@@ -51,6 +51,10 @@ test("the app loads without Stripe env vars and the webhook answers 503", async 
     });
     assert.equal(res.status, 503);
     assert.deepEqual(await res.json(), { error: "Stripe is not configured" });
+
+    // The billing status the frontend reads is behind requireAuth.
+    const status = await fetch(`http://127.0.0.1:${port}/api/stripe/status`);
+    assert.equal(status.status, 401);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
