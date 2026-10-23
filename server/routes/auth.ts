@@ -18,13 +18,25 @@ export const authRouter = Router();
 const GOOGLE_CALLBACK_URL =
   process.env.GOOGLE_CALLBACK_URL ?? "http://localhost:3002/api/auth/google/callback";
 
-// Tokens temporales para el intercambio post-OAuth (en memoria, expiran en 2 min)
-const googleSessions = new Map<string, { userId: string; expiresAt: number }>();
+// Token temporal para el intercambio post-OAuth: un JWT firmado de 2 min, no un
+// Map en memoria — en Vercel el callback y el exchange pueden caer en instancias
+// distintas. Lleva el usuario en `sub` y NO en `userId`, para que requireAuth
+// nunca lo acepte como cookie de sesión.
+const GOOGLE_EXCHANGE_PURPOSE = "google_exchange";
 
-function createGoogleSession(userId: string): string {
-  const token = crypto.randomUUID();
-  googleSessions.set(token, { userId, expiresAt: Date.now() + 2 * 60 * 1000 });
-  return token;
+export function createGoogleSession(userId: string): string {
+  return signToken({ purpose: GOOGLE_EXCHANGE_PURPOSE, sub: userId }, "2m");
+}
+
+/** The userId inside a valid, unexpired exchange token; null otherwise. */
+export function readGoogleSession(token: string): string | null {
+  try {
+    const payload = verifyToken(token);
+    if (payload?.purpose !== GOOGLE_EXCHANGE_PURPOSE || typeof payload.sub !== "string") return null;
+    return payload.sub;
+  } catch {
+    return null;
+  }
 }
 
 const googleClient = new OAuth2Client(
@@ -122,16 +134,13 @@ authRouter.post("/google/exchange", async (req: Request, res: Response) => {
 
   if (!token) return res.status(400).json({ error: "Token is required" });
 
-  const session = googleSessions.get(token);
-  if (!session || session.expiresAt < Date.now()) {
-    googleSessions.delete(token);
+  const sessionUserId = typeof token === "string" ? readGoogleSession(token) : null;
+  if (!sessionUserId) {
     return res.status(400).json({ error: "Invalid or expired session token" });
   }
 
-  googleSessions.delete(token);
-
   const user = await prisma.user.findUnique({
-    where: { id: session.userId },
+    where: { id: sessionUserId },
     include: { subscription: true },
   });
 
