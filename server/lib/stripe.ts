@@ -11,8 +11,13 @@ const PINNED_API_VERSION: string = "2025-02-24.acacia";
 const REQUIRED_ENV = ["STRIPE_SECRET_KEY", "STRIPE_PREMIUM_PRICE_ID", "STRIPE_WEBHOOK_SECRET"] as const;
 
 /** The Stripe env vars that are missing (unset or empty). Empty = Stripe is configured. */
-export function missingStripeEnv(): string[] {
-  return REQUIRED_ENV.filter((name) => !process.env[name]);
+export function missingStripeEnv(env: NodeJS.ProcessEnv = process.env): string[] {
+  return REQUIRED_ENV.filter((name) => !env[name]);
+}
+
+/** Billing (Premium purchase) is on only when every Stripe env var is set. */
+export function isBillingEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return missingStripeEnv(env).length === 0;
 }
 
 function requireEnv(name: (typeof REQUIRED_ENV)[number]): string {

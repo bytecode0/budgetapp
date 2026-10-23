@@ -8,6 +8,7 @@ import { usePlans } from '../hooks/usePlans';
 import { usePartner } from '../hooks/usePartner';
 import { HouseholdPanel } from './HouseholdPanel';
 import { useLanguage } from '../context/LanguageContext';
+import { useBillingEnabled } from '../hooks/useBillingEnabled';
 import {
   createCheckoutSession,
   confirmSession,
@@ -60,15 +61,21 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
   const [reactivateLoading, setReactivateLoading] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const { enabled: billingEnabled, loading: billingStatusLoading } = useBillingEnabled();
+  const isPremium = user?.plan === 'premium';
 
   useEffect(() => {
-    // Handle post-checkout redirect: ?session_id=xxx
+    // Handle post-checkout redirect: ?session_id=xxx — once billing status is
+    // known. With billing off the param is just dropped (the confirm endpoint
+    // would answer 503).
+    if (billingStatusLoading) return;
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get('session_id');
     if (sessionId) {
       const url = new URL(window.location.href);
       url.searchParams.delete('session_id');
       window.history.replaceState({}, '', url.toString());
+      if (!billingEnabled) return;
       confirmSession(sessionId)
         .then((info) => {
           setBillingInfo(info);
@@ -77,7 +84,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
         })
         .catch(() => {});
     }
-  }, []);
+  }, [billingStatusLoading, billingEnabled]);
 
   useEffect(() => {
     if (user?.plan === 'premium') {
@@ -646,7 +653,8 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
         </div>
       </motion.div>
 
-      {/* Billing & Plan */}
+      {/* Billing & Plan — with billing off, shown only (read-only) to existing Premium users */}
+      {(billingEnabled || isPremium) && (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -658,7 +666,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
           <h3 className="text-sm uppercase tracking-wide text-muted-foreground">{t('billing.title')}</h3>
         </div>
         <div className="p-6 space-y-4">
-          {user?.plan === 'premium' ? (
+          {isPremium ? (
             <>
               {billingLoading ? (
                 <div className="flex justify-center py-4">
@@ -706,8 +714,8 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                     </div>
                   ) : null}
 
-                  {/* Cancel / Reactivate */}
-                  {billingInfo?.cancelAtPeriodEnd ? (
+                  {/* Cancel / Reactivate — need Stripe */}
+                  {!billingEnabled ? null : billingInfo?.cancelAtPeriodEnd ? (
                     <button
                       onClick={handleReactivate}
                       disabled={reactivateLoading}
@@ -730,7 +738,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                       {confirmCancel ? t('billing.cancelConfirmBtn') : t('billing.cancelSubscription')}
                     </button>
                   )}
-                  {confirmCancel && (
+                  {billingEnabled && confirmCancel && (
                     <p className="text-xs text-muted-foreground text-center">{t('billing.cancelConfirmDesc')}</p>
                   )}
                 </>
@@ -759,6 +767,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
           )}
         </div>
       </motion.div>
+      )}
 
       {/* Sign Out */}
       <motion.div

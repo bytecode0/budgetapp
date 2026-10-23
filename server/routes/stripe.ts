@@ -5,6 +5,7 @@ import {
   getStripe,
   getPremiumPriceId,
   getWebhookSecret,
+  isBillingEnabled,
   missingStripeEnv,
   subscriptionSyncData,
   FRONTEND_URL,
@@ -44,6 +45,13 @@ function requireStripe(_req: Request, res: Response, next: NextFunction) {
   }
   next();
 }
+
+// ── GET /status ───────────────────────────────────────────────────────────────
+// Whether Premium can be bought. The frontend hides every upgrade entry point
+// when false (Stripe disabled for the beta, plan §2.9).
+stripeRouter.get("/status", requireAuth, (_req: AuthRequest, res: Response) => {
+  return res.json({ data: { enabled: isBillingEnabled() } });
+});
 
 // ── Helper: upsert subscription from Stripe subscription object ───────────────
 async function syncSubscription(userId: string, stripeSub: StripeSubscriptionLike) {

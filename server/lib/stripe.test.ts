@@ -8,7 +8,7 @@ process.env.STRIPE_SECRET_KEY = "";
 process.env.STRIPE_PREMIUM_PRICE_ID = "";
 process.env.STRIPE_WEBHOOK_SECRET = "";
 
-const { missingStripeEnv, subscriptionPeriodEnd, subscriptionSyncData } = await import("./stripe.js");
+const { isBillingEnabled, missingStripeEnv, subscriptionPeriodEnd, subscriptionSyncData } = await import("./stripe.js");
 
 const PERIOD_END = 1_767_225_600; // 2026-01-01T00:00:00Z
 
@@ -18,6 +18,24 @@ test("missingStripeEnv lists every unset Stripe var", () => {
     "STRIPE_PREMIUM_PRICE_ID",
     "STRIPE_WEBHOOK_SECRET",
   ]);
+});
+
+const ALL_STRIPE_ENV = {
+  STRIPE_SECRET_KEY: "sk_test_x",
+  STRIPE_PREMIUM_PRICE_ID: "price_x",
+  STRIPE_WEBHOOK_SECRET: "whsec_x",
+};
+
+test("isBillingEnabled is true only when every Stripe var is set", () => {
+  assert.equal(isBillingEnabled(ALL_STRIPE_ENV), true);
+  assert.equal(isBillingEnabled({ ...ALL_STRIPE_ENV, STRIPE_WEBHOOK_SECRET: undefined }), false);
+  assert.equal(isBillingEnabled({ ...ALL_STRIPE_ENV, STRIPE_PREMIUM_PRICE_ID: "" }), false);
+  assert.equal(isBillingEnabled({}), false);
+});
+
+test("missingStripeEnv reads the env it is given", () => {
+  assert.deepEqual(missingStripeEnv(ALL_STRIPE_ENV), []);
+  assert.deepEqual(missingStripeEnv({ ...ALL_STRIPE_ENV, STRIPE_SECRET_KEY: "" }), ["STRIPE_SECRET_KEY"]);
 });
 
 test("the app loads without Stripe env vars and the webhook answers 503", async () => {

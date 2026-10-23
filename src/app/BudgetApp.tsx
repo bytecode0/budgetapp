@@ -26,6 +26,7 @@ import { useAllocations } from './hooks/useAllocations';
 import { useAnalytics } from './hooks/useAnalytics';
 import { useHousehold } from './hooks/useHousehold';
 import { useOnboardingNeeded, type OnboardingStep } from './hooks/useOnboardingNeeded';
+import { useBillingEnabled } from './hooks/useBillingEnabled';
 import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/usePartner';
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
@@ -33,6 +34,7 @@ type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation
 function AppInner() {
   const { user, loading, logout, refreshUser } = useAuth();
   const { needsOnboarding, missing: setupMissing, loading: onboardingLoading, refresh: refreshOnboardingStatus } = useOnboardingNeeded(Boolean(user));
+  const { enabled: billingEnabled } = useBillingEnabled(Boolean(user));
   // Set when the dashboard's "Completa tu configuración" reopens the wizard at a step.
   const [resumeStep, setResumeStep] = useState<OnboardingStep | null>(null);
   const { t } = useTranslation();
@@ -346,13 +348,13 @@ function AppInner() {
         </nav>
 
         <div className="p-4 mt-auto space-y-3">
-          {/* Plan badge */}
+          {/* Plan badge — the upgrade button only while Premium can be bought */}
           {user?.plan === 'premium' ? (
             <div className="bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border border-amber-400/30 rounded-xl p-3 flex items-center gap-2">
               <Crown className="w-4 h-4 text-amber-500 shrink-0" />
               <span className="text-sm font-display text-amber-600 dark:text-amber-400">{t('billing.premium')}</span>
             </div>
-          ) : (
+          ) : billingEnabled ? (
             <button
               onClick={() => setCurrentScreen('settings')}
               className="w-full bg-gradient-to-r from-primary to-secondary text-white rounded-xl p-3 flex items-center gap-2 hover:shadow-lg transition-all"
@@ -360,7 +362,7 @@ function AppInner() {
               <Zap className="w-4 h-4 shrink-0" />
               <span className="text-sm font-display">{t('billing.upgradeNow')}</span>
             </button>
-          )}
+          ) : null}
 
           {/* Spending Alignment Status */}
           <div className="bg-card border border-border rounded-xl p-4">
