@@ -178,7 +178,7 @@ En Cloudflare: registro `CNAME budget → cname.vercel-dns.com` con el **proxy d
 ### 2.7 Verificación
 Preview desplegado → health OK → registrarse con un email nuevo → **llega el email de verificación (2.8)** → llega el onboarding → login con Google funciona con la URL nueva → un gasto y un pago de tarjeta se guardan → **suscripción Premium de prueba de punta a punta (2.9)**. Luego producción con el dominio.
 
-### 2.8 Emails: módulo independiente del proveedor, Resend en la beta — HECHO (código)
+### 2.8 Emails: módulo independiente del proveedor, Resend en la beta — HECHO (verificado en local el 23 oct)
 Decisión del 23 oct (sustituye a la del 21 oct): **Resend** para la beta y el primer despliegue. Su plan gratis envía a cualquier destinatario una vez verificado el dominio (3.000 emails/mes, **100/día**); la restricción "solo a mi email" era del dominio de pruebas `onboarding@resend.dev`. Cloudflare Email Sending exige Workers Paid (5 $/mes) para enviar a usuarios; la web personal envía gratis porque solo manda a una dirección verificada (tu buzón). Cuando la beta crezca o se acerque a 100/día, se cambia a Cloudflare con **una variable**, sin tocar código.
 
 **Diseño (`server/lib/email/`, ver la sección "Emails" del CLAUDE.md):**
@@ -194,13 +194,16 @@ Decisión del 23 oct (sustituye a la del 21 oct): **Resend** para la beta y el p
 3. Revisar los textos en español con `npm run email:preview` (el español es la fuente de verdad).
 4. En Vercel (Production y Preview): `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `EMAIL_FROM="LifePlan <contact@luisvespa.com>"`.
 
-**Verificado en local (23 oct):** dominio `luisvespa.com` verificado en Resend; un envío de prueba fue aceptado (`id 01a167de-…`) y **llegó a spam** en un buzón corporativo (marcado como no spam). Pendiente: comprobar SPF/DKIM/DMARC en las cabeceras, añadir `_dmarc` (`v=DMARC1; p=none;`) si falta, y repetir con un email real de la app (reset de contraseña) en Gmail y Outlook.
+**Verificado en local (23 oct):** recuperar contraseña llega correctamente con la plantilla real. Antes: dominio `luisvespa.com` verificado en Resend; un envío de prueba fue aceptado (`id 01a167de-…`) y **llegó a spam** en un buzón corporativo (marcado como no spam). Pendiente: comprobar SPF/DKIM/DMARC en las cabeceras, añadir `_dmarc` (`v=DMARC1; p=none;`) si falta, y repetir con un email real de la app (reset de contraseña) en Gmail y Outlook.
 
 **Abierto, menor:** el idioma no se guarda al registrarse (los ajustes se crean al verificar el email), así que la bienvenida y un código reenviado salen en español a quien se registró en inglés. Arreglo sin schema: que verify-email reciba el idioma.
 
 **Verificación:** desde el Preview, registro con Gmail y Outlook reales → el código llega a la bandeja de entrada, no a spam; "Mostrar original" da SPF, DKIM y DMARC `PASS`; restablecer contraseña también llega.
 
-### 2.9 Stripe configurado desde la beta
+### 2.9 Stripe — código HECHO; **deshabilitado en la beta** (decisión del 23 oct)
+Sin las variables `STRIPE_*` en Vercel, las rutas de Stripe responden 503 y el resto de la app funciona. Falta que el frontend oculte Premium/upgrade cuando la facturación está apagada (CLAUDE.md: un flag se aplica en frontend y backend). Lo de abajo queda para cuando se active.
+
+#### Plan original (cuando se active)
 Decisión del 21 oct (cierra la H): Stripe se configura **ya**, en el primer despliegue, no después. Hoy `server/lib/stripe.ts` crea el cliente al importar y tumba la app entera si falta `STRIPE_SECRET_KEY`. Tocar Stripe está en la lista de "no modificar sin preguntar" del CLAUDE.md: esta sección es esa pregunta, y su OK cubre **solo** lo que está aquí.
 
 **Modo de Stripe durante la beta: test (sandbox)** en Preview y en Production (decisión I). El flujo completo funciona con tarjetas de prueba y nadie paga dinero real. Pasar a modo live al salir de la beta es cambiar las tres variables y crear el webhook live, sin tocar código.
@@ -277,7 +280,7 @@ Cada paso escribe filas reales (como hoy) y se puede saltar. "Atrás" no borra n
 
 **H.** ~~¿Stripe perezoso o configurado desde el principio?~~ → decidido 21 oct: configurado desde la beta, y además perezoso para que su ausencia no tumbe la app (2.9).
 
-**I.** ~~Stripe durante la beta: ¿test o live?~~ → decidido 21 oct: **modo test** en Preview y Production. Al pasar a live: precio definitivo y textos legales mínimos (términos, privacidad, política de cancelación) antes de cobrar.
+**I.** ~~Stripe durante la beta~~ → decidido 21 oct: modo test; **cambiado el 23 oct: deshabilitado en la beta**. Cuando se active: modo test primero. Al pasar a live: precio definitivo y textos legales mínimos (términos, privacidad, política de cancelación) antes de cobrar.
 
 **J.** ~~Remitente de los emails~~ → decidido 21 oct: **`contact@luisvespa.com`** (también dirección de soporte y Reply-To).
 
