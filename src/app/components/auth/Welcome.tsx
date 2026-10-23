@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Target, CheckCircle2, Sparkles, Crown, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createCheckoutSession } from '../../../api/stripe';
+import { useBillingEnabled } from '../../hooks/useBillingEnabled';
 
 interface WelcomeProps {
   onContinue: () => void;
@@ -36,6 +37,13 @@ export function Welcome({ onContinue }: WelcomeProps) {
   const { t } = useTranslation();
   const [showConfetti, setShowConfetti] = useState(true);
   const [upgradingToPremium, setUpgradingToPremium] = useState(false);
+  // This screen is a Free-vs-Premium chooser. With billing off (or unknown)
+  // there is nothing to choose: go straight on, as "Continue free" would.
+  const { enabled: billingEnabled, loading: billingLoading } = useBillingEnabled();
+
+  useEffect(() => {
+    if (!billingLoading && !billingEnabled) onContinue();
+  }, [billingLoading, billingEnabled]);
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -80,6 +88,24 @@ export function Welcome({ onContinue }: WelcomeProps) {
     t('auth.welcome.premiumFeature4'),
     t('auth.welcome.premiumFeature5'),
   ];
+
+  if (!billingEnabled) {
+    // The auto-continue above runs once; if it fails (e.g. /api/auth/me
+    // errors) the user needs a way on that isn't a reload.
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        {!billingLoading && (
+          <button
+            onClick={onContinue}
+            className="px-5 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors text-sm"
+          >
+            {t('auth.welcome.continue')}
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">

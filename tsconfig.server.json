@@ -8,9 +8,11 @@
     "strict": true,
     "skipLibCheck": true,
     "outDir": "dist/server",
-    "rootDir": "server",
     "incremental": true,
     "tsBuildInfoFile": "./node_modules/.cache/tsc/server.tsbuildinfo"
   },
-  "include": ["server/**/*"]
+  "include": [
+    "server/**/*",
+    "api/**/*"
+  ]
 }

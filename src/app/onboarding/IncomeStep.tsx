@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, X, Loader2, ShieldCheck } from 'lucide-react';
+import { Plus, X, Loader2, ShieldCheck, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
 import { useIncome } from '../hooks/useIncome';
 import { useAllocations } from '../hooks/useAllocations';
 import { usePartner } from '../hooks/usePartner';
+import { useMoney } from './useMoney';
+
+const PAYDAYS = Array.from({ length: 28 }, (_, i) => i + 1); // 1-28, as UserSettings.cycleStartDay
 
 // Método Ruta note: this step only captures the user's OWN income. A partner's
 // income belongs to their own account — inviting them (reusing the existing
@@ -12,8 +15,9 @@ import { usePartner } from '../hooks/usePartner';
 // number here that would drift from a real household member.
 export function IncomeStep() {
   const { t } = useTranslation();
+  const { fmt, currency } = useMoney();
   const { incomes, totalIncome, createIncome, deleteIncome } = useIncome();
-  const { updateIncome } = useAllocations();
+  const { updateIncome, cycleStartDay, updatePayday } = useAllocations();
   const { status, sendInvite } = usePartner();
 
   const [amount, setAmount] = useState('');
@@ -40,6 +44,11 @@ export function IncomeStep() {
     setSaving(false);
     if ('error' in result) { toast.error(result.error as string); return; }
     setAmount('');
+  };
+
+  const handlePayday = async (day: number) => {
+    const result = await updatePayday(day);
+    if (result.error) toast.error(result.error);
   };
 
   const handleInvitePartner = async () => {
@@ -77,14 +86,14 @@ export function IncomeStep() {
         <div className="space-y-2">
           <label className="block text-sm font-medium">{t('onboarding.income.primaryLabel')}</label>
           <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">€</span>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">{currency}</span>
             <input
               type="number"
               inputMode="decimal"
               value={amount}
               onChange={e => setAmount(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }}
-              placeholder="0.00"
+              placeholder="0"
               className="block w-full pl-8 pr-4 py-4 text-xl font-display border border-border rounded-xl bg-muted/40 focus:bg-background outline-none focus:border-secondary transition-colors"
             />
           </div>
@@ -97,7 +106,7 @@ export function IncomeStep() {
               <div key={i.id} className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
                 <span className="text-sm font-medium">{i.description || t('onboarding.income.defaultLabel')}</span>
                 <div className="flex items-center gap-3">
-                  <span className="font-display">€{i.amount.toLocaleString()}</span>
+                  <span className="font-display">{fmt(i.amount)}</span>
                   <button onClick={() => deleteIncome(i.id)} className="text-muted-foreground hover:text-destructive">
                     <X className="w-4 h-4" />
                   </button>
@@ -115,6 +124,21 @@ export function IncomeStep() {
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           {t('onboarding.income.addAnother')}
         </button>
+
+        {/* Payday — the day the budget period starts (UserSettings.cycleStartDay) */}
+        <div className="space-y-2 pt-4 border-t border-border">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <CalendarDays className="w-4 h-4 text-secondary" /> {t('onboarding.income.paydayLabel')}
+          </label>
+          <select
+            value={cycleStartDay}
+            onChange={e => handlePayday(parseInt(e.target.value, 10))}
+            className="block w-full px-4 py-3 border border-border rounded-xl bg-muted/40 focus:bg-background outline-none focus:border-secondary text-sm"
+          >
+            {PAYDAYS.map(d => <option key={d} value={d}>{t('onboarding.income.paydayOption', { day: d })}</option>)}
+          </select>
+          <p className="text-xs text-muted-foreground">{t('onboarding.income.paydayHint')}</p>
+        </div>
 
         {/* Household / partner income */}
         {householdOn && (

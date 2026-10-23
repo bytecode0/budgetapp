@@ -11,19 +11,32 @@ import {
   sendWelcomeEmail,
   sendWelcomeGoogleEmail,
 } from "../lib/mailer.js";
+import { parseLocale, resolveLocale } from "../lib/email/locales/index.js";
 
 export const authRouter = Router();
 
 const GOOGLE_CALLBACK_URL =
   process.env.GOOGLE_CALLBACK_URL ?? "http://localhost:3002/api/auth/google/callback";
 
-// Tokens temporales para el intercambio post-OAuth (en memoria, expiran en 2 min)
-const googleSessions = new Map<string, { userId: string; expiresAt: number }>();
+// Token temporal para el intercambio post-OAuth: un JWT firmado de 2 min, no un
+// Map en memoria — en Vercel el callback y el exchange pueden caer en instancias
+// distintas. Lleva el usuario en `sub` y NO en `userId`, para que requireAuth
+// nunca lo acepte como cookie de sesión.
+const GOOGLE_EXCHANGE_PURPOSE = "google_exchange";
 
-function createGoogleSession(userId: string): string {
-  const token = crypto.randomUUID();
-  googleSessions.set(token, { userId, expiresAt: Date.now() + 2 * 60 * 1000 });
-  return token;
+export function createGoogleSession(userId: string): string {
+  return signToken({ purpose: GOOGLE_EXCHANGE_PURPOSE, sub: userId }, "2m");
+}
+
+/** The userId inside a valid, unexpired exchange token; null otherwise. */
+export function readGoogleSession(token: string): string | null {
+  try {
+    const payload = verifyToken(token);
+    if (payload?.purpose !== GOOGLE_EXCHANGE_PURPOSE || typeof payload.sub !== "string") return null;
+    return payload.sub;
+  } catch {
+    return null;
+  }
 }
 
 const googleClient = new OAuth2Client(
@@ -121,16 +134,13 @@ authRouter.post("/google/exchange", async (req: Request, res: Response) => {
 
   if (!token) return res.status(400).json({ error: "Token is required" });
 
-  const session = googleSessions.get(token);
-  if (!session || session.expiresAt < Date.now()) {
-    googleSessions.delete(token);
+  const sessionUserId = typeof token === "string" ? readGoogleSession(token) : null;
+  if (!sessionUserId) {
     return res.status(400).json({ error: "Invalid or expired session token" });
   }
 
-  googleSessions.delete(token);
-
   const user = await prisma.user.findUnique({
-    where: { id: session.userId },
+    where: { id: sessionUserId },
     include: { subscription: true },
   });
 
@@ -171,10 +181,18 @@ async function createOtp(email: string, type: string) {
 // Register
 authRouter.post("/register", async (req: Request, res: Response) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, language } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Name, email and password are required" });
+    }
+
+    // Optional: the UI language at sign-up, used for the verification email.
+    // UserSettings doesn't exist yet here (createDefaultAllocations creates it on
+    // verify), so it is not persisted.
+    const locale = language === undefined ? "es" : parseLocale(language);
+    if (!locale) {
+      return res.status(400).json({ error: "language must be 'es' or 'en'" });
     }
 
     if (password.length < 8) {
@@ -195,7 +213,7 @@ authRouter.post("/register", async (req: Request, res: Response) => {
     }
 
     const otp = await createOtp(email, "email_verification");
-    await sendVerificationEmail(email, name, otp);
+    await sendVerificationEmail(email, name, otp, locale);
 
     return res.json({ message: "Verification email sent" });
   } catch (err) {
@@ -231,11 +249,12 @@ authRouter.post("/verify-email", async (req: Request, res: Response) => {
     const user = await prisma.user.update({
       where: { email },
       data: { emailVerified: new Date() },
+      include: { settings: { select: { language: true } } },
     });
 
     setAuthCookie(res, user.id);
 
-    sendWelcomeEmail(user.email!, user.name ?? "").catch((e) =>
+    sendWelcomeEmail(user.email!, user.name ?? "", resolveLocale(user.settings?.language)).catch((e) =>
       console.error("[auth/verify-email] welcome email failed:", e)
     );
 
@@ -275,7 +294,10 @@ authRouter.post("/resend-otp", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Email and type are required" });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { settings: { select: { language: true } } },
+    });
     if (!user) {
       return res.json({ message: "If an account exists, a new code was sent" });
     }
@@ -291,10 +313,11 @@ authRouter.post("/resend-otp", async (req: Request, res: Response) => {
 
     const otp = await createOtp(email, type);
 
+    const locale = resolveLocale(user.settings?.language);
     if (type === "email_verification") {
-      await sendVerificationEmail(email, user.name ?? "", otp);
+      await sendVerificationEmail(email, user.name ?? "", otp, locale);
     } else if (type === "password_reset") {
-      await sendPasswordResetEmail(email, otp);
+      await sendPasswordResetEmail(email, otp, locale);
     }
 
     return res.json({ message: "Code sent" });
@@ -310,13 +333,16 @@ authRouter.post("/send-reset", async (req: Request, res: Response) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { settings: { select: { language: true } } },
+    });
     if (!user) {
       return res.json({ message: "If an account exists, a reset code was sent" });
     }
 
     const otp = await createOtp(email, "password_reset");
-    await sendPasswordResetEmail(email, otp);
+    await sendPasswordResetEmail(email, otp, resolveLocale(user.settings?.language));
 
     return res.json({ message: "Reset code sent" });
   } catch (err) {

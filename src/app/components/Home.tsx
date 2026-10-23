@@ -11,6 +11,8 @@ import { useIncome } from '../hooks/useIncome';
 import { useMonthlyReview } from '../hooks/useMonthlyBudget';
 import { useDebts } from '../hooks/useDebts';
 import { useLanguage } from '../context/LanguageContext';
+import { SetupChecklist } from './SetupChecklist';
+import type { OnboardingStep } from '../hooks/useOnboardingNeeded';
 
 function greeting(t: (key: string) => string) {
   const h = new Date().getHours();
@@ -31,9 +33,12 @@ function shortMonthLabel(key: string, locale: string) {
 
 interface HomeProps {
   onNavigate?: (screen: string) => void;
+  /** Setup steps still missing ("Completa tu configuración"). */
+  setupMissing?: OnboardingStep[];
+  onResumeSetup?: (step: OnboardingStep) => void;
 }
 
-export function Home({ onNavigate }: HomeProps) {
+export function Home({ onNavigate, setupMissing = [], onResumeSetup }: HomeProps) {
   const { t } = useTranslation();
   const { language } = useLanguage();
   const { selectedMonth, isCurrentMonth } = useMonth();
@@ -79,6 +84,8 @@ export function Home({ onNavigate }: HomeProps) {
 
   return (
     <div className="space-y-6 pb-8">
+
+      {onResumeSetup && <SetupChecklist missing={setupMissing} onResume={onResumeSetup} />}
 
       {/* ── Hero header ── */}
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}

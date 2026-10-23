@@ -1,4 +1,5 @@
 import { prisma } from "./prisma.js";
+import { DEFAULT_ACCOUNT_NAME } from "./onboarding.js";
 
 const DEFAULT_ALLOCATIONS = [
   { name: "Fixed Expenses",    icon: "🏠", type: "fixed",    sortOrder: 0 },
@@ -38,7 +39,7 @@ export async function createDefaultAccount(userId: string) {
     data: {
       userId,
       ownerUserId: userId,
-      name: "Main account",
+      name: DEFAULT_ACCOUNT_NAME,
       type: "checking",
       sortOrder: 0,
     },

@@ -122,6 +122,63 @@ export function debtState(ledger: DebtLedger, before?: Date): DebtState {
   };
 }
 
+/** The starting balance (anchor, cents) to store for a debt being created —
+ *  or edited before it has any balance information. An installment plan
+ *  given only its cuota owes its remaining installments; that's written into
+ *  the anchor once, so from then on the ledger alone says what's owed (edit
+ *  form, totals, payoff and bank sync all agree). Anything else keeps the
+ *  balance it was given. */
+export function startingBalanceFor(d: {
+  paymentMode: string;
+  currentBalance: number; // cents, as entered
+  installmentAmount: number | null;
+  installmentsTotal: number | null;
+  installmentsPaid: number | null;
+}): number {
+  if (d.currentBalance !== 0 || d.paymentMode !== "installments") return d.currentBalance;
+  if (!d.installmentAmount || d.installmentAmount <= 0 || d.installmentsTotal == null) return d.currentBalance;
+  return Math.max(0, d.installmentsTotal - (d.installmentsPaid ?? 0)) * d.installmentAmount;
+}
+
+/** What's still owed now — the one definition every total and payoff uses:
+ *  the live balance of an active debt, never negative. A paid-off or archived
+ *  debt owes nothing. */
+export function owedNow(ledger: DebtLedger): number {
+  if (ledger.debt.status !== "active") return 0;
+  return Math.max(0, debtState(ledger).balance);
+}
+
+/** Whether a debt is paid off, judged automatically (after payments, bank
+ *  sync, imports, edits):
+ *  - by balance reaching 0 — only if the debt HAS balance information: a
+ *    starting balance > 0, or any adjustment or purchase ever recorded. A debt
+ *    entered without a balance (e.g. only its minimum, or a cuota with no
+ *    count) goes negative with its first payment; that isn't "paid off";
+ *  - by installment count, when the total is known.
+ *  Otherwise never. A card isn't judged: it hits 0 every month in "full" mode
+ *  and keeps being used. Setting the balance to 0 by hand is the user's
+ *  decision and is handled by the route (paidOffByHand), not guessed here. */
+export function isPaidOff(ledger: DebtLedger): boolean {
+  const d = ledger.debt;
+  if (d.kind === "credit_card") return false;
+  const { balance, installmentsPaid } = debtState(ledger);
+  const hasBalanceInfo = d.currentBalance > 0 || ledger.adjustments.length > 0 || ledger.purchases.length > 0;
+  return (hasBalanceInfo && balance <= 0)
+    || (d.installmentsTotal != null && installmentsPaid >= d.installmentsTotal);
+}
+
+/** "I owe 0 now", typed by the user on a debt that isn't a card: it's paid
+ *  off. Decided from the request itself, because setLiveValues may move the
+ *  anchor to 0 and the ledger can no longer tell it apart from "no balance". */
+export function paidOffByHand(kind: string, liveBalanceCents: number): boolean {
+  return kind !== "credit_card" && liveBalanceCents <= 0;
+}
+
+/** Total owed across the active debts — what "Deuda total" shows everywhere. */
+export function sumOwed(ledgers: DebtLedger[]): number {
+  return ledgers.filter(l => l.debt.status === "active").reduce((s, l) => s + owedNow(l), 0);
+}
+
 /** What the debt's budget line should hold for the period [start, end).
  *  Measured at the period's START, so paying during the period — including
  *  the final payment that marks it paid off — doesn't shrink the line it's
@@ -289,20 +346,16 @@ export async function setLiveValues(
   if (Object.keys(data).length > 0) await prisma.debt.update({ where: { id: debtId }, data });
 }
 
-/** An installment-type debt that reaches zero is paid off (and reopens if a
- *  payment is removed). A credit card isn't: it hits zero every month in "full"
- *  mode and keeps being used. */
+/** A debt that reaches zero is paid off (and reopens if a payment is
+ *  removed) — see isPaidOff. Called after payments and after the user sets
+ *  the live balance by hand. */
 export async function syncDebtStatus(userId: string, debtIds: (string | null | undefined)[]): Promise<void> {
   const ids = [...new Set(debtIds.filter((id): id is string => !!id))];
   if (ids.length === 0) return;
   for (const ledger of await loadDebtLedgers(userId, ids)) {
-    const { kind, status, id, currentBalance, installmentsTotal } = ledger.debt;
+    const { kind, status, id } = ledger.debt;
     if (kind === "credit_card" || status === "archived") continue;
-    const { balance, installmentsPaid } = debtState(ledger);
-    // A debt entered with no balance (only its cuota) can't be judged by
-    // balance — only by its installment count, when known.
-    const paidOff = (currentBalance > 0 && balance <= 0)
-      || (installmentsTotal != null && installmentsPaid >= installmentsTotal);
+    const paidOff = isPaidOff(ledger);
     if (status === "active" && paidOff) {
       await prisma.debt.update({ where: { id }, data: { status: "paid_off" } });
     } else if (status === "paid_off" && !paidOff) {

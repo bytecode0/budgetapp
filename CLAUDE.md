@@ -1,23 +1,16 @@
 # LifePlan BudgetApp — Project Guidelines for Claude
 
-## ⚠️ READ FIRST: the BudgetApp is the product
+## What this is
 
-**Updated 21 Oct 2026:** the Radiografía Financiera (`src/radiografia/`, public no-login lead magnet) has been **abandoned** and will not launch. **All work now targets the LifePlan BudgetApp** (authenticated, `requireAuth`): a tool to get out of over-indebtedness from fragmented installments, built around the "futuro comprometido" metric.
+LifePlan is an authenticated budgeting app (every API route behind `requireAuth`) for people getting out of over-indebtedness from fragmented installments — cards, BNPL, quick loans. Its core metric is the **"futuro comprometido"**: the share of income already committed to debt before spending anything. Current plan: `docs/plan-deudas-y-onboarding.md`.
 
-The Radiografía code is still in the repo and its public routes are still mounted. Until it is removed:
-- **Do not extend or fix it.** Don't spend effort on `src/radiografia/`, `server/lib/radiografia/`, `server/routes/radiografia.ts` or `server/lib/xray/` beyond what removing it requires.
-- **Do not import from it** in BudgetApp code. If something in there is worth keeping (e.g. the statement parsers), move it out deliberately — don't reach in.
-- The sections below marked **(legacy — Radiografía)** describe that code; they're kept only so it isn't broken by accident before removal.
+The Radiografía Financiera (a public lead magnet) was abandoned and deleted on 21 Oct 2026; it lives only in git history.
 
-> **TODO (Luis):** decide whether to delete the Radiografía code and unmount `/api/radiografia` (public, unauthenticated, rate-limited only by IP — dead public surface is still attack surface).
+### How debts work (read before touching money code)
 
-### Feature flag
-
-`VITE_ENABLE_BUDGETAPP` — `true` in local dev. It was `false` in production to hide the BudgetApp while the Radiografía launched; with the Radiografía abandoned, this flag must be `true` (or removed) wherever the BudgetApp is deployed.
-
-When `false`:
-- Frontend: BudgetApp routes are **not registered in the router**. Not a hidden menu link — the route must not exist in the production bundle.
-- Backend: BudgetApp routes are **not mounted**. `/api/plans` must return **404, not 401** — a 401 confirms something is there.
+- **A credit card is an account** (type `card`). Its debt is created and kept in step by the server (`server/lib/cardDebt.ts`) — the user never creates it in Debts. Loans and installment plans are created in Debts.
+- **Balances are derived, never stored** (`server/lib/debtBalance.ts`): live balance = anchor (`Debt.currentBalance` at `balanceAsOf`) + card purchases + dated adjustments − payments. Never read `Debt.currentBalance` raw as "what's owed".
+- **A card payment only counts as spending for the part that pays pre-existing debt**; the rest pays purchases already counted in their own category. Every place that sums expenses must use `countedAmounts()` / `budgetAmount`, or groceries get counted twice.
 
 ---
 
@@ -34,7 +27,7 @@ When `false`:
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS v4, shadcn/ui (Radix primitives), Motion (Framer Motion v12)
 - **Backend**: Node.js, Express, TypeScript (`tsx watch`), Prisma ORM
 - **Database**: PostgreSQL
-- **Services**: Stripe (payments), Resend (email), Google OAuth
+- **Services**: Stripe (payments), Cloudflare Email Sending (email), Google OAuth
 - **i18n**: i18next — all user-facing strings must use `t('key')`, never hardcode text
 
 ---
@@ -84,20 +77,38 @@ Documented in `.env.example`. Relevant ones:
 | Var | Note |
 |---|---|
 | `DATABASE_URL` | PostgreSQL |
-| `JWT_SECRET` | Auth — BudgetApp only |
-| `RESEND_API_KEY`, `SENDER_EMAIL` | **Report delivery depends on these.** Must be set in production with a verified sending domain |
-| `APP_URL` | Must point to the production URL, not localhost, or report links will break |
-| `VITE_API_URL` | Must point to the production API |
-| `STRIPE_*`, `GOOGLE_*` | BudgetApp only. Not needed for launch |
-| `ANTHROPIC_API_KEY` | AI expense classification — see cost warning below |
-| `VITE_ENABLE_BUDGETAPP` | `false` in production |
+| `JWT_SECRET`, `ENCRYPTION_KEY` | Auth sessions / encrypted bank tokens |
+| `EMAIL_PROVIDER` | Which transport sends email (see Emails below): `resend` for the beta, `cloudflare`, or `console` for local dev (prints instead of sending; allowed only with `NODE_ENV` exactly `development` or `test` and no `VERCEL`/`VERCEL_ENV`). Read at send time; missing or unknown makes every send fail with a clear error, never a silent fallback |
+| `EMAIL_FROM` | Sender for every provider: `"LifePlan <contact@luisvespa.com>"` or a bare address. Its domain must be verified with the provider. No fallback sender |
+| `RESEND_API_KEY` | Only with `EMAIL_PROVIDER=resend`. Free plan: 3,000/month, 100/day, any recipient once the domain is verified |
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_API_TOKEN` | Only with `EMAIL_PROVIDER=cloudflare`. Needs the Workers Paid plan and a verified sending domain; the token only needs the send-email permission |
+| `LOGO_URL` | Optional hosted logo for the email header |
+| `APP_URL` | The production URL (CORS origin and links in emails), not localhost |
+| `GOOGLE_CLIENT_ID/SECRET`, `GOOGLE_CALLBACK_URL` | Google sign-in; the callback URL must also be registered in Google Cloud Console |
+| `STRIPE_SECRET_KEY`, `STRIPE_PREMIUM_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` | Premium subscription; webhook points at `/api/stripe/webhook`. **Test mode** during the beta. If any is missing, the Stripe routes answer 503; the rest of the app runs |
+| `GOCARDLESS_*`, `TINK_*` | Open Banking (optional) |
+| `ANTHROPIC_API_KEY` | AI expense classification — see cost note below |
+| `CRON_SECRET` | Authenticates scheduled jobs |
+
+The frontend calls the API with relative `/api/...` paths: frontend and backend are served from the same origin.
 
 - **Never** write a secret into source code. Never commit `.env`.
 - If a required env var is missing, **stop and ask**. Do not invent a fallback value or a placeholder key.
 
+### Emails (`server/lib/email/`)
+
+Two independent layers: transports know nothing about templates, templates nothing about transports.
+
+- **Send:** `sendEmail({ to, subject, html, text, replyTo? })` from `server/lib/email/index.ts` picks the transport from `EMAIL_PROVIDER` at send time. Transports live in `transports/` (`resend.ts`, `cloudflare.ts`, `console.ts`); all share a 10 s timeout and never put recipient addresses, tokens or keys in errors. Every send rejects on failure; callers decide whether that is fatal.
+- **Add a provider:** one file in `transports/` implementing `EmailTransport` (`types.ts`) plus one line in the registry in `index.ts`. Swapping provider is env-only.
+- **Look:** `theme.ts` (product name, colours, fonts, radii, logo, support email, app URL, Premium price). **Copy:** `locales/es.ts` (source of truth) and `locales/en.ts`, same keys (a test enforces it). Never hardcode text or a currency symbol in a template; money is integer cents formatted by `format.ts`. Copy only describes what the code really does (Premium gates no feature today, so no feature list). Emails that ask the user to reply set `replyTo` to the theme's `supportEmail`. A bad `APP_URL`/`LOGO_URL` drops the logo or footer link (logged once) instead of blocking an OTP; CTA links still throw.
+- **Templates:** `templates/*.ts`, one pure function per email, `(data, locale) => { subject, html, text }`, built from `components.ts` (table-based, inline-styled, escaped; each block has a plain-text twin). The senders called by routes are thin wrappers in `server/lib/mailer.ts` and `server/lib/subscriptionEmails.ts`; pass the user's `UserSettings.language` (`resolveLocale`), default Spanish.
+- **Add an email:** a template file + its keys in both locales + a sample in `samples.ts` + a wrapper in `mailer.ts`/`subscriptionEmails.ts`.
+- **Preview:** `npm run email:preview [dir]` renders every template in both locales with sample data to `./.email-preview/index.html` (gitignored). No network, no DB. Locally, `EMAIL_PROVIDER=console` prints emails (OTPs included) to the server log.
+
 ### ⚠️ Cost: AI calls (`ANTHROPIC_API_KEY`)
 
-Expense classification and the statement column-mapping fallback (`aiColumnMap.ts`) call the Anthropic API. In the BudgetApp they sit behind `requireAuth` — keep it that way: never expose a route that spends money per request without auth. The Radiografía's public `/extracto` route shares the same key gate; while `/api/radiografia` is still mounted, that public route can spend money too (see the TODO at the top).
+Expense classification calls the Anthropic API. It sits behind `requireAuth` — keep it that way: never expose a route that spends money per request without auth.
 
 ---
 
@@ -109,45 +120,6 @@ This is a financial app. Rounding bugs here destroy user trust faster than anyth
 - Do all arithmetic on integers. Convert to display format only at the render layer.
 - Round only when displaying, never mid-calculation.
 - Currency symbol must come from i18n, not hardcoded. The `€` in the input example below is a placeholder and violates this rule — fix it when touched.
-
-### The 10/50/20/20 framework (legacy — Radiografía)
-
-The BudgetApp's rules come from the Método Ruta (`metodo-ruta-reglas.md`, referenced as R1…R7 in code comments), not from this table.
-
-The diagnostic framework and its thresholds are the domain core. They live in **one place** (`src/radiografia/domain/`) and are imported from there. Never re-derive or re-hardcode a threshold inside a component.
-
-| Area | Target |
-|---|---|
-| Generosity / tithe | 10% |
-| Essentials (incl. housing) | 50% |
-| Saving + investing | 20% |
-| Enjoyment | 20% |
-
----
-
-## Radiografía-specific rules (legacy — Radiografía)
-
-The general conventions below were written for the authenticated BudgetApp. The Radiografía is a public, single-session funnel tool, so four of them do **not** apply:
-
-**1. No auth.** Radiografía endpoints are the only public routes in the project. They must be listed explicitly and visibly, not treated as an implicit exception. Rate-limit them by IP.
-
-**2. No FAB.** The manual form is a linear step-by-step wizard. It uses "Back" / "Next" buttons, not a floating action button. The FAB rule applies to create/add actions in list-based modules only.
-
-**3. No `MonthContext`.** The Radiografía is a point-in-time snapshot, not a monthly view. Do not wire it to the global month selector.
-
-**4. No Tailwind in email templates.** The report email uses **tables and inline CSS**. Email clients do not support modern CSS. A Tailwind-styled email looks perfect in the browser and broken in Outlook. This is the single most common mistake here.
-
-### Privacy: what gets persisted
-
-**Revoked 18 ago:** "percentages only, never amounts" made the report too thin to be worth asking for a bank statement ("you're spending 600€/year on restaurants" needs an amount, not a percentage). The rule that replaced it:
-
-- **Aggregates with amounts are fine** — spending by category, gastos hormiga, subscriptions, health index, archetype. What's still never allowed is **raw movements**: no individual transaction (date + concept + amount) ever reaches a database row. Only numbers `analyze()` already aggregated across the whole statement.
-- **`health` is never itemized**, in amount or in name, even in aggregate form — a euro figure next to a pharmacy/insurer is health data under GDPR Article 9 whether or not a merchant name is attached. Its spend is simply dropped from the category breakdown, not folded elsewhere.
-- **Giving movements (diezmo, iglesia, ONG) never carry a merchant name** into the report — the "who" of a tithe is religious-belief data (Article 9). The amount stays in a generic `giving_monthly` bucket, exactly as before.
-- **Merchant names for ant-expenses/subscriptions ARE persisted, under explicit consent** (revoked "never persisted", 18 ago — same reasoning as the amounts above: "600€/year on restaurants" without naming Glovo and Netflix is a report nobody acts on, and a resend or the permanent link showing less than the first email read as a bug every time). They live in the browser's `sessionStorage` from the moment the statement is read until `/email/verify`, and are written into `Radiografia.resultado` there — the first point where the consent checkbox at the email step is backed by a confirmed address. Never at `/profile/extracto`: nothing carries a merchant name before consent exists. The consent copy (`radiografia.onboarding.email.consentLabel`) says so explicitly, and must keep saying so.
-- Nothing above relaxes `health` or giving: they never reach the snapshot at all, in amount or in name.
-
-See `server/lib/radiografia/snapshot.ts` (what gets built) and `server/lib/radiografia/report.ts` (what gets shown) for where each of these is enforced — both, not just one, since a future code path that reads `Radiografia.resultado` without going through the writer must still never surface `health`.
 
 ---
 
@@ -164,7 +136,7 @@ See `server/lib/radiografia/snapshot.ts` (what gets built) and `server/lib/radio
 
 ### 1. Floating Action Button (FAB) — primary create/add action
 
-Applies to **list-based modules where the user creates or adds items**. Does **not** apply to linear wizards (see Radiografía rule 2). Never put the primary create action in a header button or inside a card.
+Applies to **list-based modules where the user creates or adds items**. Does **not** apply to linear wizards such as the onboarding, which use "Back" / "Next". Never put the primary create action in a header button or inside a card.
 
 ```tsx
 import { motion } from 'motion/react';
@@ -244,7 +216,7 @@ Every new screen/module starts with a staggered fade-in pattern.
 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
 ```
 
-**Radiografía note:** keep step transitions fast (≤200 ms). Slow animations on a 7-step wizard add up and increase abandonment.
+**Onboarding note:** keep step transitions fast (≤200 ms). Slow animations on a multi-step wizard add up and increase abandonment.
 
 ---
 
@@ -294,7 +266,6 @@ import { GripVertical } from 'lucide-react';
 
 Persist order with a `PATCH /api/<resource>/reorder` endpoint that accepts `{ order: [{id, sortOrder}] }` and does a transaction batch update. The GET endpoint should always sort by `sortOrder ASC`.
 
-The debt list in the Radiografía is **not** reorderable — order carries no meaning there. Do not add drag-and-drop to it.
 
 ---
 
@@ -310,7 +281,6 @@ const { selectedMonth, isCurrentMonth, isFutureMonth } = useMonth();
 
 Allowed range: one month back (unlimited) ↔ one month ahead of today.
 
-**BudgetApp only.** The Radiografía does not use this.
 
 ---
 
@@ -365,7 +335,7 @@ When a list has no items, show a centered empty state with an icon, a short mess
 <button className="border border-destructive/20 text-destructive hover:bg-destructive/5 rounded-lg transition-colors">
 ```
 
-**Numeric inputs in the Radiografía:** accept `0`, show thousands separators, use `inputMode="decimal"` so mobile shows the numeric keypad.
+**Numeric inputs:** accept `0`, show thousands separators, use `inputMode="decimal"` so mobile shows the numeric keypad. Currency symbol from `t('currency.symbol')`, never a literal `€`.
 
 ---
 
@@ -391,7 +361,7 @@ When a list has no items, show a centered empty state with an icon, a short mess
 - Keys live in `src/locales/en.json` and `src/locales/es.json`
 - Always add both locales when adding a new key — never leave one missing
 - Use i18next interpolation for dynamic values: `t('key', { amount: n })`
-- **Public-facing Radiografía copy is Spanish-first.** English keys may exist but Spanish is the reviewed source of truth for launch.
+- **Spanish is the primary language** and the reviewed source of truth; English must exist for every key.
 
 ---
 
@@ -401,28 +371,7 @@ When a list has no items, show a centered empty state with an icon, a short mess
 - Batch operations use named sub-routes placed **before** `/:id`: e.g. `PATCH /api/allocations/reorder`
 - All responses: `{ data }` on success, `{ error: string }` on failure
 - Auth: every route uses `requireAuth` middleware — `req.userId` is always available inside
-- **Exception:** Radiografía routes are public. Maintain the explicit list below.
-
-### Public routes (the only ones without `requireAuth`) (legacy — Radiografía)
-
-The full list, kept in sync with `server/routes/radiografia.ts` — this went stale once before (it listed two routes; the file has ten), so re-check against the file rather than trusting this list blindly:
-
-```
-POST   /api/radiografia/profile          # bootstrap/resume an anonymous profile
-GET    /api/radiografia/profile          # current state (by cookie or Bearer token)
-PATCH  /api/radiografia/profile/step     # record which onboarding step was reached
-POST   /api/radiografia/profile/extracto # analyze an uploaded statement (mandatory step)
-POST   /api/radiografia/profile/fields   # save the manual gap-filling fields
-POST   /api/radiografia/email/request    # send the 6-digit confirmation code
-POST   /api/radiografia/email/verify     # confirm the code, deliver the report
-POST   /api/radiografia/report/resend    # retry report delivery
-GET    /api/radiografia/report/:token    # permanent report page — the token IS the authorization
-DELETE /api/radiografia/profile          # delete-my-data, Bearer-token authenticated
-```
-
-All rate-limited by IP (`rateLimited()` in the same file). None of these ever accept a client-supplied `profileId` for authorization — every one resolves "who is this" from the anon cookie or Bearer token, never from the request body.
-
----
+- **Exceptions (no session):** the auth endpoints themselves, `GET /api/health`, and the Stripe webhook (verifies its own signature).
 
 ## Colour palette (Tailwind tokens)
 
@@ -443,16 +392,3 @@ Status colours follow the same semantic pattern across the app:
 - **Red** = over budget / missed / error
 
 ---
-
-## Analytics events (legacy — Radiografía)
-
-Plausible, no cookies, no consent banner needed. Fire from `src/radiografia/`:
-
-```ts
-plausible('radiografia_iniciada');
-plausible('paso_completado', { props: { paso: 3 } });
-plausible('radiografia_completada');
-plausible('email_capturado');
-```
-
-Never send financial amounts or email addresses as event properties.

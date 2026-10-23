@@ -3,6 +3,13 @@ node_modules
 dist
 .claude/.verify-pending
 
+# Rendered email previews (npm run email:preview)
+.email-preview
+
 # Bank statements / spreadsheets (never commit financial data)
 *.xlsx
 *.csv
+
+# Vercel CLI link and pulled env files (secrets)
+.vercel
+.env*.local

@@ -7,7 +7,8 @@ import { simulatePayoff, type PayoffMethod } from "../lib/debtPayoff.js";
 import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/period.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import {
-  loadDebtLedgers, debtState, monthlyCommitment, setLiveValues, syncDebtAllocations, ensureDebtLine, type DebtLedger,
+  loadDebtLedgers, debtState, owedNow, monthlyCommitment, setLiveValues, syncDebtAllocations, syncDebtStatus, ensureDebtLine,
+  startingBalanceFor, paidOffByHand, type DebtLedger,
 } from "../lib/debtBalance.js";
 
 export const debtsRouter = Router();
@@ -29,15 +30,18 @@ async function currentPeriod(userId: string): Promise<{ start: Date; end: Date }
   return periodBounds(currentPeriodKey(day), day);
 }
 
-// The API speaks LIVE values: `currentBalance` is what's owed now and
-// `installmentsPaid` counts payments recorded since the anchor. The stored
-// anchor is exposed as `anchorBalance` (see server/lib/debtBalance.ts).
+// The API speaks LIVE values: `currentBalance` is the live ledger balance
+// (what the edit form sends back as "I owe X now") and `installmentsPaid`
+// counts payments recorded since the anchor. The stored anchor is exposed as
+// `anchorBalance`. `owed` is what the app SHOWS as owed: owedNow(), which also
+// covers a plan entered with only its cuota (see server/lib/debtBalance.ts).
 function withLiveState<T extends { id: string; currentBalance: number }>(debt: T, ledger: DebtLedger | undefined, period: { start: Date; end: Date }) {
-  if (!ledger) return { ...debt, anchorBalance: debt.currentBalance, previousBalance: debt.currentBalance, purchasesTotal: 0, paymentsTotal: 0, monthlyCommitment: 0 };
+  if (!ledger) return { ...debt, owed: Math.max(0, debt.currentBalance), anchorBalance: debt.currentBalance, previousBalance: debt.currentBalance, purchasesTotal: 0, paymentsTotal: 0, monthlyCommitment: 0 };
   const state = debtState(ledger);
   return {
     ...debt,
     currentBalance: state.balance,
+    owed: owedNow(ledger),
     anchorBalance: debt.currentBalance,
     previousBalance: state.previousRemaining,
     purchasesTotal: state.purchasesTotal,
@@ -95,7 +99,7 @@ debtsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
     const live = debts.map(d => withLiveState(d, ledgers.get(d.id), period));
 
     const active = live.filter(d => d.status === "active");
-    const totalOwed = active.reduce((s, d) => s + Math.max(0, d.currentBalance), 0);
+    const totalOwed = active.reduce((s, d) => s + d.owed, 0);
     const totalMinimums = active.reduce((s, d) => s + d.monthlyCommitment, 0);
 
     return res.json(serializeMoney({ debts: live, totalOwed, totalMinimums }));
@@ -170,7 +174,7 @@ debtsRouter.get("/payoff", requireAuth, async (req: AuthRequest, res: Response) 
     const ledgers = await ledgersById(req.userId!);
     const live = debts.map(({ paymentMode, ...d }) => {
       const ledger = ledgers.get(d.id);
-      const balance = ledger ? Math.max(0, debtState(ledger).balance) : d.currentBalance;
+      const balance = ledger ? owedNow(ledger) : d.currentBalance;
       return { ...d, currentBalance: balance, ...(paymentMode === "full" && { minimumPayment: balance }) };
     });
 
@@ -227,6 +231,20 @@ debtsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
       orderBy: { sortOrder: "desc" },
     });
 
+    const finalPaymentMode = paymentMode ?? defaultPaymentMode(kind);
+    const installmentAmountCents = installmentAmount !== undefined ? toCents(installmentAmount) : null;
+    const installmentsTotalN = installmentsTotal !== undefined ? parseInt(installmentsTotal, 10) || null : null;
+    const installmentsPaidN = installmentsPaid !== undefined ? parseInt(installmentsPaid, 10) || 0 : 0;
+    // Given only its cuota, a plan starts owing its remaining cuotas — stored
+    // as the anchor so the ledger alone says what's owed from now on.
+    const startingBalance = startingBalanceFor({
+      paymentMode: finalPaymentMode,
+      currentBalance: toCents(currentBalance),
+      installmentAmount: installmentAmountCents,
+      installmentsTotal: installmentsTotalN,
+      installmentsPaid: installmentsPaidN,
+    });
+
     const debt = await prisma.debt.create({
       data: {
         userId: req.userId!,
@@ -235,18 +253,18 @@ debtsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
         visibility: visibility ?? "household",
         name,
         kind: kind ?? "other",
-        paymentMode: paymentMode ?? defaultPaymentMode(kind),
+        paymentMode: finalPaymentMode,
         accountId: resolvedAccountId,
-        currentBalance: toCents(currentBalance),
+        currentBalance: startingBalance,
         principal: principal !== undefined ? toCents(principal) : null,
         apr: apr !== undefined && apr !== null ? Number(apr) : null,
         creditLimit: creditLimit !== undefined ? toCents(creditLimit) : null,
         statementDay: statementDay !== undefined ? clampDay(statementDay) : null,
         paymentDueDay: paymentDueDay !== undefined ? clampDay(paymentDueDay) : null,
         minimumPayment: minimumPayment !== undefined ? toCents(minimumPayment) : null,
-        installmentAmount: installmentAmount !== undefined ? toCents(installmentAmount) : null,
-        installmentsTotal: installmentsTotal !== undefined ? parseInt(installmentsTotal, 10) || null : null,
-        installmentsPaid: installmentsPaid !== undefined ? parseInt(installmentsPaid, 10) || 0 : 0,
+        installmentAmount: installmentAmountCents,
+        installmentsTotal: installmentsTotalN,
+        installmentsPaid: installmentsPaidN,
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
         sortOrder: (lastOrder?.sortOrder ?? -1) + 1,
@@ -339,6 +357,10 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
       ...(currentBalance !== undefined && { balance: toCents(currentBalance) }),
       ...(installmentsPaid !== undefined && { installmentsPaid: parseInt(installmentsPaid, 10) || 0 }),
     });
+    // Set to 0 by hand: the user says it's paid off (an explicit status in
+    // the same request wins).
+    const zeroedByHand = status === undefined && currentBalance !== undefined
+      && paidOffByHand(finalKind, toCents(currentBalance));
 
     const debt = await prisma.debt.update({
       where: { id },
@@ -347,6 +369,7 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
         ...(paymentMode !== undefined && { paymentMode }),
         ...(kind !== undefined && { kind }),
         ...(status !== undefined && { status }),
+        ...(zeroedByHand && { status: "paid_off" }),
         ...(accountUpdate ?? {}),
         ...(principal !== undefined && { principal: principal === null ? null : toCents(principal) }),
         ...(apr !== undefined && { apr: apr === null ? null : Number(apr) }),
@@ -362,6 +385,24 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
         ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder, 10) }),
       },
     });
+
+    // A plan edited while it still has no balance information (anchor 0, no
+    // movements, balance not being set now) gets its starting balance, as on
+    // creation — e.g. its cuotas were only filled in now.
+    if (currentBalance === undefined && debt.status === "active" && debt.currentBalance === 0) {
+      const [ledger] = await loadDebtLedgers(req.userId!, [id]);
+      const hasMovements = ledger && ledger.payments.length + ledger.purchases.length + ledger.adjustments.length > 0;
+      const starting = startingBalanceFor(debt);
+      if (!hasMovements && starting > 0) {
+        await prisma.debt.update({ where: { id }, data: { currentBalance: starting, balanceAsOf: new Date() } });
+      }
+    }
+
+    // Any other balance or installment count set by hand settles the status
+    // like a payment does (e.g. reopens a paid-off debt given a balance again).
+    if (status === undefined && !zeroedByHand && (currentBalance !== undefined || installmentsPaid !== undefined)) {
+      await syncDebtStatus(req.userId!, [id]);
+    }
 
     // Keep any linked "debt" Allocation's line item in sync with the real
     // commitment — it's a derived value, never independently editable.

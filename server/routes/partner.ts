@@ -2,6 +2,7 @@ import { Router, Response, Request } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { sendPartnerInviteEmail } from "../lib/mailer.js";
+import { resolveLocale } from "../lib/email/locales/index.js";
 import { ensureHousehold } from "../lib/household.js";
 
 export const partnerRouter = Router();
@@ -89,7 +90,7 @@ partnerRouter.post("/invite", requireAuth, async (req: AuthRequest, res: Respons
 
     // Must not already be linked
     const mySettings = await prisma.userSettings.findUnique({
-      where: { userId: myId }, select: { linkedUserId: true },
+      where: { userId: myId }, select: { linkedUserId: true, language: true },
     });
     if (mySettings?.linkedUserId) {
       return res.status(400).json({ error: "You are already linked to a partner" });
@@ -117,11 +118,12 @@ partnerRouter.post("/invite", requireAuth, async (req: AuthRequest, res: Respons
 
     const acceptUrl = `${APP_URL}/?invite=${token}`;
 
-    // Send email — non-fatal: if Resend fails (e.g. unverified domain in dev) we still
+    // Send email — non-fatal: if sending fails (e.g. email env vars unset in dev) we still
     // return the invite so the flow can be tested via the acceptUrl.
     let emailWarning: string | undefined;
     try {
-      await sendPartnerInviteEmail(normalizedEmail, me?.name ?? "Your partner", acceptUrl);
+      // The invitee may have no account yet, so the email goes out in the inviter's language.
+      await sendPartnerInviteEmail(normalizedEmail, me?.name ?? "", acceptUrl, resolveLocale(mySettings?.language));
     } catch (emailErr: any) {
       console.warn("[partner/invite] email not sent:", emailErr?.message);
       emailWarning = "Invite created but email could not be sent. Use the link below to share manually.";

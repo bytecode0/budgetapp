@@ -1,8 +1,5 @@
 // The entire authenticated LifePlan BudgetApp tree — providers, shell, and every
-// screen. Lives in its own module (rather than inline in App.tsx) so Rollup can
-// tree-shake this whole subtree out of the production bundle when
-// VITE_ENABLE_BUDGETAPP is statically "false" at build time (see App.tsx).
-// Not launching 12 Sep 2026; only the Radiografía is public. See CLAUDE.md.
+// screen.
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LayoutDashboard, Sparkles, Wallet, Target, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight, Landmark, Users, CreditCard } from 'lucide-react';
@@ -28,14 +25,18 @@ import { MonthProvider, useMonth, monthLabel, periodRangeLabel } from './context
 import { useAllocations } from './hooks/useAllocations';
 import { useAnalytics } from './hooks/useAnalytics';
 import { useHousehold } from './hooks/useHousehold';
-import { useOnboardingNeeded } from './hooks/useOnboardingNeeded';
+import { useOnboardingNeeded, type OnboardingStep } from './hooks/useOnboardingNeeded';
+import { useBillingEnabled } from './hooks/useBillingEnabled';
 import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/usePartner';
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
 
 function AppInner() {
-  const { user, loading, hydrating, logout, refreshUser } = useAuth();
-  const { needsOnboarding, loading: onboardingLoading, refresh: refreshOnboardingStatus } = useOnboardingNeeded(Boolean(user));
+  const { user, loading, logout, refreshUser } = useAuth();
+  const { needsOnboarding, missing: setupMissing, loading: onboardingLoading, refresh: refreshOnboardingStatus } = useOnboardingNeeded(Boolean(user));
+  const { enabled: billingEnabled } = useBillingEnabled(Boolean(user));
+  // Set when the dashboard's "Completa tu configuración" reopens the wizard at a step.
+  const [resumeStep, setResumeStep] = useState<OnboardingStep | null>(null);
   const { t } = useTranslation();
   const { darkMode, updateDarkMode, dbLanguage, updateLanguage, updatePayday } = useAllocations();
   const { household } = useHousehold();
@@ -124,7 +125,7 @@ function AppInner() {
   const renderScreen = () => {
     switch (currentScreen) {
       case 'home':
-        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} />;
+        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} />;
       case 'dashboard':
         return <PlanningDashboard onNavigate={(screen) => setCurrentScreen(screen as Screen)} onViewPlan={handleViewPlan} />;
       case 'activity':
@@ -157,12 +158,12 @@ function AppInner() {
           />
         );
       default:
-        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} />;
+        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} />;
     }
   };
 
-  // Show loading screen while checking auth (or importing the Radiografía data).
-  if (loading || hydrating) {
+  // Show loading screen while checking auth.
+  if (loading) {
     return (
       <div className="size-full bg-background flex items-center justify-center">
         <motion.div
@@ -175,7 +176,6 @@ function AppInner() {
             <Target className="w-11 h-11 text-white" />
           </div>
           <h2 className="text-2xl font-display text-primary mb-2">LifePlan</h2>
-          {hydrating && <p className="text-sm text-muted-foreground mb-4">{t('radiografia.hydrating')}</p>}
           <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto" />
         </motion.div>
       </div>
@@ -202,8 +202,13 @@ function AppInner() {
       </div>
     );
   }
-  if (needsOnboarding) {
-    return <BudgetOnboarding onDone={() => refreshOnboardingStatus()} />;
+  if (needsOnboarding || resumeStep) {
+    // The wizard may have changed the payday: refresh the month context too.
+    const finishOnboarding = async () => {
+      setResumeStep(null);
+      await Promise.all([refreshOnboardingStatus(), refreshCycleStartDay()]);
+    };
+    return <BudgetOnboarding initialStep={resumeStep ?? 'welcome'} onDone={finishOnboarding} />;
   }
 
   return (
@@ -343,13 +348,13 @@ function AppInner() {
         </nav>
 
         <div className="p-4 mt-auto space-y-3">
-          {/* Plan badge */}
+          {/* Plan badge — the upgrade button only while Premium can be bought */}
           {user?.plan === 'premium' ? (
             <div className="bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border border-amber-400/30 rounded-xl p-3 flex items-center gap-2">
               <Crown className="w-4 h-4 text-amber-500 shrink-0" />
               <span className="text-sm font-display text-amber-600 dark:text-amber-400">{t('billing.premium')}</span>
             </div>
-          ) : (
+          ) : billingEnabled ? (
             <button
               onClick={() => setCurrentScreen('settings')}
               className="w-full bg-gradient-to-r from-primary to-secondary text-white rounded-xl p-3 flex items-center gap-2 hover:shadow-lg transition-all"
@@ -357,7 +362,7 @@ function AppInner() {
               <Zap className="w-4 h-4 shrink-0" />
               <span className="text-sm font-display">{t('billing.upgradeNow')}</span>
             </button>
-          )}
+          ) : null}
 
           {/* Spending Alignment Status */}
           <div className="bg-card border border-border rounded-xl p-4">

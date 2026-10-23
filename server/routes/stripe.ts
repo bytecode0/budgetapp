@@ -1,13 +1,23 @@
 import { Router } from "express";
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
-import { stripe, PREMIUM_PRICE_ID, FRONTEND_URL } from "../lib/stripe.js";
+import {
+  getStripe,
+  getPremiumPriceId,
+  getWebhookSecret,
+  isBillingEnabled,
+  missingStripeEnv,
+  subscriptionSyncData,
+  FRONTEND_URL,
+  type StripeSubscriptionLike,
+} from "../lib/stripe.js";
 import { requireAuth, type AuthRequest } from "../middleware/auth.js";
 import {
   sendSubscriptionActivatedEmail,
   sendSubscriptionCancelledEmail,
   sendPaymentFailedEmail,
 } from "../lib/subscriptionEmails.js";
+import { resolveLocale } from "../lib/email/locales/index.js";
 
 export const stripeRouter = Router();
 
@@ -26,33 +36,33 @@ function planPayload(sub: {
   };
 }
 
-// ── Helper: upsert subscription from Stripe subscription object ───────────────
-async function syncSubscription(
-  userId: string,
-  stripeSub: {
-    id: string;
-    status: string;
-    current_period_end: number;
-    cancel_at_period_end: boolean;
-    items: { data: { price: { id: string } }[] };
+// ── Guard: Stripe routes are off (503) until all its env vars are set ─────────
+function requireStripe(_req: Request, res: Response, next: NextFunction) {
+  const missing = missingStripeEnv();
+  if (missing.length > 0) {
+    console.error(`[stripe] not configured, missing: ${missing.join(", ")}`);
+    return res.status(503).json({ error: "Stripe is not configured" });
   }
-) {
-  const priceId = stripeSub.items.data[0]?.price?.id;
-  const plan = priceId === PREMIUM_PRICE_ID ? "premium" : "free";
+  next();
+}
+
+// ── GET /status ───────────────────────────────────────────────────────────────
+// Whether Premium can be bought. The frontend hides every upgrade entry point
+// when false (Stripe disabled for the beta, plan §2.9).
+stripeRouter.get("/status", requireAuth, (_req: AuthRequest, res: Response) => {
+  return res.json({ data: { enabled: isBillingEnabled() } });
+});
+
+// ── Helper: upsert subscription from Stripe subscription object ───────────────
+async function syncSubscription(userId: string, stripeSub: StripeSubscriptionLike) {
   return prisma.subscription.update({
     where: { userId },
-    data: {
-      stripeSubscriptionId: stripeSub.id,
-      plan,
-      status: stripeSub.status,
-      currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
-      cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
-    },
+    data: subscriptionSyncData(stripeSub, getPremiumPriceId()),
   });
 }
 
 // ── POST /checkout ────────────────────────────────────────────────────────────
-stripeRouter.post("/checkout", requireAuth, async (req: AuthRequest, res: Response) => {
+stripeRouter.post("/checkout", requireAuth, requireStripe, async (req: AuthRequest, res: Response) => {
   const userId = req.authUserId!;
   try {
     const user = await prisma.user.findUnique({
@@ -64,7 +74,7 @@ stripeRouter.post("/checkout", requireAuth, async (req: AuthRequest, res: Respon
     // Get or create Stripe customer
     let customerId = user.subscription?.stripeCustomerId;
     if (!customerId) {
-      const customer = await stripe.customers.create({
+      const customer = await getStripe().customers.create({
         email: user.email!,
         name: user.name ?? undefined,
         metadata: { userId },
@@ -77,11 +87,11 @@ stripeRouter.post("/checkout", requireAuth, async (req: AuthRequest, res: Respon
       });
     }
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
       payment_method_types: ["card"],
-      line_items: [{ price: PREMIUM_PRICE_ID, quantity: 1 }],
+      line_items: [{ price: getPremiumPriceId(), quantity: 1 }],
       success_url: `${FRONTEND_URL}/settings?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${FRONTEND_URL}/settings`,
       client_reference_id: userId,
@@ -96,14 +106,14 @@ stripeRouter.post("/checkout", requireAuth, async (req: AuthRequest, res: Respon
 });
 
 // ── GET /confirm-session ──────────────────────────────────────────────────────
-stripeRouter.get("/confirm-session", requireAuth, async (req: AuthRequest, res: Response) => {
+stripeRouter.get("/confirm-session", requireAuth, requireStripe, async (req: AuthRequest, res: Response) => {
   const userId = req.authUserId!;
   const { session_id } = req.query as Record<string, string>;
 
   if (!session_id) return res.status(400).json({ error: "session_id is required" });
 
   try {
-    const session = await stripe.checkout.sessions.retrieve(session_id, {
+    const session = await getStripe().checkout.sessions.retrieve(session_id, {
       expand: ["subscription"],
     });
 
@@ -115,11 +125,12 @@ stripeRouter.get("/confirm-session", requireAuth, async (req: AuthRequest, res: 
     const sub = await syncSubscription(userId, stripeSub);
 
     // Only send email if this is fresh activation (status became active from non-active)
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id: userId }, include: { settings: { select: { language: true } } } });
     if (user?.email && sub.currentPeriodEnd) {
       sendSubscriptionActivatedEmail({
         to: user.email,
-        name: user.name ?? "there",
+        name: user.name ?? "",
+        locale: resolveLocale(user.settings?.language),
         renewalDate: sub.currentPeriodEnd,
       }).catch((e) => console.error("[confirm-session] email failed:", e));
     }
@@ -142,7 +153,7 @@ stripeRouter.get("/billing-info", requireAuth, async (req: AuthRequest, res: Res
     let paymentMethod: { brand?: string; last4?: string; expMonth?: number; expYear?: number } | null = null;
     if (sub.stripeSubscriptionId) {
       try {
-        const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId, {
+        const stripeSub = await getStripe().subscriptions.retrieve(sub.stripeSubscriptionId, {
           expand: ["default_payment_method"],
         });
         const pm = stripeSub.default_payment_method as any;
@@ -167,7 +178,7 @@ stripeRouter.get("/billing-info", requireAuth, async (req: AuthRequest, res: Res
 });
 
 // ── POST /cancel-subscription ─────────────────────────────────────────────────
-stripeRouter.post("/cancel-subscription", requireAuth, async (req: AuthRequest, res: Response) => {
+stripeRouter.post("/cancel-subscription", requireAuth, requireStripe, async (req: AuthRequest, res: Response) => {
   const userId = req.authUserId!;
   try {
     const sub = await prisma.subscription.findUnique({ where: { userId } });
@@ -175,7 +186,7 @@ stripeRouter.post("/cancel-subscription", requireAuth, async (req: AuthRequest, 
       return res.status(400).json({ error: "No active subscription found" });
     }
 
-    await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+    await getStripe().subscriptions.update(sub.stripeSubscriptionId, {
       cancel_at_period_end: true,
     });
 
@@ -184,11 +195,12 @@ stripeRouter.post("/cancel-subscription", requireAuth, async (req: AuthRequest, 
       data: { cancelAtPeriodEnd: true },
     });
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id: userId }, include: { settings: { select: { language: true } } } });
     if (user?.email && updated.currentPeriodEnd) {
       sendSubscriptionCancelledEmail({
         to: user.email,
-        name: user.name ?? "there",
+        name: user.name ?? "",
+        locale: resolveLocale(user.settings?.language),
         accessUntilDate: updated.currentPeriodEnd,
       }).catch((e) => console.error("[cancel-subscription] email failed:", e));
     }
@@ -201,7 +213,7 @@ stripeRouter.post("/cancel-subscription", requireAuth, async (req: AuthRequest, 
 });
 
 // ── POST /reactivate-subscription ────────────────────────────────────────────
-stripeRouter.post("/reactivate-subscription", requireAuth, async (req: AuthRequest, res: Response) => {
+stripeRouter.post("/reactivate-subscription", requireAuth, requireStripe, async (req: AuthRequest, res: Response) => {
   const userId = req.authUserId!;
   try {
     const sub = await prisma.subscription.findUnique({ where: { userId } });
@@ -209,7 +221,7 @@ stripeRouter.post("/reactivate-subscription", requireAuth, async (req: AuthReque
       return res.status(400).json({ error: "No subscription found" });
     }
 
-    await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+    await getStripe().subscriptions.update(sub.stripeSubscriptionId, {
       cancel_at_period_end: false,
     });
 
@@ -226,14 +238,14 @@ stripeRouter.post("/reactivate-subscription", requireAuth, async (req: AuthReque
 });
 
 // ── POST /create-setup-intent ─────────────────────────────────────────────────
-stripeRouter.post("/create-setup-intent", requireAuth, async (req: AuthRequest, res: Response) => {
+stripeRouter.post("/create-setup-intent", requireAuth, requireStripe, async (req: AuthRequest, res: Response) => {
   const userId = req.authUserId!;
   try {
     const sub = await prisma.subscription.findUnique({ where: { userId } });
     if (!sub?.stripeCustomerId) {
       return res.status(400).json({ error: "No Stripe customer found" });
     }
-    const intent = await stripe.setupIntents.create({
+    const intent = await getStripe().setupIntents.create({
       customer: sub.stripeCustomerId,
       usage: "off_session",
     });
@@ -245,7 +257,7 @@ stripeRouter.post("/create-setup-intent", requireAuth, async (req: AuthRequest, 
 });
 
 // ── POST /update-payment-method ───────────────────────────────────────────────
-stripeRouter.post("/update-payment-method", requireAuth, async (req: AuthRequest, res: Response) => {
+stripeRouter.post("/update-payment-method", requireAuth, requireStripe, async (req: AuthRequest, res: Response) => {
   const userId = req.authUserId!;
   const { paymentMethodId } = req.body;
   if (!paymentMethodId) return res.status(400).json({ error: "paymentMethodId is required" });
@@ -255,12 +267,12 @@ stripeRouter.post("/update-payment-method", requireAuth, async (req: AuthRequest
       return res.status(400).json({ error: "No Stripe customer found" });
     }
 
-    await stripe.paymentMethods.attach(paymentMethodId, { customer: sub.stripeCustomerId });
-    await stripe.customers.update(sub.stripeCustomerId, {
+    await getStripe().paymentMethods.attach(paymentMethodId, { customer: sub.stripeCustomerId });
+    await getStripe().customers.update(sub.stripeCustomerId, {
       invoice_settings: { default_payment_method: paymentMethodId },
     });
     if (sub.stripeSubscriptionId) {
-      await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+      await getStripe().subscriptions.update(sub.stripeSubscriptionId, {
         default_payment_method: paymentMethodId,
       });
     }
@@ -272,15 +284,15 @@ stripeRouter.post("/update-payment-method", requireAuth, async (req: AuthRequest
 });
 
 // ── POST /webhook ─────────────────────────────────────────────────────────────
-stripeRouter.post("/webhook", async (req: Request, res: Response) => {
+stripeRouter.post("/webhook", requireStripe, async (req: Request, res: Response) => {
   const sig = req.headers["stripe-signature"] as string;
   let event: any;
 
   try {
-    event = stripe.webhooks.constructEvent(
+    event = getStripe().webhooks.constructEvent(
       req.body,
       sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      getWebhookSecret()
     );
   } catch (err: any) {
     console.error("[stripe/webhook] signature verification failed:", err.message);
@@ -295,13 +307,14 @@ stripeRouter.post("/webhook", async (req: Request, res: Response) => {
         if (!userId) break;
 
         if (session.payment_status === "paid" && session.subscription) {
-          const stripeSub = await stripe.subscriptions.retrieve(session.subscription);
-          const sub = await syncSubscription(userId, stripeSub as any);
-          const user = await prisma.user.findUnique({ where: { id: userId } });
+          const stripeSub = await getStripe().subscriptions.retrieve(session.subscription);
+          const sub = await syncSubscription(userId, stripeSub);
+          const user = await prisma.user.findUnique({ where: { id: userId }, include: { settings: { select: { language: true } } } });
           if (user?.email && sub.currentPeriodEnd) {
             sendSubscriptionActivatedEmail({
               to: user.email,
-              name: user.name ?? "there",
+              name: user.name ?? "",
+              locale: resolveLocale(user.settings?.language),
               renewalDate: sub.currentPeriodEnd,
             }).catch(() => {});
           }
@@ -320,11 +333,12 @@ stripeRouter.post("/webhook", async (req: Request, res: Response) => {
         const updated = await syncSubscription(sub.userId, stripeSub);
 
         if (!wasActive && updated.status === "active" && updated.currentPeriodEnd) {
-          const user = await prisma.user.findUnique({ where: { id: sub.userId } });
+          const user = await prisma.user.findUnique({ where: { id: sub.userId }, include: { settings: { select: { language: true } } } });
           if (user?.email) {
             sendSubscriptionActivatedEmail({
               to: user.email,
-              name: user.name ?? "there",
+              name: user.name ?? "",
+              locale: resolveLocale(user.settings?.language),
               renewalDate: updated.currentPeriodEnd,
             }).catch(() => {});
           }
@@ -364,11 +378,12 @@ stripeRouter.post("/webhook", async (req: Request, res: Response) => {
           data: { status: "past_due" },
         });
 
-        const user = await prisma.user.findUnique({ where: { id: sub.userId } });
+        const user = await prisma.user.findUnique({ where: { id: sub.userId }, include: { settings: { select: { language: true } } } });
         if (user?.email) {
           sendPaymentFailedEmail({
             to: user.email,
-            name: user.name ?? "there",
+            name: user.name ?? "",
+            locale: resolveLocale(user.settings?.language),
           }).catch(() => {});
         }
         break;
