@@ -1,4 +1,4 @@
-import { sendEmail } from "./emailClient.js";
+import { sendEmail } from "./email/index.js";
 
 // Each send rejects on failure (missing config, Cloudflare error, permanent
 // bounce); callers decide whether that is fatal for their request.

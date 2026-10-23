@@ -1,4 +1,4 @@
-import { sendEmail } from "./emailClient.js";
+import { sendEmail } from "./email/index.js";
 
 const APP_URL = process.env.APP_URL ?? "http://localhost:5173";
 
