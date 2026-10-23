@@ -138,7 +138,7 @@ Con `statementDay` / `paymentDueDay`, separar "lo que vence este mes" (compras h
 
 Va **antes** del onboarding: así el onboarding se prueba "desde cero" de verdad, con una cuenta nueva sobre una base de datos de producción vacía, en la URL real.
 
-Decisiones del 21 oct: CI/CD automático **y** comando `/deploy`; Postgres en **Neon vía Vercel Marketplace**; **borrar** la Radiografía; DNS de `luisvespa.com` en **Cloudflare**; emails por **Cloudflare Email Sending** en lugar de Resend (2.8); Stripe configurado desde la beta (2.9).
+Decisiones del 21 oct: CI/CD automático **y** comando `/deploy`; Postgres en **Neon vía Vercel Marketplace**; **borrar** la Radiografía; DNS de `luisvespa.com` en **Cloudflare**; emails con un módulo independiente del proveedor, **Resend** en la beta (2.8, decisión del 23 oct); Stripe configurado desde la beta (2.9).
 
 ### 2.1 Borrar la Radiografía (requisito para publicar) — HECHO (`233b7ab`)
 Sus rutas `/api/radiografia` y `/api/xray` son públicas, sin login, y pueden gastar en la API de Anthropic.
@@ -151,14 +151,14 @@ Sus rutas `/api/radiografia` y `/api/xray` son públicas, sin login, y pueden ga
 ### 2.2 Preparar la app para Vercel
 - **Hecho:** un solo proyecto (`vercel.json`): Vite como sitio estático y Express como una Vercel Function en `api/index.ts`. Reescrituras: `/api/(.*)` → la función, el resto → `index.html` (SPA). Mismo dominio, así que las cookies de sesión funcionan sin CORS entre dominios. Región `fra1` (Fráncfort): crear la base de Neon en la misma región.
 - **Hecho:** `server/app.ts` exporta la app; `server/index.ts` solo escucha en local. `/api/health` devuelve el commit desplegado.
-- **Hecho:** el cliente de Resend se crea al primer envío (antes tumbaba toda la app si faltaba `RESEND_API_KEY`). Resend se sustituye por Cloudflare Email Sending (2.8). `server/lib/stripe.ts` tiene el mismo problema sin `STRIPE_SECRET_KEY`: se arregla en 2.9.
+- **Hecho:** el cliente de Resend se crea al primer envío (antes tumbaba toda la app si faltaba `RESEND_API_KEY`). Superado por el módulo de email de 2.8. `server/lib/stripe.ts` tiene el mismo problema sin `STRIPE_SECRET_KEY`: se arregla en 2.9.
 - **Límite de Vercel:** el cuerpo de una petición es de 4,5 MB como máximo. Los extractos se suben en base64 en el body: un fichero de más de ~3 MB fallará con 413. Si pasa en la práctica, subir el fichero a Vercel Blob directamente desde el navegador.
 - **Prisma + Neon:** en runtime, `DATABASE_URL` (con pooling, la que inyecta Neon). Para `db push`, la URL sin pooling (`DATABASE_URL_UNPOOLED`), como hace `/deploy`. Si aparecen errores tipo "prepared statement already exists", añadir `pgbouncer=true` a la URL con pooling. **Hecho:** `prisma generate` en `postinstall`. Seguimos con `db push`, nunca migraciones (CLAUDE.md).
 - Revisado: no hay temporizadores ni trabajos periódicos en el servidor. Si Open Banking vuelve (fase futura), su sincronización periódica irá a **Vercel Cron Jobs** con `CRON_SECRET`.
 - `index.html`: título, descripción y `lang` de la BudgetApp.
 
 ### 2.3 Variables de entorno en Vercel (las pones tú; nunca pasan por el código ni por mí)
-`DATABASE_URL` / `DIRECT_URL` (las inyecta Neon), `JWT_SECRET`, `ENCRYPTION_KEY`, `APP_URL=https://budget.luisvespa.com`, `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_EMAIL_API_TOKEN` + `EMAIL_FROM` (ver 2.8; sustituyen a `RESEND_API_KEY`), `GOOGLE_CLIENT_ID/SECRET` + `GOOGLE_CALLBACK_URL` (añadir la URL nueva en Google Cloud Console), `STRIPE_SECRET_KEY` + `STRIPE_PREMIUM_PRICE_ID` + `STRIPE_WEBHOOK_SECRET` (ver 2.9), `GOCARDLESS_*` / `TINK_*` **no** (Open Banking queda apagado en producción hasta su fase; sin esas variables se desactiva solo), `ANTHROPIC_API_KEY` (opcional: ahora todas sus rutas tienen login), `CRON_SECRET`. Separar Production y Preview (Preview con su propia base de Neon).
+`DATABASE_URL` / `DIRECT_URL` (las inyecta Neon), `JWT_SECRET`, `ENCRYPTION_KEY`, `APP_URL=https://budget.luisvespa.com`, `EMAIL_PROVIDER=resend` + `RESEND_API_KEY` + `EMAIL_FROM="LifePlan <contact@luisvespa.com>"` (ver 2.8), `GOOGLE_CLIENT_ID/SECRET` + `GOOGLE_CALLBACK_URL` (añadir la URL nueva en Google Cloud Console), `STRIPE_SECRET_KEY` + `STRIPE_PREMIUM_PRICE_ID` + `STRIPE_WEBHOOK_SECRET` (ver 2.9), `GOCARDLESS_*` / `TINK_*` **no** (Open Banking queda apagado en producción hasta su fase; sin esas variables se desactiva solo), `ANTHROPIC_API_KEY` (opcional: ahora todas sus rutas tienen login), `CRON_SECRET`. Separar Production y Preview (Preview con su propia base de Neon).
 
 ### 2.4 Dominio
 En Cloudflare: registro `CNAME budget → cname.vercel-dns.com` con el **proxy desactivado** (nube gris, "DNS only"), para que Vercel emita el certificado. En Vercel: añadir `budget.luisvespa.com` al proyecto.
@@ -178,27 +178,25 @@ En Cloudflare: registro `CNAME budget → cname.vercel-dns.com` con el **proxy d
 ### 2.7 Verificación
 Preview desplegado → health OK → registrarse con un email nuevo → **llega el email de verificación (2.8)** → llega el onboarding → login con Google funciona con la URL nueva → un gasto y un pago de tarjeta se guardan → **suscripción Premium de prueba de punta a punta (2.9)**. Luego producción con el dominio.
 
-### 2.8 Emails con Cloudflare Email Sending (sustituye a Resend)
-Decisión del 21 oct: los emails salen por **Cloudflare Email Sending**. El DNS de `luisvespa.com` ya está en Cloudflare, así que el dominio se verifica en el mismo panel y desaparece una cuenta externa.
+### 2.8 Emails: módulo independiente del proveedor, Resend en la beta — HECHO (código)
+Decisión del 23 oct (sustituye a la del 21 oct): **Resend** para la beta y el primer despliegue. Su plan gratis envía a cualquier destinatario una vez verificado el dominio (3.000 emails/mes, **100/día**); la restricción "solo a mi email" era del dominio de pruebas `onboarding@resend.dev`. Cloudflare Email Sending exige Workers Paid (5 $/mes) para enviar a usuarios; la web personal envía gratis porque solo manda a una dirección verificada (tu buzón). Cuando la beta crezca o se acerque a 100/día, se cambia a Cloudflare con **una variable**, sin tocar código.
 
-**Hecho (código, tareas 2–5):** `server/lib/emailClient.ts` + tests, los 8 envíos migrados con versión `text`, `resend` desinstalado, CLAUDE.md y README actualizados. Si el envío falla, cada ruta hace lo mismo que antes (registro: 500 y se puede reintentar; bienvenidas, invitación y emails de suscripción: no bloquean). Pendiente: tarea 1 (Cloudflare), `.env.example` y la verificación en el Preview.
+**Diseño (`server/lib/email/`, ver la sección "Emails" del CLAUDE.md):**
+- **Transportes** (`transports/`): `resend` (beta), `cloudflare` (preparado), `console` (solo desarrollo local; se niega en producción y en cualquier entorno de Vercel). Se elige con `EMAIL_PROVIDER`, leído al enviar. Añadir un proveedor = un fichero + una línea en el registro. Timeout de 10 s; los errores no incluyen claves ni direcciones.
+- **Plantillas** independientes del proveedor: `theme.ts` (marca, colores, logo, soporte = `contact@luisvespa.com`, precio Premium), `components.ts` (bloques HTML compatibles con Gmail/Outlook, cada uno con su versión en texto), `locales/{es,en}.ts` (español por defecto), una plantilla por email → `{ subject, html, text }`. Todo valor del usuario se escapa.
+- Los 8 emails (verificación, reset, bienvenida, bienvenida Google, invitación de pareja, suscripción activada/cancelada, pago fallido) salen en el idioma del usuario; la verificación, en el idioma de la web al registrarse. Cancelación y pago fallido llevan Reply-To al soporte.
+- Textos revisados contra el código: sin promesas de funciones que no existen (Premium hoy no limita nada → "acceso Premium" sin lista).
+- `npm run email:preview` → `.email-preview/index.html` con todos los emails en ambos idiomas.
 
-**Hechos verificados (docs de Cloudflare, oct 2026):**
-- Email Sending está en **beta**. Enviar a cualquier destinatario exige el plan **Workers Paid** (5 $/mes): incluye 3.000 emails/mes por cuenta, luego 0,35 $ por 1.000. En el plan gratuito solo se puede enviar a direcciones de destino verificadas de tu cuenta (sirve para probar, no para usuarios reales).
-- Se puede usar desde fuera de Workers con la **API REST**: `POST https://api.cloudflare.com/client/v4/accounts/{account_id}/email/sending/send`, `Authorization: Bearer <token>`, cuerpo JSON con `from`, `to`, `subject`, `html`, `text`. Respuesta `{ success, errors, result: { delivered, queued, permanent_bounces } }`. Mensaje máximo 5 MiB.
-- Cuentan para la cuota los emails aceptados (también los que rebotan); los rechazados en la API o bloqueados por la lista de supresión, no.
+**Pendiente (tuyo):**
+1. **Resend:** añadir el dominio `luisvespa.com` y copiar sus registros DNS (DKIM `resend._domainkey`, MX y SPF en `send.`) en Cloudflare con el proxy desactivado. API key con "Sending access" solo para ese dominio.
+2. `.env.example` (bloqueado para mí) y tu `.env` local: `EMAIL_PROVIDER=console` mientras no haya clave; luego `resend`.
+3. Revisar los textos en español con `npm run email:preview` (el español es la fuente de verdad).
+4. En Vercel (Production y Preview): `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `EMAIL_FROM="LifePlan <contact@luisvespa.com>"`.
 
-**Tareas:**
-1. **Tú, en Cloudflare:** activar Workers Paid, dar de alta `luisvespa.com` en Email Service → Email Sending y dejar que añada los registros SPF/DKIM (y un DMARC `p=none` para empezar). Crear un API token con **solo** el permiso de enviar email en esa cuenta. Remitente: `EMAIL_FROM="LifePlan <contact@luisvespa.com>"` (decisión J).
-2. **`server/lib/emailClient.ts`** (sustituye a `resendClient.ts`): un único `sendEmail({ to, subject, html, text })` con `fetch` a la API REST, sin SDK nuevo. Lee `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_API_TOKEN` y `EMAIL_FROM` **al enviar**, no al importar (mismo motivo que el arreglo de Resend). Si faltan, lanza un error claro; no hay remitente por defecto inventado (quitar el fallback `onboarding@resend.dev`). Si `success: false` o el destinatario sale en `permanent_bounces`, lanza con el código de Cloudflare.
-3. Migrar los 8 envíos a `sendEmail`: `mailer.ts` (verificación, restablecer contraseña, bienvenida, bienvenida Google, invitación de pareja) y `subscriptionEmails.ts` (suscripción activada, cancelada, pago fallido). Las plantillas HTML no cambian. Añadir versión `text` a cada uno (mejora la entregabilidad).
-4. Quitar la dependencia `resend` del `package.json`; actualizar `.env.example` y la tabla de variables del CLAUDE.md (`RESEND_API_KEY` → las de Cloudflare).
-5. **Tests** (`server/lib/emailClient.test.ts`, sin red: `fetch` simulado): construye bien URL, cabeceras y cuerpo; error claro si faltan variables; error si `success: false` o rebote permanente.
-6. **Local:** sin las variables, el registro no debe romper la app. Mismo comportamiento que hoy con Resend (comprobar qué hace hoy el registro si el envío falla y mantenerlo).
+**Abierto, menor:** el idioma no se guarda al registrarse (los ajustes se crean al verificar el email), así que la bienvenida y un código reenviado salen en español a quien se registró en inglés. Arreglo sin schema: que verify-email reciba el idioma.
 
-**Verificación:** desde el Preview, registrarse con un email real (Gmail y Outlook) → el código llega a la bandeja de entrada, no a spam; en Gmail "Mostrar original" da SPF, DKIM y DMARC `PASS`. Restablecer contraseña también llega.
-
-**Riesgo:** es un producto en beta. Si la entregabilidad o la API fallan, la vuelta atrás es barata porque todo pasa por `sendEmail`: cambiar su implementación, no los 8 envíos.
+**Verificación:** desde el Preview, registro con Gmail y Outlook reales → el código llega a la bandeja de entrada, no a spam; "Mostrar original" da SPF, DKIM y DMARC `PASS`; restablecer contraseña también llega.
 
 ### 2.9 Stripe configurado desde la beta
 Decisión del 21 oct (cierra la H): Stripe se configura **ya**, en el primer despliegue, no después. Hoy `server/lib/stripe.ts` crea el cliente al importar y tumba la app entera si falta `STRIPE_SECRET_KEY`. Tocar Stripe está en la lista de "no modificar sin preguntar" del CLAUDE.md: esta sección es esa pregunta, y su OK cubre **solo** lo que está aquí.
@@ -279,4 +277,6 @@ Cada paso escribe filas reales (como hoy) y se puede saltar. "Atrás" no borra n
 
 **I.** ~~Stripe durante la beta: ¿test o live?~~ → decidido 21 oct: **modo test** en Preview y Production. Al pasar a live: precio definitivo y textos legales mínimos (términos, privacidad, política de cancelación) antes de cobrar.
 
-**J.** ~~Remitente de los emails~~ → decidido 21 oct: **`contact@luisvespa.com`**.
+**J.** ~~Remitente de los emails~~ → decidido 21 oct: **`contact@luisvespa.com`** (también dirección de soporte y Reply-To).
+
+**K.** ~~Proveedor de email~~ → decidido 23 oct: **Resend** en la beta, con módulo independiente del proveedor; Cloudflare cuando se acerque al límite de 100/día.
