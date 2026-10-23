@@ -16,6 +16,7 @@ import {
   sendSubscriptionCancelledEmail,
   sendPaymentFailedEmail,
 } from "../lib/subscriptionEmails.js";
+import { resolveLocale } from "../lib/email/locales/index.js";
 
 export const stripeRouter = Router();
 
@@ -116,11 +117,12 @@ stripeRouter.get("/confirm-session", requireAuth, requireStripe, async (req: Aut
     const sub = await syncSubscription(userId, stripeSub);
 
     // Only send email if this is fresh activation (status became active from non-active)
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id: userId }, include: { settings: { select: { language: true } } } });
     if (user?.email && sub.currentPeriodEnd) {
       sendSubscriptionActivatedEmail({
         to: user.email,
-        name: user.name ?? "there",
+        name: user.name ?? "",
+        locale: resolveLocale(user.settings?.language),
         renewalDate: sub.currentPeriodEnd,
       }).catch((e) => console.error("[confirm-session] email failed:", e));
     }
@@ -185,11 +187,12 @@ stripeRouter.post("/cancel-subscription", requireAuth, requireStripe, async (req
       data: { cancelAtPeriodEnd: true },
     });
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id: userId }, include: { settings: { select: { language: true } } } });
     if (user?.email && updated.currentPeriodEnd) {
       sendSubscriptionCancelledEmail({
         to: user.email,
-        name: user.name ?? "there",
+        name: user.name ?? "",
+        locale: resolveLocale(user.settings?.language),
         accessUntilDate: updated.currentPeriodEnd,
       }).catch((e) => console.error("[cancel-subscription] email failed:", e));
     }
@@ -298,11 +301,12 @@ stripeRouter.post("/webhook", requireStripe, async (req: Request, res: Response)
         if (session.payment_status === "paid" && session.subscription) {
           const stripeSub = await getStripe().subscriptions.retrieve(session.subscription);
           const sub = await syncSubscription(userId, stripeSub);
-          const user = await prisma.user.findUnique({ where: { id: userId } });
+          const user = await prisma.user.findUnique({ where: { id: userId }, include: { settings: { select: { language: true } } } });
           if (user?.email && sub.currentPeriodEnd) {
             sendSubscriptionActivatedEmail({
               to: user.email,
-              name: user.name ?? "there",
+              name: user.name ?? "",
+              locale: resolveLocale(user.settings?.language),
               renewalDate: sub.currentPeriodEnd,
             }).catch(() => {});
           }
@@ -321,11 +325,12 @@ stripeRouter.post("/webhook", requireStripe, async (req: Request, res: Response)
         const updated = await syncSubscription(sub.userId, stripeSub);
 
         if (!wasActive && updated.status === "active" && updated.currentPeriodEnd) {
-          const user = await prisma.user.findUnique({ where: { id: sub.userId } });
+          const user = await prisma.user.findUnique({ where: { id: sub.userId }, include: { settings: { select: { language: true } } } });
           if (user?.email) {
             sendSubscriptionActivatedEmail({
               to: user.email,
-              name: user.name ?? "there",
+              name: user.name ?? "",
+              locale: resolveLocale(user.settings?.language),
               renewalDate: updated.currentPeriodEnd,
             }).catch(() => {});
           }
@@ -365,11 +370,12 @@ stripeRouter.post("/webhook", requireStripe, async (req: Request, res: Response)
           data: { status: "past_due" },
         });
 
-        const user = await prisma.user.findUnique({ where: { id: sub.userId } });
+        const user = await prisma.user.findUnique({ where: { id: sub.userId }, include: { settings: { select: { language: true } } } });
         if (user?.email) {
           sendPaymentFailedEmail({
             to: user.email,
-            name: user.name ?? "there",
+            name: user.name ?? "",
+            locale: resolveLocale(user.settings?.language),
           }).catch(() => {});
         }
         break;
