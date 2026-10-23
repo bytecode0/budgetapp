@@ -43,7 +43,8 @@ export interface EmailTheme {
 
 const BRAND = {
   productName: "LifePlan",
-  supportEmail: "support@lifeplan.app",
+  // Shown in footers and used as Reply-To where an email asks the user to reply.
+  supportEmail: "contact@luisvespa.com",
   fontStack: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
   monoFontStack: "'SFMono-Regular',Menlo,Consolas,'Courier New',Courier,monospace",
   radius: { card: 16, box: 12, button: 10 },

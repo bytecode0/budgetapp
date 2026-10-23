@@ -10,6 +10,8 @@ const ENV_KEYS = [
   "CLOUDFLARE_ACCOUNT_ID",
   "CLOUDFLARE_EMAIL_API_TOKEN",
   "NODE_ENV",
+  "VERCEL",
+  "VERCEL_ENV",
 ] as const;
 const savedEnv: Record<string, string | undefined> = {};
 const realFetch = globalThis.fetch;
@@ -29,6 +31,8 @@ beforeEach(() => {
   process.env.CLOUDFLARE_ACCOUNT_ID = "acc123";
   process.env.CLOUDFLARE_EMAIL_API_TOKEN = "cf_secret_token";
   process.env.NODE_ENV = "development";
+  delete process.env.VERCEL;
+  delete process.env.VERCEL_ENV;
   globalThis.fetch = (async (input: string | URL | Request) => {
     const url = String(input);
     urls.push(url);
@@ -129,9 +133,32 @@ test("EMAIL_PROVIDER=console logs the message and makes no network call", async 
   assert.match(logged[0], /Tu código: 123456/);
 });
 
-test("the console transport is refused when NODE_ENV=production", async () => {
+test("the console transport works with NODE_ENV=test", async () => {
   process.env.EMAIL_PROVIDER = "console";
-  process.env.NODE_ENV = "production";
-  await assert.rejects(sendEmail(message), /refused when NODE_ENV=production/);
-  assert.equal(logged.length, 0);
+  process.env.NODE_ENV = "test";
+  await sendEmail(message);
+  assert.equal(logged.length, 1);
 });
+
+const refused: [string, Record<string, string | undefined>][] = [
+  ["NODE_ENV=production", { NODE_ENV: "production" }],
+  ["NODE_ENV unset", { NODE_ENV: undefined }],
+  ['NODE_ENV="Production"', { NODE_ENV: "Production" }],
+  ['NODE_ENV=" production"', { NODE_ENV: " production" }],
+  ['NODE_ENV=" development" (padded)', { NODE_ENV: " development" }],
+  ["VERCEL=1 with NODE_ENV=development", { NODE_ENV: "development", VERCEL: "1" }],
+  ["VERCEL_ENV=preview with NODE_ENV=development", { NODE_ENV: "development", VERCEL_ENV: "preview" }],
+  ["VERCEL_ENV=production with NODE_ENV=test", { NODE_ENV: "test", VERCEL_ENV: "production" }],
+];
+
+for (const [label, env] of refused) {
+  test(`the console transport is refused with ${label}`, async () => {
+    process.env.EMAIL_PROVIDER = "console";
+    for (const [k, v] of Object.entries(env)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    await assert.rejects(sendEmail(message), /console is for local development only/);
+    assert.equal(logged.length, 0);
+  });
+}
