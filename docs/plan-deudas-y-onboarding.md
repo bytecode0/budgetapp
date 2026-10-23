@@ -194,6 +194,8 @@ Decisión del 23 oct (sustituye a la del 21 oct): **Resend** para la beta y el p
 3. Revisar los textos en español con `npm run email:preview` (el español es la fuente de verdad).
 4. En Vercel (Production y Preview): `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `EMAIL_FROM="LifePlan <contact@luisvespa.com>"`.
 
+**Verificado en local (23 oct):** dominio `luisvespa.com` verificado en Resend; un envío de prueba fue aceptado (`id 01a167de-…`) y **llegó a spam** en un buzón corporativo (marcado como no spam). Pendiente: comprobar SPF/DKIM/DMARC en las cabeceras, añadir `_dmarc` (`v=DMARC1; p=none;`) si falta, y repetir con un email real de la app (reset de contraseña) en Gmail y Outlook.
+
 **Abierto, menor:** el idioma no se guarda al registrarse (los ajustes se crean al verificar el email), así que la bienvenida y un código reenviado salen en español a quien se registró en inglés. Arreglo sin schema: que verify-email reciba el idioma.
 
 **Verificación:** desde el Preview, registro con Gmail y Outlook reales → el código llega a la bandeja de entrada, no a spam; "Mostrar original" da SPF, DKIM y DMARC `PASS`; restablecer contraseña también llega.
