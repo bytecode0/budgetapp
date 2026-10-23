@@ -11,7 +11,7 @@ import {
   sendWelcomeEmail,
   sendWelcomeGoogleEmail,
 } from "../lib/mailer.js";
-import { resolveLocale } from "../lib/email/locales/index.js";
+import { parseLocale, resolveLocale } from "../lib/email/locales/index.js";
 
 export const authRouter = Router();
 
@@ -172,10 +172,18 @@ async function createOtp(email: string, type: string) {
 // Register
 authRouter.post("/register", async (req: Request, res: Response) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, language } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Name, email and password are required" });
+    }
+
+    // Optional: the UI language at sign-up, used for the verification email.
+    // UserSettings doesn't exist yet here (createDefaultAllocations creates it on
+    // verify), so it is not persisted.
+    const locale = language === undefined ? "es" : parseLocale(language);
+    if (!locale) {
+      return res.status(400).json({ error: "language must be 'es' or 'en'" });
     }
 
     if (password.length < 8) {
@@ -196,7 +204,7 @@ authRouter.post("/register", async (req: Request, res: Response) => {
     }
 
     const otp = await createOtp(email, "email_verification");
-    await sendVerificationEmail(email, name, otp);
+    await sendVerificationEmail(email, name, otp, locale);
 
     return res.json({ message: "Verification email sent" });
   } catch (err) {

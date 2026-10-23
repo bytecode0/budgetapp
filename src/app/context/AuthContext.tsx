@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import i18n from "i18next";
 
 export interface AuthUser {
   id: string;
@@ -73,7 +74,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password }),
+      // The server accepts only "es" | "en"; Spanish is the default.
+      body: JSON.stringify({ name, email, password, language: i18n.language === "en" ? "en" : "es" }),
     });
     const data = await res.json();
     if (!res.ok) return { error: data.error || "Registration failed" };

@@ -11,6 +11,14 @@ export function resolveLocale(language: string | null | undefined): EmailLocale 
   return language?.toLowerCase().startsWith("en") ? "en" : "es";
 }
 
+/**
+ * Strict check for a language sent by a client (e.g. the register body):
+ * exactly "es" or "en", otherwise null.
+ */
+export function parseLocale(value: unknown): EmailLocale | null {
+  return value === "es" || value === "en" ? value : null;
+}
+
 /** Fills {placeholders}. Unknown placeholders are left as is so a typo shows in the preview. */
 export function fill(template: string, vars: Record<string, string> = {}): string {
   return template.replace(/\{(\w+)\}/g, (match, key: string) =>
