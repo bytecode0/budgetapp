@@ -1,4 +1,4 @@
-import { button, callout, checklist, facts, heading, paragraph, type RenderedEmail } from "../components.js";
+import { button, callout, facts, heading, paragraph, type RenderedEmail } from "../components.js";
 import { formatDate, formatMoney } from "../format.js";
 import type { EmailLocale } from "../locales/index.js";
 import { getTheme } from "../theme.js";
@@ -22,15 +22,11 @@ export function subscriptionActivatedEmail(data: SubscriptionActivatedData, loca
     blocks: [
       heading(t(s.heading)),
       paragraph(named(t, s.introNamed, s.intro, name), { muted: true }),
-      checklist(
-        [s.featureAi, s.featurePdf, s.featureProjections, s.featureSupport, s.featureBadge].map((f) => ({ body: t(f) })),
-        t(s.accessTitle),
-      ),
       facts([
         { label: t(s.renewalLabel), value: formatDate(data.renewalDate, locale) },
         { label: t(s.amountLabel), value: amount },
       ]),
-      paragraph(t(s.explore)),
+      paragraph(t(s.thanks)),
       button(t(s.cta), appLink()),
       callout("info", t(s.manage)),
     ],

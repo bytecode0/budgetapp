@@ -22,9 +22,8 @@ export function partnerInviteEmail(data: PartnerInviteData, locale: EmailLocale)
       divider(),
       checklist(
         [
-          { title: t(s.sameBudgetTitle), body: t(s.sameBudgetBody) },
-          { title: t(s.sharedPlansTitle), body: t(s.sharedPlansBody) },
-          { title: t(s.syncTitle), body: t(s.syncBody) },
+          { title: t(s.sameDataTitle), body: t(s.sameDataBody) },
+          { title: t(s.ownDataTitle), body: t(s.ownDataBody, { sender }) },
           { title: t(s.unlinkTitle), body: t(s.unlinkBody) },
         ],
         t(s.whatTitle),

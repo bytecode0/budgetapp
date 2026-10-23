@@ -1,6 +1,7 @@
-import { button, callout, checklist, heading, paragraph, type RenderedEmail } from "../components.js";
+import { button, callout, heading, paragraph, type RenderedEmail } from "../components.js";
 import { formatDate } from "../format.js";
 import type { EmailLocale } from "../locales/index.js";
+import { getTheme } from "../theme.js";
 import { appLink, firstName, named, renderEmail, strings } from "./shared.js";
 
 export interface SubscriptionCancelledData {
@@ -13,7 +14,9 @@ export function subscriptionCancelledEmail(data: SubscriptionCancelledData, loca
   const s = d.subscriptionCancelled;
   const name = firstName(data.name);
   const date = formatDate(data.accessUntilDate, locale);
-  return renderEmail(locale, {
+  // The email invites a reply, so replies go to a mailbox someone reads.
+  const replyTo = getTheme().supportEmail;
+  const email = renderEmail(locale, {
     subject: t(s.subject),
     preheader: t(s.preheader, { date }),
     accent: "neutral",
@@ -21,13 +24,11 @@ export function subscriptionCancelledEmail(data: SubscriptionCancelledData, loca
       heading(t(s.heading)),
       paragraph(named(t, s.introNamed, s.intro, name), { muted: true }),
       callout("warning", t(s.noCharges), t(s.accessUntil, { date })),
-      checklist(
-        [s.loseAi, s.losePdf, s.loseProjections, s.loseSupport].map((f) => ({ body: t(f) })),
-        t(s.loseTitle, { date }),
-      ),
+      paragraph(t(s.afterDate, { date })),
       paragraph(t(s.reactivatePrompt, { date })),
       button(t(s.cta), appLink("/settings")),
       paragraph(t(s.feedback), { muted: true, small: true }),
     ],
   });
+  return { ...email, replyTo };
 }

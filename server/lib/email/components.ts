@@ -15,6 +15,8 @@ export interface RenderedEmail {
   subject: string;
   html: string;
   text: string;
+  /** Set by templates that ask the reader to reply. */
+  replyTo?: string;
 }
 
 export type Accent = keyof EmailTheme["accents"];
@@ -32,12 +34,41 @@ export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
 }
 
-/** Only absolute http(s) and mailto links are allowed into an href. */
+export function isHttpUrl(url: string): boolean {
+  try {
+    const { protocol } = new URL(url.trim());
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Only absolute http(s) and mailto links are allowed into an href. Throws: use it
+ * for links that are the point of the email (accept an invite, open the app).
+ */
 export function safeUrl(url: string): string {
-  if (!/^(https?:\/\/|mailto:)/i.test(url.trim())) {
+  if (!isHttpUrl(url) && !/^mailto:[^\s@]+@[^\s@]+$/i.test(url.trim())) {
     throw new Error("[email] refusing a link that is not http(s) or mailto");
   }
   return escapeHtml(url.trim());
+}
+
+const reportedConfig = new Set<string>();
+
+/**
+ * For decoration driven by config (logo, footer link): a bad value must not stop
+ * an OTP from going out, so the element is left out and the problem is logged
+ * once per process.
+ */
+function configUrlOrNull(envName: string, url: string | null): string | null {
+  if (!url) return null;
+  if (isHttpUrl(url)) return url.trim();
+  if (!reportedConfig.has(envName)) {
+    reportedConfig.add(envName);
+    console.error(`[email] ${envName} is not an absolute http(s) URL; it is left out of emails until fixed`);
+  }
+  return null;
 }
 
 // Each content block is one row of the card's inner table.
@@ -196,8 +227,10 @@ export interface LayoutOptions {
 export function layout(opts: LayoutOptions): RenderedEmail {
   const t = getTheme();
   const product = escapeHtml(t.productName);
-  const logo = t.logoUrl
-    ? `<img src="${safeUrl(t.logoUrl)}" alt="${product}" width="24" height="24" style="display:block;border:0;border-radius:6px;" />`
+  const logoUrl = configUrlOrNull("LOGO_URL", t.logoUrl);
+  const appUrl = configUrlOrNull("APP_URL", t.appUrl);
+  const logo = logoUrl
+    ? `<img src="${escapeHtml(logoUrl)}" alt="${product}" width="24" height="24" style="display:block;border:0;border-radius:6px;" />`
     : `<div style="width:24px;height:24px;line-height:24px;border-radius:6px;background:${t.colors.primary};color:${t.colors.onPrimary};text-align:center;font-size:13px;font-weight:700;">${escapeHtml(t.productName.charAt(0))}</div>`;
   // Padding after the preheader stops clients pulling body text into the preview.
   const preheaderPad = "&#847;&zwnj;&nbsp;".repeat(60);
@@ -232,8 +265,8 @@ export function layout(opts: LayoutOptions): RenderedEmail {
       <tr><td align="center" style="padding:24px 16px 0;">
         <p style="margin:0 0 6px;font-size:12px;color:${t.colors.muted};">${escapeHtml(opts.footer.tagline)}</p>
         <p style="margin:0 0 6px;font-size:12px;">
-          <a href="${safeUrl(t.appUrl)}" style="color:${t.colors.primary};text-decoration:none;">${escapeHtml(opts.footer.visitLabel)}</a>
-          <span style="color:${t.colors.subtle};"> &middot; </span>
+          ${appUrl ? `<a href="${escapeHtml(appUrl)}" style="color:${t.colors.primary};text-decoration:none;">${escapeHtml(opts.footer.visitLabel)}</a>
+          <span style="color:${t.colors.subtle};"> &middot; </span>` : ""}
           <a href="${safeUrl(`mailto:${t.supportEmail}`)}" style="color:${t.colors.muted};text-decoration:none;">${escapeHtml(opts.footer.supportLabel)}</a>
         </p>
         <p style="margin:0;font-size:11px;color:${t.colors.subtle};">${escapeHtml(opts.footer.reason)}</p>
@@ -248,7 +281,7 @@ export function layout(opts: LayoutOptions): RenderedEmail {
   const footer = [
     "--",
     opts.footer.tagline,
-    `${opts.footer.visitLabel}: ${t.appUrl}`,
+    ...(appUrl ? [`${opts.footer.visitLabel}: ${appUrl}`] : []),
     `${opts.footer.supportLabel}: ${t.supportEmail}`,
     opts.footer.reason,
   ].join("\n");
