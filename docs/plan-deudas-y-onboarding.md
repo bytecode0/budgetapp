@@ -1,4 +1,4 @@
-# Plan: pagos de deuda + onboarding inicial
+# Plan de desarrollo de LifePlan
 
 _21 oct 2026. La Radiografía se abandona; todo el trabajo va a la BudgetApp (ver CLAUDE.md)._
 
@@ -8,6 +8,32 @@ Dos épicas, en este orden:
 2. **Onboarding**: completar el asistente para cuentas nuevas (ingresos, ahorros, deudas, gastos fijos), ya con el modelo de pago de la épica 1.
 
 La épica 1 va primero porque el paso de deudas del onboarding tiene que preguntar el modo de pago. Si el onboarding se cierra antes, habría que rehacer ese paso.
+
+---
+
+## Estado a 28 oct 2026
+
+| Épica | Estado |
+|---|---|
+| 1. Pagos de deuda | Hecha |
+| 2. Limpieza y despliegue | **Desplegada el 23 oct** en https://budget.luisvespa.com (PR #2, `cd4cf8b`) |
+| 3. Onboarding desde cero | Hecha, en producción |
+| **4. Importación de ficheros** (cuentas y tarjetas) | **Siguiente** |
+| **5. Conexión con bancos (PSD2)** | Después de la 4; bloqueada para usuarios reales hasta firmar con un proveedor |
+| Ciclo de facturación de la tarjeta (1.9) | Pendiente; se apoya en el modo tarjeta de la épica 4 |
+
+**La app es gratuita.** Stripe queda para un futuro lejano (decisión I): el código sigue ahí, sin variables `STRIPE_*` responde 503 y el frontend oculta Premium.
+
+### Pendientes sueltos (un PR de mantenimiento antes de la épica 4)
+1. **Rotar la contraseña de Neon** (quedó en una conversación) → actualizar `DATABASE_URL` en Vercel y redeploy. Tú.
+2. **Sin valores por defecto silenciosos** en `server/lib/jwt.ts` (`JWT_SECRET`) y `GOOGLE_CALLBACK_URL`: el de Google ocultó el fallo del despliegue; el de JWT permitiría falsificar sesiones si faltara la variable. Auth/OAuth: necesita tu OK explícito.
+3. **Cuentas en un hogar:** `PATCH`/`DELETE /api/accounts/:id` solo comprueban el hogar, no el dueño; un miembro puede editar o borrar las cuentas (incluso privadas) del otro.
+4. Guardar el idioma al registrarse (2.8, abierto menor).
+5. "Completa tu configuración" no se refresca al añadir cosas desde otras pantallas.
+6. Textos sin i18n: partidas "Fixed Expenses"/"Flexible Spending" creadas al registrarse; `€` escritos a mano en Home.
+7. Botón "No tengo tarjetas / préstamos" (`noCardsAt`/`noLoansAt` en `UserSettings`): aceptado en idea, falta tu OK al cambio de schema.
+8. Skill `/deploy`: las variables de Neon son *Sensitive* (`env pull` no las baja) y en un primer despliegue con la base vacía el paso de schema se salta. Hay que reescribir ese paso.
+9. Para cuando vuelva Stripe: el webhook responde 200 aunque falle al procesar un evento (Stripe no reintenta).
 
 ---
 
@@ -134,7 +160,7 @@ Con `statementDay` / `paymentDueDay`, separar "lo que vence este mes" (compras h
 
 ---
 
-## Épica 2: limpieza y despliegue (budget.luisvespa.com)
+## Épica 2: limpieza y despliegue (budget.luisvespa.com) — DESPLEGADA el 23 oct
 
 Va **antes** del onboarding: así el onboarding se prueba "desde cero" de verdad, con una cuenta nueva sobre una base de datos de producción vacía, en la URL real.
 
@@ -220,7 +246,7 @@ Decisión del 21 oct (cierra la H): Stripe se configura **ya**, en el primer des
 
 ---
 
-## Épica 3: onboarding desde cero
+## Épica 3: onboarding desde cero — HECHA
 
 Objetivo: una persona que se registra hoy, sin nada, sale del onboarding con **ingresos, ahorros, tarjetas, préstamos y gastos fijos** configurados y ve su "futuro comprometido". Se prueba siempre con **una cuenta nueva** en el entorno desplegado (o local con `npm run reset:onboarding`).
 
@@ -258,6 +284,111 @@ Cada paso escribe filas reales (como hoy) y se puede saltar. "Atrás" no borra n
 
 ---
 
+## Épica 4: importación de ficheros de cuentas y tarjetas
+
+**Por qué va antes que la conexión con bancos:** funciona sin contratos ni proveedor; cubre lo que PSD2 cubre peor en España (tarjetas de crédito, Wizink/Cetelem/Klarna, historial de más de 90 días, usuarios que no quieren conectar su banco); y construye el **núcleo de ingesta** que la épica 5 reutiliza, para que un movimiento importado y uno sincronizado se traten igual.
+
+### Estado actual (verificado en el código, 28 oct)
+- Funciona de punta a punta para **cuentas bancarias con cabeceras en español tipo BBVA** (.xlsx/.csv): previsualización, duplicados, categorías por reglas e IA, pagos a una partida de deuda, guarda `PAID_FROM_CARD`.
+- **Un único parser** (`server/lib/parsers/bbva.ts`) para todos los ficheros. Revolut, N26 o cualquier cabecera en inglés fallan. No hay OFX, Norma 43 ni PDF.
+- CSV frágil: no respeta campos entre comillas con el separador dentro y solo lee UTF-8 (muchas exportaciones españolas son Latin-1). `parseAmount` lee mal `1.234` (sin decimales) y `1,234.56` (formato inglés).
+- **Tarjetas: no se importan bien.** Las compras sí suben la deuda, pero los abonos de la tarjeta ("pago recibido", devoluciones) se convierten en **ingresos**: inflan los ingresos y no bajan la deuda. Si el mismo pago se importa también desde la cuenta del banco, cuenta doble. Muchas tarjetas exportan las compras en positivo: hoy entrarían todas como ingresos.
+- Duplicados: la huella no incluye la cuenta y, sin columna de saldo (típico de tarjetas), dos compras idénticas el mismo día se toman por una.
+- Vercel limita el cuerpo de la petición a 4,5 MB: ficheros de más de ~3 MB fallan con 413.
+
+### 4.1 Núcleo de ingesta común (`server/lib/ingest/`)
+Una sola función decide qué es cada movimiento, venga de un fichero (épica 4) o de un banco (épica 5):
+- **Entrada normalizada:** fecha, importe en céntimos con signo **desde el punto de vista del titular**, descripción, comercio, saldo (opcional), referencia externa (opcional), cuenta destino.
+- **Cuenta bancaria:** cargo → gasto en su categoría; abono → ingreso; **pago de tarjeta** detectado (4.4) → pago a la deuda de esa tarjeta (`debtId`), nunca gasto ni ingreso además.
+- **Tarjeta:** compra → gasto en su categoría sobre la cuenta tarjeta (sube la deuda); **pago recibido** → baja la deuda, y si ese pago ya entró desde la cuenta del banco, se reconoce como el mismo y no cuenta dos veces; **devolución** → baja la deuda y el gasto de su categoría (modelo pendiente: decisión L).
+- **Duplicados:** huella por cuenta (incluye `accountId`); sin columna de saldo, se distingue por orden de aparición dentro del día; y aviso de "posible duplicado" entre fuentes distintas (fichero vs. banco, o dos ficheros que se solapan) por importe ± fecha ± cuenta, que el usuario confirma en la previsualización.
+- Respeta las reglas del CLAUDE.md: todo en céntimos enteros; las sumas de gasto siguen pasando por `countedAmounts()` / `budgetAmount`.
+- **Tests de dinero obligatorios:** compra de 50 € con tarjeta + pago de la tarjeta desde el banco de 350 € → gasto del mes 350 (el caso 6 de la épica 3), también cuando el pago llega por los dos ficheros.
+
+### 4.2 Lectura de ficheros
+- **CSV robusto:** comillas, separador `;` `,` o tabulador, detección de codificación (UTF-8 / Latin-1 / UTF-16 de algunos bancos).
+- **XLSX:** elegir la hoja con movimientos si hay varias.
+- **Norma 43 (AEB/CSB 43):** el formato estándar de extractos de la banca española; lo exportan casi todos los bancos desde la banca online de empresa y muchos de particulares. Un parser lo cubre para todos.
+- **OFX/QFX:** lo exportan ING, Openbank y varias tarjetas.
+- **Detección de columnas:** sinónimos de cabecera en español e inglés + **perfiles por banco** (BBVA, Santander, CaixaBank, Sabadell, Bankinter, ING, Openbank, Revolut, N26, Wise, y emisores de tarjetas). Cada perfil con su fichero de ejemplo **anonimizado** como test.
+- **Mapeo manual cuando no se reconoce:** el usuario elige columna de fecha, importe (o debe/haber por separado), descripción, formato de fecha y si las compras vienen en positivo. Se guarda como perfil de esa cuenta: la segunda vez se importa sin preguntar.
+- **Números y fechas:** arreglar `1.234` y `1,234.56`; fechas `dd/mm/aaaa`, `dd-mm-aa`, ISO y fechas de Excel; tests para cada caso.
+- **PDF:** fuera de esta épica (decisión N).
+
+### 4.3 Modo tarjeta
+Cuando la cuenta destino es una tarjeta:
+- Convención de signo explícita ("las compras aparecen en positivo / en negativo"), detectada si se puede y confirmable.
+- Reconoce las líneas de **pago recibido** y **devolución** y las trata como en 4.1.
+- Si el fichero trae fecha de corte o periodo, se guarda: es la base del **ciclo de facturación (1.9)** ("lo que vence este mes" vs. "saldo total").
+- Opcional: comparar el total importado con el importe del extracto que dice el usuario, y avisar si no cuadra.
+
+### 4.4 Detección automática de pagos de tarjeta
+En los ficheros de la cuenta bancaria, reconocer el cargo con que se paga una tarjeta ("LIQUIDACION TARJETA", "PAGO TARJETA", "RECIBO VISA", últimos 4 dígitos, el nombre del emisor…) y proponerlo como pago a la deuda de esa tarjeta, en vez de dejarlo como gasto sin categoría (hoy cuenta doble si no hay una regla aprendida). Lo mismo para cuotas de préstamos y BNPL ya dados de alta en Deudas. El usuario confirma en la previsualización y la regla se aprende.
+
+### 4.5 Ficheros grandes
+Para pasar del límite de 4,5 MB: leer el fichero en el navegador y enviar al servidor solo las filas (JSON mucho más pequeño), o subir el fichero a Vercel Blob y leerlo desde el servidor. Decidir al llegar (decisión O); con extractos mensuales normales no hace falta.
+
+### 4.6 Interfaz
+Asistente: cuenta → fichero → (mapeo, solo si no se reconoce) → previsualización (categorías, duplicados, pagos de tarjeta detectados, avisos) → confirmar → resumen ("23 gastos, 2 ingresos, 1 pago a la tarjeta PASS"). Errores claros y en español cuando un fichero no se entiende, con la opción de mapear a mano. Textos en `es.json` y `en.json`.
+
+### 4.7 Lo que necesito de ti
+- **Qué bancos y tarjetas usas** (y tus beta testers), para priorizar perfiles.
+- **Un fichero de ejemplo de cada uno** (cuenta y tarjeta), del formato que dé su banca online. Los anonimizo antes de usarlos como test (nombres, IBAN, importes) y no se suben al repo sin anonimizar.
+
+### 4.8 Verificación
+Con tus ficheros reales de un mismo mes, en local y luego en producción: importar el extracto de la cuenta y el de la tarjeta → el gasto del mes cuadra con lo real (sin dobles), la deuda de la tarjeta coincide con el extracto, el pago de la tarjeta aparece una sola vez como pago a la deuda; reimportar el mismo fichero no crea nada nuevo.
+
+---
+
+## Épica 5: conexión con bancos (PSD2)
+
+### Situación del mercado (investigado el 28 oct 2026, con fuentes oficiales)
+- **GoCardless Bank Account Data (antes Nordigen) no acepta clientes nuevos desde julio de 2025.** El código que tenemos es solo para GoCardless: no se puede usar.
+- **Ya no hay ruta gratuita y autoservicio:** todos los proveedores que aceptan clientes piden empresa (o autónomo, por confirmar), verificación (KYB) y contrato para conectar cuentas de otras personas.
+- **Proveedor propuesto (decisión M, pendiente de tu OK): Enable Banking.** Sus usuarios operan bajo su licencia AISP (no necesitas licencia propia), consentimientos de ~180 días, la mejor documentación de bancos españoles vía Redsys, y un **modo restringido gratuito para tus propias cuentas**: se puede construir y probar entero sin contrato. Precio de producción por cuenta y mes con **mínimo mensual** (sin cifras públicas). Alternativa: Plaid EU (gratis 200 llamadas por producto: unos pocos usuarios), Tink o Salt Edge (por ventas).
+- **Tarjetas de crédito por PSD2 en España: no confirmado** con ningún proveedor. Por eso la épica 4 va primero.
+- Límites: renovar el consentimiento cada ~180 días; ~4 actualizaciones al día por cuenta sin el usuario delante.
+
+**Antes de la beta con otros usuarios (tú):** escribir a Enable Banking (info@enablebanking.com) y preguntar: mínimo mensual, si firman con un autónomo, y si cubren cuentas de tarjeta de crédito en bancos españoles.
+
+### Estado actual del código (verificado, 28 oct)
+Un 70 % construido para GoCardless y nunca ejecutado: lista de bancos, consentimiento con `state` firmado, callback, vinculación de cuentas, sincronización manual, `sync-all`, detección de consentimiento caducado. Problemas: la sesión post-consentimiento vive en un `Map` en memoria (falla en Vercel, igual que pasó con Google); `sync-all` espera POST + `x-cron-secret` (Vercel Cron manda GET + `Authorization: Bearer`) y no hay cron configurado; al vincular una tarjeta **no** se crea su deuda y se sobrescribe su saldo (rompe el patrimonio y los ingresos); los movimientos sincronizados y los importados de la misma cuenta se duplican; no hay categorización por IA ni reparto por hogar en la sincronización; el frontend no muestra los errores `banking_*`.
+
+### 5.1 Proveedor Enable Banking
+- Implementar `BankingProviderClient` (`server/lib/banking/types.ts` ya es neutral) para Enable Banking: autenticación con JWT firmado con la clave privada de la app (variable de entorno; nunca en el repo), lista de bancos de España, inicio de autorización, sesión, cuentas (con detalles: nombre, IBAN enmascarado, tipo), saldos y movimientos (contabilizados y, aparte, pendientes).
+- **Quitar el cliente de GoCardless** (decisión P): no se puede contratar y deja código muerto.
+- El identificador de sesión del proveedor se guarda **cifrado** con `secretBox` (`ENCRYPTION_KEY`), que ya existe y hoy nadie usa.
+
+### 5.2 Que funcione en Vercel
+- La sesión post-consentimiento: JWT firmado de corta duración, como el arreglo de Google (sin `Map` en memoria).
+- Sincronización periódica con **Vercel Cron** (GET + `Authorization: Bearer CRON_SECRET`), por lotes con presupuesto de tiempo, respetando ~4 al día por cuenta.
+
+### 5.3 Cuentas y tarjetas vinculadas
+- Vincular una cuenta de tarjeta del banco = crear o elegir la **cuenta tarjeta + su deuda** (`cardDebt.ts`), y enlazar también la deuda (`Debt.bankConnectionId` / `externalAccountId`) para que el saldo del banco se concilie con un `DebtAdjustment` fechado (ya implementado en `setLiveValues`, hoy nunca se llama).
+- Nunca sobrescribir el saldo de una cuenta tarjeta (debe seguir en 0; lo que se debe vive en la deuda).
+
+### 5.4 Movimientos por el núcleo de la épica 4
+Toda la sincronización pasa por `server/lib/ingest/`: mismas reglas de tarjeta, mismos duplicados (incluido el aviso entre fichero importado y banco), detección de pagos de tarjeta, reparto por hogar, y categorización por reglas + IA opcional.
+
+### 5.5 Primera sincronización con revisión
+El frontend usa los endpoints de previsualización que ya existen: la primera vez el usuario revisa y confirma, en vez de importar 90 días a ciegas.
+
+### 5.6 Interfaz y avisos
+- "Conecta tu banco" en Cuentas (y opcional en el onboarding, paso 3).
+- Errores del consentimiento visibles (`?error=banking_*`), estado de cada conexión, botón de reconectar.
+- **Aviso antes de caducar el consentimiento** (en la app y por email con una plantilla nueva del módulo de email), guardando `expiresAt` (hoy nunca se escribe).
+
+### 5.7 Interruptor en servidor y frontend
+Activo solo con las variables de Enable Banking. Mientras estemos en modo restringido (solo tus cuentas), además una lista de emails permitidos (`BANKING_ALLOWED_EMAILS`) para que los beta testers no vean un botón que fallaría.
+
+### 5.8 Privacidad
+Borrar una conexión revoca el consentimiento en el proveedor y deja de sincronizar; los movimientos ya importados se quedan (son del usuario). Añadir a la política de privacidad qué datos se leen y quién es el proveedor con licencia.
+
+### 5.9 Verificación
+En modo restringido, con tus cuentas reales: conectar banco → revisar y confirmar la primera sincronización → la cuenta y (si el banco la expone) la tarjeta aparecen con su deuda; al día siguiente el cron trae lo nuevo sin duplicar lo importado por fichero; desconectar revoca el acceso. Usuarios beta solo después del contrato.
+
+---
+
 ## Decisiones
 
 ### Tomadas (21 oct 2026)
@@ -285,3 +416,15 @@ Cada paso escribe filas reales (como hoy) y se puede saltar. "Atrás" no borra n
 **J.** ~~Remitente de los emails~~ → decidido 21 oct: **`contact@luisvespa.com`** (también dirección de soporte y Reply-To).
 
 **K.** ~~Proveedor de email~~ → decidido 23 oct: **Resend** en la beta, con módulo independiente del proveedor; Cloudflare cuando se acerque al límite de 100/día.
+
+**L.** Devoluciones de la tarjeta (4.1): cómo se modelan para que bajen a la vez la deuda y el gasto de su categoría. Hoy los importes de `Expense` son siempre positivos y el saldo de la deuda solo lee gastos, pagos y ajustes. Opciones: un gasto con importe negativo marcado como devolución, o un campo de tipo en `Expense`. Puede necesitar un cambio de schema: se propone antes de aplicarlo.
+
+**M.** Proveedor de Open Banking — **propuesta: Enable Banking** (GoCardless cerrado a clientes nuevos desde julio de 2025). Construir en modo restringido con tus cuentas; usuarios reales tras el contrato. Pendiente de tu OK y de la respuesta de Enable Banking (mínimo mensual, autónomo, tarjetas en España).
+
+**N.** Importar PDF: fuera de la épica 4. La mayoría de bancos exportan CSV/XLSX/Norma 43/OFX; el PDF es frágil y caro de mantener. Se revisa si algún banco o tarjeta importante solo da PDF.
+
+**O.** Ficheros de más de ~3 MB (4.5): leer en el navegador o subir a Vercel Blob. Se decide si aparece en la práctica.
+
+**P.** Propuesta: quitar el cliente de GoCardless al empezar la épica 5.
+
+**Q.** ~~Stripe~~ → decidido 28 oct: **futuro lejano; la app es gratuita**.
