@@ -332,7 +332,10 @@ Para pasar del límite de 4,5 MB: leer el fichero en el navegador y enviar al se
 Asistente: cuenta → fichero → (mapeo, solo si no se reconoce) → previsualización (categorías, duplicados, pagos de tarjeta detectados, avisos) → confirmar → resumen ("23 gastos, 2 ingresos, 1 pago a la tarjeta PASS"). Errores claros y en español cuando un fichero no se entiende, con la opción de mapear a mano. Textos en `es.json` y `en.json`.
 
 ### 4.7 Lo que necesito de ti
-- **Qué bancos y tarjetas usas** (y tus beta testers), para priorizar perfiles.
+- **Bancos y tarjetas de la beta (28 oct): BBVA (cuenta), Revolut (cuenta) y tarjeta de crédito PASS de Carrefour.** Son los primeros perfiles, en este orden:
+  1. **BBVA**: el único que ya funciona hoy; añadir su fichero real como test y revisar los casos que fallan (números, duplicados sin saldo).
+  2. **Revolut**: CSV/Excel con cabeceras en inglés y formato de número inglés; columnas propias (comisión aparte del importe, estado `COMPLETED`/`PENDING`/`REVERTED`, tipo de operación, cambio de divisa). Hoy no se puede importar.
+  3. **PASS Carrefour**: tarjeta de crédito (modo tarjeta, 4.3). Formato de exportación **por confirmar** con tu fichero: si su área de cliente solo da PDF, se replantea la decisión N.
 - **Un fichero de ejemplo de cada uno** (cuenta y tarjeta), del formato que dé su banca online. Los anonimizo antes de usarlos como test (nombres, IBAN, importes) y no se suben al repo sin anonimizar.
 
 ### 4.8 Verificación
