@@ -34,6 +34,14 @@ La épica 1 va primero porque el paso de deudas del onboarding tiene que pregunt
 7. Botón "No tengo tarjetas / préstamos" (`noCardsAt`/`noLoansAt` en `UserSettings`): aceptado en idea, falta tu OK al cambio de schema.
 8. Skill `/deploy`: las variables de Neon son *Sensitive* (`env pull` no las baja) y en un primer despliegue con la base vacía el paso de schema se salta. Hay que reescribir ese paso.
 9. Para cuando vuelva Stripe: el webhook responde 200 aunque falle al procesar un evento (Stripe no reintenta).
+10. **Finanzas compartidas: los datos de la pareja invitada se quedan ocultos** (visto en producción el 28 oct). Prioridad alta de este PR.
+    - **Causa:** `BudgetApp.tsx` pinta el onboarding antes que el modal de `?invite=`. La invitada hace su propio onboarding (sus ingresos se guardan con su `userId`) y solo después acepta. Al aceptar, `requireAuth` cambia su `req.userId` al de quien invitó (`linkedUserId`), y lo que creó antes queda oculto, aunque no borrado.
+    - **Arreglo:**
+      - Con una invitación pendiente, mostrar primero la aceptación y saltar el onboarding de la invitada.
+      - Al aceptar, mover sus filas `Income` al pool compartido (`userId` = quien invitó, `ownerUserId` = ella), en la misma transacción que el enlace. Decidir qué se hace con sus otros datos de onboarding: ahorros, deudas, partidas y cuentas.
+      - El ingreso base del hogar (`UserSettings.monthlyIncome` del pool, que se usa cuando el mes no tiene ingresos registrados) tiene que sumar a los dos miembros, no solo a quien invitó.
+    - **Solución temporal mientras tanto:** la invitada añade su sueldo desde "Añadir ingreso" con su sesión.
+    - **Test:** invitar → registrarse → aceptar → los ingresos de los dos suman en el presupuesto.
 
 ---
 
