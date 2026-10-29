@@ -52,13 +52,16 @@ export interface DebtFormState {
   // them, so a form left open can't erase a payment recorded meanwhile.
   loadedBalance: string;
   loadedInstallmentsPaid: string;
+  // The debt behind a card account (server/lib/cardDebt.ts): it stays a
+  // credit_card, so its kind is neither offered nor sent.
+  cardBacked: boolean;
 }
 
 /** A new loan / installment plan. */
 export const EMPTY_DEBT_FORM: DebtFormState = {
   id: null, name: '', kind: 'installment', paymentMode: 'installments', currentBalance: '', apr: '', creditLimit: '',
   paymentDueDay: '', minimumPayment: '', installmentAmount: '', installmentsTotal: '', installmentsPaid: '',
-  loadedBalance: '', loadedInstallmentsPaid: '',
+  loadedBalance: '', loadedInstallmentsPaid: '', cardBacked: false,
 };
 
 export function debtFormFromDebt(d: Debt): DebtFormState {
@@ -77,6 +80,7 @@ export function debtFormFromDebt(d: Debt): DebtFormState {
     installmentsPaid: String(d.installmentsPaid ?? 0),
     loadedBalance: String(d.currentBalance),
     loadedInstallmentsPaid: String(d.installmentsPaid ?? 0),
+    cardBacked: d.kind === 'credit_card' && d.accountId !== null,
   };
 }
 
@@ -85,7 +89,7 @@ export function debtPayloadFromForm(form: DebtFormState): DebtPayload {
   const isInstallments = form.paymentMode === 'installments';
   return {
     name: form.name.trim(),
-    kind: form.kind,
+    ...(!form.cardBacked && { kind: form.kind }),
     paymentMode: form.paymentMode,
     ...((!form.id || form.currentBalance !== form.loadedBalance) && { currentBalance: parseFloat(form.currentBalance) || 0 }),
     apr: form.apr ? parseFloat(form.apr) : null,
@@ -124,26 +128,30 @@ export function DebtFormFields({ form, setForm }: DebtFormFieldsProps) {
         />
       </div>
 
-      {/* Kind */}
+      {/* Kind — a card's debt stays a card (the server answers 409 otherwise) */}
       <div className="space-y-2">
         <label className="text-xs text-muted-foreground">{t('debts.kindLabel')}</label>
-        <div className="grid grid-cols-3 gap-2">
-          {(form.id ? DEBT_KINDS : NEW_DEBT_KINDS).map(k => {
-            const Icon = kindIcon(k);
-            const selected = form.kind === k;
-            return (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setForm(f => ({ ...f, kind: k, ...(!f.id && { paymentMode: defaultModeFor(k) }) }))}
-                className={`flex flex-col items-center gap-1 py-3 rounded-xl border transition-colors text-xs ${selected ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted'}`}
-              >
-                <Icon className="w-4 h-4" />
-                {t(`debts.kind.${k}`)}
-              </button>
-            );
-          })}
-        </div>
+        {form.cardBacked ? (
+          <p className="text-xs text-muted-foreground">{t('debts.cardKindLockedHint')}</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {(form.id ? DEBT_KINDS : NEW_DEBT_KINDS).map(k => {
+              const Icon = kindIcon(k);
+              const selected = form.kind === k;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, kind: k, ...(!f.id && { paymentMode: defaultModeFor(k) }) }))}
+                  className={`flex flex-col items-center gap-1 py-3 rounded-xl border transition-colors text-xs ${selected ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted'}`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {t(`debts.kind.${k}`)}
+                </button>
+              );
+            })}
+          </div>
+        )}
         {!form.id && <p className="text-xs text-muted-foreground">{t('debts.cardsInAccountsHint')}</p>}
       </div>
 

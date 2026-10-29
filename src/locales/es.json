@@ -627,6 +627,7 @@
     "cardOwedAdjustHint": "Si no coincide con tu banco, corrígelo aquí. La diferencia (intereses, alguna compra sin apuntar) cuenta como deuda previa.",
     "payCard": "Pagar tarjeta",
     "cardHasMovementsError": "Esta tarjeta ya tiene compras o pagos registrados: no puede cambiar de tipo.",
+    "backsOwnerDebtError": "Esta cuenta lleva una deuda de su titular actual: no puede cambiar de titular.",
     "cardMinimumRequired": "Indica el pago mínimo de la tarjeta"
   },
   "editExpense": {
@@ -1069,6 +1070,12 @@
     "paidFromCardError": "Un pago de la tarjeta tiene que salir de otra cuenta (la del banco), no de la propia tarjeta.",
     "paymentFailed": "No se pudo registrar el pago. Inténtalo de nuevo.",
     "hasPaymentsError": "Esta deuda tiene pagos registrados y se queda en el historial de pagadas: no se puede borrar.",
+    "cardKindLockedHint": "Es la deuda de una tarjeta: su tipo no cambia. La tarjeta se gestiona en Cuentas.",
+    "cardKindLockedError": "Es la deuda de una tarjeta: sigue siendo una tarjeta de crédito. Cambia la cuenta de la tarjeta en Cuentas.",
+    "cardVisibilityLockedError": "Es la deuda de una tarjeta: su visibilidad sigue a la de la tarjeta. Cámbiala en Cuentas.",
+    "cardAlreadyHasDebtError": "Esta tarjeta ya tiene su deuda: regístralo en la cuenta de la tarjeta.",
+    "accountOwnerMismatchError": "Una deuda solo puede ir en una cuenta de su mismo titular.",
+    "accountLockedError": "Esta deuda ya tiene movimientos registrados: su cuenta no puede cambiar.",
     "owedNow": "Debes {{amount}}",
     "payWhichLabel": "Tarjeta",
     "payPartialHint": "Puedes pagar una parte o el total.",

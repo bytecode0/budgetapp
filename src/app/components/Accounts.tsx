@@ -14,6 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { useAccounts, type Account, type AccountType } from '../hooks/useAccounts';
 import { CardFields, EMPTY_CARD_FIELDS, cardFieldsError, cardSettingsPayload, type CardFieldsValue } from './shared/CardFields';
 import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSheet';
+import { apiErrorMessage } from '../lib/apiErrors';
 import { useHousehold } from '../hooks/useHousehold';
 import { useBanking, type BankInstitution, type BankProviderAccount, type BankConnection as BankConnectionInfo } from '../hooks/useBanking';
 
@@ -254,7 +255,7 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
       : await createAccount(payload);
     setSaving(false);
     if (result.error) {
-      toast.error('code' in result && result.code === 'card_has_movements' ? t('accounts.cardHasMovementsError') : result.error);
+      toast.error(apiErrorMessage(t, result));
       return;
     }
     toast.success(form.id ? t('accounts.savedOk') : t('accounts.createdOk'));
@@ -264,13 +265,13 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
 
   const handleArchive = async (a: Account) => {
     const result = await updateAccount(a.id, { isArchived: !a.isArchived });
-    if (result.error) toast.error(result.error);
+    if (result.error) toast.error(apiErrorMessage(t, result));
     else toast.success(a.isArchived ? t('accounts.restoredOk') : t('accounts.archivedOk'));
   };
 
   const handleDelete = async (a: Account) => {
     const result = await deleteAccount(a.id);
-    if (result.error) toast.error(result.code === 'account_backs_debt' ? t('accounts.backsDebtError') : result.error);
+    if (result.error) toast.error(apiErrorMessage(t, result));
     else toast.success(t('accounts.deletedOk'));
   };
 

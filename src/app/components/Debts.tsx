@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDebts, type Debt, type PayoffSummary } from '../hooks/useDebts';
 import { DebtFormFields, EMPTY_DEBT_FORM, debtFormFromDebt, debtPayloadFromForm, kindIcon, type DebtFormState } from './shared/DebtFormFields';
 import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSheet';
+import { apiErrorMessage } from '../lib/apiErrors';
 
 // What a payment of this debt usually is, to prefill the payment sheet.
 const suggestedPayment = (d: Debt): number =>
@@ -147,7 +148,7 @@ export function Debts() {
       ? await updateDebt(form.id, payload)
       : await createDebt(payload);
     setSaving(false);
-    if (result.error) { toast.error(result.error); return; }
+    if (result.error) { toast.error(apiErrorMessage(t, result)); return; }
     toast.success(form.id ? t('debts.savedOk') : t('debts.createdOk'));
     setShowForm(false);
     setForm(EMPTY_DEBT_FORM);
@@ -155,13 +156,13 @@ export function Debts() {
 
   const handleTogglePaidOff = async (d: Debt) => {
     const result = await updateDebt(d.id, { status: d.status === 'active' ? 'paid_off' : 'active' });
-    if (result.error) toast.error(result.error);
+    if (result.error) toast.error(apiErrorMessage(t, result));
     else toast.success(d.status === 'active' ? t('debts.markedPaidOff') : t('debts.reactivatedOk'));
   };
 
   const handleDelete = async (d: Debt) => {
     const result = await deleteDebt(d.id);
-    if (result.error) toast.error(result.code === 'debt_has_payments' ? t('debts.hasPaymentsError') : result.error);
+    if (result.error) toast.error(apiErrorMessage(t, result));
     else toast.success(t('debts.deletedOk'));
   };
 

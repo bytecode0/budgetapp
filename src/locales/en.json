@@ -627,6 +627,7 @@
     "cardOwedAdjustHint": "If it doesn't match your bank, correct it here. The difference (interest, an unrecorded purchase) counts as previous debt.",
     "payCard": "Pay card",
     "cardHasMovementsError": "This card already has purchases or payments recorded: it can't change type.",
+    "backsOwnerDebtError": "This account backs a debt of its current owner: it can't change owner.",
     "cardMinimumRequired": "Enter the card's minimum payment"
   },
   "editExpense": {
@@ -1069,6 +1070,12 @@
     "paidFromCardError": "A card payment must come from another account (your bank), not the card itself.",
     "paymentFailed": "The payment couldn't be recorded. Try again.",
     "hasPaymentsError": "This debt has recorded payments and stays in the paid-off history: it can't be deleted.",
+    "cardKindLockedHint": "This is a card's debt: its type doesn't change. The card is managed in Accounts.",
+    "cardKindLockedError": "This is a card's debt: it stays a credit card. Change the card account in Accounts instead.",
+    "cardVisibilityLockedError": "This is a card's debt: its visibility follows the card's. Change it in Accounts.",
+    "cardAlreadyHasDebtError": "This card already has its debt: record it on the card account.",
+    "accountOwnerMismatchError": "A debt can only be on an account with the same owner.",
+    "accountLockedError": "This debt already has recorded movements: its account can't change.",
     "owedNow": "You owe {{amount}}",
     "payWhichLabel": "Card",
     "payPartialHint": "You can pay part of it or all of it.",

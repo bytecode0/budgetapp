@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useAccounts } from '../hooks/useAccounts';
 import { useAuth } from '../context/AuthContext';
 import { CardFields, EMPTY_CARD_FIELDS, cardFieldsError, cardSettingsPayload, type CardFieldsValue } from '../components/shared/CardFields';
+import { apiErrorMessage } from '../lib/apiErrors';
 import { useMoney } from './useMoney';
 import { NoneAnswer } from './NoneAnswer';
 
@@ -43,7 +44,7 @@ export function CardsStep() {
 
   const handleDelete = async (id: string) => {
     const result = await deleteAccount(id);
-    if (result.error) toast.error(result.code === 'account_backs_debt' ? t('accounts.backsDebtError') : result.error);
+    if (result.error) toast.error(apiErrorMessage(t, result));
   };
 
   return (

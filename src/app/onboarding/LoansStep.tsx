@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   DebtFormFields, EMPTY_DEBT_FORM, debtPayloadFromForm, kindIcon, type DebtFormState,
 } from '../components/shared/DebtFormFields';
+import { apiErrorMessage } from '../lib/apiErrors';
 import { useMoney } from './useMoney';
 import { NoneAnswer } from './NoneAnswer';
 
@@ -31,14 +32,14 @@ export function LoansStep() {
     setSaving(true);
     const result = await createDebt(debtPayloadFromForm(form));
     setSaving(false);
-    if ('error' in result) { toast.error(result.error as string); return; }
+    if ('error' in result) { toast.error(apiErrorMessage(t, result)); return; }
     toast.success(t('onboarding.loans.createdOk'));
     reset();
   };
 
   const handleDelete = async (id: string) => {
     const result = await deleteDebt(id);
-    if (result.error) toast.error(result.code === 'debt_has_payments' ? t('debts.hasPaymentsError') : result.error);
+    if (result.error) toast.error(apiErrorMessage(t, result));
   };
 
   return (
