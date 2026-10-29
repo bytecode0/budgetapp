@@ -46,7 +46,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const [file, setFile] = useState<File | null>(null);
   const [source, setSource] = useState<PreviewSource | null>(null);
   // The manual mapping: the rows it shows, why it opened, what it starts from.
-  const [mappingScreen, setMappingScreen] = useState<{ sample: StatementSample[]; reason: 'unrecognized' | 'manual'; initial: ColumnMapping | null } | null>(null);
+  const [mappingScreen, setMappingScreen] = useState<{ sample: StatementSample[]; reason: 'unrecognized' | 'manual'; initial: ColumnMapping | null; key: number } | null>(null);
   const [savingMapping, setSavingMapping] = useState(false);
   const [problem, setProblem] = useState<ReadProblem | null>(null);
   const [data, setData] = useState<ImportPreview | null>(null);
@@ -91,7 +91,8 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   };
 
   const openMapping = (rows: StatementSample[], reason: 'unrecognized' | 'manual', initial: ColumnMapping | null) => {
-    setMappingScreen({ sample: rows, reason, initial });
+    // A new key remounts the screen, so its form starts from this sample.
+    setMappingScreen(prev => ({ sample: rows, reason, initial, key: (prev?.key ?? 0) + 1 }));
     setStep('mapping');
   };
 
@@ -325,6 +326,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                 {step === 'mapping' && mappingScreen && (
                   /* ── 2b. Which column is what (only when not recognised, or asked) ── */
                   <ColumnMappingStep
+                    key={mappingScreen.key}
                     sample={mappingScreen.sample}
                     isCard={account?.type === 'card'}
                     reason={mappingScreen.reason}

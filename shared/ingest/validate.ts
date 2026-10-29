@@ -58,6 +58,26 @@ const isDay = (v: unknown): v is string =>
 const optInt = (v: unknown) => v === undefined || v === null || Number.isSafeInteger(v);
 const optStr = (v: unknown, max = 500) => v === undefined || v === null || (typeof v === "string" && v.length <= max);
 
+/** What the browser posts: the reader's rows within the bounds the server
+ *  checks (parseNormalizedRows), so a long text or an odd currency cell in a
+ *  bank's export can't make the whole import fail. Texts are cut, not
+ *  dropped; a currency that isn't a 3-letter code is unknown. */
+export function toWireRows(rows: NormalizedRow[]): NormalizedRow[] {
+  const cut = (v: string | null | undefined, max: number) => (typeof v === "string" ? v.slice(0, max) : v);
+  return rows.map(r => ({
+    ...r,
+    description: r.description.slice(0, 500),
+    details: cut(r.details, 500) ?? undefined,
+    externalRef: cut(r.externalRef, 200),
+    state: cut(r.state, 40),
+    currency: r.currency && /^[A-Z]{3}$/.test(r.currency) ? r.currency : null,
+  }));
+}
+
+/** Skipped rows as the browser posts them (a reason within parseSkippedRows' bound). */
+export const toWireSkipped = (skipped: SkippedRow[]): SkippedRow[] =>
+  skipped.map(s => ({ rowIndex: s.rowIndex, reason: s.reason.slice(0, 60) }));
+
 /** Rows read in the browser, checked as strictly as the server's own reader
  *  would produce them: integer cents, real calendar days, bounded text. */
 export function parseNormalizedRows(input: unknown): { rows: NormalizedRow[] } | { error: string } {

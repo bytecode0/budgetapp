@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { StatementSample } from '../../../shared/ingest/read';
 import type { ColumnMapping, ReadResult, SkippedRow, StatementSource } from '../../../shared/ingest/types';
 import type { ShapeInput } from '../../../shared/ingest/shapes';
+import { toWireRows, toWireSkipped } from '../../../shared/ingest/validate';
 import { readStatementFile, sampleStatementFile, SERVER_READ_MAX_BYTES } from '../lib/readStatementFile';
 
 export type { ColumnMapping, StatementSample };
@@ -154,7 +155,7 @@ export function useImport() {
       // A sign the user chose wins over the one the mapping states.
       const sign = purchasesSign ?? (source.kind === 'rows' ? source.read.purchasesSign : undefined);
       const body = source.kind === 'rows'
-        ? { accountId, rows: source.read.rows, skipped: source.read.skipped, source: source.read.source }
+        ? { accountId, rows: toWireRows(source.read.rows), skipped: toWireSkipped(source.read.skipped), source: source.read.source }
         : { accountId, filename: source.file.name, dataBase64: await fileToBase64(source.file) };
       const res = await fetch('/api/expenses/import/preview', {
         method: 'POST',

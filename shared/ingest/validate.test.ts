@@ -1,7 +1,7 @@
 // Run with:  node --import tsx --test shared/ingest/validate.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseColumnMapping, parseNormalizedRows, parseSkippedRows, parseSource, storedMapping } from "./validate.js";
+import { parseColumnMapping, parseNormalizedRows, parseSkippedRows, parseSource, storedMapping, toWireRows, toWireSkipped } from "./validate.js";
 
 test("mapping: a valid one is kept, unknown keys dropped", () => {
   const r = parseColumnMapping({
@@ -56,4 +56,18 @@ test("skipped rows and source from the browser", () => {
   assert.equal(parseSource(undefined), "rows");
   assert.equal(parseSource("revolut"), "revolut");
   assert.equal(parseSource("<script>"), null);
+});
+
+test("rows as the browser posts them always pass the server's check", () => {
+  const long = "x".repeat(900);
+  const wire = toWireRows([{
+    rowIndex: 7, date: "2026-10-29", amountCents: -100, description: long, details: long,
+    externalRef: long, state: "COMPLETED", currency: "EURO", feeCents: null,
+  }, { rowIndex: 8, date: "2026-10-30", amountCents: 50, description: "ok", currency: "USD" }]);
+  const parsed = parseNormalizedRows(wire);
+  assert.ok("rows" in parsed, JSON.stringify(parsed));
+  assert.equal(parsed.rows[0].description.length, 500);
+  assert.equal(parsed.rows[0].currency, null);
+  assert.equal(parsed.rows[1].currency, "USD");
+  assert.ok("skipped" in parseSkippedRows(toWireSkipped([{ rowIndex: 1, reason: `state:${"X".repeat(100)}` }])));
 });
