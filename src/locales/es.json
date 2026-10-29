@@ -1075,6 +1075,7 @@
     "cardVisibilityLockedError": "Es la deuda de una tarjeta: su visibilidad sigue a la de la tarjeta. Cámbiala en Cuentas.",
     "cardAlreadyHasDebtError": "Esta tarjeta ya tiene su deuda: regístralo en la cuenta de la tarjeta.",
     "accountOwnerMismatchError": "Una deuda solo puede ir en una cuenta de su mismo titular.",
+    "creditCardNeedsCardAccountError": "Una deuda de tarjeta de crédito solo puede ir en una cuenta de tipo tarjeta.",
     "accountLockedError": "Esta deuda ya tiene movimientos registrados: su cuenta no puede cambiar.",
     "owedNow": "Debes {{amount}}",
     "payWhichLabel": "Tarjeta",

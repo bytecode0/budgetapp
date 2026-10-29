@@ -8,6 +8,7 @@ const ERROR_KEYS: Record<string, string> = {
   card_debt_visibility_locked: 'debts.cardVisibilityLockedError',
   card_already_has_debt: 'debts.cardAlreadyHasDebtError',
   debt_account_owner_mismatch: 'debts.accountOwnerMismatchError',
+  credit_card_needs_card_account: 'debts.creditCardNeedsCardAccountError',
   account_backs_debt: 'accounts.backsDebtError',
   account_backs_owner_debt: 'accounts.backsOwnerDebtError',
   card_has_movements: 'accounts.cardHasMovementsError',

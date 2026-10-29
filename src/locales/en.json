@@ -1075,6 +1075,7 @@
     "cardVisibilityLockedError": "This is a card's debt: its visibility follows the card's. Change it in Accounts.",
     "cardAlreadyHasDebtError": "This card already has its debt: record it on the card account.",
     "accountOwnerMismatchError": "A debt can only be on an account with the same owner.",
+    "creditCardNeedsCardAccountError": "A credit card debt can only be on a card account.",
     "accountLockedError": "This debt already has recorded movements: its account can't change.",
     "owedNow": "You owe {{amount}}",
     "payWhichLabel": "Card",

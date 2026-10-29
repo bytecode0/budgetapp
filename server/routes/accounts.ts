@@ -7,7 +7,7 @@ import { toCents, serializeMoney } from "../lib/money.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { currentPeriodKey, periodBounds } from "../lib/period.js";
 import { loadDebtLedgers, debtState, owedNow, monthlyCommitment } from "../lib/debtBalance.js";
-import { ownerChangeSplitsDebtLink } from "../lib/debtAccountLink.js";
+import { ownerChangeSplitsDebtLink, mirroredCardDebtId } from "../lib/debtAccountLink.js";
 import { CARD_PAYMENT_MODES, cardDebtOwnershipChanges, createCardDebt, updateCardDebt, type CardSettings } from "../lib/cardDebt.js";
 
 export const accountsRouter = Router();
@@ -196,7 +196,7 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     // The card's own debt follows its card (or is dropped with it, below).
     if (ownerUserId !== undefined && ownerUserId !== existing.ownerUserId) {
       const onAccount = await prisma.debt.findMany({ where: { userId: req.userId!, accountId: id }, select: { id: true, ownerUserId: true } });
-      if (ownerChangeSplitsDebtLink(ownerUserId, onAccount, linkedDebt?.id ?? null)) {
+      if (ownerChangeSplitsDebtLink(ownerUserId, onAccount, mirroredCardDebtId(existing.type, linkedDebt?.id ?? null))) {
         return res.status(409).json({ error: "This account backs a debt of its current owner; it can't change owner", code: "account_backs_owner_debt" });
       }
     }
