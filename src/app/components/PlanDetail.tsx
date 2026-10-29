@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { monthLabel, useMonth } from '../context/MonthContext';
 import { currentPeriodKey } from '../lib/period';
 import { useLanguage } from '../context/LanguageContext';
+import { useMoney } from '../onboarding/useMoney';
 
 const COLOR_OPTIONS = [
   '#1E3A8A','#10B981','#F59E0B','#EF4444','#8B5CF6',
@@ -75,7 +76,8 @@ function buildProjectionData(
   target: number,
   isCompound: boolean,
   horizon: HorizonKey,
-  rates: [number, number, number] = [0.01, 0.05, 0.15],
+  rates: [number, number, number],
+  axis: { now: string; year: (n: number) => string; month: (n: number) => string },
 ): ProjectionPoint[] {
   if (monthly <= 0 && current >= target) return [];
 
@@ -97,9 +99,9 @@ function buildProjectionData(
 
   const points: ProjectionPoint[] = [];
   for (let m = 0; m <= endMonth; m += step) {
-    const label = m === 0 ? 'Now'
-      : m % 12 === 0 ? `Y${m / 12}`
-      : `M${m}`;
+    const label = m === 0 ? axis.now
+      : m % 12 === 0 ? axis.year(m / 12)
+      : axis.month(m);
     const pt: ProjectionPoint = { label, month: m };
     if (isCompound) {
       pt.pessimistic = compoundBalance(current, monthly, m, r0);
@@ -141,7 +143,7 @@ function ProjectionTooltip({ active, payload, label, target, t }: any) {
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
               <span className="text-muted-foreground text-xs">{p.name}:</span>
-              <span className="font-medium ml-auto">€{Math.round(p.value).toLocaleString()}</span>
+              <span className="font-medium ml-auto">{t('currency.symbol')}{Math.round(p.value).toLocaleString()}</span>
             </div>
             {overGoal && (
               <p className="text-xs text-secondary pl-4">{t('planDetail.aboveGoalAmount', { amount: Math.round(gain).toLocaleString() })}</p>
@@ -160,6 +162,7 @@ function ProjectionTooltip({ active, payload, label, target, t }: any) {
 
 export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => void }) {
   const { t } = useTranslation();
+  const { fmt, currency } = useMoney();
   const { cycleStartDay } = useMonth();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
@@ -322,7 +325,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
       setDepositAmount('');
       toast.success(t('planDetail.contribRegistered'));
     } else {
-      toast.error('Failed to register contribution');
+      toast.error(t('planDetail.contributionFailed'));
     }
   };
 
@@ -340,7 +343,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
       setSyncAllocationId(null);
       toast.success(t('planDetail.allocationSynced', { amount: plan.monthlyContribution.toLocaleString() }));
     } else {
-      toast.error('Failed to sync allocation');
+      toast.error(t('planDetail.syncFailed'));
     }
   };
 
@@ -365,8 +368,9 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
       isInvestmentDerived,
       horizon,
       projRates,
+      { now: t('planDetail.axisNow'), year: n => t('planDetail.axisYear', { n }), month: n => t('planDetail.axisMonth', { n }) },
     );
-  }, [plan?.currentAmount, effectiveMonthly, plan?.targetAmount, plan?.goalClass, horizon]);
+  }, [plan?.currentAmount, effectiveMonthly, plan?.targetAmount, plan?.goalClass, horizon, t]);
 
   if (!plan) {
     return (
@@ -514,7 +518,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                   {form.goalClass === 'investment' ? t('planDetail.milestoneOptional') : t('planDetail.targetAmount')}
                 </label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">€</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{currency}</span>
                   <input type="number" min="0"
                     className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary text-sm"
                     value={form.targetAmount}
@@ -525,7 +529,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
               <div>
                 <label className="text-sm text-muted-foreground mb-1.5 block">{t('planDetail.alreadySaved')}</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">€</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{currency}</span>
                   <input type="number" min="0"
                     className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary text-sm"
                     value={form.currentAmount}
@@ -536,7 +540,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
               <div>
                 <label className="text-sm text-muted-foreground mb-1.5 block">{t('planDetail.monthlyContribution')}</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">€</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{currency}</span>
                   <input type="number" min="0"
                     className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary text-sm"
                     value={form.monthlyContribution}
@@ -647,7 +651,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                   <p className="text-sm font-medium opacity-90">{t('planDetail.howMuchAdding')}</p>
                   <div className="flex gap-3">
                     <div className="flex items-center gap-2 bg-white/20 rounded-xl px-4 py-2.5 flex-1">
-                      <span className="text-white/70 text-sm">€</span>
+                      <span className="text-white/70 text-sm">{currency}</span>
                       <input
                         type="number" min="0" step="50"
                         placeholder={String(plan.monthlyContribution || 100)}
@@ -680,7 +684,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                         onClick={() => setContribAmount(String(v))}
                         className="px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-lg text-xs text-white transition-colors"
                       >
-                        +€{v}
+                        +{currency}{v}
                       </button>
                     ))}
                     {plan.monthlyContribution > 0 && ![50, 100, 200, 500].includes(plan.monthlyContribution) && (
@@ -688,7 +692,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                         onClick={() => setContribAmount(String(plan.monthlyContribution))}
                         className="px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-lg text-xs text-white transition-colors"
                       >
-                        +€{plan.monthlyContribution} {t('planDetail.planned')}
+                        +{currency}{plan.monthlyContribution} {t('planDetail.planned')}
                       </button>
                     )}
                   </div>
@@ -700,12 +704,12 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div>
               <p className="text-sm opacity-75 mb-2">{t('planDetail.currentProgress')}</p>
-              <p className="text-4xl font-display mb-1">€{plan.currentAmount.toLocaleString()}</p>
-              <p className="text-sm opacity-75">{t('planDetail.of')} €{plan.targetAmount.toLocaleString()}</p>
+              <p className="text-4xl font-display mb-1">{fmt(plan.currentAmount)}</p>
+              <p className="text-sm opacity-75">{t('planDetail.of')} {fmt(plan.targetAmount)}</p>
             </div>
             <div>
               <p className="text-sm opacity-75 mb-2">{t('planDetail.remaining')}</p>
-              <p className="text-4xl font-display mb-1">€{remaining.toLocaleString()}</p>
+              <p className="text-4xl font-display mb-1">{fmt(remaining)}</p>
               <p className="text-sm opacity-75">
                 {monthsLeft !== null
                   ? t('planDetail.monthsLeft', { count: monthsLeft })
@@ -714,7 +718,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
             </div>
             <div>
               <p className="text-sm opacity-75 mb-2">{t('planDetail.monthlyContribution')}</p>
-              <p className="text-4xl font-display mb-1">€{plan.monthlyContribution.toLocaleString()}</p>
+              <p className="text-4xl font-display mb-1">{fmt(plan.monthlyContribution)}</p>
               <p className="text-sm opacity-75">{t('planDetail.perMonth')}</p>
             </div>
           </div>
@@ -788,7 +792,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
             </div>
             <p className="text-sm text-muted-foreground">{t('planDetail.alreadySaved')}</p>
           </div>
-          <p className="text-2xl font-display">€{plan.currentAmount.toLocaleString()}</p>
+          <p className="text-2xl font-display">{fmt(plan.currentAmount)}</p>
           <button
             onClick={() => setShowContribute(true)}
             className="text-sm text-primary mt-1 hover:underline flex items-center gap-1"
@@ -804,7 +808,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
             </div>
             <p className="text-sm text-muted-foreground">{t('planDetail.stillNeeded')}</p>
           </div>
-          <p className="text-2xl font-display">€{remaining.toLocaleString()}</p>
+          <p className="text-2xl font-display">{fmt(remaining)}</p>
           <p className="text-sm text-muted-foreground mt-1">{t('planDetail.pctToGo', { pct: (100 - Math.min(progress, 100)).toFixed(0) })}</p>
         </motion.div>
       </div>
@@ -855,7 +859,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                     <p className="text-sm font-medium">{t('planDetail.registerThisMonth')}</p>
                     <div className="flex gap-3">
                       <div className="flex items-center gap-2 flex-1 border border-border rounded-xl px-3 py-2 bg-background">
-                        <span className="text-muted-foreground text-sm">€</span>
+                        <span className="text-muted-foreground text-sm">{currency}</span>
                         <input
                           type="number" min="0" step="10"
                           className="flex-1 outline-none bg-transparent text-sm font-display"
@@ -883,7 +887,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                           <button key={v} onClick={() => setDepositAmount(String(v))}
                             className="px-3 py-1.5 bg-muted hover:bg-muted/80 rounded-lg text-xs transition-colors"
                           >
-                            €{v.toLocaleString()}
+                            {fmt(v)}
                           </button>
                         ))}
                     </div>
@@ -938,7 +942,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                   <p className="font-medium text-sm mb-1">{t('planDetail.optionAdjustQuota')}</p>
                   <p className="text-xs text-muted-foreground mb-1">{t('planDetail.optionAdjustQuotaDesc')}</p>
                   <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
-                    {t('planDetail.newQuotaLabel')}: <strong>€{newQuota.toLocaleString()}/mo</strong>
+                    {t('planDetail.newQuotaLabel')}: <strong>{fmt(newQuota)}{t('currency.perMonthSuffix')}</strong>
                   </p>
                   <button
                     onClick={() => handleAdjustQuota(newQuota)}
@@ -978,7 +982,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                 <p className="text-sm text-muted-foreground">
                   {isInvestment
                     ? scenarioConfig.map(s => s.pill).join(' · ')
-                    : `€${effectiveMonthly.toLocaleString()}/mo — ${plan.currentAmount < plan.targetAmount && projectedCompletion ? `${format(projectedCompletion, 'MMM yyyy')}` : t('planDetail.goalReached')}`}
+                    : `${fmt(effectiveMonthly)}${t('currency.perMonthSuffix')} — ${plan.currentAmount < plan.targetAmount && projectedCompletion ? `${format(projectedCompletion, 'MMM yyyy')}` : t('planDetail.goalReached')}`}
                 </p>
               </div>
             </div>
@@ -1001,7 +1005,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                         <p className="text-xs text-muted-foreground">{t('planDetail.adjustScenarios')}</p>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-sm text-muted-foreground">€</span>
+                        <span className="text-sm text-muted-foreground">{currency}</span>
                         <input
                           type="number"
                           min="0"
@@ -1014,7 +1018,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                           <button
                             onClick={() => setSimMonthly(plan.monthlyContribution)}
                             className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-lg hover:bg-muted transition-colors"
-                            title="Reset to saved value"
+                            title={t('planDetail.resetToSaved')}
                           >
                             ↩
                           </button>
@@ -1086,7 +1090,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                           tick={{ fontSize: 11, fill: 'currentColor', opacity: 0.5 }}
                           tickLine={false}
                           axisLine={false}
-                          tickFormatter={v => v >= 1000 ? `€${(v / 1000).toFixed(0)}k` : `€${v}`}
+                          tickFormatter={v => v >= 1000 ? `${currency}${(v / 1000).toFixed(0)}k` : `${currency}${v}`}
                           width={60}
                         />
                         <Tooltip content={<ProjectionTooltip target={plan.targetAmount} t={t} />} />
@@ -1099,7 +1103,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                             strokeDasharray="2 5"
                             strokeOpacity={0.3}
                             label={{
-                              value: amount >= 1000 ? `€${(amount / 1000).toFixed(0)}k` : `€${amount}`,
+                              value: amount >= 1000 ? `${currency}${(amount / 1000).toFixed(0)}k` : `${currency}${amount}`,
                               position: 'insideTopRight',
                               fontSize: 10,
                               fill: plan.color,
@@ -1114,7 +1118,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                           strokeDasharray="6 3"
                           strokeOpacity={0.6}
                           label={{
-                            value: `Goal €${plan.targetAmount.toLocaleString()}`,
+                            value: t('planDetail.goalAmount', { amount: fmt(plan.targetAmount) }),
                             position: 'insideTopRight',
                             fontSize: 11,
                             fill: plan.color,
@@ -1188,7 +1192,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                               </>
                             ) : (
                               <>
-                                <p className={`font-display text-sm ${textColor}`}>€{Math.round(balance).toLocaleString()}</p>
+                                <p className={`font-display text-sm ${textColor}`}>{fmt(Math.round(balance))}</p>
                                 <p className="text-xs text-muted-foreground">
                                   {goalM <= horizonM
                                     ? t('planDetail.goalReachedIn', { time: goalM < 12 ? `${goalM}mo` : `${(goalM / 12).toFixed(1)}y` })
@@ -1222,7 +1226,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                               <p className="text-xs text-muted-foreground mb-1">
                                 {t('planDetail.balanceAt', { horizon: t(HORIZON_OPTIONS.find(o => o.key === horizon)?.labelKey ?? '') })}
                               </p>
-                              <p className="font-display text-sm" style={{ color: plan.color }}>€{Math.round(balance).toLocaleString()}</p>
+                              <p className="font-display text-sm" style={{ color: plan.color }}>{fmt(Math.round(balance))}</p>
                               <p className="text-xs text-muted-foreground mt-0.5">
                                 {balance >= plan.targetAmount
                                   ? t('planDetail.aboveGoalAmount', { amount: Math.round(balance - plan.targetAmount).toLocaleString() })
@@ -1307,7 +1311,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-display text-sm">€{amount.toLocaleString()}</span>
+                        <span className="font-display text-sm">{fmt(amount)}</span>
                         <div className="flex items-center gap-2">
                           {reached ? (
                             <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{t('planDetail.reached')}</span>
@@ -1335,7 +1339,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                       </div>
                       {!reached && (
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          €{plan.currentAmount.toLocaleString()} / €{amount.toLocaleString()} · {barPct.toFixed(0)}%
+                          {fmt(plan.currentAmount)} / {fmt(amount)} · {barPct.toFixed(0)}%
                         </p>
                       )}
                     </div>
@@ -1354,13 +1358,13 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                       onClick={() => setMilestoneEdit(prev => [...prev!, v].sort((a, b) => a - b))}
                       className="px-3 py-1.5 text-xs bg-muted hover:bg-primary/10 hover:text-primary border border-border rounded-lg transition-colors"
                     >
-                      +€{v >= 1000 ? `${v / 1000}k` : v}
+                      +{currency}{v >= 1000 ? `${v / 1000}k` : v}
                     </button>
                   ))}
                 </div>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">€</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{currency}</span>
                     <input
                       type="number" min="1" step="500"
                       placeholder={t('planDetail.customAmount')}
@@ -1407,7 +1411,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-display text-sm">{m.pct}{t('planDetail.pctComplete')}</span>
-                    <span className="text-sm text-muted-foreground">€{m.amount.toLocaleString()}</span>
+                    <span className="text-sm text-muted-foreground">{fmt(m.amount)}</span>
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <motion.div

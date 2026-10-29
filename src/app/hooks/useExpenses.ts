@@ -22,6 +22,9 @@ export interface Expense {
   // What this counts as spending: less than `amount` only for a card payment
   // that partly pays purchases already counted in their own category.
   budgetAmount?: number;
+  // "expense" | "refund". A refund keeps a positive amount but counts
+  // negative (budgetAmount = −amount): it lowers its category's spending.
+  kind?: string;
   debtId?: string | null;
   description: string;
   merchant: string;
@@ -81,7 +84,7 @@ export function useExpenses(month?: string) {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (!res.ok) return { error: data.error || 'Failed to create expense' };
+    if (!res.ok) return { error: data.error || 'Failed to create expense', code: data.code as string | undefined };
     setExpenses(prev => [data.expense, ...prev]);
     return { expense: data.expense };
   };
@@ -109,7 +112,7 @@ export function useExpenses(month?: string) {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (!res.ok) return { error: data.error || 'Failed to update expense' };
+    if (!res.ok) return { error: data.error || 'Failed to update expense', code: data.code as string | undefined };
     setExpenses(prev => prev.map(e => e.id === id ? data.expense : e));
     return { expense: data.expense };
   };

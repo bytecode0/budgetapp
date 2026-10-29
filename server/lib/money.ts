@@ -33,6 +33,7 @@ const MONEY_KEYS = new Set([
   "currentAmount",
   "monthlyContribution",
   "monthlyIncome",
+  "ownMonthlyIncome",
   "expectedAmount",
   "depositedAmount",
   "budgeted",

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useIncome } from '../hooks/useIncome';
 import { useAllocations } from '../hooks/useAllocations';
 import { usePartner } from '../hooks/usePartner';
+import { useAuth } from '../context/AuthContext';
 import { useMoney } from './useMoney';
 
 const PAYDAYS = Array.from({ length: 28 }, (_, i) => i + 1); // 1-28, as UserSettings.cycleStartDay
@@ -16,7 +17,8 @@ const PAYDAYS = Array.from({ length: 28 }, (_, i) => i + 1); // 1-28, as UserSet
 export function IncomeStep() {
   const { t } = useTranslation();
   const { fmt, currency } = useMoney();
-  const { incomes, totalIncome, createIncome, deleteIncome } = useIncome();
+  const { user } = useAuth();
+  const { incomes: poolIncomes, createIncome, deleteIncome } = useIncome();
   const { updateIncome, cycleStartDay, updatePayday } = useAllocations();
   const { status, sendInvite } = usePartner();
 
@@ -26,15 +28,21 @@ export function IncomeStep() {
   const [partnerEmail, setPartnerEmail] = useState('');
   const [invitingPartner, setInvitingPartner] = useState(false);
 
-  // Keep UserSettings.monthlyIncome (the fallback the rest of the app reads
-  // when there's no Income history yet) in sync as income rows change —
-  // header nav has no per-step submit step to hang this off of.
+  // In a couple the pool holds both partners' income; this step is only
+  // about the signed-in person's own.
+  const incomes = poolIncomes.filter(i => i.ownerUserId === user?.id);
+  const ownIncome = incomes.reduce((s, i) => s + i.amount, 0);
+
+  // Keep the person's own UserSettings.monthlyIncome (the baseline the rest of
+  // the app reads, summed across the household, when there's no Income history
+  // yet) in sync as income rows change — header nav has no per-step submit
+  // step to hang this off of. Own income only, so a partner's never counts twice.
   const syncedRef = useRef<number | null>(null);
   useEffect(() => {
-    if (totalIncome === syncedRef.current) return;
-    syncedRef.current = totalIncome;
-    if (totalIncome > 0) updateIncome(totalIncome);
-  }, [totalIncome]);
+    if (ownIncome === syncedRef.current) return;
+    syncedRef.current = ownIncome;
+    if (ownIncome > 0) updateIncome(ownIncome);
+  }, [ownIncome]);
 
   const handleAdd = async () => {
     const value = parseFloat(amount);

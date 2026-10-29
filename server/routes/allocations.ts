@@ -6,6 +6,7 @@ import { toCents, toEuros, serializeMoney } from "../lib/money.js";
 import { suggestBudgets } from "../lib/suggestBudgets.js";
 import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/period.js";
 import { debtCommitments } from "../lib/debtBalance.js";
+import { incomeBaselines } from "../lib/householdIncome.js";
 
 export const allocationsRouter = Router();
 
@@ -15,12 +16,13 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
     // Ensure defaults exist for this user
     await createDefaultAllocations(req.userId!);
 
-    const [allocations, settings] = await Promise.all([
+    const [allocations, settings, baselines] = await Promise.all([
       prisma.allocation.findMany({
         where: { userId: req.userId! },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       }),
       prisma.userSettings.findUnique({ where: { userId: req.userId! } }),
+      incomeBaselines(req.userId!, req.authUserId!),
     ]);
 
     // A debt line's amount depends on payments and on which period we're in
@@ -35,7 +37,7 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
 
     return res.json(serializeMoney({
       allocations: withDebtLines,
-      monthlyIncome: settings?.monthlyIncome ?? 0,
+      ...baselines, // monthlyIncome (household), ownMonthlyIncome (editable), isCouple
       darkMode: settings?.darkMode ?? false,
       language: settings?.language ?? 'es',
       cycleStartDay: settings?.cycleStartDay ?? 1,
@@ -294,19 +296,21 @@ allocationsRouter.patch("/settings/display", requireAuth, async (req: AuthReques
   }
 });
 
-// PATCH /api/allocations/settings/income  (update monthly income)
+// PATCH /api/allocations/settings/income  (update the signed-in person's own
+// monthly income baseline — the body is HER figure, never the household's;
+// returns both, see server/lib/householdIncome.ts)
 allocationsRouter.patch("/settings/income", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { monthlyIncome } = req.body;
     if (monthlyIncome === undefined) return res.status(400).json({ error: "monthlyIncome is required" });
 
-    const settings = await prisma.userSettings.upsert({
-      where: { userId: req.userId! },
+    await prisma.userSettings.upsert({
+      where: { userId: req.authUserId! },
       update: { monthlyIncome: toCents(monthlyIncome) },
-      create: { userId: req.userId!, monthlyIncome: toCents(monthlyIncome) },
+      create: { userId: req.authUserId!, monthlyIncome: toCents(monthlyIncome) },
     });
 
-    return res.json(serializeMoney({ monthlyIncome: settings.monthlyIncome }));
+    return res.json(serializeMoney(await incomeBaselines(req.userId!, req.authUserId!)));
   } catch (err) {
     console.error("[allocations/settings/income]", err);
     return res.status(500).json({ error: "Internal server error" });

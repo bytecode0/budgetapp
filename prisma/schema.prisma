@@ -59,6 +59,10 @@ model UserSettings {
   language      String  @default("es")
   linkedUserId  String? // Points to primary user's id when this is a linked (partner) account
   cycleStartDay Int     @default(1) // 1-28; day the budget period starts (payday). 1 = calendar month (unchanged behavior)
+  // Onboarding answers "I have no credit cards" / "I have no loans": they mark
+  // those setup steps done. Null = not answered (or undone). server/lib/onboarding.ts
+  noCardsAt     DateTime?
+  noLoansAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -80,6 +84,10 @@ model LifePlan {
   monthlyContribution Int       @default(0) // cents
   deadline            DateTime?
   milestones          String    @default("[]") // JSON array of milestone amounts (investment plans)
+  // Who created it (req.authUserId); null for plans from before this column
+  // that were never merged. Decides who keeps it when a couple unlinks
+  // (server/lib/partnerUnlink.ts).
+  ownerUserId         String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -145,6 +153,10 @@ model Expense {
   source       String   @default("manual") // "manual" | "import"
   externalId   String? // idempotency key for future bank import; null for manual entries
   date         DateTime @default(now())
+  // "expense" | "refund". A refund (decision L, epic 4) keeps a POSITIVE amount
+  // but counts negative: it lowers its category's spending (countedAmounts)
+  // and, on a card account, the card debt (debtBalance purchases).
+  kind         String   @default("expense")
 
   // Attribution (Epic H3) — who paid, who benefits, how it's split.
   payerUserId       String? // who actually paid (real person); null for legacy rows
@@ -152,6 +164,10 @@ model Expense {
   beneficiaryUserId String? // when scope=personal and beneficiary ≠ payer
   scopeConfidence   Float?  // 0..1 when scope was set by AI
   scopeSource       String  @default("manual") // manual | ai | rule
+  // Who entered it (req.authUserId), manual or import; null for legacy rows
+  // and bank sync. Decides which partner gets it back on unlink
+  // (server/lib/partnerUnlink.ts) — the payer only says whose money it was.
+  createdByUserId   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -238,6 +254,10 @@ model Account {
   externalAccountId String? // provider's account identifier
   balanceSource      String   @default("manual") // manual | bank_sync
   balanceSyncedAt    DateTime?
+
+  // Column mapping saved for statement imports of this account when its file
+  // isn't recognised (server/lib/ingest/types.ts ColumnMapping). Null = none.
+  importProfile Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

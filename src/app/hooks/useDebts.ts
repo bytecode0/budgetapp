@@ -130,7 +130,7 @@ export function useDebts() {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (!res.ok) return { error: data.error || 'Failed to create debt' };
+    if (!res.ok) return { error: (data.error as string) || 'Failed to create debt', code: data.code as string | undefined };
     setDebts(d => {
       const next = [...d, data.debt];
       recomputeTotals(next);
@@ -147,7 +147,7 @@ export function useDebts() {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (!res.ok) return { error: data.error || 'Failed to update debt' };
+    if (!res.ok) return { error: (data.error as string) || 'Failed to update debt', code: data.code as string | undefined };
     setDebts(d => {
       const next = d.map(x => (x.id === id ? data.debt : x));
       recomputeTotals(next);

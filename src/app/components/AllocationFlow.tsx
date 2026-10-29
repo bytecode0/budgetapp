@@ -19,6 +19,7 @@ import { BudgetSuggestions } from './BudgetSuggestions';
 import { useLanguage } from '../context/LanguageContext';
 import { useMonth, monthLabel } from '../context/MonthContext';
 import { IconPicker, renderAllocationIcon } from './shared/AllocationIcon';
+import { useMoney } from '../onboarding/useMoney';
 
 const TYPE_OPTIONS = [
   { value: 'fixed',    label: 'Fixed',    color: 'bg-blue-500' },
@@ -105,11 +106,12 @@ interface LocalAllocation {
 
 export function AllocationFlow() {
   const { t } = useTranslation();
+  const { fmt, currency } = useMoney();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
 
   const {
-    allocations: rawAllocations, monthlyIncome: baseIncome, loading,
+    allocations: rawAllocations, monthlyIncome: baseIncome, ownMonthlyIncome, isCouple, loading,
     updateIncome, createAllocation, updateAllocation, deleteAllocation, reorderAllocations, fetchAllocations,
   } = useAllocations();
 
@@ -214,15 +216,15 @@ export function AllocationFlow() {
 
   const handleSaveIncome = async () => {
     const amount = parseFloat(incomeInput.replace(/,/g, ''));
-    if (isNaN(amount) || amount < 0) { toast.error('Enter a valid amount'); return; }
+    if (isNaN(amount) || amount < 0) { toast.error(t('allocation.invalidAmount')); return; }
     const result = await updateIncome(amount);
     if ('error' in result && result.error) toast.error(result.error as string);
-    else { toast.success('Income updated!'); setEditingIncome(false); }
+    else { toast.success(t('allocation.incomeUpdated')); setEditingIncome(false); }
   };
 
   const handleAddAllocation = async () => {
-    if (!newName.trim()) { toast.error('Enter a name'); return; }
-    if (newType === 'plan' && !newLifePlanId) { toast.error('Select a life plan'); return; }
+    if (!newName.trim()) { toast.error(t('allocation.nameRequired')); return; }
+    if (newType === 'plan' && !newLifePlanId) { toast.error(t('allocation.lifePlanRequired')); return; }
     setAdding(true);
     const result = await createAllocation({
       name: newName.trim(), icon: newIcon, type: newType,
@@ -231,7 +233,7 @@ export function AllocationFlow() {
     setAdding(false);
     if ('error' in result && result.error) toast.error(result.error as string);
     else {
-      toast.success('Allocation added!');
+      toast.success(t('allocation.addedOk'));
       setShowAdd(false); setNewName(''); setNewIcon('💰'); setNewType('flexible'); setNewLifePlanId('');
     }
   };
@@ -239,7 +241,7 @@ export function AllocationFlow() {
   const handleDelete = async (id: string) => {
     const result = await deleteAllocation(id);
     if ('error' in result && result.error) toast.error(result.error as string);
-    else toast.success('Removed');
+    else toast.success(t('allocation.removedOk'));
   };
 
   const commitEditName = (id: string) => {
@@ -366,7 +368,7 @@ export function AllocationFlow() {
               {hasRecordedIncome ? (
                 /* Dynamic: sum of this month's recorded income transactions */
                 <div>
-                  <p className="text-5xl font-display">€{monthlyIncome.toLocaleString()}</p>
+                  <p className="text-5xl font-display">{fmt(monthlyIncome)}</p>
                   <div className="flex items-center gap-3 mt-2">
                     <span className="text-xs opacity-60">{t('allocation.incomeFromEntries', { count: incomes.length })}</span>
                     <button
@@ -378,8 +380,12 @@ export function AllocationFlow() {
                   </div>
                 </div>
               ) : editingIncome ? (
+                /* Edits only the signed-in person's own baseline: in a couple the
+                   figure shown above it is the household's (both summed). */
+                <div className="space-y-2">
+                {isCouple && <p className="text-xs opacity-75">{t('allocation.ownIncomeLabel')}</p>}
                 <div className="flex items-center gap-3">
-                  <span className="text-3xl opacity-75">€</span>
+                  <span className="text-3xl opacity-75">{currency}</span>
                   <input
                     type="number"
                     className="text-4xl bg-white/20 rounded-xl px-3 py-1 w-40 outline-none text-white"
@@ -391,17 +397,23 @@ export function AllocationFlow() {
                   <button onClick={handleSaveIncome} className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors"><Check className="w-4 h-4" /></button>
                   <button onClick={() => setEditingIncome(false)} className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors"><X className="w-4 h-4" /></button>
                 </div>
+                {isCouple && <p className="text-xs opacity-60">{t('allocation.householdIncomeTotal', { total: fmt(baseIncome) })}</p>}
+                </div>
               ) : (
                 <div>
                   <button
                     className="text-5xl font-display hover:opacity-80 transition-opacity flex items-center gap-3 group"
-                    onClick={() => { setIncomeInput(String(baseIncome)); setEditingIncome(true); }}
+                    onClick={() => { setIncomeInput(String(ownMonthlyIncome)); setEditingIncome(true); }}
                   >
-                    €{monthlyIncome.toLocaleString()}
+                    {fmt(monthlyIncome)}
                     <Pencil className="w-5 h-5 opacity-0 group-hover:opacity-60 transition-opacity" />
                   </button>
                   <div className="flex items-center gap-3 mt-2">
-                    <span className="text-xs opacity-60">{t('allocation.incomeBaseline')}</span>
+                    <span className="text-xs opacity-60">
+                      {isCouple
+                        ? t('allocation.incomeBaselineCouple', { own: fmt(ownMonthlyIncome) })
+                        : t('allocation.incomeBaseline')}
+                    </span>
                     <button
                       onClick={() => setShowAddIncome(true)}
                       className="inline-flex items-center gap-1 text-xs bg-white/15 hover:bg-white/25 rounded-lg px-2.5 py-1 transition-colors"
@@ -425,14 +437,14 @@ export function AllocationFlow() {
             <div className="grid grid-cols-3 gap-4 pt-6 border-t border-white/20">
               <div>
                 <p className="text-xs opacity-75 mb-1">{t('allocation.totalAllocated')}</p>
-                <p className="text-xl font-display">€{totalAllocated.toLocaleString()}</p>
+                <p className="text-xl font-display">{fmt(totalAllocated)}</p>
                 <p className="text-xs opacity-60">
                   {monthlyIncome > 0 ? ((totalAllocated / monthlyIncome) * 100).toFixed(0) : 0}% {t('allocation.pctOfIncome')}
                 </p>
               </div>
               <div>
                 <p className="text-xs opacity-75 mb-1">{t('allocation.goingToPlans')}</p>
-                <p className="text-xl font-display">€{planAllocTotal.toLocaleString()}</p>
+                <p className="text-xl font-display">{fmt(planAllocTotal)}</p>
                 <p className="text-xs opacity-60">
                   {monthlyIncome > 0 ? ((planAllocTotal / monthlyIncome) * 100).toFixed(0) : 0}% {t('allocation.pctOfIncome')}
                 </p>
@@ -442,7 +454,7 @@ export function AllocationFlow() {
                   {isOver ? t('allocation.overBudget') : isBalanced ? t('allocation.perfectlyBalanced') : t('allocation.freeCash')}
                 </p>
                 <p className={`text-xl font-display ${isOver ? 'text-red-300' : isBalanced ? 'text-emerald-300' : ''}`}>
-                  €{Math.abs(freeAmount).toLocaleString()}
+                  {fmt(Math.abs(freeAmount))}
                 </p>
                 <p className="text-xs opacity-60">
                   {isOver ? t('allocation.reduceAllocations') : isBalanced ? `✓ ${t('allocation.allAccountedFor')}` : t('allocation.unassigned')}
@@ -453,14 +465,14 @@ export function AllocationFlow() {
             <div className="grid grid-cols-3 gap-4 pt-6 border-t border-white/20">
               <div>
                 <p className="text-xs opacity-75 mb-1">{t('allocation.totalIncome')}</p>
-                <p className="text-xl font-display text-emerald-300">€{monthlyIncome.toLocaleString()}</p>
+                <p className="text-xl font-display text-emerald-300">{fmt(monthlyIncome)}</p>
                 <p className="text-xs opacity-60">
                   {hasRecordedIncome ? t('allocation.incomeFromEntries', { count: incomes.length }) : t('allocation.incomeBaseline')}
                 </p>
               </div>
               <div>
                 <p className="text-xs opacity-75 mb-1">{t('allocation.actuallySpent')}</p>
-                <p className="text-xl font-display">€{(monthReview?.totalActual ?? 0).toLocaleString()}</p>
+                <p className="text-xl font-display">{fmt(monthReview?.totalActual ?? 0)}</p>
                 <p className="text-xs opacity-60">
                   {monthReview
                     ? `${Math.round((monthReview.totalActual / Math.max(monthlyIncome, 1)) * 100)}% ${t('allocation.pctOfIncome')}`
@@ -475,7 +487,7 @@ export function AllocationFlow() {
                     <>
                       <p className="text-xs opacity-75 mb-1">{t('allocation.net')}</p>
                       <p className={`text-xl font-display ${negative ? 'text-red-300' : 'text-emerald-300'}`}>
-                        {negative ? '-' : '+'}€{Math.abs(net).toLocaleString()}
+                        {negative ? '-' : '+'}{fmt(Math.abs(net))}
                       </p>
                       <p className="text-xs opacity-60">{t('allocation.afterExpenses')}</p>
                     </>
@@ -494,7 +506,7 @@ export function AllocationFlow() {
                     key={a.id}
                     className="h-full transition-all"
                     style={{ width: `${(a.allocatedAmount / monthlyIncome) * 100}%`, backgroundColor: getTypeColor(a.type) }}
-                    title={`${a.name}: €${a.allocatedAmount.toLocaleString()}`}
+                    title={`${a.name}: ${fmt(a.allocatedAmount)}`}
                   />
                 ))}
                 {freePct > 0.5 && (
@@ -583,7 +595,7 @@ export function AllocationFlow() {
                       <div
                         ref={handleRef}
                         className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors shrink-0 touch-none select-none"
-                        title="Drag to reorder"
+                        title={t('allocation.dragToReorder')}
                       >
                         <GripVertical className="w-4 h-4" />
                       </div>
@@ -629,7 +641,7 @@ export function AllocationFlow() {
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <div className="flex items-center gap-1">
-                        <span className="text-sm text-muted-foreground">€</span>
+                        <span className="text-sm text-muted-foreground">{currency}</span>
                         <input
                           type="number" min="0" step="50"
                           className="w-24 text-right text-sm font-medium border border-border rounded-lg px-2 py-1 outline-none focus:border-primary bg-background"
@@ -657,8 +669,8 @@ export function AllocationFlow() {
                   {linkedPlan && (
                     <div className="space-y-1 pt-1">
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>€{linkedPlan.currentAmount.toLocaleString()} saved</span>
-                        <span>{planProgress.toFixed(0)}% of €{linkedPlan.targetAmount.toLocaleString()}</span>
+                        <span>{t('allocation.planSavedAmount', { amount: fmt(linkedPlan.currentAmount) })}</span>
+                        <span>{t('allocation.planProgressOf', { pct: planProgress.toFixed(0), target: fmt(linkedPlan.targetAmount) })}</span>
                       </div>
                       <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                         <motion.div
@@ -786,7 +798,7 @@ export function AllocationFlow() {
                           >
                             <div className="text-xl mb-1">{p.icon}</div>
                             <p className="text-xs font-medium truncate">{p.title}</p>
-                            <p className="text-xs text-muted-foreground">€{p.currentAmount.toLocaleString()} saved</p>
+                            <p className="text-xs text-muted-foreground">{t('allocation.planSavedAmount', { amount: fmt(p.currentAmount) })}</p>
                           </button>
                         ))}
                       </div>

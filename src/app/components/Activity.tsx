@@ -7,6 +7,7 @@ import { useExpenses, type Expense } from '../hooks/useExpenses';
 import { useIncome, type Income } from '../hooks/useIncome';
 import { useAllocations } from '../hooks/useAllocations';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { useMonth, monthLabel } from '../context/MonthContext';
 import { useDuplicates } from '../hooks/useDuplicates';
 import { AddExpense } from './AddExpense';
@@ -17,6 +18,7 @@ import { Duplicates } from './Duplicates';
 import { ImportStatement } from './ImportStatement';
 import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSheet';
 import { useAccounts } from '../hooks/useAccounts';
+import { useMoney } from '../onboarding/useMoney';
 
 type Movement =
   | { kind: 'expense'; id: string; date: string; amount: number; expense: Expense }
@@ -34,6 +36,7 @@ function getTypeColor(type: string) {
 
 export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () => void }) {
   const { t } = useTranslation();
+  const { currency } = useMoney();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
 
@@ -58,6 +61,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
   const { expenses, loading, totalSpent, totalByAllocation, deleteExpense, updateExpense, updateAttribution, fetchExpenses } =
     useExpenses(currentMonth);
   const { incomes, totalIncome, deleteIncome, fetchIncomes } = useIncome(currentMonth);
+  const { user } = useAuth();
   const { groups: duplicateGroups, loading: duplicatesLoading, merge: mergeDuplicates, fetchDuplicates } = useDuplicates();
   const { allocations, monthlyIncome } = useAllocations();
 
@@ -185,7 +189,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
             </div>
             <p className="text-sm opacity-90">{t('activity.totalSpent')}</p>
           </div>
-          <p className="text-3xl font-display">€{totalSpent.toFixed(2)}</p>
+          <p className="text-3xl font-display">{currency}{totalSpent.toFixed(2)}</p>
           <p className="text-sm opacity-75 mt-1">{t('activity.avgPerDay', { amount: avgPerDay.toFixed(2) })}</p>
           {totalIncome > 0 && (
             <p className="text-sm opacity-75 mt-0.5">{t('activity.incomeThisMonth', { amount: totalIncome.toFixed(2) })}</p>
@@ -232,7 +236,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
               <p className="text-xl font-display flex items-center gap-2">
                 <span>{topAllocation.icon}</span>{topAllocation.name}
               </p>
-              <p className="text-sm text-muted-foreground mt-1">€{topAllocation.amount.toFixed(2)} {t('activity.totalSpent')}</p>
+              <p className="text-sm text-muted-foreground mt-1">{currency}{topAllocation.amount.toFixed(2)} {t('activity.totalSpent')}</p>
             </>
           ) : (
             <p className="text-sm text-muted-foreground mt-2">{t('activity.noExpenses')}</p>
@@ -336,13 +340,15 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
           className="space-y-6"
         >
           {grouped.map(([day, dayItems], groupIdx) => {
-            const net = dayItems.reduce((s, m) => m.kind === 'income' ? s + m.amount : s - m.amount, 0);
+            // Spending counts as the server says (budgetAmount): a refund
+            // adds back, a card payment only its pre-existing-debt part.
+            const net = dayItems.reduce((s, m) => m.kind === 'income' ? s + m.amount : s - (m.expense.budgetAmount ?? m.amount), 0);
             return (
             <div key={day}>
               <div className="flex items-center justify-between mb-2 px-1">
                 <p className="text-sm font-medium text-muted-foreground">{formatDateLabel(day)}</p>
                 <p className={`text-sm ${net > 0 ? 'text-emerald-600' : 'text-muted-foreground'}`}>
-                  {net > 0 ? '+' : ''}€{net.toFixed(2)}
+                  {net > 0 ? '+' : ''}{currency}{net.toFixed(2)}
                 </p>
               </div>
               <div className="bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border">
@@ -376,6 +382,11 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                                     {t('addExpense.unassigned')}
                                   </span>
                                 )}
+                                {m.expense.kind === 'refund' && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                    {t('activity.refund')}
+                                  </span>
+                                )}
                                 {m.expense.account && (
                                   <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                                     {m.expense.account.name}
@@ -392,7 +403,9 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <p className="text-lg font-display">€{m.amount.toFixed(2)}</p>
+                            {m.expense.kind === 'refund'
+                              ? <p className="text-lg font-display text-emerald-600">+{currency}{m.amount.toFixed(2)}</p>
+                              : <p className="text-lg font-display">{currency}{m.amount.toFixed(2)}</p>}
                             <button
                               onClick={() => setEditing(m.expense)}
                               className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
@@ -433,22 +446,27 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <p className="text-lg font-display text-emerald-600">+€{m.amount.toFixed(2)}</p>
-                            <button
-                              onClick={() => setEditingIncome(m.income)}
-                              className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteIncome(m.id)}
-                              disabled={deletingId === m.id}
-                              className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50"
-                            >
-                              {deletingId === m.id
-                                ? <Loader2 className="w-4 h-4 animate-spin" />
-                                : <Trash2 className="w-4 h-4" />}
-                            </button>
+                            <p className="text-lg font-display text-emerald-600">+{currency}{m.amount.toFixed(2)}</p>
+                            {/* Another member's income is read-only (the server answers 403). */}
+                            {m.income.ownerUserId === user?.id && (
+                              <>
+                                <button
+                                  onClick={() => setEditingIncome(m.income)}
+                                  className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteIncome(m.id)}
+                                  disabled={deletingId === m.id}
+                                  className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                  {deletingId === m.id
+                                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                                    : <Trash2 className="w-4 h-4" />}
+                                </button>
+                              </>
+                            )}
                           </div>
                         </>
                       )}

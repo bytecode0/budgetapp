@@ -7,6 +7,9 @@ import { useAllocations } from '../hooks/useAllocations';
 import { useAccounts } from '../hooks/useAccounts';
 import { useExpenses } from '../hooks/useExpenses';
 import { useLanguage } from '../context/LanguageContext';
+import { useMoney } from '../onboarding/useMoney';
+import { useAuth } from '../context/AuthContext';
+import { apiErrorMessage } from '../lib/apiErrors';
 
 interface AddExpenseProps {
   isOpen: boolean;
@@ -19,12 +22,14 @@ type Step = 'amount' | 'allocation' | 'details';
 
 export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpenseProps) {
   const { t } = useTranslation();
+  const { currency } = useMoney();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
 
   const { allocations } = useAllocations();
   const { accounts } = useAccounts();
   const { createExpense, suggestAllocation } = useExpenses();
+  const { user } = useAuth();
 
   const activeAccounts = accounts.filter(a => !a.isArchived);
   // Cards listed apart: picking one means "paid with this card", which raises
@@ -48,11 +53,15 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
   const selectedAllocation = allocations.find(a => a.id === selectedAllocationId) ?? null;
   const selectedAccount = accounts.find(a => a.id === selectedAccountId) ?? null;
 
-  // Default to the first bank account once accounts load — never silently to a
-  // card, which would turn the expense into card debt.
+  // Default once accounts load: the user's own bank account first (in a
+  // couple's pool the partner's may sort first, and the expense would count
+  // as paid with the partner's money), never silently a card, which would
+  // turn the expense into card debt. Same rule as the server
+  // (server/lib/defaultAccount.ts).
   useEffect(() => {
     if (!selectedAccountId && activeAccounts.length > 0) {
-      setSelectedAccountId((bankAccounts[0] ?? activeAccounts[0]).id);
+      const own = bankAccounts.find(a => a.ownerUserId === user?.id);
+      setSelectedAccountId((own ?? bankAccounts[0] ?? activeAccounts.find(a => a.ownerUserId === user?.id) ?? activeAccounts[0]).id);
     }
   }, [activeAccounts, selectedAccountId]);
 
@@ -95,7 +104,7 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
 
   const handleSubmit = async () => {
     const parsed = parseFloat(amount);
-    if (isNaN(parsed) || parsed <= 0) { toast.error('Enter a valid amount'); return; }
+    if (isNaN(parsed) || parsed <= 0) { toast.error(t('addExpense.invalidAmount')); return; }
     setSaving(true);
     const result = await createExpense({
       amount: parsed,
@@ -106,9 +115,9 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
     });
     setSaving(false);
     if ('error' in result) {
-      toast.error(result.error as string);
+      toast.error(apiErrorMessage(t, result));
     } else {
-      toast.success('Expense added!');
+      toast.success(t('addExpense.addedOk'));
       onSaved?.();
       handleClose();
     }
@@ -321,7 +330,7 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
                       <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">{t('addExpense.summary')}</p>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">{t('addExpense.amount')}</span>
-                        <span className="text-2xl font-display text-primary">€{parseFloat(amount).toFixed(2)}</span>
+                        <span className="text-2xl font-display text-primary">{currency}{parseFloat(amount).toFixed(2)}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">{t('addExpense.category')}</span>

@@ -1,13 +1,16 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Upload, FileSpreadsheet, Loader2, Check, ArrowLeft, Sparkles } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, Loader2, Check, ArrowLeft, CreditCard, Landmark, AlertTriangle, PieChart, Columns3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
-import { useLanguage } from '../context/LanguageContext';
 import { useAccounts } from '../hooks/useAccounts';
-import { useAllocations } from '../hooks/useAllocations';
-import { useImport, type ImportPreview, type ConfirmRow, type AiCategory } from '../hooks/useImport';
+import { useImport, type ImportPreview, type PurchasesSign, type PreviewSource, type ImportSummary, type StatementSample, type ColumnMapping } from '../hooks/useImport';
 import { BudgetSuggestions } from './BudgetSuggestions';
+import { ImportPreviewStep } from './import/ImportPreviewStep';
+import { ColumnMappingStep } from './import/ColumnMappingStep';
+import { useAuth } from '../context/AuthContext';
+import { apiErrorMessage } from '../lib/apiErrors';
+import { parseColumnMapping } from '../../../shared/ingest/validate';
 
 interface ImportStatementProps {
   isOpen: boolean;
@@ -15,158 +18,182 @@ interface ImportStatementProps {
   onImported?: () => void;
 }
 
+type Step = 'account' | 'file' | 'mapping' | 'preview' | 'summary';
+
+/** A file the reader didn't understand: its code (shared/ingest/read.ts, or
+ *  the server's 422) and, for tabular files, its first rows. */
+interface ReadProblem { code: string; sample?: StatementSample[] }
+
+// The import wizard (docs/plan-deudas-y-onboarding.md §4.6):
+//   account → file → (column mapping, only if not recognised) → preview → summary.
+// The file is read in this browser (decision O) and only its rows are sent;
+// the preview says what each row is; the summary what was written.
 export function ImportStatement({ isOpen, onClose, onImported }: ImportStatementProps) {
   const { t } = useTranslation();
-  const { language } = useLanguage();
-  const locale = language === 'es' ? 'es-ES' : 'en-GB';
   const { accounts } = useAccounts();
-  const { allocations, createAllocation } = useAllocations();
-  const { loading, confirming, classifying, suggestingCats, preview, confirm, classify, suggestCategories } = useImport();
+  const { loading, read, sample, preview, loadProfile, saveProfile, suggestMapping } = useImport();
+  const { user } = useAuth();
 
   const activeAccounts = accounts.filter(a => !a.isArchived);
+  // Preselected: the user's own bank account, as the server's default
+  // (server/lib/defaultAccount.ts) — not whichever of the couple's sorts first.
+  const defaultAccount = activeAccounts.find(a => a.type !== 'card' && a.ownerUserId === user?.id)
+    ?? activeAccounts.find(a => a.type !== 'card')
+    ?? activeAccounts.find(a => a.ownerUserId === user?.id)
+    ?? activeAccounts[0];
 
+  const [step, setStep] = useState<Step>('account');
   const [accountId, setAccountId] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [source, setSource] = useState<PreviewSource | null>(null);
+  // The manual mapping: the rows it shows, why it opened, what it starts from.
+  const [mappingScreen, setMappingScreen] = useState<{ sample: StatementSample[]; reason: 'unrecognized' | 'manual'; initial: ColumnMapping | null; key: number } | null>(null);
+  const [savingMapping, setSavingMapping] = useState(false);
+  const [problem, setProblem] = useState<ReadProblem | null>(null);
   const [data, setData] = useState<ImportPreview | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [allocByRow, setAllocByRow] = useState<Record<string, string>>({});
+  const [previewKey, setPreviewKey] = useState(0);
+  // The card sign the user chose in the preview (saved on the account on import).
+  const [chosenSign, setChosenSign] = useState<PurchasesSign | null>(null);
+  const [summary, setSummary] = useState<ImportSummary | null>(null);
   const [aiEnabled, setAiEnabled] = useState(false);
-  const [aiMerchants, setAiMerchants] = useState<Set<string>>(new Set());
-  const [proposedCats, setProposedCats] = useState<AiCategory[] | null>(null);
-  const [acceptedCats, setAcceptedCats] = useState<Set<number>>(new Set());
-  const [creatingCats, setCreatingCats] = useState(false);
+  const [aiMapping, setAiMapping] = useState(false);
   const [postImportBudgets, setPostImportBudgets] = useState(false);
 
+  const reset = () => {
+    setStep('account'); setFile(null); setSource(null); setMappingScreen(null); setProblem(null); setData(null);
+    setChosenSign(null); setSummary(null); setPostImportBudgets(false);
+  };
+
   useEffect(() => {
-    if (!isOpen) { setData(null); setSelected(new Set()); setAllocByRow({}); setAiMerchants(new Set()); setProposedCats(null); setPostImportBudgets(false); }
-    if (isOpen && !accountId && activeAccounts.length > 0) setAccountId(activeAccounts[0].id);
+    if (!isOpen) reset();
+    if (isOpen && !accountId && defaultAccount) setAccountId(defaultAccount.id);
     if (isOpen) {
       fetch('/api/ai/status', { credentials: 'include' })
         .then(r => r.ok ? r.json() : { enabled: false })
-        .then(d => setAiEnabled(!!d.enabled))
-        .catch(() => setAiEnabled(false));
+        .then(d => { setAiEnabled(!!d.enabled); setAiMapping(!!d.importMapping); })
+        .catch(() => { setAiEnabled(false); setAiMapping(false); });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  const fmtEuro = (v: number) => `€${Math.abs(v).toFixed(2)}`;
-  const fmtDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+  const account = activeAccounts.find(a => a.id === accountId) ?? null;
 
-  const handleFile = async (file: File | undefined) => {
+  const runPreview = async (src: PreviewSource, purchasesSign?: PurchasesSign) => {
+    const res = await preview(src, accountId, purchasesSign);
+    if (res.error) {
+      if (res.code === 'unrecognized_columns' && res.sample?.length) { openMapping(res.sample, 'unrecognized', null); return; }
+      // Unknown codes and network failures: our own text, never the server's.
+      toast.error(apiErrorMessage(t, { code: res.code, error: t('import.readFailed') }));
+      return;
+    }
+    setData(res.preview!);
+    setPreviewKey(k => k + 1);
+    setStep('preview');
+  };
+
+  const openMapping = (rows: StatementSample[], reason: 'unrecognized' | 'manual', initial: ColumnMapping | null) => {
+    // A new key remounts the screen, so its form starts from this sample.
+    setMappingScreen(prev => ({ sample: rows, reason, initial, key: (prev?.key ?? 0) + 1 }));
+    setStep('mapping');
+  };
+
+  const readAndPreview = async (picked: File, mapping: ColumnMapping | null) => {
+    // Read here (decision O): only the rows go to the server.
+    const outcome = await read(picked, mapping);
+    if ('code' in outcome) {
+      // Columns not recognised: straight to the manual mapping.
+      if (outcome.code === 'unrecognized_columns' && outcome.sample?.length) { openMapping(outcome.sample, 'unrecognized', mapping); return; }
+      setProblem(outcome);
+      setStep('file');
+      return;
+    }
+    setProblem(null);
+    setSource(outcome.source);
+    await runPreview(outcome.source);
+  };
+
+  const handleFile = async (picked: File | undefined) => {
+    if (!picked) return;
+    setFile(picked);
+    setMappingScreen(null);
+    setProblem(null);
+    setChosenSign(null);
+    await readAndPreview(picked, accountId ? await loadProfile(accountId) : null);
+  };
+
+  // "Map by hand" from an error or from the preview: the file's first rows.
+  const mapByHand = async (initial: ColumnMapping | null) => {
     if (!file) return;
-    const res = await preview(file);
-    if (res.error) { toast.error(res.error); return; }
-    const p = res.preview!;
-    setData(p);
-    // Default: select all new rows; pre-fill suggested allocation per expense.
-    setSelected(new Set(p.rows.filter(r => r.status === 'new').map(r => r.externalId)));
-    setAllocByRow(Object.fromEntries(p.rows.filter(r => r.suggestedAllocationId).map(r => [r.externalId, r.suggestedAllocationId!])));
+    const rows = problem?.sample?.length ? problem.sample : await sample(file);
+    if (!rows?.length) { toast.error(t('import.mapping.notTabular')); return; }
+    openMapping(rows, 'manual', initial);
   };
 
-  // Group new expense rows by merchant so the user can categorize a whole shop at
-  // once instead of row by row. Sorted by frequency (most movements first).
-  const merchantGroups = useMemo(() => {
-    const map = new Map<string, { merchant: string; label: string; ids: string[] }>();
-    (data?.rows ?? [])
-      .filter(r => r.status === 'new' && r.kind === 'expense')
-      .forEach(r => {
-        const g = map.get(r.merchant) ?? { merchant: r.merchant, label: r.merchant || r.description, ids: [] };
-        g.ids.push(r.externalId);
-        map.set(r.merchant, g);
-      });
-    return [...map.values()].sort((a, b) => b.ids.length - a.ids.length);
-  }, [data]);
-
-  const uncategorizedMerchantCount = merchantGroups.filter(g => g.ids.some(id => !allocByRow[id])).length;
-
-  const assignMerchant = (ids: string[], allocationId: string) =>
-    setAllocByRow(prev => ({ ...prev, ...Object.fromEntries(ids.map(id => [id, allocationId])) }));
-
-  const uncategorizedMerchants = () =>
-    merchantGroups.filter(g => g.ids.some(id => !allocByRow[id]) && g.merchant).map(g => g.merchant);
-
-  // Classify the given merchants against existing categories and merge into the
-  // preview. Editable afterwards; degrades to a toast on failure.
-  const runClassify = async (merchants: string[]) => {
-    if (merchants.length === 0) return;
-    const res = await classify(merchants);
-    if (res.error) { toast.error(t('import.aiFailed')); return; }
-    const suggestions = res.suggestions ?? [];
-    if (suggestions.length === 0) { toast.info(t('import.aiNoneFound')); return; }
-    const idsByMerchant = new Map(merchantGroups.map(g => [g.merchant, g.ids]));
-    setAllocByRow(prev => {
-      const next = { ...prev };
-      for (const s of suggestions) {
-        for (const id of idsByMerchant.get(s.merchant) ?? []) next[id] = s.allocationId;
+  // Saved on the account so its next file is read without asking; only the
+  // owner may (a household member's mapping is used for this import only).
+  const handleSaveMapping = async (mapping: ColumnMapping) => {
+    if (!file) return;
+    // Never saved nor used when its "titles" are values (a data row taken
+    // for the header row); the server refuses it too.
+    if ('error' in parseColumnMapping(mapping)) { toast.error(t('import.mapping.chooseHeaderRow')); return; }
+    setSavingMapping(true);
+    try {
+      if (accountId) {
+        const saved = await saveProfile(accountId, mapping);
+        if ('ok' in saved) toast.success(t('import.mapping.saved'));
+        else if (saved.status === 403) toast.info(t('import.mapping.notOwner'));
+        else toast.error(t('import.mapping.saveFailed'));
       }
-      return next;
-    });
-    setAiMerchants(prev => new Set([...prev, ...suggestions.map(s => s.merchant)]));
-    toast.success(t('import.aiClassified', { count: suggestions.length }));
-  };
-
-  const handleClassifyAI = () => runClassify(uncategorizedMerchants());
-
-  // Ask the AI to propose a category set from the uncategorized merchants.
-  const handleSuggestCategories = async () => {
-    const merchants = uncategorizedMerchants();
-    if (merchants.length === 0) return;
-    const res = await suggestCategories(merchants);
-    if (res.error) { toast.error(t('import.aiFailed')); return; }
-    const cats = res.categories ?? [];
-    if (cats.length === 0) { toast.info(t('import.aiNoneFound')); return; }
-    setProposedCats(cats);
-    setAcceptedCats(new Set(cats.map((_, i) => i))); // accept all by default
-  };
-
-  // Create the accepted categories, then re-classify so the new ones get assigned.
-  const handleCreateCategories = async () => {
-    if (!proposedCats) return;
-    const chosen = proposedCats.filter((_, i) => acceptedCats.has(i));
-    if (chosen.length === 0) { setProposedCats(null); return; }
-    setCreatingCats(true);
-    let created = 0;
-    for (const cat of chosen) {
-      const r = await createAllocation({ name: cat.name, icon: cat.icon, type: 'flexible' });
-      if (!('error' in r)) created++;
-    }
-    setCreatingCats(false);
-    setProposedCats(null);
-    if (created > 0) {
-      toast.success(t('import.aiCategoriesCreated', { count: created }));
-      await runClassify(uncategorizedMerchants()); // assign merchants to the new categories
+      setChosenSign(null);
+      await readAndPreview(file, mapping);
+    } finally {
+      setSavingMapping(false);
     }
   };
 
-  const toggle = (id: string) => setSelected(prev => {
-    const next = new Set(prev);
-    next.has(id) ? next.delete(id) : next.add(id);
-    return next;
-  });
+  const handleSignChange = (sign: PurchasesSign) => {
+    if (!source) return;
+    setChosenSign(sign);
+    runPreview(source, sign);
+  };
 
-  const handleConfirm = async () => {
-    if (!data) return;
-    const rows: ConfirmRow[] = data.rows
-      .filter(r => r.status === 'new' && selected.has(r.externalId))
-      .map(r => ({
-        kind: r.kind,
-        externalId: r.externalId,
-        date: r.date,
-        description: r.description,
-        merchant: r.merchant,
-        amount: r.amount,
-        allocationId: r.kind === 'expense' ? (allocByRow[r.externalId] || null) : undefined,
-      }));
-    if (rows.length === 0) { toast.error(t('import.nothingSelected')); return; }
-    const res = await confirm(accountId, rows);
-    if (res.error) { toast.error(res.error); return; }
-    toast.success(t('import.importedOk', { count: res.inserted ?? rows.length }));
+  // After the import: the card sign the user chose becomes part of how this
+  // account's files are read, so the next file isn't asked. Only the owner
+  // may change it (a household member's choice stays for this import).
+  const rememberSign = async () => {
+    if (!accountId || !chosenSign || data?.mode !== 'card' || source?.kind !== 'rows') return;
+    const mapping = source.read.mapping;
+    if (!mapping || mapping.purchasesSign === chosenSign) return;
+    const saved = await saveProfile(accountId, { ...mapping, description: mapping.description.slice(0, 5), purchasesSign: chosenSign });
+    if ('ok' in saved) toast.success(t('import.signSaved'));
+  };
+
+  const handleConfirmed = (s: ImportSummary) => {
+    setSummary(s);
+    setStep('summary');
     onImported?.();
-    // Offer budget suggestions before closing — the just-imported history now
-    // makes per-category amounts computable (esp. for freshly-created categories).
-    setPostImportBudgets(true);
+    rememberSign();
   };
 
-  const selectedCount = data ? data.rows.filter(r => r.status === 'new' && selected.has(r.externalId)).length : 0;
+  const summaryParts = (s: ImportSummary): string[] => [
+    ...(s.expenses ? [t('import.summaryExpenses', { count: s.expenses })] : []),
+    ...(s.incomes ? [t('import.summaryIncomes', { count: s.incomes })] : []),
+    ...(s.refunds ? [t('import.summaryRefunds', { count: s.refunds })] : []),
+    ...s.payments.map(p => (p.name
+      ? t('import.summaryPayments', { count: p.count, name: p.name })
+      : t('import.summaryPaymentsUnnamed', { count: p.count }))),
+  ];
+
+  const back = () => {
+    if (step === 'file') { setProblem(null); setStep('account'); }
+    else if (step === 'mapping' || step === 'preview') setStep('file');
+  };
+  // The mapping step is shown in the progress only when it's used.
+  const steps: Step[] = mappingScreen ? ['account', 'file', 'mapping', 'preview', 'summary'] : ['account', 'file', 'preview', 'summary'];
+  const stepIndex = steps.indexOf(step);
+  const problemMessage = problem && (problem.code === 'reader_failed'
+    ? t('import.readFailed')
+    : apiErrorMessage(t, { code: problem.code, error: t('import.readFailed') }));
 
   return (
     <>
@@ -183,221 +210,186 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
             exit={{ opacity: 0, y: 40, scale: 0.95 }}
             className="bg-card border border-border rounded-2xl p-6 w-full max-w-2xl space-y-5 max-h-[88vh] overflow-y-auto"
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {data && (
-                  <button onClick={() => setData(null)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                {(step === 'file' || step === 'mapping' || step === 'preview') && (
+                  <button onClick={back} aria-label={t('import.back')} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
                     <ArrowLeft className="w-4 h-4" />
                   </button>
                 )}
-                <FileSpreadsheet className="w-5 h-5 text-primary" />
-                <h2 className="text-2xl font-display">{t('import.title')}</h2>
+                <FileSpreadsheet className="w-5 h-5 text-primary shrink-0" />
+                <h2 className="text-2xl font-display truncate">{t('import.title')}</h2>
               </div>
-              <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted transition-colors">
+              <button onClick={onClose} aria-label={t('import.close')} className="p-2 rounded-lg hover:bg-muted transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {!data ? (
-              /* ── Step 1: pick account + file ── */
-              <div className="space-y-5">
-                <p className="text-sm text-muted-foreground">{t('import.subtitle')}</p>
-
-                {activeAccounts.length > 0 && (
-                  <div className="space-y-2">
-                    <label className="text-xs text-muted-foreground">{t('import.account')}</label>
-                    <select
-                      value={accountId ?? ''}
-                      onChange={e => setAccountId(e.target.value || null)}
-                      className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
-                    >
-                      {activeAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                    </select>
-                  </div>
-                )}
-
-                <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-border rounded-2xl p-10 cursor-pointer hover:border-primary/50 transition-colors">
-                  {loading ? <Loader2 className="w-8 h-8 animate-spin text-primary" /> : <Upload className="w-8 h-8 text-muted-foreground" />}
-                  <span className="text-sm text-muted-foreground">{loading ? t('import.reading') : t('import.dropHint')}</span>
-                  <input
-                    type="file"
-                    accept=".xlsx,.csv"
-                    className="hidden"
-                    disabled={loading}
-                    onChange={e => handleFile(e.target.files?.[0])}
-                  />
-                </label>
+            <div className="space-y-1.5">
+              <div className="flex gap-1.5">
+                {steps.map((s, i) => (
+                  <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${i <= stepIndex ? 'bg-primary' : 'bg-muted'}`} />
+                ))}
               </div>
-            ) : (
-              /* ── Step 2: preview + confirm ── */
-              <div className="space-y-4">
-                <div className="flex flex-wrap gap-2 text-xs">
-                  <span className="px-2.5 py-1 rounded-full bg-primary/10 text-primary">{t('import.newCount', { count: data.newCount })}</span>
-                  <span className="px-2.5 py-1 rounded-full bg-muted text-muted-foreground">{t('import.dupCount', { count: data.duplicateCount })}</span>
-                  <span className="px-2.5 py-1 rounded-full bg-muted text-muted-foreground">{t('import.expenseCount', { count: data.expenseCount })}</span>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">{t('import.incomeCount', { count: data.incomeCount })}</span>
-                </div>
+              <p className="text-xs text-muted-foreground">
+                {t('import.stepOf', { n: stepIndex + 1, total: steps.length })} · {t(`import.steps.${step}`)}
+                {account && step !== 'account' && <> · {account.name}</>}
+              </p>
+            </div>
 
-                {/* Bulk assign by merchant — categorize a whole shop in one go */}
-                {merchantGroups.length > 1 && allocations.length > 0 && (
-                  <div className="border border-border rounded-xl p-3 space-y-2 bg-muted/30">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">{t('import.byMerchant')}</p>
-                        <p className="text-xs text-muted-foreground">{t('import.uncategorizedMerchants', { count: uncategorizedMerchantCount })}</p>
-                      </div>
-                      {aiEnabled && uncategorizedMerchantCount > 0 && (
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            onClick={handleSuggestCategories}
-                            disabled={suggestingCats || creatingCats}
-                            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/5 transition-colors disabled:opacity-50"
-                          >
-                            {suggestingCats ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                            {t('import.aiSuggestCategories')}
-                          </button>
-                          <button
-                            onClick={handleClassifyAI}
-                            disabled={classifying}
-                            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gradient-to-br from-primary to-secondary text-white hover:shadow-md transition-all disabled:opacity-50"
-                          >
-                            {classifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                            {classifying ? t('import.aiClassifying') : t('import.aiClassify')}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                      {merchantGroups.map(g => {
-                        // The group's shared category, or '' when its rows disagree / are unset.
-                        const allocs = g.ids.map(id => allocByRow[id] ?? '');
-                        const shared = allocs.every(a => a === allocs[0]) ? allocs[0] : '';
-                        return (
-                          <div key={g.merchant} className="flex items-center gap-2">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm truncate flex items-center gap-1.5">
-                                {g.label}
-                                {aiMerchants.has(g.merchant) && (
-                                  <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-                                    <Sparkles className="w-2.5 h-2.5" /> {t('import.aiSuggested')}
-                                  </span>
-                                )}
-                              </p>
-                              <p className="text-xs text-muted-foreground">{t('import.movementsCount', { count: g.ids.length })}</p>
-                            </div>
-                            <select
-                              value={shared}
-                              onChange={e => assignMerchant(g.ids, e.target.value)}
-                              className="text-xs border border-border rounded-lg px-2 py-1 bg-background outline-none focus:border-primary max-w-[45%]"
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={step}
+                initial={{ opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -12 }}
+                transition={{ duration: 0.15 }}
+              >
+                {step === 'account' && (
+                  /* ── 1. Which account or card the file belongs to ── */
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">{t('import.accountHint')}</p>
+                    {activeAccounts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-6">{t('import.noAccounts')}</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {activeAccounts.map(a => {
+                          const Icon = a.type === 'card' ? CreditCard : Landmark;
+                          const active = a.id === accountId;
+                          return (
+                            <button
+                              key={a.id}
+                              type="button"
+                              onClick={() => setAccountId(a.id)}
+                              className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-colors ${active ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
                             >
-                              <option value="">{t('import.uncategorized')}</option>
-                              {allocations.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
-                            </select>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {proposedCats && (
-                  <div className="border border-primary/30 rounded-xl p-3 space-y-2 bg-primary/5">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-primary" />
-                        {t('import.aiCategoriesProposed', { count: proposedCats.length })}
-                      </p>
-                      <button onClick={() => setProposedCats(null)} className="p-1 rounded hover:bg-muted transition-colors">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                      {proposedCats.map((cat, i) => (
-                        <label key={i} className="flex items-center gap-2 cursor-pointer py-1">
-                          <input
-                            type="checkbox"
-                            className="accent-primary shrink-0"
-                            checked={acceptedCats.has(i)}
-                            onChange={() => setAcceptedCats(prev => {
-                              const n = new Set(prev);
-                              n.has(i) ? n.delete(i) : n.add(i);
-                              return n;
-                            })}
-                          />
-                          <span className="text-lg shrink-0">{cat.icon}</span>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm truncate">{cat.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {cat.merchants.slice(0, 3).join(', ')}{cat.merchants.length > 3 ? '…' : ''}
-                            </p>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
+                              <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm truncate">{a.name}</p>
+                                <p className="text-xs text-muted-foreground">{t(`accounts.type.${a.type}`)}</p>
+                              </div>
+                              {active && <Check className="w-4 h-4 text-primary shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                     <button
-                      onClick={handleCreateCategories}
-                      disabled={creatingCats || acceptedCats.size === 0}
-                      className="w-full py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                      onClick={() => setStep('file')}
+                      disabled={!accountId}
+                      className="w-full py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                      {creatingCats ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                      {t('import.aiCreateCategories', { count: acceptedCats.size })}
+                      {t('import.next')}
                     </button>
                   </div>
                 )}
 
-                <div className="border border-border rounded-xl divide-y divide-border max-h-[48vh] overflow-y-auto">
-                  {data.rows.map(r => {
-                    const isDup = r.status === 'duplicate';
-                    return (
-                      <div key={r.externalId} className={`flex items-center gap-3 p-3 ${isDup ? 'opacity-50' : ''}`}>
-                        <input
-                          type="checkbox"
-                          className="accent-primary shrink-0"
-                          checked={!isDup && selected.has(r.externalId)}
-                          disabled={isDup}
-                          onChange={() => toggle(r.externalId)}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm truncate">{r.description || r.merchant}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {fmtDate(r.date)}
-                            {isDup && <> · {t('import.duplicate')}</>}
-                          </p>
-                        </div>
-                        {r.kind === 'expense' && !isDup && allocations.length > 0 && (
-                          <select
-                            value={allocByRow[r.externalId] ?? ''}
-                            onChange={e => setAllocByRow(prev => ({ ...prev, [r.externalId]: e.target.value }))}
-                            className="text-xs border border-border rounded-lg px-2 py-1 bg-background outline-none focus:border-primary max-w-[40%]"
-                          >
-                            <option value="">{t('import.uncategorized')}</option>
-                            {allocations.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
-                          </select>
-                        )}
-                        <p className={`text-sm font-display shrink-0 w-20 text-right ${r.kind === 'income' ? 'text-emerald-600' : ''}`}>
-                          {r.kind === 'income' ? '+' : '-'}{fmtEuro(r.signedAmount)}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
+                {step === 'file' && (
+                  /* ── 2. The file ── */
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      {t(account?.type === 'card' ? 'import.fileHintCard' : 'import.subtitle')}
+                    </p>
 
-                <button
-                  onClick={handleConfirm}
-                  disabled={confirming || selectedCount === 0}
-                  className="w-full py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  {t('import.importSelected', { count: selectedCount })}
-                </button>
-              </div>
-            )}
+                    {problem && (
+                      <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 space-y-3">
+                        <div className="flex gap-3">
+                          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <p className="text-sm">{problemMessage}</p>
+                            <p className="text-xs text-muted-foreground">{t('import.tryAnotherFile')}</p>
+                          </div>
+                        </div>
+                        {file && (problem.code === 'no_movements' || problem.code === 'unrecognized_columns') && (
+                          <button
+                            type="button"
+                            onClick={() => mapByHand(null)}
+                            className="px-5 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors text-sm inline-flex items-center gap-2"
+                          >
+                            <Columns3 className="w-4 h-4" /> {t('import.mapping.mapByHand')}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-border rounded-2xl p-10 cursor-pointer hover:border-primary/50 transition-colors">
+                      {loading ? <Loader2 className="w-8 h-8 animate-spin text-primary" /> : <Upload className="w-8 h-8 text-muted-foreground" />}
+                      <span className="text-sm text-muted-foreground text-center">{loading ? t('import.reading') : t('import.dropHint')}</span>
+                      <input
+                        type="file"
+                        accept=".xlsx,.xls,.csv,.txt,.n43,.aeb,.ofx,.qfx"
+                        className="hidden"
+                        disabled={loading}
+                        onChange={e => { handleFile(e.target.files?.[0]); e.target.value = ''; }}
+                      />
+                    </label>
+                    <p className="text-xs text-muted-foreground">{t('import.readLocally')}</p>
+                  </div>
+                )}
+
+                {step === 'mapping' && mappingScreen && (
+                  /* ── 2b. Which column is what (only when not recognised, or asked) ── */
+                  <ColumnMappingStep
+                    key={mappingScreen.key}
+                    sample={mappingScreen.sample}
+                    isCard={account?.type === 'card'}
+                    reason={mappingScreen.reason}
+                    initial={mappingScreen.initial}
+                    saving={savingMapping || loading}
+                    onSave={handleSaveMapping}
+                    onSuggest={aiMapping ? suggestMapping : undefined}
+                  />
+                )}
+
+                {step === 'preview' && data && (
+                  /* ── 3. What each row is ── */
+                  <ImportPreviewStep
+                    key={previewKey}
+                    data={data}
+                    accountId={accountId}
+                    aiEnabled={aiEnabled}
+                    onSignChange={handleSignChange}
+                    signLoading={loading}
+                    onConfirmed={handleConfirmed}
+                    onMapByHand={source?.kind === 'rows' && source.read.mapping ? () => mapByHand(source.read.mapping ?? null) : undefined}
+                  />
+                )}
+
+                {step === 'summary' && summary && (
+                  /* ── 4. What was written ── */
+                  <div className="space-y-5">
+                    <div className="bg-emerald-50 dark:bg-emerald-950/20 border-2 border-emerald-200 dark:border-emerald-800 rounded-2xl p-5 space-y-2">
+                      <p className="font-display text-lg flex items-center gap-2">
+                        <Check className="w-5 h-5 text-emerald-600" /> {t('import.summaryTitle')}
+                      </p>
+                      <p className="text-sm">
+                        {summaryParts(summary).length > 0 ? summaryParts(summary).join(', ') : t('import.summaryNothing')}
+                      </p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        onClick={() => setPostImportBudgets(true)}
+                        className="flex-1 px-5 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors text-sm flex items-center justify-center gap-2"
+                      >
+                        <PieChart className="w-4 h-4" /> {t('import.suggestBudgets')}
+                      </button>
+                      <button
+                        onClick={onClose}
+                        className="flex-1 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors text-sm"
+                      >
+                        {t('import.done')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
           </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
 
-    {/* After a successful import: offer history-based budget suggestions, then close. */}
+    {/* After a successful import: history-based budget suggestions, on request. */}
     <BudgetSuggestions
       isOpen={postImportBudgets}
       onClose={() => { setPostImportBudgets(false); onClose(); }}

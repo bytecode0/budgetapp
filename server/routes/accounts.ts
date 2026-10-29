@@ -1,12 +1,16 @@
 import { Router, Response } from "express";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
+import { mutationAccess, reorderableEntries, visibleToWhere } from "../lib/ownership.js";
 import { createDefaultAccount } from "../lib/defaults.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { currentPeriodKey, periodBounds } from "../lib/period.js";
 import { loadDebtLedgers, debtState, owedNow, monthlyCommitment } from "../lib/debtBalance.js";
-import { CARD_PAYMENT_MODES, createCardDebt, updateCardDebt, type CardSettings } from "../lib/cardDebt.js";
+import { ownerChangeSplitsDebtLink, mirroredCardDebtId } from "../lib/debtAccountLink.js";
+import { parseColumnMapping, storedMapping } from "../../shared/ingest/validate.js";
+import { CARD_PAYMENT_MODES, cardDebtOwnershipChanges, createCardDebt, updateCardDebt, type CardSettings } from "../lib/cardDebt.js";
 
 export const accountsRouter = Router();
 
@@ -42,7 +46,7 @@ accountsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
     const accounts = await prisma.account.findMany({
       where: {
         userId: req.userId!,
-        OR: [{ ownerUserId: req.authUserId! }, { visibility: "household" }],
+        ...visibleToWhere(req.authUserId!),
       },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     });
@@ -115,7 +119,7 @@ accountsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
     });
 
     if (card) {
-      await createCardDebt({ userId: req.userId!, authUserId: req.authUserId!, householdId: req.householdId }, account, card);
+      await createCardDebt({ userId: req.userId!, householdId: req.householdId }, account, card);
     }
 
     return res.json(serializeMoney({ account }));
@@ -133,12 +137,16 @@ accountsRouter.patch("/reorder", requireAuth, async (req: AuthRequest, res: Resp
       return res.status(400).json({ error: "order array is required" });
     }
 
+    // Only rows the caller can see (the same rule as GET); others are ignored.
+    const visible = await prisma.account.findMany({
+      where: { userId: req.userId!, ...visibleToWhere(req.authUserId!) },
+      select: { id: true },
+    });
+    const entries = reorderableEntries(order, new Set(visible.map(r => r.id)));
+
     await prisma.$transaction(
-      order.map(({ id, sortOrder }) =>
-        prisma.account.updateMany({
-          where: { id, userId: req.userId! },
-          data: { sortOrder },
-        })
+      entries.map(({ id, sortOrder }) =>
+        prisma.account.updateMany({ where: { id, userId: req.userId! }, data: { sortOrder } })
       )
     );
 
@@ -155,6 +163,9 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     const { id } = req.params;
     const existing = await prisma.account.findFirst({ where: { id, userId: req.userId! } });
     if (!existing) return res.status(404).json({ error: "Account not found" });
+    const access = mutationAccess(existing, req.authUserId);
+    if (access === "hidden") return res.status(404).json({ error: "Account not found" });
+    if (access === "forbidden") return res.status(403).json({ error: "Only the owner can change this account" });
 
     const { name, type, currency, currentBalance, isArchived, sortOrder, visibility, ownerUserId } = req.body;
     if (type !== undefined && !ACCOUNT_TYPES.has(type)) {
@@ -163,11 +174,17 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     if (visibility !== undefined && !VISIBILITIES.has(visibility)) {
       return res.status(400).json({ error: "Invalid visibility" });
     }
-    // ownerUserId can only be reassigned to a member of the same household.
-    if (ownerUserId !== undefined && req.householdId) {
-      const member = await prisma.householdMember.findFirst({
-        where: { householdId: req.householdId, userId: ownerUserId }, select: { id: true },
-      });
+    // ownerUserId can only be reassigned to a member of the same household;
+    // without a household the only valid owner is the caller.
+    if (ownerUserId !== undefined && typeof ownerUserId !== "string") {
+      return res.status(400).json({ error: "Owner must be a household member" });
+    }
+    if (ownerUserId !== undefined && ownerUserId !== req.authUserId) {
+      const member = req.householdId
+        ? await prisma.householdMember.findFirst({
+            where: { householdId: req.householdId, userId: ownerUserId }, select: { id: true },
+          })
+        : null;
       if (!member) return res.status(400).json({ error: "Owner must be a household member" });
     }
 
@@ -175,6 +192,16 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     const card = finalType === "card" ? cardSettingsFrom(req.body) : null;
     if (card && "error" in card) return res.status(400).json({ error: card.error });
     const linkedDebt = await prisma.debt.findFirst({ where: { userId: req.userId!, accountId: id, kind: "credit_card" }, select: { id: true } });
+
+    // Any other debt on this account must keep the account's owner
+    // (server/lib/debtAccountLink.ts): refuse a handover that would split them.
+    // The card's own debt follows its card (or is dropped with it, below).
+    if (ownerUserId !== undefined && ownerUserId !== existing.ownerUserId) {
+      const onAccount = await prisma.debt.findMany({ where: { userId: req.userId!, accountId: id }, select: { id: true, ownerUserId: true } });
+      if (ownerChangeSplitsDebtLink(ownerUserId, onAccount, mirroredCardDebtId(existing.type, linkedDebt?.id ?? null))) {
+        return res.status(409).json({ error: "This account backs a debt of its current owner; it can't change owner", code: "account_backs_owner_debt" });
+      }
+    }
 
     // No longer a card: drop its debt — unless anything was recorded on it,
     // which would rewrite closed months (server/lib/debtBalance.ts).
@@ -187,28 +214,85 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
       await prisma.debt.delete({ where: { id: linkedDebt.id } });
     }
 
-    const account = await prisma.account.update({
-      where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(type !== undefined && { type }),
-        ...(currency !== undefined && { currency }),
-        ...(currentBalance !== undefined && { currentBalance: card ? 0 : toCents(currentBalance) }),
-        ...(isArchived !== undefined && { isArchived: Boolean(isArchived) }),
-        ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
-        ...(visibility !== undefined && { visibility }),
-        ...(ownerUserId !== undefined && { ownerUserId }),
-      },
-    });
+    // A card's debt mirrors its account's owner and visibility, written
+    // together so they can't drift apart.
+    const debtOwnership = linkedDebt ? cardDebtOwnershipChanges(finalType, { ownerUserId, visibility }) : null;
+    const [account] = await prisma.$transaction([
+      prisma.account.update({
+        where: { id },
+        data: {
+          ...(name !== undefined && { name }),
+          ...(type !== undefined && { type }),
+          ...(currency !== undefined && { currency }),
+          ...(currentBalance !== undefined && { currentBalance: card ? 0 : toCents(currentBalance) }),
+          ...(isArchived !== undefined && { isArchived: Boolean(isArchived) }),
+          ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
+          ...(visibility !== undefined && { visibility }),
+          ...(ownerUserId !== undefined && { ownerUserId }),
+        },
+      }),
+      ...(linkedDebt && debtOwnership ? [prisma.debt.update({ where: { id: linkedDebt.id }, data: debtOwnership })] : []),
+    ]);
 
     if (card) {
       if (linkedDebt) await updateCardDebt(req.userId!, linkedDebt.id, { ...card, ...(name !== undefined && { name }) });
-      else await createCardDebt({ userId: req.userId!, authUserId: req.authUserId!, householdId: req.householdId }, account, card);
+      else await createCardDebt({ userId: req.userId!, householdId: req.householdId }, account, card);
     }
 
     return res.json(serializeMoney({ account }));
   } catch (err) {
     console.error("[accounts/PATCH]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Statement-import column mapping saved on an account (shared/ingest/): used
+// when its files aren't recognised by a bank profile, so the second import
+// doesn't ask again. Changing it is owner-only, like every other account
+// change. Reading it follows the import itself: the browser reads the file
+// (decision O) with this mapping, and anyone who may import into the account
+// (its owner, or a household member when it's shared) needs it — the server
+// path applied it for them too.
+async function ownedAccount(req: AuthRequest, res: Response) {
+  const existing = await prisma.account.findFirst({ where: { id: req.params.id, userId: req.userId! } });
+  const access = existing ? mutationAccess(existing, req.authUserId) : "hidden";
+  if (access === "hidden") { res.status(404).json({ error: "Account not found" }); return null; }
+  if (access === "forbidden") { res.status(403).json({ error: "Only the owner can change this account" }); return null; }
+  return existing;
+}
+
+// GET /api/accounts/:id/import-profile → { data: { importProfile: ColumnMapping | null } }
+accountsRouter.get("/:id/import-profile", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const account = await prisma.account.findFirst({
+      where: { id: req.params.id, userId: req.userId!, ...visibleToWhere(req.authUserId!) },
+      select: { importProfile: true },
+    });
+    if (!account) return res.status(404).json({ error: "Account not found" });
+    return res.json({ data: { importProfile: storedMapping(account.importProfile) } });
+  } catch (err) {
+    console.error("[accounts/import-profile GET]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/accounts/:id/import-profile  Body: { importProfile: ColumnMapping | null }
+accountsRouter.patch("/:id/import-profile", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const account = await ownedAccount(req, res);
+    if (!account) return;
+    const { importProfile } = req.body as { importProfile?: unknown };
+    if (importProfile === undefined) return res.status(400).json({ error: "importProfile is required (null to clear)" });
+    let value: Prisma.InputJsonValue | typeof Prisma.DbNull = Prisma.DbNull;
+    if (importProfile !== null) {
+      const parsed = parseColumnMapping(importProfile);
+      if ("error" in parsed) return res.status(400).json({ error: parsed.error });
+      value = { ...parsed.mapping };
+    }
+    const updated = await prisma.account.update({ where: { id: account.id }, data: { importProfile: value }, select: { importProfile: true } });
+    return res.json({ data: { importProfile: storedMapping(updated.importProfile) } });
+  } catch (err) {
+    console.error("[accounts/import-profile PATCH]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -219,6 +303,9 @@ accountsRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Respons
     const { id } = req.params;
     const existing = await prisma.account.findFirst({ where: { id, userId: req.userId! } });
     if (!existing) return res.status(404).json({ error: "Account not found" });
+    const access = mutationAccess(existing, req.authUserId);
+    if (access === "hidden") return res.status(404).json({ error: "Account not found" });
+    if (access === "forbidden") return res.status(403).json({ error: "Only the owner can change this account" });
 
     // A card account backs a debt's purchases (server/lib/debtBalance.ts):
     // without it, the debt's payments would count in full in past months. A

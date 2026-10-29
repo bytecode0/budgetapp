@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useMonthlyReview } from '../hooks/useMonthlyBudget';
 import { useLanguage } from '../context/LanguageContext';
 import { useMonth, monthLabel } from '../context/MonthContext';
+import { useMoney } from '../onboarding/useMoney';
 
 function normalizeType(type: string): string {
   if (type === 'essential') return 'fixed';
@@ -31,6 +32,7 @@ function getTypeBg(type: string) {
 
 export function MonthlyReview() {
   const { t } = useTranslation();
+  const { fmt } = useMoney();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
   const { selectedMonth, isCurrentMonth, isFutureMonth } = useMonth();
@@ -86,7 +88,7 @@ export function MonthlyReview() {
                 className="bg-card border border-border rounded-2xl p-5"
               >
                 <p className="text-sm text-muted-foreground mb-2">{t('monthlyReview.totalBudgeted')}</p>
-                <p className="text-3xl font-display">€{review.totalBudgeted.toLocaleString()}</p>
+                <p className="text-3xl font-display">{fmt(review.totalBudgeted)}</p>
                 <p className="text-xs text-muted-foreground mt-1">{t('monthlyReview.acrossCategories')}</p>
               </motion.div>
 
@@ -108,7 +110,7 @@ export function MonthlyReview() {
                 <p className={`text-3xl font-display ${
                   isOver ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
                 }`}>
-                  €{review.totalActual.toLocaleString()}
+                  {fmt(review.totalActual)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {isOver ? t('monthlyReview.overBudget') : t('monthlyReview.underBudget')}
@@ -125,7 +127,7 @@ export function MonthlyReview() {
                 <p className={`text-3xl font-display ${
                   isOver ? 'text-red-500' : 'text-emerald-500'
                 }`}>
-                  {isOver ? '-' : '+'}€{budgetDelta.toLocaleString()}
+                  {isOver ? '-' : '+'}{fmt(budgetDelta)}
                 </p>
                 {review.unassigned > 0 && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
@@ -179,18 +181,18 @@ export function MonthlyReview() {
                         <div className="flex items-center gap-4 shrink-0 text-right">
                           <div>
                             <p className="text-xs text-muted-foreground">{t('monthlyReview.budget')}</p>
-                            <p className="text-sm font-medium">€{row.budgeted.toLocaleString()}</p>
+                            <p className="text-sm font-medium">{fmt(row.budgeted)}</p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">{t('monthlyReview.actual')}</p>
                             <p className={`text-sm font-medium ${isOver ? 'text-red-500' : isUnder ? 'text-emerald-500' : ''}`}>
-                              €{row.actual.toLocaleString()}
+                              {fmt(row.actual)}
                             </p>
                           </div>
                           <div className="w-16">
                             <p className="text-xs text-muted-foreground">{t('monthlyReview.diff')}</p>
                             <p className={`text-sm font-display ${isOver ? 'text-red-500' : isUnder ? 'text-emerald-500' : 'text-muted-foreground'}`}>
-                              {isOver ? '+' : isUnder ? '-' : ''}€{Math.abs(row.diff).toLocaleString()}
+                              {isOver ? '+' : isUnder ? '-' : ''}{fmt(Math.abs(row.diff))}
                             </p>
                           </div>
                         </div>

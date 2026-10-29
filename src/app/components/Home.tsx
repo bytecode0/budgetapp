@@ -13,6 +13,7 @@ import { useDebts } from '../hooks/useDebts';
 import { useLanguage } from '../context/LanguageContext';
 import { SetupChecklist } from './SetupChecklist';
 import type { OnboardingStep } from '../hooks/useOnboardingNeeded';
+import { useMoney } from '../onboarding/useMoney';
 
 function greeting(t: (key: string) => string) {
   const h = new Date().getHours();
@@ -36,10 +37,13 @@ interface HomeProps {
   /** Setup steps still missing ("Completa tu configuración"). */
   setupMissing?: OnboardingStep[];
   onResumeSetup?: (step: OnboardingStep) => void;
+  /** Re-reads the setup status (after a "no cards" / "no loans" answer). */
+  onSetupChanged?: () => void;
 }
 
-export function Home({ onNavigate, setupMissing = [], onResumeSetup }: HomeProps) {
+export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChanged = () => {} }: HomeProps) {
   const { t } = useTranslation();
+  const { fmt } = useMoney();
   const { language } = useLanguage();
   const { selectedMonth, isCurrentMonth } = useMonth();
   const { plans } = usePlans();
@@ -85,7 +89,7 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup }: HomeProps
   return (
     <div className="space-y-6 pb-8">
 
-      {onResumeSetup && <SetupChecklist missing={setupMissing} onResume={onResumeSetup} />}
+      {onResumeSetup && <SetupChecklist missing={setupMissing} onResume={onResumeSetup} onChanged={onSetupChanged} />}
 
       {/* ── Hero header ── */}
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
@@ -104,13 +108,13 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup }: HomeProps
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-6 pt-6 border-t border-white/20">
             <div>
               <p className="text-xs opacity-70 mb-1">{t('home.monthlyIncome')}</p>
-              <p className="text-2xl font-display">€{displayIncome.toLocaleString()}</p>
+              <p className="text-2xl font-display">{fmt(displayIncome)}</p>
               {incomes.length > 0 && <p className="text-xs opacity-60">{t('home.actualIncome')}</p>}
             </div>
             <div>
               <p className="text-xs opacity-70 mb-1">{t('home.spentSoFar')}</p>
               <p className="text-2xl font-display">
-                €{(review?.totalActual ?? 0).toLocaleString()}
+                {fmt(review?.totalActual ?? 0)}
               </p>
             </div>
             <div>
@@ -121,7 +125,7 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup }: HomeProps
             </div>
             <div>
               <p className="text-xs opacity-70 mb-1">{t('home.totalSaved')}</p>
-              <p className="text-2xl font-display">€{totalSaved.toLocaleString()}</p>
+              <p className="text-2xl font-display">{fmt(totalSaved)}</p>
               <p className="text-xs opacity-60">{t('home.acrossAllPlans')}</p>
             </div>
             <div>

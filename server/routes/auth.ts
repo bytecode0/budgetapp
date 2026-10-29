@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { OAuth2Client } from "google-auth-library";
 import { prisma } from "../lib/prisma.js";
@@ -11,12 +12,17 @@ import {
   sendWelcomeEmail,
   sendWelcomeGoogleEmail,
 } from "../lib/mailer.js";
-import { parseLocale, resolveLocale } from "../lib/email/locales/index.js";
+import { parseLocale, resolveLocale, type EmailLocale } from "../lib/email/locales/index.js";
 
 export const authRouter = Router();
 
-const GOOGLE_CALLBACK_URL =
-  process.env.GOOGLE_CALLBACK_URL ?? "http://localhost:3002/api/auth/google/callback";
+// Google sign-in needs all three, with no fallback: a default callback URL hid
+// a missing variable in the first deploy (it redirected to localhost).
+const GOOGLE_ENV = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_CALLBACK_URL"] as const;
+
+export function missingGoogleEnv(env: Record<string, string | undefined> = process.env): string[] {
+  return GOOGLE_ENV.filter((name) => !env[name]);
+}
 
 // Token temporal para el intercambio post-OAuth: un JWT firmado de 2 min, no un
 // Map en memoria — en Vercel el callback y el exchange pueden caer en instancias
@@ -39,11 +45,61 @@ export function readGoogleSession(token: string): string | null {
   }
 }
 
-const googleClient = new OAuth2Client(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  GOOGLE_CALLBACK_URL
-);
+// OAuth CSRF protection: GET /google puts a random nonce in an httpOnly cookie
+// and the same nonce in `state`; the callback only exchanges a code when the
+// two match, so a sign-in can't be completed in a browser that didn't start it
+// (login CSRF). `state` is `<nonce>` or `<nonce>.<lang>`: the UI language rides
+// along so a new user's settings are created in it (not a secret, re-validated
+// on the way back). base64url never contains a '.'.
+export const GOOGLE_STATE_COOKIE = "google_oauth_state";
+const GOOGLE_STATE_COOKIE_OPTS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  path: "/api/auth/google", // also covers /api/auth/google/callback
+};
+const GOOGLE_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+const NONCE_PATTERN = /^[A-Za-z0-9_-]{43}$/; // 32 bytes, base64url, no padding
+
+export function newGoogleNonce(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+export function buildGoogleState(nonce: string, lang: EmailLocale | null): string {
+  return lang ? `${nonce}.${lang}` : nonce;
+}
+
+/** The nonce and (validated) language inside a `state`; null when malformed. */
+export function parseGoogleState(state: unknown): { nonce: string; lang: EmailLocale | null } | null {
+  if (typeof state !== "string") return null;
+  const dot = state.indexOf(".");
+  const nonce = dot === -1 ? state : state.slice(0, dot);
+  if (!NONCE_PATTERN.test(nonce)) return null;
+  return { nonce, lang: dot === -1 ? null : parseLocale(state.slice(dot + 1)) };
+}
+
+/** Constant-time comparison of the cookie's nonce with the one in `state`. */
+export function googleNonceMatches(cookieNonce: unknown, stateNonce: string): boolean {
+  if (typeof cookieNonce !== "string") return false;
+  const a = Buffer.from(cookieNonce);
+  const b = Buffer.from(stateNonce);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+// One client per request: getToken/setCredentials mutate it, and a shared
+// client would mix up concurrent sign-ins. Null when Google isn't configured.
+function newGoogleClient(): OAuth2Client | null {
+  const missing = missingGoogleEnv();
+  if (missing.length) {
+    console.error(`[auth/google] not configured, missing: ${missing.join(", ")}`);
+    return null;
+  }
+  return new OAuth2Client(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_CALLBACK_URL
+  );
+}
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -59,10 +115,17 @@ function setAuthCookie(res: Response, userId: string) {
 
 // ── Google OAuth ──────────────────────────────────────────────
 
-authRouter.get("/google", (_req: Request, res: Response) => {
+authRouter.get("/google", (req: Request, res: Response) => {
+  const googleClient = newGoogleClient();
+  // A top-level navigation, not a fetch: send the browser back to the app with
+  // the same error the callback uses, never to Google.
+  if (!googleClient) return res.redirect(`${process.env.APP_URL ?? "http://localhost:5173"}/?error=google_failed`);
+  const nonce = newGoogleNonce();
+  res.cookie(GOOGLE_STATE_COOKIE, nonce, { ...GOOGLE_STATE_COOKIE_OPTS, maxAge: GOOGLE_STATE_MAX_AGE_MS });
   const url = googleClient.generateAuthUrl({
     access_type: "offline",
     prompt: "select_account",
+    state: buildGoogleState(nonce, parseLocale(req.query.lang)),
     scope: [
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile",
@@ -73,11 +136,23 @@ authRouter.get("/google", (_req: Request, res: Response) => {
 
 authRouter.get("/google/callback", async (req: Request, res: Response) => {
   const appUrl = process.env.APP_URL ?? "http://localhost:5173";
-  const { code, error } = req.query as Record<string, string>;
+  const { code, error, state } = req.query as Record<string, string>;
+  // Single use: cleared whatever happens next.
+  const cookieNonce = req.cookies?.[GOOGLE_STATE_COOKIE];
+  res.clearCookie(GOOGLE_STATE_COOKIE, GOOGLE_STATE_COOKIE_OPTS);
 
   if (error || !code) {
     return res.redirect(`${appUrl}/?error=google_denied`);
   }
+
+  const parsedState = parseGoogleState(state);
+  if (!parsedState || !googleNonceMatches(cookieNonce, parsedState.nonce)) {
+    console.error("[auth/google/callback] state does not match the sign-in cookie");
+    return res.redirect(`${appUrl}/?error=google_failed`);
+  }
+
+  const googleClient = newGoogleClient();
+  if (!googleClient) return res.redirect(`${appUrl}/?error=google_failed`);
 
   try {
     const { tokens } = await googleClient.getToken(code);
@@ -113,10 +188,11 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
     });
 
     if (isNewUser) {
-      sendWelcomeGoogleEmail(user.email!, user.name ?? "").catch((e) =>
+      const locale = parsedState.lang ?? undefined;
+      sendWelcomeGoogleEmail(user.email!, user.name ?? "", locale).catch((e) =>
         console.error("[auth/google/callback] welcome google email failed:", e)
       );
-      createDefaultAllocations(user.id).catch((e) =>
+      createDefaultAllocations(user.id, locale).catch((e) =>
         console.error("[auth/google/callback] createDefaultAllocations failed:", e)
       );
     }
@@ -187,9 +263,8 @@ authRouter.post("/register", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Name, email and password are required" });
     }
 
-    // Optional: the UI language at sign-up, used for the verification email.
-    // UserSettings doesn't exist yet here (createDefaultAllocations creates it on
-    // verify), so it is not persisted.
+    // Optional: the UI language at sign-up, used for the verification email and
+    // saved to UserSettings below (createDefaultAllocations keeps it on verify).
     const locale = language === undefined ? "es" : parseLocale(language);
     if (!locale) {
       return res.status(400).json({ error: "language must be 'es' or 'en'" });
@@ -206,11 +281,14 @@ authRouter.post("/register", async (req: Request, res: Response) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    if (existing) {
-      await prisma.user.update({ where: { email }, data: { name, passwordHash } });
-    } else {
-      await prisma.user.create({ data: { name, email, passwordHash } });
-    }
+    const user = existing
+      ? await prisma.user.update({ where: { email }, data: { name, passwordHash } })
+      : await prisma.user.create({ data: { name, email, passwordHash } });
+    await prisma.userSettings.upsert({
+      where: { userId: user.id },
+      update: { language: locale },
+      create: { userId: user.id, monthlyIncome: 0, language: locale },
+    });
 
     const otp = await createOtp(email, "email_verification");
     await sendVerificationEmail(email, name, otp, locale);

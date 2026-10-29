@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
+import { mutationAccess } from "../lib/ownership.js";
 import { normalizeMerchant } from "../lib/normalizeMerchant.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { incomeListingFilter } from "../lib/visibility.js";
@@ -90,6 +91,9 @@ incomeRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) 
     const { id } = req.params;
     const existing = await prisma.income.findFirst({ where: { id, userId: req.userId! } });
     if (!existing) return res.status(404).json({ error: "Income not found" });
+    const access = mutationAccess(existing, req.authUserId);
+    if (access === "hidden") return res.status(404).json({ error: "Income not found" });
+    if (access === "forbidden") return res.status(403).json({ error: "Only the owner can change this income" });
 
     const { amount, description, category, accountId, date } = req.body;
     if (category !== undefined && !CATEGORIES.has(category)) {
@@ -128,6 +132,9 @@ incomeRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Response)
     const { id } = req.params;
     const existing = await prisma.income.findFirst({ where: { id, userId: req.userId! } });
     if (!existing) return res.status(404).json({ error: "Income not found" });
+    const access = mutationAccess(existing, req.authUserId);
+    if (access === "hidden") return res.status(404).json({ error: "Income not found" });
+    if (access === "forbidden") return res.status(403).json({ error: "Only the owner can change this income" });
 
     await prisma.income.delete({ where: { id } });
     return res.json({ success: true });

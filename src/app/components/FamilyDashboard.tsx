@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, TrendingUp, TrendingDown, PiggyBank, Landmark, Users } from 'lucide-react';
 import { useMonth } from '../context/MonthContext';
+import { useMoney } from '../onboarding/useMoney';
 
 interface Health { income: number; expenses: number; savings: number; savingsRate: number; netWorth: number; }
 interface Person { userId: string; name: string | null; income: number; spent: number; contributionPct: number; }
@@ -14,6 +15,7 @@ interface DashboardData { health: Health; byPerson: Person[]; byCategory: Catego
 // detail — so it's safe at the shared_stats privacy tier.
 export function FamilyDashboard() {
   const { t } = useTranslation();
+  const { fmt } = useMoney();
   const { selectedMonth } = useMonth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,7 +30,7 @@ export function FamilyDashboard() {
     return () => { active = false; };
   }, [selectedMonth]);
 
-  const eur = (n: number) => `€${n.toLocaleString()}`;
+  const eur = (n: number) => fmt(n);
 
   if (loading) {
     return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;

@@ -494,7 +494,8 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </div>
           </div>
-          <div className="p-5 hover:bg-muted/30 transition-colors cursor-pointer">
+          {/* The public privacy policy (LegalPage), in a new tab like the auth TermsNotice. */}
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="block p-5 hover:bg-muted/30 transition-colors cursor-pointer">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center">
@@ -507,7 +508,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </div>
-          </div>
+          </a>
         </div>
       </motion.div>
 

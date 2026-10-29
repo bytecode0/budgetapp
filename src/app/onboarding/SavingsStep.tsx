@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { PiggyBank, TrendingUp, Lightbulb } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAccounts, type Account } from '../hooks/useAccounts';
+import { useAuth } from '../context/AuthContext';
 import { useMoney } from './useMoney';
 
 // Deliberate simplification vs. the earlier (list-of-named-categories) design:
@@ -15,8 +16,11 @@ export function SavingsStep() {
   const { currency } = useMoney();
   const { accounts, createAccount, updateAccount } = useAccounts();
 
-  const cashAccount = accounts.find(a => a.type === 'cash' || a.type === 'savings');
-  const investmentAccount = accounts.find(a => a.type === 'investment');
+  const { user } = useAuth();
+  // Only the user's own accounts: a partner's shared one is read-only for them.
+  const own = accounts.filter(a => a.ownerUserId === user?.id);
+  const cashAccount = own.find(a => a.type === 'cash' || a.type === 'savings');
+  const investmentAccount = own.find(a => a.type === 'investment');
 
   const [cash, setCash] = useState('');
   const [investment, setInvestment] = useState('');

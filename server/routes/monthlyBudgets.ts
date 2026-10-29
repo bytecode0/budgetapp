@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { periodBounds } from "../lib/period.js";
+import { ALLOCATION_NOT_FOUND, allocationsInPool } from "../lib/poolRefs.js";
 import { countedAmounts, debtCommitments } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 
@@ -65,15 +66,9 @@ monthlyBudgetsRouter.post("/save", requireAuth, async (req: AuthRequest, res: Re
       return res.status(400).json({ error: "month and budgets array are required" });
     }
 
-    // Verify allocations belong to user
-    const allocationIds = budgets.map(b => b.allocationId);
-    const userAllocs = await prisma.allocation.findMany({
-      where: { id: { in: allocationIds }, userId: req.userId! },
-      select: { id: true },
-    });
-    const validIds = new Set(userAllocs.map(a => a.id));
-    if (budgets.some(b => !validIds.has(b.allocationId))) {
-      return res.status(403).json({ error: "One or more allocations not found" });
+    // Every line must be one of the pool's (a budget always names one).
+    if (budgets.some(b => !b?.allocationId) || !(await allocationsInPool(req.userId!, budgets.map(b => b.allocationId)))) {
+      return res.status(404).json(ALLOCATION_NOT_FOUND);
     }
 
     await Promise.all(

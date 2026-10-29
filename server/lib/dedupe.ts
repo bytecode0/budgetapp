@@ -3,22 +3,24 @@
 // Two expenses are candidate duplicates when they share the exact same amount
 // (integer cents — no float tolerance needed thanks to Phase A) and fall within
 // WINDOW_DAYS of each other. Typical case: a charge entered manually and later
-// re-imported from the bank.
+// re-imported from the bank. An expense and a refund (Expense.kind) of the
+// same amount are never duplicates: the refund undoes the purchase.
 
 const WINDOW_DAYS = 2;
 const DAY_MS = 86400000;
 
 /**
- * Cluster items into groups of likely duplicates. Items are bucketed by amount,
+ * Cluster items into groups of likely duplicates. Items are bucketed by kind and amount,
  * then chained while consecutive (date-sorted) entries are within WINDOW_DAYS.
  * Only clusters of 2+ are returned.
  */
-export function findDuplicateGroups<T extends { id: string; amount: number; date: Date | string }>(items: T[]): T[][] {
-  const byAmount = new Map<number, T[]>();
+export function findDuplicateGroups<T extends { id: string; amount: number; date: Date | string; kind?: string | null }>(items: T[]): T[][] {
+  const byAmount = new Map<string, T[]>();
   for (const it of items) {
-    const arr = byAmount.get(it.amount) ?? [];
+    const key = `${it.kind || "expense"}|${it.amount}`;
+    const arr = byAmount.get(key) ?? [];
     arr.push(it);
-    byAmount.set(it.amount, arr);
+    byAmount.set(key, arr);
   }
 
   const groups: T[][] = [];

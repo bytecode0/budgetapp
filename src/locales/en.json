@@ -77,7 +77,7 @@
       "helpCenter": "Help Center",
       "helpCenterSubtitle": "Get support and learn how to plan better",
       "privacy": "Privacy & Security",
-      "privacySubtitle": "Your data is encrypted and secure"
+      "privacySubtitle": "Encrypted connection (HTTPS), and passwords stored hashed, never in plain text"
     },
     "sharedFinances": {
       "sectionTitle": "Shared Finances",
@@ -225,7 +225,8 @@
     "months_other": "{{count}} months",
     "noDeadline": "No deadline",
     "currentLabel": "(current)",
-    "savedAmount": "€{{amount}} saved"
+    "savedAmount": "€{{amount}} saved",
+    "ofTarget": "of {{amount}}"
   },
   "planDetail": {
     "notFound": "Plan not found",
@@ -339,7 +340,14 @@
     "quotaUpdated": "Monthly quota updated to €{{amount}}/mo",
     "syncAllocationBanner": "Your monthly budget allocation is now out of sync (€{{current}}/mo). Sync it?",
     "syncAllocationBtn": "Sync allocation",
-    "allocationSynced": "Allocation synced to €{{amount}}/mo"
+    "allocationSynced": "Allocation synced to €{{amount}}/mo",
+    "contributionFailed": "Failed to register contribution",
+    "syncFailed": "Failed to sync allocation",
+    "resetToSaved": "Reset to saved value",
+    "goalAmount": "Goal {{amount}}",
+    "axisNow": "Now",
+    "axisYear": "Y{{n}}",
+    "axisMonth": "M{{n}}"
   },
   "createPlan": {
     "title": "Create Life Plan",
@@ -462,6 +470,9 @@
     "addIncome": "Add income",
     "incomeFromEntries": "sum of {{count}} income entries this month",
     "incomeBaseline": "planned baseline",
+    "ownIncomeLabel": "Your income (only yours; each partner edits their own)",
+    "householdIncomeTotal": "Household total: {{total}}",
+    "incomeBaselineCouple": "household baseline · yours: {{own}}",
     "totalAllocated": "Total Allocated",
     "pctOfIncome": "% of income",
     "goingToPlans": "Going to Plans",
@@ -518,7 +529,16 @@
     "iconSearchPlaceholder": "Search icons...",
     "iconSearchEmpty": "No icons found",
     "addPlanAllocation": "Add Plan Allocation",
-    "addAllocation": "Add Category"
+    "addAllocation": "Add Category",
+    "planSavedAmount": "{{amount}} saved",
+    "planProgressOf": "{{pct}}% of {{target}}",
+    "dragToReorder": "Drag to reorder",
+    "invalidAmount": "Enter a valid amount",
+    "incomeUpdated": "Income updated",
+    "nameRequired": "Enter a name",
+    "lifePlanRequired": "Select a life plan",
+    "addedOk": "Allocation added",
+    "removedOk": "Allocation removed"
   },
   "addExpense": {
     "title": "Add Expense",
@@ -540,7 +560,9 @@
     "addExpense": "Add Expense",
     "bankAccounts": "Accounts",
     "cards": "Cards",
-    "paidWithCardHint": "It's added to the {{name}} debt: you'll pay it when you settle the card."
+    "paidWithCardHint": "It's added to the {{name}} debt: you'll pay it when you settle the card.",
+    "invalidAmount": "Enter a valid amount",
+    "addedOk": "Expense added"
   },
   "accounts": {
     "title": "Accounts",
@@ -605,6 +627,7 @@
     "cardOwedAdjustHint": "If it doesn't match your bank, correct it here. The difference (interest, an unrecorded purchase) counts as previous debt.",
     "payCard": "Pay card",
     "cardHasMovementsError": "This card already has purchases or payments recorded: it can't change type.",
+    "backsOwnerDebtError": "This account backs a debt of its current owner: it can't change owner.",
     "cardMinimumRequired": "Enter the card's minimum payment"
   },
   "editExpense": {
@@ -671,7 +694,8 @@
     "expense": "Expense",
     "shared": "Shared",
     "sharedPaidBy": "Shared · paid by {{name}}",
-    "payCard": "Pay card"
+    "payCard": "Pay card",
+    "refund": "Refund"
   },
   "addIncome": {
     "title": "Add income",
@@ -728,9 +752,9 @@
   "import": {
     "button": "Import",
     "title": "Import statement",
-    "subtitle": "Upload a bank statement (.xlsx or .csv). We'll match it against what you already have.",
+    "subtitle": "Upload a bank statement (.xlsx, .csv, Norma 43 or OFX). We match it against what you already have.",
     "account": "Import into account",
-    "dropHint": "Click to choose a .xlsx or .csv file",
+    "dropHint": "Click to choose a file (.xlsx, .csv, Norma 43 or OFX)",
     "reading": "Reading file…",
     "newCount": "{{count}} new",
     "dupCount": "{{count}} already imported",
@@ -753,7 +777,123 @@
     "aiCategoriesCreated": "Created {{count}} categories",
     "importSelected": "Import {{count}} selected",
     "nothingSelected": "Select at least one row",
-    "importedOk": "Imported {{count}} transactions"
+    "importedOk": "Imported {{count}} transactions",
+    "payment": "debt payment",
+    "refund": "refund",
+    "fee": "fee",
+    "possibleDuplicate": "possible duplicate",
+    "otherCurrency": "other currency",
+    "unrecognizedColumns": "We don't recognise this file's columns: we need at least a date and an amount.",
+    "reviewCount": "{{count}} to review",
+    "reviewCredit": "credit to review",
+    "reviewCreditHint": "We can't tell whether this credit is a card payment or a refund. Pick one to import it.",
+    "resolvePayment": "It's a payment",
+    "resolveRefund": "It's a refund",
+    "signQuestion": "How does this card statement show purchases?",
+    "signUnknown": "We can't tell how this card statement writes purchases. Pick one to see the movements classified correctly; nothing is imported until you do.",
+    "signNegative": "Purchases as negative (−)",
+    "signPositive": "Purchases as positive (+)",
+    "learnedPayment": "payment suggested by a rule: confirm it",
+    "paysDebt": "Pays",
+    "notAPayment": "Not a debt payment (expense)",
+    "cardPaymentUnassigned": "card payment: pick which card",
+    "possibleCardPayment": "may be a credit card payment: if so, pick the card",
+    "tooManyRows": "The file has too many movements (at most 5,000). Export a shorter period.",
+    "fileTooLarge": "The Excel file is too large (at most 5 MB). Export a shorter period or as CSV.",
+    "emptyFile": "The file is empty.",
+    "noMovements": "The file has the expected columns but no movements.",
+    "invalidRows": "Some rows aren't valid. Read the file again and retry.",
+    "debtNotFound": "One of the chosen debts no longer exists. Read the file again.",
+    "readFailed": "The file couldn't be read.",
+    "confirmFailed": "The import failed. Try again.",
+    "paymentCount_one": "{{count}} debt payment",
+    "paymentCount_other": "{{count}} debt payments",
+    "skippedCount_one": "{{count}} skipped",
+    "skippedCount_other": "{{count}} skipped",
+    "skippedTitle_one": "{{count}} row of the file is not imported",
+    "skippedTitle_other": "{{count}} rows of the file are not imported",
+    "skippedRow": "Row {{row}}: {{reason}}",
+    "skippedState": "state \"{{state}}\" (not a final transaction yet; it will appear as completed in your next statement)",
+    "skippedOther": "not a transaction",
+    "show": "Show",
+    "hide": "Hide",
+    "signSaved": "Saved: next time we won't ask how this card's purchases appear.",
+    "summaryTitle": "Import complete",
+    "summaryExpenses_one": "{{count}} expense",
+    "summaryExpenses_other": "{{count}} expenses",
+    "summaryIncomes_one": "{{count}} income",
+    "summaryIncomes_other": "{{count}} incomes",
+    "summaryRefunds_one": "{{count}} refund",
+    "summaryRefunds_other": "{{count}} refunds",
+    "summaryPayments_one": "{{count}} payment to {{name}}",
+    "summaryPayments_other": "{{count}} payments to {{name}}",
+    "summaryPaymentsUnnamed_one": "{{count}} debt payment",
+    "summaryPaymentsUnnamed_other": "{{count}} debt payments",
+    "summaryNothing": "There was nothing new to import: everything was already saved.",
+    "suggestBudgets": "Suggest budgets",
+    "done": "Done",
+    "back": "Back",
+    "close": "Close",
+    "next": "Next",
+    "stepOf": "Step {{n}} of {{total}}",
+    "steps": {
+      "account": "Account",
+      "file": "File",
+      "mapping": "Columns",
+      "preview": "Review",
+      "summary": "Summary"
+    },
+    "accountHint": "Which account or card is this statement from? The transactions are recorded on it.",
+    "noAccounts": "You don't have any accounts yet. Create one in Accounts to import its statement.",
+    "fileHintCard": "Upload the card statement (.xlsx, .csv or OFX). Purchases raise its debt and payments lower it.",
+    "tryAnotherFile": "Check that it's the transactions statement your bank gives you, or try another format (CSV, Excel, Norma 43 or OFX).",
+    "readLocally": "The file is read in your browser and only the transactions reach the server. If your browser can't read it, it is sent to our server to be read there, without storing it.",
+    "noRowsToImport": "This file has no transactions to import.",
+    "wrongColumns": "Columns read wrong? Pick them by hand",
+    "mapping": {
+      "chooseColumn": "Choose a column",
+      "emptyRow": "(empty row)",
+      "unrecognizedIntro": "We don't recognise this file's columns. Tell us which is which: we save it on the account and the next statement is imported without asking.",
+      "manualIntro": "Tell us which column is which. We save it on the account and future statements are read this way.",
+      "sheet": "Sheet",
+      "sheetN": "Sheet {{n}}",
+      "headerRow": "Row with the column titles",
+      "rowN": "Row {{n}}",
+      "dateColumn": "Date",
+      "dateFormat": "Date format",
+      "dmy": "day/month/year (31/12/2026)",
+      "mdy": "month/day/year (12/31/2026)",
+      "ymd": "year-month-day (2026-12-31)",
+      "amountQuestion": "How do amounts appear?",
+      "singleAmount": "One signed column",
+      "splitAmount": "Money out and money in in separate columns",
+      "amountColumn": "Amount",
+      "debitColumn": "Money out",
+      "creditColumn": "Money in",
+      "descriptionColumns": "Description: choose one or more columns (up to {{max}}), in order",
+      "signDetect": "Detect it automatically",
+      "previewTitle": "This is how the first rows are read",
+      "previewNeedsColumns": "Choose at least the date and the amount to see how rows are read.",
+      "previewEmpty": "With these columns no transaction comes out. Check the title row, the date, its format and the amount.",
+      "noDescription": "(no description)",
+      "previewCount": "{{read}} of {{total}} sample rows are read as transactions.",
+      "save": "Save and continue",
+      "notTabular": "This file has no columns to choose (Norma 43 and OFX are always read the same way).",
+      "saved": "Columns saved on the account.",
+      "notOwner": "Only the account's creator can save its columns: they are used for this import.",
+      "saveFailed": "The columns could not be saved; they are used for this import.",
+      "mapByHand": "Pick the columns by hand",
+      "aiSuggest": "Suggest columns with AI",
+      "aiPrivacy": "To suggest them, we send an AI provider only the column titles you see here and the format of the values (for example \"dd/mm/yyyy\" or \"-#,##\"), never the amounts or the transactions. Check the titles before sending them.",
+      "aiTitlesToSend": "These titles will be sent: {{titles}}",
+      "aiTitlesLookLikeData": "Some titles in this row look like data (dates, amounts, names or account numbers), so we don't send them to the AI. Check the title row or choose the columns by hand.",
+      "chooseHeaderRow": "That row looks like transactions, not titles. Choose the row with the column titles. If the file has none, download it from your bank with titles.",
+      "chooseHeaderRowOption": "Choose the title row",
+      "aiSuggested": "AI suggestion: check every column in the preview before saving.",
+      "aiRateLimited": "You've asked for many suggestions in a row. Try again later or pick the columns by hand.",
+      "aiNoSuggestion": "The AI found no clear match. Pick the columns by hand.",
+      "aiFailed": "The suggestion could not be fetched. Pick the columns by hand."
+    }
   },
   "budgets": {
     "title": "Suggested budgets",
@@ -801,6 +941,7 @@
     "sharePlans": "Life plans and savings goals",
     "shareAllocations": "Monthly budget allocations",
     "shareReviews": "Budget reviews and reports",
+    "ownDataMoves": "Anything you've already entered (income, expenses, accounts, debts, plans) moves into the shared finances and stays yours; your accounts and debts are shared with your partner and count in your joint committed future, though you can mark an account as private at any time. If you unlink, what's yours generally comes back with you: your accounts, debts, income and plans, and the expenses you entered or that are on your accounts. The budget stays in the shared finances, as do expenses tied to your partner's cards or debts.",
     "decline": "Decline",
     "accept": "Accept",
     "linked": "Linked!",
@@ -820,7 +961,7 @@
       "signingIn": "Signing in...",
       "noAccount": "Don't have an account?",
       "signUpFree": "Sign up free",
-      "terms": "By signing in, you agree to our Terms of Service and Privacy Policy",
+      "terms": "By signing in, you agree to our <terms>Terms of service</terms> and <privacy>Privacy policy</privacy>",
       "googleCancelled": "Google sign-in was cancelled",
       "googleFailed": "Google sign-in failed. Please try again.",
       "verifyEmailFirst": "Please verify your email first.",
@@ -844,7 +985,7 @@
       "freeBenefits": "Unlimited life plans · Expense tracking · Smart insights",
       "passwordMismatch": "Passwords do not match",
       "codeSent": "Verification code sent! Check your email.",
-      "terms": "By creating an account, you agree to our Terms of Service and Privacy Policy"
+      "terms": "By creating an account, you agree to our <terms>Terms of service</terms> and <privacy>Privacy policy</privacy>"
     },
     "forgotPassword": {
       "backToLogin": "Back to login",
@@ -1046,10 +1187,18 @@
     "paidFromCardError": "A card payment must come from another account (your bank), not the card itself.",
     "paymentFailed": "The payment couldn't be recorded. Try again.",
     "hasPaymentsError": "This debt has recorded payments and stays in the paid-off history: it can't be deleted.",
+    "cardKindLockedHint": "This is a card's debt: its type doesn't change. The card is managed in Accounts.",
+    "cardKindLockedError": "This is a card's debt: it stays a credit card. Change the card account in Accounts instead.",
+    "cardVisibilityLockedError": "This is a card's debt: its visibility follows the card's. Change it in Accounts.",
+    "cardAlreadyHasDebtError": "This card already has its debt: record it on the card account.",
+    "accountOwnerMismatchError": "A debt can only be on an account with the same owner.",
+    "creditCardNeedsCardAccountError": "A credit card debt can only be on a card account.",
+    "accountLockedError": "This debt already has recorded movements: its account can't change.",
     "owedNow": "You owe {{amount}}",
     "payWhichLabel": "Card",
     "payPartialHint": "You can pay part of it or all of it.",
-    "cardsInAccountsHint": "Credit cards are added in Accounts: their debt shows up here on its own."
+    "cardsInAccountsHint": "Credit cards are added in Accounts: their debt shows up here on its own.",
+    "aprShort": "{{apr}}% APR"
   },
   "onboarding": {
     "stepOf": "Step {{current}} of {{total}}",
@@ -1139,18 +1288,22 @@
       "namePlaceholder": "e.g. PASS, BBVA Visa",
       "add": "Add a card",
       "save": "Save card",
-      "noCards": "No credit cards? Press Continue.",
-      "createdOk": "Card added"
+      "noCards": "No credit cards?",
+      "createdOk": "Card added",
+      "noCardsButton": "I don't have credit cards",
+      "noCardsAnswered": "Noted: you don't have credit cards. Press Continue."
     },
     "loans": {
       "title": "Loans and installments",
       "subtitle": "Car, Klarna, payday loan, buy-now-pay-later… Everything you pay in installments.",
       "add": "Add a loan or installment plan",
       "save": "Save",
-      "noLoans": "Nothing paid in installments? Press Continue.",
+      "noLoans": "Nothing paid in installments?",
       "createdOk": "Added",
       "owedLabel": "Outstanding",
-      "note": "Include your mortgage too: it is treated differently from a card or a consumer loan, and you will not need to add it as a fixed expense."
+      "note": "Include your mortgage too: it is treated differently from a card or a consumer loan, and you will not need to add it as a fixed expense.",
+      "noLoansButton": "I don't have loans or installments",
+      "noLoansAnswered": "Noted: you don't have loans or installments. Press Continue."
     },
     "lines": {
       "income": "Income",
@@ -1192,10 +1345,200 @@
         "cards": "Your credit cards",
         "loans": "Your loans and installments",
         "fixed": "Your fixed expenses"
+      },
+      "sayNo": "I don't have any",
+      "answered": {
+        "cards": "Noted: you don't have credit cards",
+        "loans": "Noted: you don't have loans or installments"
       }
-    }
+    },
+    "undo": "Undo",
+    "answerFailed": "Couldn't save. Please try again."
   },
   "currency": {
-    "symbol": "€"
+    "symbol": "€",
+    "perMonthSuffix": "/mo"
+  },
+  "legal": {
+    "lastUpdated": "Last updated: 29 October 2026",
+    "backToApp": "Back to LifePlan",
+    "privacyLink": "Privacy policy",
+    "termsLink": "Terms of service",
+    "privacy": {
+      "title": "Privacy policy",
+      "intro": "This policy explains what data LifePlan (budget.luisvespa.com) processes, what it is used for and who it is shared with. LifePlan is a free app, in beta, for organising your budget and your debts.",
+      "sections": [
+        {
+          "title": "Who is responsible",
+          "paragraphs": [
+            "The controller of your data is Luis Vespa. For any privacy question, write to contact@luisvespa.com."
+          ]
+        },
+        {
+          "title": "What data we process",
+          "paragraphs": [
+            "We only process the data you enter in the app or that is generated by using it:"
+          ],
+          "items": [
+            "Your account: name, email and password. For the password we store only a hash (bcrypt), never the password itself. If you sign in with Google, we store the name, email and profile picture address that Google provides.",
+            "One-time verification codes we email you to confirm your account or reset your password. They expire after 15 minutes.",
+            "Your financial data: income, expenses (amount, date, description and category), budget and categories, accounts and balances, cards, loans, installment plans and debts with their payments, savings goals, rules for categorising expenses and your preferences (language, theme, payday).",
+            "Bank statements you import: the file (CSV, Excel, Norma 43 or OFX) is read in your browser and only the transactions it contains reach the server (date, amount, description and, if present, balance and status). If your browser can't read it and the file is small, it is sent to the server to be read there, without storing it. We store the transactions you confirm, not the file. If you tell us which column is which, we store that mapping (the column titles) on the account for the next statement.",
+            "Your household: if you invite someone to share finances, we store their email and the invitation, and send them an email with the link. People in the same household see the shared data according to the household's privacy level.",
+            "Technical data: the logs the server produces while running (for example, errors), which include data such as the request's IP address."
+          ]
+        },
+        {
+          "title": "What LifePlan does not do",
+          "paragraphs": [
+            "LifePlan does not connect to your bank today: data only gets in because you type it or import a file. It does not move money or make payments. It shows no ads, does not sell your data or hand it to third parties for their own purposes, and uses no analytics or advertising cookies. Nor does it make automated decisions that legally affect you."
+          ]
+        },
+        {
+          "title": "What we use it for, and on what basis",
+          "paragraphs": [
+            "We use your data to provide the service you ask for when you sign up: storing your information, calculating your budget, your committed future and your debt payoff plan, and sending you the necessary emails (verification, password reset, welcome and household invitations). The legal basis is the performance of the contract you accept when creating your account (Article 6(1)(b) GDPR).",
+            "Technical logs are used to keep the service running and secure, on the basis of legitimate interest (Article 6(1)(f) GDPR)."
+          ]
+        },
+        {
+          "title": "Artificial intelligence",
+          "paragraphs": [
+            "When you import a statement, the app may offer buttons to classify expenses or suggest categories with AI. Only if you press one of those buttons do we send Anthropic (the provider of the Claude model) the uncategorised merchant descriptions from that statement, up to 40 at a time, and, to classify them, the names of your budget categories.",
+            "We do not send amounts, dates, your name, your email or account numbers. Bear in mind that the description is the text your bank writes and sometimes includes other data, such as the name of the person you sent a transfer to. What the AI returns are only suggestions, which you review before anything is saved.",
+            "If we don't recognise a statement's columns, you can ask the AI to suggest which is which. First we show you the titles that will be sent, and only if you press \"Suggest columns with AI\" do we send an AI provider (depending on our configuration, through OpenRouter or directly to Anthropic) the column titles you see and the format of the values in the first rows (for example \"dd/mm/yyyy\", \"-#,##\" or \"12-character text\"), computed in your browser. We never send the amounts or the transactions. The titles are text from your file: if the chosen row doesn't look like titles we send nothing, but check them before sending. The suggestion only fills in the columns screen; you review and confirm it."
+          ]
+        },
+        {
+          "title": "Providers that process data on our behalf",
+          "paragraphs": [
+            "To run LifePlan we use these providers, which process data only to provide their service to us:"
+          ],
+          "items": [
+            "Neon: the PostgreSQL database where your data is stored, hosted in the European Union (Frankfurt).",
+            "Vercel: hosting for the website and the app's server, which runs in Frankfurt.",
+            "Resend: sending the app's emails (your email address and the message content).",
+            "Google: sign-in with Google, only if you choose to use it. The website also loads its fonts from Google Fonts, so your browser sends your IP address to Google when you open it.",
+            "Anthropic: the AI classification described above and, if it is the configured provider, the AI column suggestion, only when you ask for them.",
+            "OpenRouter: the AI column suggestion described above (the column titles you see and the formats), when you ask for it and if it is the configured provider. OpenRouter passes it to the chosen model's provider."
+          ],
+          "after": "Some of these providers are US companies and may process data outside the European Economic Area. They do so with the safeguards set out in their data processing terms, such as the standard contractual clauses approved by the European Commission."
+        },
+        {
+          "title": "Cookies and local storage",
+          "paragraphs": [
+            "LifePlan uses a single cookie, called \"token\", which keeps you signed in. It is technical and strictly necessary: it cannot be read by JavaScript, it expires after 7 days and it is deleted when you sign out. Your browser also keeps in its local storage the language you choose and whether you have hidden the \"Finish your setup\" notice. We use no analytics, advertising or third-party cookies, which is why we don't ask for your consent to them."
+          ]
+        },
+        {
+          "title": "How long we keep data",
+          "paragraphs": [
+            "We keep your data while you have an account. You can delete the transactions, accounts, debts and other items you created at any time from within the app. Verification codes expire after 15 minutes and household invitations after 7 days.",
+            "The app does not yet have a button to delete your account. To do so, write to contact@luisvespa.com from your account's email address and we will delete it together with all its data. The database provider's backups may keep it for a limited period before it is erased."
+          ]
+        },
+        {
+          "title": "Security",
+          "paragraphs": [
+            "All communication is encrypted over HTTPS, passwords are stored hashed, the session cookie cannot be read by JavaScript and every request for your data requires a signed-in session. No system is completely secure: if we detect a problem affecting your data, we will inform you as the law requires."
+          ]
+        },
+        {
+          "title": "Your rights",
+          "paragraphs": [
+            "You can ask to access, correct or erase your data, object to or restrict its processing, and ask for a copy in a commonly used format (portability). Write to contact@luisvespa.com and we will reply within one month. If you believe we have not handled your data properly, you can complain to the Spanish Data Protection Agency (www.aepd.es)."
+          ]
+        },
+        {
+          "title": "Minors",
+          "paragraphs": [
+            "LifePlan is intended for people aged 18 or over. You must not create an account if you are under 18."
+          ]
+        },
+        {
+          "title": "Changes to this policy",
+          "paragraphs": [
+            "If we change this policy, we will update this page and its date. If the change is significant, we will let you know before it applies."
+          ]
+        }
+      ]
+    },
+    "terms": {
+      "title": "Terms of service",
+      "intro": "These terms govern the use of LifePlan (budget.luisvespa.com), an app by Luis Vespa for organising your budget and your debts. By creating an account or using the app, you accept them.",
+      "sections": [
+        {
+          "title": "A free beta",
+          "paragraphs": [
+            "LifePlan is in beta and is free. During the beta, features may change, be added or be removed. If there are ever paid plans, we will announce them in advance and will never charge you anything without your explicit agreement."
+          ]
+        },
+        {
+          "title": "Your account",
+          "paragraphs": [
+            "To use LifePlan you must be at least 18 and give accurate details when signing up. You are responsible for keeping your password secret and for what is done with your account. If you think someone has accessed it, write to contact@luisvespa.com."
+          ]
+        },
+        {
+          "title": "Not financial advice",
+          "paragraphs": [
+            "LifePlan is a tool to help you get organised. Its figures (budget, committed future, debt-free date, payoff order) are estimates calculated from the data you enter, and are only as accurate as that data. They are not financial, legal or tax advice. LifePlan is not a bank, does not move money or make payments for you, and decisions about your money are always yours."
+          ]
+        },
+        {
+          "title": "Acceptable use",
+          "paragraphs": [
+            "You agree to use LifePlan lawfully and, in particular, not to:"
+          ],
+          "items": [
+            "try to access other people's accounts or data;",
+            "attack, overload or try to bypass the service's security, or use it in an abusive automated way;",
+            "upload files with malicious content or data you have no right to use;",
+            "invite someone to your household without their consent."
+          ]
+        },
+        {
+          "title": "Your data and your household",
+          "paragraphs": [
+            "The data you enter remains yours. How we process it is explained in the Privacy policy. If you share your finances with someone through a household, they will see the shared data according to the household's privacy level; choose carefully what you share."
+          ]
+        },
+        {
+          "title": "No warranty",
+          "paragraphs": [
+            "LifePlan is provided \"as is\", without warranties of any kind. As a beta, it may have bugs, interruptions or, in exceptional cases, data loss: keep your own records of anything important. To the extent permitted by law, we are not liable for damages arising from using the app or from decisions made based on its figures. Nothing here limits your rights under consumer protection law or liability for wilful misconduct or gross negligence."
+          ]
+        },
+        {
+          "title": "Ending the service or your account",
+          "paragraphs": [
+            "You can stop using LifePlan whenever you want and ask us to delete your account by writing to contact@luisvespa.com. We may suspend or close an account that breaches these terms. We may also end the beta or the service; in that case we will give you reasonable notice whenever possible."
+          ]
+        },
+        {
+          "title": "Changes to these terms",
+          "paragraphs": [
+            "If we change these terms, we will update this page and its date. If the change is significant, we will let you know before it applies; if you disagree, you can stop using the service."
+          ]
+        },
+        {
+          "title": "Governing law",
+          "paragraphs": [
+            "These terms are governed by Spanish law. If you are a consumer, any dispute will be settled by the courts of your place of residence."
+          ]
+        },
+        {
+          "title": "Contact",
+          "paragraphs": [
+            "For any question about these terms, write to contact@luisvespa.com."
+          ]
+        }
+      ]
+    }
+  },
+  "apiErrors": {
+    "refundOnDebtLine": "A refund can't go on a debt line: it undoes a purchase, it doesn't pay the debt.",
+    "allocationNotFound": "That category no longer exists. Reload and pick another one.",
+    "accountNotFound": "That account isn't available. Reload and pick another one."
   }
 }

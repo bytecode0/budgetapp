@@ -7,6 +7,7 @@ import type { AddressInfo } from "node:net";
 process.env.STRIPE_SECRET_KEY = "";
 process.env.STRIPE_PREMIUM_PRICE_ID = "";
 process.env.STRIPE_WEBHOOK_SECRET = "";
+process.env.JWT_SECRET ??= "test-secret"; // the app refuses to load without it
 
 const { isBillingEnabled, missingStripeEnv, subscriptionPeriodEnd, subscriptionSyncData } = await import("./stripe.js");
 

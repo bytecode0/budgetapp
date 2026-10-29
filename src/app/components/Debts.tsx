@@ -9,9 +9,11 @@ import {
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { useDebts, type Debt, type PayoffSummary } from '../hooks/useDebts';
 import { DebtFormFields, EMPTY_DEBT_FORM, debtFormFromDebt, debtPayloadFromForm, kindIcon, type DebtFormState } from './shared/DebtFormFields';
 import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSheet';
+import { apiErrorMessage } from '../lib/apiErrors';
 
 // What a payment of this debt usually is, to prefill the payment sheet.
 const suggestedPayment = (d: Debt): number =>
@@ -70,6 +72,7 @@ export function Debts() {
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
   const { debts, totalOwed, totalMinimums, loading, createDebt, updateDebt, deleteDebt, reorderDebts, fetchPayoff, fetchDebts } = useDebts();
   const currency = t('currency.symbol');
+  const { user } = useAuth();
 
   const [paying, setPaying] = useState<DebtPaymentTarget | null>(null);
 
@@ -145,7 +148,7 @@ export function Debts() {
       ? await updateDebt(form.id, payload)
       : await createDebt(payload);
     setSaving(false);
-    if (result.error) { toast.error(result.error); return; }
+    if (result.error) { toast.error(apiErrorMessage(t, result)); return; }
     toast.success(form.id ? t('debts.savedOk') : t('debts.createdOk'));
     setShowForm(false);
     setForm(EMPTY_DEBT_FORM);
@@ -153,13 +156,13 @@ export function Debts() {
 
   const handleTogglePaidOff = async (d: Debt) => {
     const result = await updateDebt(d.id, { status: d.status === 'active' ? 'paid_off' : 'active' });
-    if (result.error) toast.error(result.error);
+    if (result.error) toast.error(apiErrorMessage(t, result));
     else toast.success(d.status === 'active' ? t('debts.markedPaidOff') : t('debts.reactivatedOk'));
   };
 
   const handleDelete = async (d: Debt) => {
     const result = await deleteDebt(d.id);
-    if (result.error) toast.error(result.code === 'debt_has_payments' ? t('debts.hasPaymentsError') : result.error);
+    if (result.error) toast.error(apiErrorMessage(t, result));
     else toast.success(t('debts.deletedOk'));
   };
 
@@ -186,7 +189,7 @@ export function Debts() {
           <p className="font-display truncate">{d.name}</p>
           <p className="text-xs text-muted-foreground">
             {t(`debts.kind.${d.kind}`)} · {t(`debts.paymentMode.${d.paymentMode}`)}
-            {d.apr != null && ` · ${d.apr}% APR`}
+            {d.apr != null && ` · ${t('debts.aprShort', { apr: d.apr })}`}
             {progress && ` · ${progress} ${t('debts.installments')}`}
           </p>
           {d.purchasesTotal > 0 && (
@@ -209,16 +212,21 @@ export function Debts() {
               <Banknote className="w-4 h-4 text-muted-foreground" />
             </button>
           )}
-          <button onClick={() => openEdit(d)} className="p-2 rounded-lg hover:bg-muted transition-colors" title={t('debts.edit')}>
-            <Pencil className="w-4 h-4 text-muted-foreground" />
-          </button>
-          <button onClick={() => handleTogglePaidOff(d)} className="p-2 rounded-lg hover:bg-muted transition-colors" title={d.status === 'active' ? t('debts.markPaidOff') : t('debts.reactivate')}>
-            {d.status === 'active' ? <CheckCircle2 className="w-4 h-4 text-muted-foreground" /> : <RotateCcw className="w-4 h-4 text-muted-foreground" />}
-          </button>
-          {d.status !== 'active' && (
-            <button onClick={() => handleDelete(d)} className="p-2 rounded-lg border border-destructive/20 text-destructive hover:bg-destructive/5 transition-colors" title={t('debts.delete')}>
-              <Trash2 className="w-4 h-4" />
-            </button>
+          {/* Another member's shared debt is read-only (the server answers 403). */}
+          {d.ownerUserId === user?.id && (
+            <>
+              <button onClick={() => openEdit(d)} className="p-2 rounded-lg hover:bg-muted transition-colors" title={t('debts.edit')}>
+                <Pencil className="w-4 h-4 text-muted-foreground" />
+              </button>
+              <button onClick={() => handleTogglePaidOff(d)} className="p-2 rounded-lg hover:bg-muted transition-colors" title={d.status === 'active' ? t('debts.markPaidOff') : t('debts.reactivate')}>
+                {d.status === 'active' ? <CheckCircle2 className="w-4 h-4 text-muted-foreground" /> : <RotateCcw className="w-4 h-4 text-muted-foreground" />}
+              </button>
+              {d.status !== 'active' && (
+                <button onClick={() => handleDelete(d)} className="p-2 rounded-lg border border-destructive/20 text-destructive hover:bg-destructive/5 transition-colors" title={t('debts.delete')}>
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

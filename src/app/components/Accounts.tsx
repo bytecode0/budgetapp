@@ -10,9 +10,11 @@ import {
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { useAccounts, type Account, type AccountType } from '../hooks/useAccounts';
 import { CardFields, EMPTY_CARD_FIELDS, cardFieldsError, cardSettingsPayload, type CardFieldsValue } from './shared/CardFields';
 import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSheet';
+import { apiErrorMessage } from '../lib/apiErrors';
 import { useHousehold } from '../hooks/useHousehold';
 import { useBanking, type BankInstitution, type BankProviderAccount, type BankConnection as BankConnectionInfo } from '../hooks/useBanking';
 
@@ -96,6 +98,7 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
   const currency = t('currency.symbol');
   const { accounts, netWorth, loading, createAccount, updateAccount, deleteAccount, reorderAccounts, fetchAccounts } = useAccounts();
   const { household } = useHousehold();
+  const { user } = useAuth();
   const inHousehold = (household?.members?.length ?? 0) > 1;
 
   const { enabled: bankingEnabled, connections, connect, exchange, linkAccounts, fetchInstitutions, syncNow, reconnect } = useBanking();
@@ -252,7 +255,7 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
       : await createAccount(payload);
     setSaving(false);
     if (result.error) {
-      toast.error('code' in result && result.code === 'card_has_movements' ? t('accounts.cardHasMovementsError') : result.error);
+      toast.error(apiErrorMessage(t, result));
       return;
     }
     toast.success(form.id ? t('accounts.savedOk') : t('accounts.createdOk'));
@@ -262,13 +265,13 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
 
   const handleArchive = async (a: Account) => {
     const result = await updateAccount(a.id, { isArchived: !a.isArchived });
-    if (result.error) toast.error(result.error);
+    if (result.error) toast.error(apiErrorMessage(t, result));
     else toast.success(a.isArchived ? t('accounts.restoredOk') : t('accounts.archivedOk'));
   };
 
   const handleDelete = async (a: Account) => {
     const result = await deleteAccount(a.id);
-    if (result.error) toast.error(result.code === 'account_backs_debt' ? t('accounts.backsDebtError') : result.error);
+    if (result.error) toast.error(apiErrorMessage(t, result));
     else toast.success(t('accounts.deletedOk'));
   };
 
@@ -311,16 +314,21 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
               <Banknote className="w-4 h-4 text-muted-foreground" />
             </button>
           )}
-          <button onClick={() => openEdit(a)} className="p-2 rounded-lg hover:bg-muted transition-colors" title={t('accounts.edit')}>
-            <Pencil className="w-4 h-4 text-muted-foreground" />
-          </button>
-          <button onClick={() => handleArchive(a)} className="p-2 rounded-lg hover:bg-muted transition-colors" title={a.isArchived ? t('accounts.restore') : t('accounts.archive')}>
-            {a.isArchived ? <ArchiveRestore className="w-4 h-4 text-muted-foreground" /> : <Archive className="w-4 h-4 text-muted-foreground" />}
-          </button>
-          {a.isArchived && (
-            <button onClick={() => handleDelete(a)} className="p-2 rounded-lg border border-destructive/20 text-destructive hover:bg-destructive/5 transition-colors" title={t('accounts.delete')}>
-              <Trash2 className="w-4 h-4" />
-            </button>
+          {/* Another member's shared account is read-only (the server answers 403). */}
+          {a.ownerUserId === user?.id && (
+            <>
+              <button onClick={() => openEdit(a)} className="p-2 rounded-lg hover:bg-muted transition-colors" title={t('accounts.edit')}>
+                <Pencil className="w-4 h-4 text-muted-foreground" />
+              </button>
+              <button onClick={() => handleArchive(a)} className="p-2 rounded-lg hover:bg-muted transition-colors" title={a.isArchived ? t('accounts.restore') : t('accounts.archive')}>
+                {a.isArchived ? <ArchiveRestore className="w-4 h-4 text-muted-foreground" /> : <Archive className="w-4 h-4 text-muted-foreground" />}
+              </button>
+              {a.isArchived && (
+                <button onClick={() => handleDelete(a)} className="p-2 rounded-lg border border-destructive/20 text-destructive hover:bg-destructive/5 transition-colors" title={t('accounts.delete')}>
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

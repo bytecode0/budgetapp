@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Mail, Lock, Eye, EyeOff, Target } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
+import { TermsNotice } from './TermsNotice';
 import { useAuth } from '../../context/AuthContext';
 
 interface LoginProps {
@@ -14,7 +15,7 @@ interface LoginProps {
 }
 
 export function Login({ onLogin, onSwitchToSignup, onForgotPassword, onNeedVerification, googleError }: LoginProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,7 +46,8 @@ export function Login({ onLogin, onSwitchToSignup, onForgotPassword, onNeedVerif
   };
 
   const handleGoogleLogin = () => {
-    window.location.href = '/api/auth/google';
+    // The server accepts only "es" | "en" and creates a new user's settings in it.
+    window.location.href = `/api/auth/google?lang=${i18n.language === 'en' ? 'en' : 'es'}`;
   };
 
   return (
@@ -165,7 +167,7 @@ export function Login({ onLogin, onSwitchToSignup, onForgotPassword, onNeedVerif
           transition={{ duration: 0.5, delay: 0.3 }}
           className="text-center text-xs text-muted-foreground mt-6"
         >
-          {t('auth.login.terms')}
+          <TermsNotice i18nKey="auth.login.terms" />
         </motion.p>
       </div>
     </div>

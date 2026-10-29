@@ -3,8 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Loader2, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAccounts } from '../hooks/useAccounts';
+import { useAuth } from '../context/AuthContext';
 import { CardFields, EMPTY_CARD_FIELDS, cardFieldsError, cardSettingsPayload, type CardFieldsValue } from '../components/shared/CardFields';
+import { apiErrorMessage } from '../lib/apiErrors';
 import { useMoney } from './useMoney';
+import { NoneAnswer } from './NoneAnswer';
 
 // Credit cards, exactly as in Accounts: a card is an account (type "card") and
 // the server creates its debt and budget line behind it (server/lib/cardDebt.ts).
@@ -12,6 +15,7 @@ export function CardsStep() {
   const { t } = useTranslation();
   const { fmt } = useMoney();
   const { accounts, createAccount, deleteAccount } = useAccounts();
+  const { user } = useAuth();
   const cards = accounts.filter(a => a.type === 'card' && !a.isArchived);
 
   const [adding, setAdding] = useState(false);
@@ -40,7 +44,7 @@ export function CardsStep() {
 
   const handleDelete = async (id: string) => {
     const result = await deleteAccount(id);
-    if (result.error) toast.error(result.code === 'account_backs_debt' ? t('accounts.backsDebtError') : result.error);
+    if (result.error) toast.error(apiErrorMessage(t, result));
   };
 
   return (
@@ -59,9 +63,11 @@ export function CardsStep() {
               <p className={`font-display ${a.card && a.card.owed > 0 ? 'text-red-500' : ''}`}>{fmt(a.card?.owed ?? 0)}</p>
               <p className="text-xs text-muted-foreground">{t('accounts.cardOwed')}</p>
             </div>
-            <button onClick={() => handleDelete(a.id)} className="p-2 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/5 transition-colors" title={t('accounts.delete')}>
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {a.ownerUserId === user?.id && (
+              <button onClick={() => handleDelete(a.id)} className="p-2 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/5 transition-colors" title={t('accounts.delete')}>
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -103,7 +109,12 @@ export function CardsStep() {
       )}
 
       {cards.length === 0 && !adding && (
-        <p className="mt-6 text-center text-sm text-muted-foreground">{t('onboarding.cards.noCards')}</p>
+        <NoneAnswer
+          answer="noCards"
+          hintKey="onboarding.cards.noCards"
+          buttonKey="onboarding.cards.noCardsButton"
+          answeredKey="onboarding.cards.noCardsAnswered"
+        />
       )}
     </div>
   );

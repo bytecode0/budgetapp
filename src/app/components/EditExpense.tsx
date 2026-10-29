@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import type { Expense, AttributionPayload } from '../hooks/useExpenses';
 import type { Allocation } from '../hooks/useAllocations';
 import { useHousehold } from '../hooks/useHousehold';
+import { useMoney } from '../onboarding/useMoney';
+import { apiErrorMessage } from '../lib/apiErrors';
 
 interface EditExpenseProps {
   isOpen: boolean;
@@ -13,12 +15,13 @@ interface EditExpenseProps {
   allocations: Allocation[];
   onClose: () => void;
   onSave: (payload: { amount: number; description: string; allocationId: string | null; date: string }) =>
-    Promise<{ error?: string } | { expense: Expense }>;
+    Promise<{ error?: string; code?: string } | { expense: Expense }>;
   onSaveAttribution?: (payload: AttributionPayload) => Promise<{ error?: string } | { expense: Expense }>;
 }
 
 export function EditExpense({ isOpen, expense, allocations, onClose, onSave, onSaveAttribution }: EditExpenseProps) {
   const { t } = useTranslation();
+  const { currency } = useMoney();
   const { household } = useHousehold();
   const members = household?.members ?? [];
   const showAttribution = members.length > 1;
@@ -74,7 +77,7 @@ export function EditExpense({ isOpen, expense, allocations, onClose, onSave, onS
 
     setSaving(true);
     const result = await onSave({ amount: parsed, description: description.trim(), allocationId, date });
-    if ('error' in result && result.error) { setSaving(false); toast.error(result.error); return; }
+    if ('error' in result && result.error) { setSaving(false); toast.error(apiErrorMessage(t, result)); return; }
 
     if (showAttribution && onSaveAttribution) {
       const payload: AttributionPayload = { scope, payerUserId: payerUserId || undefined };
@@ -235,7 +238,7 @@ export function EditExpense({ isOpen, expense, allocations, onClose, onSave, onS
                             <div key={m.userId} className="flex items-center gap-2">
                               <span className="text-sm flex-1 truncate">{m.name ?? m.email}</span>
                               <div className="relative w-28">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">€</span>
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{currency}</span>
                                 <input
                                   type="number" min="0" step="0.01"
                                   value={customShares[m.userId] ?? ''}

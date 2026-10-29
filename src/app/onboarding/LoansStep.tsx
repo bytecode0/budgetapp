@@ -3,10 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDebts } from '../hooks/useDebts';
+import { useAuth } from '../context/AuthContext';
 import {
   DebtFormFields, EMPTY_DEBT_FORM, debtPayloadFromForm, kindIcon, type DebtFormState,
 } from '../components/shared/DebtFormFields';
+import { apiErrorMessage } from '../lib/apiErrors';
 import { useMoney } from './useMoney';
+import { NoneAnswer } from './NoneAnswer';
 
 // Loans and installment plans (car, Klarna, payday loans, mortgage…), with
 // the same form as Debts. The server creates each debt's budget line.
@@ -15,6 +18,7 @@ export function LoansStep() {
   const { t } = useTranslation();
   const { fmt } = useMoney();
   const { debts, createDebt, deleteDebt } = useDebts();
+  const { user } = useAuth();
   const loans = debts.filter(d => d.kind !== 'credit_card');
 
   const [adding, setAdding] = useState(false);
@@ -28,14 +32,14 @@ export function LoansStep() {
     setSaving(true);
     const result = await createDebt(debtPayloadFromForm(form));
     setSaving(false);
-    if ('error' in result) { toast.error(result.error as string); return; }
+    if ('error' in result) { toast.error(apiErrorMessage(t, result)); return; }
     toast.success(t('onboarding.loans.createdOk'));
     reset();
   };
 
   const handleDelete = async (id: string) => {
     const result = await deleteDebt(id);
-    if (result.error) toast.error(result.code === 'debt_has_payments' ? t('debts.hasPaymentsError') : result.error);
+    if (result.error) toast.error(apiErrorMessage(t, result));
   };
 
   return (
@@ -61,9 +65,11 @@ export function LoansStep() {
                   <p className="text-xs text-muted-foreground">{t('onboarding.loans.owedLabel')} {fmt(d.owed)}</p>
                 )}
               </div>
-              <button onClick={() => handleDelete(d.id)} className="p-2 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/5 transition-colors" title={t('debts.delete')}>
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {d.ownerUserId === user?.id && (
+                <button onClick={() => handleDelete(d.id)} className="p-2 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/5 transition-colors" title={t('debts.delete')}>
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           );
         })}
@@ -96,7 +102,12 @@ export function LoansStep() {
       )}
 
       {loans.length === 0 && !adding && (
-        <p className="mt-6 text-center text-sm text-muted-foreground">{t('onboarding.loans.noLoans')}</p>
+        <NoneAnswer
+          answer="noLoans"
+          hintKey="onboarding.loans.noLoans"
+          buttonKey="onboarding.loans.noLoansButton"
+          answeredKey="onboarding.loans.noLoansAnswered"
+        />
       )}
 
       <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 mt-8 flex gap-3 text-sm text-amber-800 dark:text-amber-400">

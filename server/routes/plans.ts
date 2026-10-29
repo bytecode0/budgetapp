@@ -40,6 +40,7 @@ plansRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
       const plan = await tx.lifePlan.create({
         data: {
           userId: req.userId!,
+          ownerUserId: req.authUserId!,
           title,
           description: description ?? "",
           goalClass: goalClass ?? "savings",

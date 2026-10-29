@@ -101,7 +101,7 @@ export function detectRecurringFrom(items: RecurringInput[], opts: RecurringOpti
 /** Scan a user's expense history and return the merchants that look recurring. */
 export async function detectRecurring(userId: string): Promise<RecurringCandidate[]> {
   const expenses = await prisma.expense.findMany({
-    where: { userId, merchant: { not: "" } },
+    where: { userId, merchant: { not: "" }, kind: "expense" }, // a refund isn't a charge
     select: { merchant: true, amount: true, date: true, allocationId: true },
     orderBy: { date: "asc" },
   });

@@ -77,7 +77,7 @@
       "helpCenter": "Centro de Ayuda",
       "helpCenterSubtitle": "Obtén soporte y aprende a planificar mejor",
       "privacy": "Privacidad y Seguridad",
-      "privacySubtitle": "Tus datos están cifrados y seguros"
+      "privacySubtitle": "Conexión cifrada (HTTPS) y contraseñas guardadas con hash, nunca en claro"
     },
     "sharedFinances": {
       "sectionTitle": "Finanzas Compartidas",
@@ -225,7 +225,8 @@
     "months_other": "{{count}} meses",
     "noDeadline": "Sin fecha límite",
     "currentLabel": "(actual)",
-    "savedAmount": "€{{amount}} ahorrado"
+    "savedAmount": "€{{amount}} ahorrado",
+    "ofTarget": "de {{amount}}"
   },
   "planDetail": {
     "notFound": "Plan no encontrado",
@@ -339,7 +340,14 @@
     "quotaUpdated": "Cuota mensual actualizada a €{{amount}}/mes",
     "syncAllocationBanner": "Tu asignación mensual ya no está sincronizada (€{{current}}/mes). ¿Sincronizar?",
     "syncAllocationBtn": "Sincronizar asignación",
-    "allocationSynced": "Asignación sincronizada a €{{amount}}/mes"
+    "allocationSynced": "Asignación sincronizada a €{{amount}}/mes",
+    "contributionFailed": "No se pudo registrar la aportación",
+    "syncFailed": "No se pudo sincronizar la asignación",
+    "resetToSaved": "Volver al valor guardado",
+    "goalAmount": "Objetivo {{amount}}",
+    "axisNow": "Hoy",
+    "axisYear": "A{{n}}",
+    "axisMonth": "M{{n}}"
   },
   "createPlan": {
     "title": "Crear Plan de Vida",
@@ -462,6 +470,9 @@
     "addIncome": "Añadir ingreso",
     "incomeFromEntries": "suma de {{count}} ingresos este mes",
     "incomeBaseline": "base planificada",
+    "ownIncomeLabel": "Tu ingreso (solo el tuyo; cada uno edita el suyo)",
+    "householdIncomeTotal": "Total del hogar: {{total}}",
+    "incomeBaselineCouple": "base del hogar · la tuya: {{own}}",
     "totalAllocated": "Total Asignado",
     "pctOfIncome": "% de ingresos",
     "goingToPlans": "Destinado a Planes",
@@ -518,7 +529,16 @@
     "iconSearchPlaceholder": "Buscar iconos...",
     "iconSearchEmpty": "No se encontraron iconos",
     "addPlanAllocation": "Añadir Asignación de Plan",
-    "addAllocation": "Añadir Categoría"
+    "addAllocation": "Añadir Categoría",
+    "planSavedAmount": "{{amount}} ahorrado",
+    "planProgressOf": "{{pct}}% de {{target}}",
+    "dragToReorder": "Arrastra para reordenar",
+    "invalidAmount": "Introduce un importe válido",
+    "incomeUpdated": "Ingreso actualizado",
+    "nameRequired": "Escribe un nombre",
+    "lifePlanRequired": "Elige un plan de vida",
+    "addedOk": "Asignación añadida",
+    "removedOk": "Asignación eliminada"
   },
   "addExpense": {
     "title": "Añadir Gasto",
@@ -540,7 +560,9 @@
     "addExpense": "Añadir Gasto",
     "bankAccounts": "Cuentas",
     "cards": "Tarjetas",
-    "paidWithCardHint": "Se suma a la deuda de {{name}}: la pagarás cuando liquides la tarjeta."
+    "paidWithCardHint": "Se suma a la deuda de {{name}}: la pagarás cuando liquides la tarjeta.",
+    "invalidAmount": "Introduce un importe válido",
+    "addedOk": "Gasto añadido"
   },
   "accounts": {
     "title": "Cuentas",
@@ -605,6 +627,7 @@
     "cardOwedAdjustHint": "Si no coincide con tu banco, corrígelo aquí. La diferencia (intereses, alguna compra sin apuntar) cuenta como deuda previa.",
     "payCard": "Pagar tarjeta",
     "cardHasMovementsError": "Esta tarjeta ya tiene compras o pagos registrados: no puede cambiar de tipo.",
+    "backsOwnerDebtError": "Esta cuenta lleva una deuda de su titular actual: no puede cambiar de titular.",
     "cardMinimumRequired": "Indica el pago mínimo de la tarjeta"
   },
   "editExpense": {
@@ -671,7 +694,8 @@
     "expense": "Gasto",
     "shared": "Compartido",
     "sharedPaidBy": "Compartido · pagó {{name}}",
-    "payCard": "Pagar tarjeta"
+    "payCard": "Pagar tarjeta",
+    "refund": "Devolución"
   },
   "addIncome": {
     "title": "Añadir ingreso",
@@ -728,9 +752,9 @@
   "import": {
     "button": "Importar",
     "title": "Importar extracto",
-    "subtitle": "Sube un extracto bancario (.xlsx o .csv). Lo cotejamos con lo que ya tienes.",
+    "subtitle": "Sube un extracto bancario (.xlsx, .csv, Norma 43 u OFX). Lo cotejamos con lo que ya tienes.",
     "account": "Importar a la cuenta",
-    "dropHint": "Haz clic para elegir un archivo .xlsx o .csv",
+    "dropHint": "Haz clic para elegir un archivo (.xlsx, .csv, Norma 43 u OFX)",
     "reading": "Leyendo archivo…",
     "newCount": "{{count}} nuevos",
     "dupCount": "{{count}} ya importados",
@@ -753,7 +777,123 @@
     "aiCategoriesCreated": "Creadas {{count}} categorías",
     "importSelected": "Importar {{count}} seleccionados",
     "nothingSelected": "Selecciona al menos una fila",
-    "importedOk": "Importadas {{count}} transacciones"
+    "importedOk": "Importadas {{count}} transacciones",
+    "payment": "pago de deuda",
+    "refund": "devolución",
+    "fee": "comisión",
+    "possibleDuplicate": "posible duplicado",
+    "otherCurrency": "otra divisa",
+    "unrecognizedColumns": "No reconocemos las columnas de este archivo: necesitamos al menos fecha e importe.",
+    "reviewCount": "{{count}} por revisar",
+    "reviewCredit": "abono por revisar",
+    "reviewCreditHint": "No sabemos si este abono es un pago de la tarjeta o una devolución. Elige uno para importarlo.",
+    "resolvePayment": "Es un pago",
+    "resolveRefund": "Es una devolución",
+    "signQuestion": "¿Cómo aparecen las compras en este extracto de tarjeta?",
+    "signUnknown": "No podemos saber cómo escribe las compras este extracto de tarjeta. Elige una opción para ver los movimientos bien clasificados; hasta entonces no se importa nada.",
+    "signNegative": "Compras en negativo (−)",
+    "signPositive": "Compras en positivo (+)",
+    "learnedPayment": "pago sugerido por una regla: confírmalo",
+    "paysDebt": "Paga",
+    "notAPayment": "No es un pago de deuda (gasto)",
+    "cardPaymentUnassigned": "pago de tarjeta: elige qué tarjeta",
+    "possibleCardPayment": "puede ser el pago de una tarjeta de crédito: si lo es, elige la tarjeta",
+    "tooManyRows": "El archivo tiene demasiados movimientos (máximo 5.000). Exporta un periodo más corto.",
+    "fileTooLarge": "El archivo Excel es demasiado grande (máximo 5 MB). Exporta un periodo más corto o en CSV.",
+    "emptyFile": "El archivo está vacío.",
+    "noMovements": "El archivo tiene las columnas esperadas pero ningún movimiento.",
+    "invalidRows": "Algunas filas no son válidas. Vuelve a leer el archivo e inténtalo de nuevo.",
+    "debtNotFound": "Una de las deudas elegidas ya no existe. Vuelve a leer el archivo.",
+    "readFailed": "No se pudo leer el archivo.",
+    "confirmFailed": "No se pudo importar. Inténtalo de nuevo.",
+    "paymentCount_one": "{{count}} pago de deuda",
+    "paymentCount_other": "{{count}} pagos de deuda",
+    "skippedCount_one": "{{count}} omitido",
+    "skippedCount_other": "{{count}} omitidos",
+    "skippedTitle_one": "{{count}} fila del archivo no se importa",
+    "skippedTitle_other": "{{count}} filas del archivo no se importan",
+    "skippedRow": "Fila {{row}}: {{reason}}",
+    "skippedState": "estado «{{state}}» (aún no es un movimiento definitivo; aparecerá completado en el próximo extracto)",
+    "skippedOther": "no es un movimiento",
+    "show": "Ver",
+    "hide": "Ocultar",
+    "signSaved": "Guardado: la próxima vez no te preguntaremos cómo vienen las compras de esta tarjeta.",
+    "summaryTitle": "Importación completada",
+    "summaryExpenses_one": "{{count}} gasto",
+    "summaryExpenses_other": "{{count}} gastos",
+    "summaryIncomes_one": "{{count}} ingreso",
+    "summaryIncomes_other": "{{count}} ingresos",
+    "summaryRefunds_one": "{{count}} devolución",
+    "summaryRefunds_other": "{{count}} devoluciones",
+    "summaryPayments_one": "{{count}} pago a {{name}}",
+    "summaryPayments_other": "{{count}} pagos a {{name}}",
+    "summaryPaymentsUnnamed_one": "{{count}} pago de deuda",
+    "summaryPaymentsUnnamed_other": "{{count}} pagos de deuda",
+    "summaryNothing": "No había nada nuevo que importar: todo estaba ya guardado.",
+    "suggestBudgets": "Sugerir presupuestos",
+    "done": "Hecho",
+    "back": "Atrás",
+    "close": "Cerrar",
+    "next": "Siguiente",
+    "stepOf": "Paso {{n}} de {{total}}",
+    "steps": {
+      "account": "Cuenta",
+      "file": "Archivo",
+      "mapping": "Columnas",
+      "preview": "Revisión",
+      "summary": "Resumen"
+    },
+    "accountHint": "¿De qué cuenta o tarjeta es el extracto? Los movimientos se apuntan en ella.",
+    "noAccounts": "Aún no tienes cuentas. Crea una en Cuentas para importar su extracto.",
+    "fileHintCard": "Sube el extracto de la tarjeta (.xlsx, .csv u OFX). Las compras suben su deuda y los pagos la bajan.",
+    "tryAnotherFile": "Comprueba que es el extracto de movimientos que da tu banco, o prueba con otro formato (CSV, Excel, Norma 43 u OFX).",
+    "readLocally": "El archivo se lee en tu navegador y al servidor solo llegan los movimientos. Si tu navegador no puede leerlo, se envía a nuestro servidor para leerlo allí, sin guardarlo.",
+    "noRowsToImport": "Este archivo no tiene movimientos que importar.",
+    "wrongColumns": "¿Las columnas no se han leído bien? Indícalas a mano",
+    "mapping": {
+      "chooseColumn": "Elige una columna",
+      "emptyRow": "(fila vacía)",
+      "unrecognizedIntro": "No reconocemos las columnas de este archivo. Dinos cuál es cada una: lo guardamos en la cuenta y el próximo extracto se importa sin preguntar.",
+      "manualIntro": "Indica cuál es cada columna. Lo guardamos en la cuenta y los próximos extractos se leen así.",
+      "sheet": "Hoja",
+      "sheetN": "Hoja {{n}}",
+      "headerRow": "Fila con los títulos de las columnas",
+      "rowN": "Fila {{n}}",
+      "dateColumn": "Fecha",
+      "dateFormat": "Formato de la fecha",
+      "dmy": "día/mes/año (31/12/2026)",
+      "mdy": "mes/día/año (12/31/2026)",
+      "ymd": "año-mes-día (2026-12-31)",
+      "amountQuestion": "¿Cómo vienen los importes?",
+      "singleAmount": "Una columna con signo",
+      "splitAmount": "Cargos y abonos en columnas separadas",
+      "amountColumn": "Importe",
+      "debitColumn": "Cargos (dinero que sale)",
+      "creditColumn": "Abonos (dinero que entra)",
+      "descriptionColumns": "Concepto: elige una o varias columnas (máximo {{max}}), en orden",
+      "signDetect": "Detectarlo automáticamente",
+      "previewTitle": "Así se leen las primeras filas",
+      "previewNeedsColumns": "Elige al menos la fecha y el importe para ver cómo se leen.",
+      "previewEmpty": "Con estas columnas no sale ningún movimiento. Revisa la fila de títulos, la fecha, su formato y el importe.",
+      "noDescription": "(sin concepto)",
+      "previewCount": "{{read}} de {{total}} filas de la muestra se leen como movimientos.",
+      "save": "Guardar y continuar",
+      "notTabular": "Este archivo no tiene columnas que elegir (Norma 43 y OFX se leen siempre igual).",
+      "saved": "Columnas guardadas en la cuenta.",
+      "notOwner": "Solo quien creó la cuenta puede guardar sus columnas: se usan para esta importación.",
+      "saveFailed": "No se pudieron guardar las columnas; se usan para esta importación.",
+      "mapByHand": "Indicar las columnas a mano",
+      "aiSuggest": "Sugerir columnas con IA",
+      "aiPrivacy": "Para sugerirlas, enviamos a un proveedor de IA solo los títulos de columna que ves aquí y el formato de los valores (por ejemplo «dd/mm/aaaa» o «-#,##»), nunca los importes ni los movimientos. Revisa los títulos antes de enviarlos.",
+      "aiTitlesToSend": "Se enviarán estos títulos: {{titles}}",
+      "aiTitlesLookLikeData": "Algunos títulos de esta fila parecen datos (fechas, importes, nombres o números de cuenta), así que no los enviamos a la IA. Comprueba la fila de títulos o elige las columnas a mano.",
+      "chooseHeaderRow": "Esa fila parece de movimientos, no de títulos. Elige la fila de títulos de las columnas. Si el archivo no tiene ninguna, descárgalo de tu banco con los títulos.",
+      "chooseHeaderRowOption": "Elige la fila de títulos",
+      "aiSuggested": "Sugerencia de la IA: revisa cada columna en la vista previa antes de guardar.",
+      "aiRateLimited": "Has pedido muchas sugerencias seguidas. Inténtalo en un rato o elige las columnas a mano.",
+      "aiNoSuggestion": "La IA no ha encontrado una correspondencia clara. Elige las columnas a mano.",
+      "aiFailed": "No se pudo obtener la sugerencia. Elige las columnas a mano."
+    }
   },
   "budgets": {
     "title": "Presupuestos sugeridos",
@@ -801,6 +941,7 @@
     "sharePlans": "Planes de vida y objetivos de ahorro",
     "shareAllocations": "Asignaciones del presupuesto mensual",
     "shareReviews": "Revisiones e informes del presupuesto",
+    "ownDataMoves": "Lo que ya hayas registrado (ingresos, gastos, cuentas, deudas, planes) pasa a las finanzas compartidas y sigue siendo tuyo; tus cuentas y deudas pasan a ser de la pareja y cuentan en vuestro futuro comprometido, aunque puedes marcar una cuenta como privada cuando quieras. Si os desvinculáis, en general vuelve contigo lo tuyo: tus cuentas, deudas, ingresos y planes, y los gastos que registraste tú o que están en tus cuentas. El presupuesto se queda en las finanzas compartidas, igual que los gastos ligados a las tarjetas o deudas de tu pareja.",
     "decline": "Rechazar",
     "accept": "Aceptar",
     "linked": "¡Vinculados!",
@@ -820,7 +961,7 @@
       "signingIn": "Iniciando sesión...",
       "noAccount": "¿No tienes cuenta?",
       "signUpFree": "Regístrate gratis",
-      "terms": "Al iniciar sesión, aceptas nuestros Términos de Servicio y Política de Privacidad",
+      "terms": "Al iniciar sesión, aceptas nuestros <terms>Términos del servicio</terms> y nuestra <privacy>Política de privacidad</privacy>",
       "googleCancelled": "Inicio de sesión con Google cancelado",
       "googleFailed": "Error al iniciar sesión con Google. Inténtalo de nuevo.",
       "verifyEmailFirst": "Por favor, verifica tu email primero.",
@@ -844,7 +985,7 @@
       "freeBenefits": "Planes de vida ilimitados · Seguimiento de gastos · Perspectivas inteligentes",
       "passwordMismatch": "Las contraseñas no coinciden",
       "codeSent": "¡Código de verificación enviado! Revisa tu email.",
-      "terms": "Al crear una cuenta, aceptas nuestros Términos de Servicio y Política de Privacidad"
+      "terms": "Al crear una cuenta, aceptas nuestros <terms>Términos del servicio</terms> y nuestra <privacy>Política de privacidad</privacy>"
     },
     "forgotPassword": {
       "backToLogin": "Volver al inicio de sesión",
@@ -1046,10 +1187,18 @@
     "paidFromCardError": "Un pago de la tarjeta tiene que salir de otra cuenta (la del banco), no de la propia tarjeta.",
     "paymentFailed": "No se pudo registrar el pago. Inténtalo de nuevo.",
     "hasPaymentsError": "Esta deuda tiene pagos registrados y se queda en el historial de pagadas: no se puede borrar.",
+    "cardKindLockedHint": "Es la deuda de una tarjeta: su tipo no cambia. La tarjeta se gestiona en Cuentas.",
+    "cardKindLockedError": "Es la deuda de una tarjeta: sigue siendo una tarjeta de crédito. Cambia la cuenta de la tarjeta en Cuentas.",
+    "cardVisibilityLockedError": "Es la deuda de una tarjeta: su visibilidad sigue a la de la tarjeta. Cámbiala en Cuentas.",
+    "cardAlreadyHasDebtError": "Esta tarjeta ya tiene su deuda: regístralo en la cuenta de la tarjeta.",
+    "accountOwnerMismatchError": "Una deuda solo puede ir en una cuenta de su mismo titular.",
+    "creditCardNeedsCardAccountError": "Una deuda de tarjeta de crédito solo puede ir en una cuenta de tipo tarjeta.",
+    "accountLockedError": "Esta deuda ya tiene movimientos registrados: su cuenta no puede cambiar.",
     "owedNow": "Debes {{amount}}",
     "payWhichLabel": "Tarjeta",
     "payPartialHint": "Puedes pagar una parte o el total.",
-    "cardsInAccountsHint": "Las tarjetas de crédito se añaden en Cuentas: su deuda aparece aquí sola."
+    "cardsInAccountsHint": "Las tarjetas de crédito se añaden en Cuentas: su deuda aparece aquí sola.",
+    "aprShort": "{{apr}}% TAE"
   },
   "onboarding": {
     "stepOf": "Paso {{current}} de {{total}}",
@@ -1139,18 +1288,22 @@
       "namePlaceholder": "ej. PASS, Visa BBVA",
       "add": "Añadir una tarjeta",
       "save": "Guardar tarjeta",
-      "noCards": "¿No tienes tarjetas de crédito? Pulsa Continuar.",
-      "createdOk": "Tarjeta añadida"
+      "noCards": "¿No tienes tarjetas de crédito?",
+      "createdOk": "Tarjeta añadida",
+      "noCardsButton": "No tengo tarjetas de crédito",
+      "noCardsAnswered": "Anotado: no tienes tarjetas de crédito. Pulsa Continuar."
     },
     "loans": {
       "title": "Préstamos y cuotas",
       "subtitle": "Coche, Klarna, préstamo rápido, compras a plazos… Todo lo que pagas en cuotas.",
       "add": "Añadir un préstamo o cuotas",
       "save": "Guardar",
-      "noLoans": "¿No pagas nada a plazos? Pulsa Continuar.",
+      "noLoans": "¿No pagas nada a plazos?",
       "createdOk": "Añadido",
       "owedLabel": "Pendiente",
-      "note": "Incluye también la hipoteca: la tratamos distinto a una tarjeta o un préstamo de consumo, y no tendrás que añadirla como gasto fijo."
+      "note": "Incluye también la hipoteca: la tratamos distinto a una tarjeta o un préstamo de consumo, y no tendrás que añadirla como gasto fijo.",
+      "noLoansButton": "No tengo préstamos ni cuotas",
+      "noLoansAnswered": "Anotado: no tienes préstamos ni cuotas. Pulsa Continuar."
     },
     "lines": {
       "income": "Ingreso",
@@ -1192,10 +1345,200 @@
         "cards": "Tus tarjetas de crédito",
         "loans": "Tus préstamos y cuotas",
         "fixed": "Tus gastos fijos"
+      },
+      "sayNo": "No tengo",
+      "answered": {
+        "cards": "Anotado: no tienes tarjetas de crédito",
+        "loans": "Anotado: no tienes préstamos ni cuotas"
       }
-    }
+    },
+    "undo": "Deshacer",
+    "answerFailed": "No se ha podido guardar. Inténtalo de nuevo."
   },
   "currency": {
-    "symbol": "€"
+    "symbol": "€",
+    "perMonthSuffix": "/mes"
+  },
+  "legal": {
+    "lastUpdated": "Última actualización: 29 de octubre de 2026",
+    "backToApp": "Volver a LifePlan",
+    "privacyLink": "Política de privacidad",
+    "termsLink": "Términos del servicio",
+    "privacy": {
+      "title": "Política de privacidad",
+      "intro": "Esta política explica qué datos trata LifePlan (budget.luisvespa.com), para qué los usa y con quién se comparten. LifePlan es una aplicación gratuita, en fase beta, para organizar tu presupuesto y tus deudas.",
+      "sections": [
+        {
+          "title": "Quién es el responsable",
+          "paragraphs": [
+            "El responsable del tratamiento de tus datos es Luis Vespa. Para cualquier cuestión sobre privacidad puedes escribir a contact@luisvespa.com."
+          ]
+        },
+        {
+          "title": "Qué datos tratamos",
+          "paragraphs": [
+            "Solo tratamos los datos que tú introduces en la aplicación o que se generan al usarla:"
+          ],
+          "items": [
+            "Tu cuenta: nombre, email y contraseña. De la contraseña guardamos solo un hash (bcrypt), nunca la contraseña en sí. Si entras con Google, guardamos el nombre, el email y la dirección de la foto de perfil que Google nos facilita.",
+            "Códigos de verificación de un solo uso que te enviamos por email para confirmar tu cuenta o recuperar la contraseña. Caducan a los 15 minutos.",
+            "Tus datos financieros: ingresos, gastos (importe, fecha, concepto y categoría), presupuesto y categorías, cuentas y saldos, tarjetas, préstamos, cuotas y deudas con sus pagos, metas de ahorro, reglas para categorizar gastos y tus preferencias (idioma, tema, día de cobro).",
+            "Extractos bancarios que importas: el archivo (CSV, Excel, Norma 43 u OFX) se lee en tu navegador y al servidor solo llegan los movimientos que contiene (fecha, importe, concepto y, si los trae, saldo y estado). Si tu navegador no consigue leerlo y el archivo es pequeño, se envía al servidor para leerlo allí, sin guardarlo. Guardamos los movimientos que confirmas, no el archivo. Si indicas qué columna es cada una, guardamos esa correspondencia (los títulos de las columnas) en la cuenta para el próximo extracto.",
+            "Tu hogar: si invitas a otra persona a compartir las finanzas, guardamos su email y la invitación, y le enviamos un email con el enlace. Las personas de un mismo hogar ven los datos compartidos según el nivel de privacidad que tenga el hogar.",
+            "Datos técnicos: los registros que genera el servidor al funcionar (por ejemplo, errores), que incluyen datos como la dirección IP de la petición."
+          ]
+        },
+        {
+          "title": "Lo que LifePlan no hace",
+          "paragraphs": [
+            "LifePlan no se conecta hoy a tu banco: los datos solo entran porque tú los escribes o importas un archivo. No mueve dinero ni hace pagos. No muestra publicidad, no vende tus datos ni los cede a terceros para sus propios fines, y no usa cookies de analítica ni de publicidad. Tampoco toma decisiones automatizadas que te afecten jurídicamente."
+          ]
+        },
+        {
+          "title": "Para qué los usamos y con qué base",
+          "paragraphs": [
+            "Usamos tus datos para prestarte el servicio que pides al registrarte: guardar tu información, calcular tu presupuesto, tu futuro comprometido y tu plan de salida de deudas, y enviarte los emails necesarios (verificación, recuperación de contraseña, bienvenida e invitaciones al hogar). La base jurídica es la ejecución del contrato que aceptas al crear tu cuenta (artículo 6.1.b del RGPD).",
+            "Los registros técnicos se usan para mantener el servicio funcionando y seguro, sobre la base del interés legítimo (artículo 6.1.f del RGPD)."
+          ]
+        },
+        {
+          "title": "Inteligencia artificial",
+          "paragraphs": [
+            "Al importar un extracto, la aplicación puede ofrecerte botones para clasificar gastos o sugerir categorías con IA. Solo si pulsas uno de esos botones, enviamos a Anthropic (el proveedor del modelo Claude) los conceptos de comercio sin categoría de ese extracto, hasta 40 a la vez, y, para clasificarlos, los nombres de tus categorías de presupuesto.",
+            "No enviamos importes, fechas, tu nombre, tu email ni números de cuenta. Ten en cuenta que el concepto es el texto que pone tu banco y a veces incluye otros datos, como el nombre de la persona a la que hiciste una transferencia. Lo que devuelve la IA son solo sugerencias, que revisas antes de guardar nada.",
+            "Si no reconocemos las columnas de un extracto, puedes pedir que la IA sugiera cuál es cada una. Antes te mostramos los títulos que se enviarán, y solo si pulsas «Sugerir columnas con IA» enviamos a un proveedor de IA (según nuestra configuración, a través de OpenRouter o directamente a Anthropic) los títulos de columna que ves y el formato de los valores de las primeras filas (por ejemplo «dd/mm/aaaa», «-#,##» o «texto de 12 caracteres»), calculado en tu navegador. Nunca enviamos los importes ni los movimientos. Los títulos son texto de tu archivo: si la fila elegida no parece de títulos no enviamos nada, pero revísalos antes de enviarlos. La sugerencia solo rellena la pantalla de columnas; la revisas y la confirmas tú."
+          ]
+        },
+        {
+          "title": "Proveedores que tratan datos por nosotros",
+          "paragraphs": [
+            "Para que LifePlan funcione usamos estos proveedores, que tratan datos solo para prestarnos su servicio:"
+          ],
+          "items": [
+            "Neon: base de datos PostgreSQL donde se guardan tus datos, alojada en la Unión Europea (Fráncfort).",
+            "Vercel: alojamiento de la web y del servidor de la aplicación, que se ejecuta en Fráncfort.",
+            "Resend: envío de los emails de la aplicación (tu email y el contenido del mensaje).",
+            "Google: el inicio de sesión con Google, solo si eliges usarlo. Además, la web carga sus tipografías desde Google Fonts, por lo que tu navegador envía a Google tu dirección IP al abrirla.",
+            "Anthropic: la clasificación con IA descrita arriba y, si es el proveedor configurado, la sugerencia de columnas con IA, solo cuando las pides.",
+            "OpenRouter: la sugerencia de columnas con IA descrita arriba (los títulos de columna que ves y los formatos), cuando la pides y si es el proveedor configurado. OpenRouter la pasa al proveedor del modelo elegido."
+          ],
+          "after": "Algunos de estos proveedores son empresas de Estados Unidos y pueden tratar datos fuera del Espacio Económico Europeo. Lo hacen con las garantías previstas en sus condiciones de tratamiento de datos, como las cláusulas contractuales tipo aprobadas por la Comisión Europea."
+        },
+        {
+          "title": "Cookies y almacenamiento local",
+          "paragraphs": [
+            "LifePlan usa una sola cookie, llamada «token», que mantiene tu sesión iniciada. Es técnica e imprescindible: no es accesible desde JavaScript, caduca a los 7 días y se borra al cerrar sesión. Además, tu navegador guarda en su almacenamiento local el idioma que eliges y si has ocultado el aviso «Completa tu configuración». No usamos cookies de analítica, de publicidad ni de terceros, por eso no te pedimos consentimiento para ellas."
+          ]
+        },
+        {
+          "title": "Cuánto tiempo guardamos los datos",
+          "paragraphs": [
+            "Guardamos tus datos mientras tengas la cuenta. Puedes borrar en cualquier momento, desde la propia aplicación, los movimientos, cuentas, deudas y demás elementos que hayas creado. Los códigos de verificación caducan a los 15 minutos y las invitaciones al hogar, a los 7 días.",
+            "La aplicación todavía no tiene un botón para eliminar la cuenta. Para hacerlo, escribe a contact@luisvespa.com desde el email de tu cuenta y la eliminaremos junto con todos sus datos. Las copias de seguridad del proveedor de base de datos pueden conservarlos durante un periodo limitado antes de borrarse."
+          ]
+        },
+        {
+          "title": "Seguridad",
+          "paragraphs": [
+            "Todas las comunicaciones van cifradas por HTTPS, las contraseñas se guardan con hash, la cookie de sesión no es accesible desde JavaScript y cada petición a tus datos exige una sesión iniciada. Ningún sistema es totalmente seguro: si detectamos un problema que afecte a tus datos, te avisaremos como exige la ley."
+          ]
+        },
+        {
+          "title": "Tus derechos",
+          "paragraphs": [
+            "Puedes pedir acceso a tus datos, su rectificación o supresión, oponerte a su tratamiento o pedir que se limite, y pedir una copia en un formato de uso común (portabilidad). Escribe a contact@luisvespa.com y te responderemos en el plazo de un mes. Si crees que no hemos tratado bien tus datos, puedes reclamar ante la Agencia Española de Protección de Datos (www.aepd.es)."
+          ]
+        },
+        {
+          "title": "Menores",
+          "paragraphs": [
+            "LifePlan está pensada para personas mayores de 18 años. No debes crear una cuenta si eres menor de edad."
+          ]
+        },
+        {
+          "title": "Cambios en esta política",
+          "paragraphs": [
+            "Si cambiamos esta política, actualizaremos esta página y su fecha. Si el cambio es importante, te lo comunicaremos antes de que se aplique."
+          ]
+        }
+      ]
+    },
+    "terms": {
+      "title": "Términos del servicio",
+      "intro": "Estos términos regulan el uso de LifePlan (budget.luisvespa.com), una aplicación de Luis Vespa para organizar tu presupuesto y tus deudas. Al crear una cuenta o usar la aplicación, los aceptas.",
+      "sections": [
+        {
+          "title": "Una beta gratuita",
+          "paragraphs": [
+            "LifePlan está en fase beta y es gratuita. Durante la beta las funciones pueden cambiar, aparecer o desaparecer. Si en el futuro hubiera planes de pago, lo anunciaremos con antelación y nunca te cobraremos nada sin que lo aceptes expresamente."
+          ]
+        },
+        {
+          "title": "Tu cuenta",
+          "paragraphs": [
+            "Para usar LifePlan debes tener al menos 18 años y dar datos ciertos al registrarte. Eres responsable de mantener tu contraseña en secreto y de lo que se haga con tu cuenta. Si crees que alguien ha accedido a ella, escríbenos a contact@luisvespa.com."
+          ]
+        },
+        {
+          "title": "No es asesoramiento financiero",
+          "paragraphs": [
+            "LifePlan es una herramienta para organizarte. Sus cifras (presupuesto, futuro comprometido, fecha de salida de deudas, orden de pago) son estimaciones calculadas con los datos que tú introduces, y solo son tan exactas como esos datos. No constituyen asesoramiento financiero, jurídico ni fiscal. LifePlan no es un banco, no mueve dinero ni hace pagos por ti, y las decisiones sobre tu dinero son siempre tuyas."
+          ]
+        },
+        {
+          "title": "Uso aceptable",
+          "paragraphs": [
+            "Te comprometes a usar LifePlan de forma lícita y, en particular, a no:"
+          ],
+          "items": [
+            "intentar acceder a cuentas o datos de otras personas;",
+            "atacar, sobrecargar o intentar saltarse la seguridad del servicio, ni usarlo de forma automatizada abusiva;",
+            "subir archivos con contenido malicioso o datos que no tengas derecho a usar;",
+            "invitar a tu hogar a alguien sin su consentimiento."
+          ]
+        },
+        {
+          "title": "Tus datos y tu hogar",
+          "paragraphs": [
+            "Los datos que introduces siguen siendo tuyos. Cómo los tratamos se explica en la Política de privacidad. Si compartes tus finanzas con otra persona a través del hogar, ella verá los datos compartidos según el nivel de privacidad del hogar; decide con cuidado qué compartes."
+          ]
+        },
+        {
+          "title": "Sin garantías",
+          "paragraphs": [
+            "LifePlan se ofrece «tal cual», sin garantías de ningún tipo. Al ser una beta, puede tener errores, interrupciones o, en casos excepcionales, pérdida de datos: conserva tus propios registros de lo importante. En la medida en que la ley lo permita, no respondemos de los daños derivados del uso de la aplicación o de decisiones tomadas a partir de sus cifras. Nada de esto limita los derechos que te reconoce la normativa de consumidores ni la responsabilidad por dolo o culpa grave."
+          ]
+        },
+        {
+          "title": "Fin del servicio o de tu cuenta",
+          "paragraphs": [
+            "Puedes dejar de usar LifePlan cuando quieras y pedir que eliminemos tu cuenta escribiendo a contact@luisvespa.com. Podemos suspender o cerrar una cuenta que incumpla estos términos. También podemos cerrar la beta o el servicio; en ese caso te avisaremos con antelación razonable siempre que sea posible."
+          ]
+        },
+        {
+          "title": "Cambios en estos términos",
+          "paragraphs": [
+            "Si cambiamos estos términos, actualizaremos esta página y su fecha. Si el cambio es importante, te lo comunicaremos antes de que se aplique; si no estás de acuerdo, puedes dejar de usar el servicio."
+          ]
+        },
+        {
+          "title": "Ley aplicable",
+          "paragraphs": [
+            "Estos términos se rigen por la ley española. Si eres consumidor, cualquier conflicto se resolverá ante los juzgados de tu domicilio."
+          ]
+        },
+        {
+          "title": "Contacto",
+          "paragraphs": [
+            "Para cualquier duda sobre estos términos, escribe a contact@luisvespa.com."
+          ]
+        }
+      ]
+    }
+  },
+  "apiErrors": {
+    "refundOnDebtLine": "Una devolución no puede ir en la partida de una deuda: deshace una compra, no paga la deuda.",
+    "allocationNotFound": "Esa categoría ya no existe. Recarga la página y elige otra.",
+    "accountNotFound": "Esa cuenta no está disponible. Recarga la página y elige otra."
   }
 }

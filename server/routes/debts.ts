@@ -1,9 +1,12 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
+import { mutationAccess, reorderableEntries, visibleToWhere } from "../lib/ownership.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { buildDebtTimeline } from "../lib/debtTimeline.js";
+import { householdBaselineIncome } from "../lib/householdIncome.js";
 import { simulatePayoff, type PayoffMethod } from "../lib/debtPayoff.js";
+import { debtAccountLinkError, cardDebtKindLocked, creditCardOnNonCardAccount, type DebtAccountLinkError } from "../lib/debtAccountLink.js";
 import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/period.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import {
@@ -74,6 +77,28 @@ async function createCardAccount(req: AuthRequest, name: string, visibility?: st
   return account.id;
 }
 
+const LINK_ERROR_MESSAGES: Record<DebtAccountLinkError, string> = {
+  card_already_has_debt: "This card already has its debt; record it on the card account",
+  debt_account_owner_mismatch: "A debt can only be linked to an account of its own owner",
+  credit_card_needs_card_account: "A credit card debt can only be linked to a card account",
+};
+
+/** The account `accountId` if it's in the pool, visible to the caller and a
+ *  valid link for the debt (server/lib/debtAccountLink.ts). `null` when it
+ *  isn't usable (ignored, as before), `{ error }` when the link is refused. */
+async function linkableAccount(
+  req: AuthRequest, accountId: string, debt: { id?: string; ownerUserId: string; kind: string },
+): Promise<{ id: string } | { error: DebtAccountLinkError } | null> {
+  const account = await prisma.account.findFirst({
+    where: { id: accountId, userId: req.userId!, ...visibleToWhere(req.authUserId!) },
+    select: { id: true, type: true, ownerUserId: true },
+  });
+  if (!account) return null;
+  const onAccount = await prisma.debt.findMany({ where: { userId: req.userId!, accountId: account.id }, select: { id: true } });
+  const code = debtAccountLinkError(debt, account, onAccount);
+  return code ? { error: code } : { id: account.id };
+}
+
 function defaultPaymentMode(kind: string | undefined): string {
   return !kind || kind === "credit_card" || kind === "other" ? "minimum" : "installments";
 }
@@ -90,7 +115,7 @@ debtsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
     const debts = await prisma.debt.findMany({
       where: {
         userId: req.userId!,
-        OR: [{ ownerUserId: req.authUserId! }, { visibility: "household" }],
+        ...visibleToWhere(req.authUserId!),
       },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     });
@@ -117,12 +142,13 @@ debtsRouter.get("/timeline", requireAuth, async (req: AuthRequest, res: Response
   try {
     const periodsCount = Math.min(24, Math.max(1, parseInt(String(req.query.periods ?? "6"), 10) || 6));
 
-    const [debts, settings] = await Promise.all([
+    const [debts, settings, monthlyIncome] = await Promise.all([
       prisma.debt.findMany({
         where: { userId: req.userId!, OR: [{ ownerUserId: req.authUserId! }, { visibility: "household" }] },
         select: { id: true, name: true, kind: true, status: true, paymentMode: true, minimumPayment: true, installmentAmount: true, installmentsTotal: true, installmentsPaid: true },
       }),
-      prisma.userSettings.findUnique({ where: { userId: req.userId! }, select: { cycleStartDay: true, monthlyIncome: true } }),
+      prisma.userSettings.findUnique({ where: { userId: req.userId! }, select: { cycleStartDay: true } }),
+      householdBaselineIncome(req.userId!),
     ]);
 
     const cycleStartDay = clampCycleStartDay(settings?.cycleStartDay ?? 1);
@@ -137,7 +163,7 @@ debtsRouter.get("/timeline", requireAuth, async (req: AuthRequest, res: Response
       const atStart = debtState(ledger, period.start);
       return { ...d, installmentsPaid: atStart.installmentsPaid, previousRemaining: monthlyCommitment(ledger, period) };
     });
-    const timeline = buildDebtTimeline(live, settings?.monthlyIncome ?? 0, cycleStartDay, periodsCount);
+    const timeline = buildDebtTimeline(live, monthlyIncome, cycleStartDay, periodsCount);
 
     return res.json(serializeMoney({ timeline }));
   } catch (err) {
@@ -215,11 +241,13 @@ debtsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: "Invalid visibility" });
     }
 
-    // A linked account must belong to the user.
+    // A linked account must be in the pool and visible to the caller (another
+    // member's private account is as good as nonexistent).
     let resolvedAccountId: string | null = null;
     if (accountId) {
-      const owned = await prisma.account.findFirst({ where: { id: accountId, userId: req.userId! }, select: { id: true } });
-      if (owned) resolvedAccountId = owned.id;
+      const linked = await linkableAccount(req, accountId, { ownerUserId: req.authUserId!, kind: kind ?? "other" });
+      if (linked && "error" in linked) return res.status(409).json({ error: LINK_ERROR_MESSAGES[linked.error], code: linked.error });
+      if (linked) resolvedAccountId = linked.id;
     }
 
     if (kind === "credit_card" && !resolvedAccountId) {
@@ -290,8 +318,15 @@ debtsRouter.patch("/reorder", requireAuth, async (req: AuthRequest, res: Respons
       return res.status(400).json({ error: "order array is required" });
     }
 
+    // Only rows the caller can see (the same rule as GET); others are ignored.
+    const visible = await prisma.debt.findMany({
+      where: { userId: req.userId!, ...visibleToWhere(req.authUserId!) },
+      select: { id: true },
+    });
+    const entries = reorderableEntries(order, new Set(visible.map(r => r.id)));
+
     await prisma.$transaction(
-      order.map(({ id, sortOrder }) =>
+      entries.map(({ id, sortOrder }) =>
         prisma.debt.updateMany({ where: { id, userId: req.userId! }, data: { sortOrder } })
       )
     );
@@ -309,6 +344,9 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
     const { id } = req.params;
     const existing = await prisma.debt.findFirst({ where: { id, userId: req.userId! } });
     if (!existing) return res.status(404).json({ error: "Debt not found" });
+    const access = mutationAccess(existing, req.authUserId);
+    if (access === "hidden") return res.status(404).json({ error: "Debt not found" });
+    if (access === "forbidden") return res.status(403).json({ error: "Only the owner can change this debt" });
 
     const {
       name, kind, status, accountId, currentBalance, principal, apr,
@@ -327,8 +365,10 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
       if (!accountId) {
         accountUpdate = { accountId: null };
       } else {
-        const owned = await prisma.account.findFirst({ where: { id: accountId, userId: req.userId! }, select: { id: true } });
-        if (owned) accountUpdate = { accountId: owned.id };
+        // Same rule as POST: in the pool, visible to the caller, a valid link.
+        const linked = await linkableAccount(req, accountId, { ...existing, kind: kind ?? existing.kind });
+        if (linked && "error" in linked) return res.status(409).json({ error: LINK_ERROR_MESSAGES[linked.error], code: linked.error });
+        if (linked) accountUpdate = { accountId: linked.id };
       }
     }
     // The linked account decides which expenses are purchases and how past
@@ -341,10 +381,35 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
       }
     }
 
+    // The debt behind a card account is a credit_card for good: another kind
+    // would slip out of the rules that keep it mirroring its card.
+    const existingAccount = existing.accountId
+      ? await prisma.account.findUnique({ where: { id: existing.accountId }, select: { type: true } })
+      : null;
+    if (cardDebtKindLocked(existing, existingAccount?.type ?? null, kind)) {
+      return res.status(409).json({ error: "A card's debt stays a credit card; change the card account instead", code: "card_debt_kind_locked" });
+    }
+    // Nor does a debt turn into a card on an account that isn't one (a new
+    // link was already checked above).
+    if (!accountUpdate && kind !== undefined && kind !== existing.kind && existingAccount
+      && creditCardOnNonCardAccount(kind, existingAccount.type)) {
+      return res.status(409).json({ error: LINK_ERROR_MESSAGES.credit_card_needs_card_account, code: "credit_card_needs_card_account" });
+    }
+
     // A card created before cards got their own account (or edited into a
     // card) gets one now, as on creation.
     const finalKind = kind ?? existing.kind;
     const finalAccountId = accountUpdate ? accountUpdate.accountId : existing.accountId;
+
+    // A card's debt mirrors its card account's owner and visibility
+    // (server/lib/cardDebt.ts, kept in step from PATCH /api/accounts/:id).
+    // Changed here, the two would drift apart.
+    if (visibility !== undefined && visibility !== existing.visibility && finalKind === "credit_card" && finalAccountId) {
+      const account = await prisma.account.findUnique({ where: { id: finalAccountId }, select: { type: true } });
+      if (account?.type === "card") {
+        return res.status(409).json({ error: "A card's debt follows its card account's visibility; change it on the account", code: "card_debt_visibility_locked" });
+      }
+    }
     if (finalKind === "credit_card" && !finalAccountId) {
       accountUpdate = { accountId: await createCardAccount(req, name ?? existing.name, existing.visibility) };
     }
@@ -425,6 +490,9 @@ debtsRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Response) 
     const { id } = req.params;
     const existing = await prisma.debt.findFirst({ where: { id, userId: req.userId! } });
     if (!existing) return res.status(404).json({ error: "Debt not found" });
+    const access = mutationAccess(existing, req.authUserId);
+    if (access === "hidden") return res.status(404).json({ error: "Debt not found" });
+    if (access === "forbidden") return res.status(403).json({ error: "Only the owner can change this debt" });
 
     // Its payments' budget split (server/lib/debtBalance.ts) needs the debt:
     // deleting it would make past months count those payments in full.

@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
+import { ALLOCATION_NOT_FOUND, allocationsInPool } from "../lib/poolRefs.js";
 
 export const rulesRouter = Router();
 
@@ -41,8 +42,7 @@ rulesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     if (type === "regex" && !validRegex(pattern)) return res.status(400).json({ error: "Invalid regular expression" });
     if (!allocationId) return res.status(400).json({ error: "allocationId is required" });
 
-    const alloc = await prisma.allocation.findFirst({ where: { id: allocationId, userId: req.userId! } });
-    if (!alloc) return res.status(400).json({ error: "Allocation not found" });
+    if (!(await allocationsInPool(req.userId!, [allocationId]))) return res.status(404).json(ALLOCATION_NOT_FOUND);
 
     const rule = await prisma.categorizationRule.create({
       data: {
@@ -87,8 +87,8 @@ rulesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
       return res.status(400).json({ error: "Invalid regular expression" });
     }
     if (allocationId !== undefined) {
-      const alloc = await prisma.allocation.findFirst({ where: { id: allocationId, userId: req.userId! } });
-      if (!alloc) return res.status(400).json({ error: "Allocation not found" });
+      if (!allocationId) return res.status(400).json({ error: "allocationId is required" });
+      if (!(await allocationsInPool(req.userId!, [allocationId]))) return res.status(404).json(ALLOCATION_NOT_FOUND);
     }
 
     const rule = await prisma.categorizationRule.update({

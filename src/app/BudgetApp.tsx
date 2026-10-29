@@ -31,6 +31,22 @@ import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/useP
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
 
+// The partner invite token survives the full-page Google OAuth redirect in
+// sessionStorage (React state is wiped by it). Storage may be unavailable
+// (private mode, blocked site data): the invite then only lasts this page load.
+const PENDING_INVITE_KEY = 'pendingInviteToken';
+
+function readPendingInvite(): string | null {
+  try { return window.sessionStorage.getItem(PENDING_INVITE_KEY); } catch { return null; }
+}
+
+function writePendingInvite(token: string | null): void {
+  try {
+    if (token) window.sessionStorage.setItem(PENDING_INVITE_KEY, token);
+    else window.sessionStorage.removeItem(PENDING_INVITE_KEY);
+  } catch { /* storage unavailable: nothing to persist or clear */ }
+}
+
 function AppInner() {
   const { user, loading, logout, refreshUser } = useAuth();
   const { needsOnboarding, missing: setupMissing, loading: onboardingLoading, refresh: refreshOnboardingStatus } = useOnboardingNeeded(Boolean(user));
@@ -39,7 +55,7 @@ function AppInner() {
   const [resumeStep, setResumeStep] = useState<OnboardingStep | null>(null);
   const { t } = useTranslation();
   const { darkMode, updateDarkMode, dbLanguage, updateLanguage, updatePayday } = useAllocations();
-  const { household } = useHousehold();
+  const { household, fetchHousehold } = useHousehold();
   const inHousehold = (household?.members?.length ?? 0) > 1;
   const { language, setLanguage } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
@@ -62,9 +78,14 @@ function AppInner() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
 
-  // Partner invite: detect ?invite=TOKEN in URL
+  // Partner invite: detect ?invite=TOKEN in URL (or one saved before an OAuth
+  // redirect). Kept in state across the auth flow; `inviteChecking` holds the
+  // app until the token is validated, so the onboarding never flashes before
+  // the accept step.
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [inviteDetails, setInviteDetails] = useState<InviteDetails | null>(null);
+  const [inviteChecking, setInviteChecking] = useState(() =>
+    new URLSearchParams(window.location.search).has('invite') || readPendingInvite() !== null);
   const { acceptInvite } = usePartner();
 
   // Open Banking: detect ?bankToken=TOKEN in URL (post-consent redirect hand-off)
@@ -72,10 +93,22 @@ function AppInner() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('invite');
+    const urlInvite = params.get('invite');
+    const token = urlInvite ?? readPendingInvite();
     if (token) {
+      writePendingInvite(token);
       setInviteToken(token);
-      fetchInviteDetails(token).then(details => setInviteDetails(details));
+      fetchInviteDetails(token).then(details => {
+        // Invalid or expired: forget it so it isn't retried on every load.
+        if (!details) {
+          writePendingInvite(null);
+          setInviteToken(null);
+        }
+        setInviteDetails(details);
+        setInviteChecking(false);
+      });
+    }
+    if (urlInvite) {
       // Clean the token from the URL without reloading
       const url = new URL(window.location.href);
       url.searchParams.delete('invite');
@@ -91,6 +124,18 @@ function AppInner() {
       window.history.replaceState({}, '', url.toString());
     }
   }, []);
+
+  // "Completa tu configuración" lives on Home, but what fills it (accounts,
+  // cards, debts, budget lines) is added from other screens: re-read the
+  // status each time Home is shown, and when the tab regains focus.
+  useEffect(() => {
+    if (currentScreen === 'home') refreshOnboardingStatus();
+  }, [currentScreen, refreshOnboardingStatus]);
+  useEffect(() => {
+    const onFocus = () => { refreshOnboardingStatus(); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refreshOnboardingStatus]);
 
   // Sync DB language to LanguageContext on load
   useEffect(() => {
@@ -125,7 +170,7 @@ function AppInner() {
   const renderScreen = () => {
     switch (currentScreen) {
       case 'home':
-        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} />;
+        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} onSetupChanged={refreshOnboardingStatus} />;
       case 'dashboard':
         return <PlanningDashboard onNavigate={(screen) => setCurrentScreen(screen as Screen)} onViewPlan={handleViewPlan} />;
       case 'activity':
@@ -158,7 +203,7 @@ function AppInner() {
           />
         );
       default:
-        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} />;
+        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} onSetupChanged={refreshOnboardingStatus} />;
     }
   };
 
@@ -189,6 +234,39 @@ function AppInner() {
         onAuthenticated={() => refreshUser()}
         inviteBanner={inviteDetails ? { senderName: inviteDetails.senderName, senderEmail: inviteDetails.senderEmail } : null}
       />
+    );
+  }
+
+  // A pending partner invite comes BEFORE the onboarding: whoever accepts joins
+  // the inviter's shared finances (their own data moves there on the server),
+  // so they must not set up a separate budget first. Declining falls through
+  // to the normal onboarding.
+  if (inviteToken && inviteChecking) {
+    return (
+      <div className="size-full bg-background flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (inviteToken && inviteDetails) {
+    const closeInvite = async () => {
+      writePendingInvite(null); // accepted or declined: done with it
+      setInviteToken(null);
+      setInviteDetails(null);
+      // After accepting, the data scope is the shared pool: re-derive the
+      // onboarding status (so the wizard doesn't appear), the pool's payday
+      // and the household.
+      await Promise.all([refreshUser(), refreshOnboardingStatus(), refreshCycleStartDay(), fetchHousehold()]);
+    };
+    return (
+      <div className="size-full bg-background">
+        <PartnerInviteAccept
+          token={inviteToken}
+          invite={inviteDetails}
+          onAccept={acceptInvite}
+          onDismiss={closeInvite}
+        />
+      </div>
     );
   }
 
@@ -408,18 +486,6 @@ function AppInner() {
 
       {/* Add Expense Modal */}
       <AddExpense isOpen={showAddExpense} onClose={() => setShowAddExpense(false)} />
-
-      {/* Partner Invite Accept Modal — shown after login if ?invite= was in URL */}
-      <AnimatePresence>
-        {user && inviteToken && inviteDetails && (
-          <PartnerInviteAccept
-            token={inviteToken}
-            invite={inviteDetails}
-            onAccept={acceptInvite}
-            onDismiss={() => { setInviteToken(null); setInviteDetails(null); refreshUser(); }}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }
