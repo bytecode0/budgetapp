@@ -5,6 +5,7 @@ import { serializeMoney } from "../lib/money.js";
 import { clampCycleStartDay } from "../lib/period.js";
 import { loadDebtLedgers } from "../lib/debtBalance.js";
 import { deriveOnboardingStatus, computeOnboardingResult } from "../lib/onboarding.js";
+import { householdBaselineIncome } from "../lib/householdIncome.js";
 
 export const onboardingRouter = Router();
 
@@ -21,8 +22,8 @@ const visibleTo = (req: AuthRequest) => ({
 onboardingRouter.get("/status", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const [settings, incomeCount, accounts, debts, allocations] = await Promise.all([
-      prisma.userSettings.findUnique({ where: { userId }, select: { monthlyIncome: true } }),
+    const [monthlyIncome, incomeCount, accounts, debts, allocations] = await Promise.all([
+      householdBaselineIncome(userId),
       prisma.income.count({ where: { userId } }),
       prisma.account.findMany({
         where: visibleTo(req),
@@ -34,7 +35,7 @@ onboardingRouter.get("/status", requireAuth, async (req: AuthRequest, res: Respo
 
     const status = deriveOnboardingStatus({
       authUserId: req.authUserId!,
-      monthlyIncome: settings?.monthlyIncome ?? 0,
+      monthlyIncome,
       incomeCount,
       accounts,
       debts,
@@ -53,8 +54,9 @@ onboardingRouter.get("/status", requireAuth, async (req: AuthRequest, res: Respo
 onboardingRouter.get("/result", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const [settings, debts, allocations] = await Promise.all([
-      prisma.userSettings.findUnique({ where: { userId }, select: { monthlyIncome: true, cycleStartDay: true } }),
+    const [settings, monthlyIncome, debts, allocations] = await Promise.all([
+      prisma.userSettings.findUnique({ where: { userId }, select: { cycleStartDay: true } }),
+      householdBaselineIncome(userId),
       prisma.debt.findMany({ where: visibleTo(req), select: { id: true, name: true, apr: true } }),
       prisma.allocation.findMany({ where: { userId }, select: { type: true, allocatedAmount: true } }),
     ]);
@@ -65,7 +67,7 @@ onboardingRouter.get("/result", requireAuth, async (req: AuthRequest, res: Respo
         const ledger = ledgers.get(d.id);
         return ledger ? [{ ledger, name: d.name, apr: d.apr }] : [];
       }),
-      monthlyIncome: settings?.monthlyIncome ?? 0,
+      monthlyIncome,
       cycleStartDay: clampCycleStartDay(settings?.cycleStartDay ?? 1),
       allocations,
     });

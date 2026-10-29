@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { buildDebtTimeline } from "../lib/debtTimeline.js";
+import { householdBaselineIncome } from "../lib/householdIncome.js";
 import { simulatePayoff, type PayoffMethod } from "../lib/debtPayoff.js";
 import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/period.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
@@ -117,12 +118,13 @@ debtsRouter.get("/timeline", requireAuth, async (req: AuthRequest, res: Response
   try {
     const periodsCount = Math.min(24, Math.max(1, parseInt(String(req.query.periods ?? "6"), 10) || 6));
 
-    const [debts, settings] = await Promise.all([
+    const [debts, settings, monthlyIncome] = await Promise.all([
       prisma.debt.findMany({
         where: { userId: req.userId!, OR: [{ ownerUserId: req.authUserId! }, { visibility: "household" }] },
         select: { id: true, name: true, kind: true, status: true, paymentMode: true, minimumPayment: true, installmentAmount: true, installmentsTotal: true, installmentsPaid: true },
       }),
-      prisma.userSettings.findUnique({ where: { userId: req.userId! }, select: { cycleStartDay: true, monthlyIncome: true } }),
+      prisma.userSettings.findUnique({ where: { userId: req.userId! }, select: { cycleStartDay: true } }),
+      householdBaselineIncome(req.userId!),
     ]);
 
     const cycleStartDay = clampCycleStartDay(settings?.cycleStartDay ?? 1);
@@ -137,7 +139,7 @@ debtsRouter.get("/timeline", requireAuth, async (req: AuthRequest, res: Response
       const atStart = debtState(ledger, period.start);
       return { ...d, installmentsPaid: atStart.installmentsPaid, previousRemaining: monthlyCommitment(ledger, period) };
     });
-    const timeline = buildDebtTimeline(live, settings?.monthlyIncome ?? 0, cycleStartDay, periodsCount);
+    const timeline = buildDebtTimeline(live, monthlyIncome, cycleStartDay, periodsCount);
 
     return res.json(serializeMoney({ timeline }));
   } catch (err) {
