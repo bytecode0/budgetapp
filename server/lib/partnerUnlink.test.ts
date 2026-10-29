@@ -1,7 +1,7 @@
 // Run with:  node --import tsx --test server/lib/partnerUnlink.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { planUnlink, planRestoreExternalIds, type UnlinkInput } from "./partnerUnlink.js";
+import { planUnlink, planRestoreExternalIds, planClashRenames, type UnlinkInput } from "./partnerUnlink.js";
 
 const HER = "her";
 const EX = "ex";
@@ -41,9 +41,14 @@ const base: UnlinkInput = {
     { id: "line-her-loan", type: "debt", debtId: "her-loan", lifePlanId: null },
     { id: "line-ex-card", type: "debt", debtId: "ex-card-debt", lifePlanId: null },
   ],
-  rules: [{ id: "r-her-loan", allocationId: "line-her-loan" }, { id: "r-fixed", allocationId: "fixed" }],
+  rules: [
+    { id: "r-her-loan", allocationId: "line-her-loan", matchType: "contains", pattern: "cofidis" },
+    { id: "r-fixed", allocationId: "fixed", matchType: "contains", pattern: "rent" },
+  ],
   recurring: [{ id: "c-her-loan", allocationId: "line-her-loan" }, { id: "c-fixed", allocationId: "fixed" }],
+  poolId: EX,
   memberExternalIds: { expense: new Set(), income: new Set() },
+  memberRuleKeys: new Set(),
 };
 
 test("what she owns moves back; what the ex owns stays", () => {
@@ -216,7 +221,7 @@ test("her plans come back with their plan lines and the rules on them; unowned a
       { id: "line-her-trip", type: "plan", debtId: null, lifePlanId: "her-trip" },
       { id: "line-ex-car", type: "plan", debtId: null, lifePlanId: "ex-car" },
     ],
-    rules: [...base.rules, { id: "r-trip", allocationId: "line-her-trip" }],
+    rules: [...base.rules, { id: "r-trip", allocationId: "line-her-trip", matchType: "contains", pattern: "ryanair" }],
     expenses: [
       expense({ id: "her-saving", allocationId: "line-her-trip", createdByUserId: HER }),
       expense({ id: "ex-saving-for-her-trip", allocationId: "line-her-trip", payerUserId: EX, createdByUserId: EX }),
@@ -258,6 +263,44 @@ test("two moved rows with the same original: only the first gets it back", () =>
     { id: "c", externalId: "x2" },
   ], new Set());
   assert.deepEqual(out, [{ id: "a", externalId: "x" }]);
+});
+
+// Rows already under her own userId (e.g. bank sync into her scope while
+// linked) must not make the unlink fail on a unique key.
+test("a moved row whose externalId she already has is namespaced before the move, never dropped", () => {
+  const plan = planUnlink({
+    ...base,
+    incomes: [...base.incomes, { id: "her-bonus", ownerUserId: HER, accountId: null, externalId: "inc1" }],
+    expenses: [
+      expense({ id: "clash", accountId: "her-checking", externalId: "abc" }),
+      expense({ id: "free", accountId: "her-checking", externalId: "def" }),
+      expense({ id: "ex-row", accountId: "ex-checking", payerUserId: EX, externalId: "merged:ex:abc" }),
+    ],
+    memberExternalIds: { expense: new Set(["abc"]), income: new Set(["inc1"]) },
+  });
+  // `merged:ex:abc` is taken in the pool, so the counter goes up.
+  assert.deepEqual(plan.clashExternalIds.expense, [{ id: "clash", externalId: "merged:ex#2:abc" }]);
+  assert.deepEqual(plan.clashExternalIds.income, [{ id: "her-bonus", externalId: "merged:ex:inc1" }]);
+  assert.ok(plan.move.expenseIds.includes("clash"));
+  // Its original is hers already, so it is not restored either.
+  assert.deepEqual(plan.restoreExternalIds.expense, []);
+});
+
+test("a clashing row that merge had namespaced gets its original back when that is free", () => {
+  const out = planClashRenames([{ id: "a", externalId: "merged:her:x" }], new Set(["merged:her:x"]), new Set(), "ex");
+  assert.deepEqual(out, [{ id: "a", externalId: "merged:ex:x" }]);
+  const plan = planUnlink({
+    ...base,
+    expenses: [expense({ id: "a", accountId: "her-checking", externalId: "merged:her:x" })],
+    memberExternalIds: { expense: new Set(["merged:her:x"]), income: new Set() },
+  });
+  assert.deepEqual(plan.restoreExternalIds.expense, [{ id: "a", externalId: "x" }]);
+});
+
+test("a moving rule she already has is dropped in favour of hers", () => {
+  const plan = planUnlink({ ...base, memberRuleKeys: new Set(["contains|cofidis"]) });
+  assert.deepEqual(plan.dropRuleIds, ["r-her-loan"]);
+  assert.deepEqual(plan.move.ruleIds, []);
 });
 
 test("a member with nothing of her own moves nothing", () => {

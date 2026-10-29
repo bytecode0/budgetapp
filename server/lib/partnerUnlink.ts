@@ -66,6 +66,12 @@
 // statement is still recognised as a duplicate. When it is taken, the row
 // keeps its namespaced id (a later merge rebuilds it from the original).
 //
+// Unique clashes with rows already under her own userId can't block the
+// unlink (as on merge): a moved Expense/Income whose externalId she already
+// has is namespaced (`merged:<poolId>:<old>`) before it moves — never
+// dropped; a moved CategorizationRule whose (matchType, pattern) she already
+// has is dropped in favour of hers.
+//
 // Any other reference that would cross the two scopes after the move (e.g. an
 // ex's expense in her debt line, the ex's income paid into her account) is
 // cleared. Debt.accountId never crosses (see above), so no debt balance
@@ -75,7 +81,7 @@
 // partnerUnlink.test.ts); loadUnlinkInput() and unlinkMemberFromPool() are the
 // database around it.
 import type { Prisma } from "@prisma/client";
-import { originalExternalId } from "./partnerMerge.js";
+import { namespacedExternalId, originalExternalId } from "./partnerMerge.js";
 
 type Db = Prisma.TransactionClient;
 
@@ -91,10 +97,13 @@ export interface UnlinkInput {
   }[];
   plans: { id: string; ownerUserId: string | null }[];
   allocations: { id: string; type: string; debtId: string | null; lifePlanId: string | null }[];
-  rules: { id: string; allocationId: string }[];
+  rules: { id: string; allocationId: string; matchType: string; pattern: string }[];
   recurring: { id: string; allocationId: string | null }[];
+  poolId: string;
   /** externalIds already under her own userId (rows she has outside the pool). */
   memberExternalIds: { expense: Set<string>; income: Set<string> };
+  /** `${matchType}|${pattern}` of the rules already under her own userId. */
+  memberRuleKeys: Set<string>;
 }
 
 export interface UnlinkPlan {
@@ -108,6 +117,10 @@ export interface UnlinkPlan {
     allocationIds: string[]; // debt lines of moving debts, plan lines of her plans
     ruleIds: string[];       // rules pointing at those lines
   };
+  /** Rules on moving lines that she already has (same matchType + pattern): deleted, hers win. */
+  dropRuleIds: string[];
+  /** Moving rows whose externalId she already has: namespaced in the pool before the move. */
+  clashExternalIds: { expense: ExternalIdChange[]; income: ExternalIdChange[] };
   /** Pool lines to copy into her scope → her moved expenses that use each. */
   copyAllocations: Map<string, string[]>;
   /** Moved rows whose original externalId is free in her scope: set after the move. */
@@ -146,6 +159,29 @@ export function planRestoreExternalIds(
     out.push({ id: r.id, externalId: original });
   }
   return out;
+}
+
+/**
+ * Moving rows whose externalId is already under her userId would break the
+ * unique key: each gets a namespaced id that is free in the pool (where it is
+ * renamed) and in her scope (where it lands).
+ */
+export function planClashRenames(
+  moving: { id: string; externalId: string | null }[],
+  herScope: Set<string>,
+  poolScope: Set<string>,
+  poolId: string,
+): ExternalIdChange[] {
+  const taken = new Set([...poolScope, ...herScope]);
+  return moving
+    .filter(r => r.externalId !== null && herScope.has(r.externalId))
+    .map(r => ({ id: r.id, externalId: namespacedExternalId(poolId, r.externalId!, taken) }));
+}
+
+/** The moving rows as they stand after the clash renames. */
+function withRenames<T extends { id: string; externalId: string | null }>(rows: T[], renames: ExternalIdChange[]): T[] {
+  const renamed = new Map(renames.map(r => [r.id, r.externalId]));
+  return rows.map(r => (renamed.has(r.id) ? { ...r, externalId: renamed.get(r.id)! } : r));
 }
 
 const COPYABLE_LINE_TYPES = new Set(["fixed", "flexible", "generosity"]);
@@ -211,6 +247,17 @@ export function planUnlink(input: UnlinkInput): UnlinkPlan {
     }
   }
 
+  const movingExpenses = input.expenses.filter(e => expenses.has(e.id));
+  const movingIncomes = input.incomes.filter(i => incomes.has(i.id));
+  const poolIds = (rows: { externalId: string | null }[]) =>
+    new Set(rows.map(r => r.externalId).filter((id): id is string => id !== null));
+  const clashExternalIds = {
+    expense: planClashRenames(movingExpenses, input.memberExternalIds.expense, poolIds(input.expenses), input.poolId),
+    income: planClashRenames(movingIncomes, input.memberExternalIds.income, poolIds(input.incomes), input.poolId),
+  };
+  const movingRules = input.rules.filter(r => allocations.has(r.allocationId));
+  const dropRule = (r: UnlinkInput["rules"][number]) => input.memberRuleKeys.has(`${r.matchType}|${r.pattern}`);
+
   return {
     move: {
       accountIds: [...accounts],
@@ -220,12 +267,14 @@ export function planUnlink(input: UnlinkInput): UnlinkPlan {
       expenseIds: [...expenses],
       planIds: [...plans],
       allocationIds: [...allocations],
-      ruleIds: input.rules.filter(r => allocations.has(r.allocationId)).map(r => r.id),
+      ruleIds: movingRules.filter(r => !dropRule(r)).map(r => r.id),
     },
+    dropRuleIds: movingRules.filter(dropRule).map(r => r.id),
+    clashExternalIds,
     copyAllocations,
     restoreExternalIds: {
-      expense: planRestoreExternalIds(input.expenses.filter(e => expenses.has(e.id)), input.memberExternalIds.expense),
-      income: planRestoreExternalIds(input.incomes.filter(i => incomes.has(i.id)), input.memberExternalIds.income),
+      expense: planRestoreExternalIds(withRenames(movingExpenses, clashExternalIds.expense), input.memberExternalIds.expense),
+      income: planRestoreExternalIds(withRenames(movingIncomes, clashExternalIds.income), input.memberExternalIds.income),
     },
     clear: {
       // A moving expense's debt is always hers and a staying one's never is,
@@ -243,7 +292,10 @@ export function planUnlink(input: UnlinkInput): UnlinkPlan {
 export async function loadUnlinkInput(db: Db, memberId: string, poolId: string): Promise<UnlinkInput> {
   const pool = { userId: poolId };
   const hersWithId = { userId: memberId, externalId: { not: null } };
-  const [accounts, debts, bankConnections, incomes, expenses, plans, allocations, rules, recurring, memberExpenseIds, memberIncomeIds] = await Promise.all([
+  const [
+    accounts, debts, bankConnections, incomes, expenses, plans, allocations, rules, recurring,
+    memberExpenseIds, memberIncomeIds, memberRules,
+  ] = await Promise.all([
     db.account.findMany({ where: pool, select: { id: true, ownerUserId: true, bankConnectionId: true } }),
     db.debt.findMany({ where: pool, select: { id: true, ownerUserId: true, accountId: true, bankConnectionId: true } }),
     db.bankConnection.findMany({ where: pool, select: { id: true, ownerUserId: true } }),
@@ -257,13 +309,16 @@ export async function loadUnlinkInput(db: Db, memberId: string, poolId: string):
     }),
     db.lifePlan.findMany({ where: pool, select: { id: true, ownerUserId: true } }),
     db.allocation.findMany({ where: pool, select: { id: true, type: true, debtId: true, lifePlanId: true } }),
-    db.categorizationRule.findMany({ where: pool, select: { id: true, allocationId: true } }),
+    db.categorizationRule.findMany({ where: pool, select: { id: true, allocationId: true, matchType: true, pattern: true } }),
     db.recurringCommitment.findMany({ where: pool, select: { id: true, allocationId: true } }),
     db.expense.findMany({ where: hersWithId, select: { externalId: true } }),
     db.income.findMany({ where: hersWithId, select: { externalId: true } }),
+    db.categorizationRule.findMany({ where: { userId: memberId }, select: { matchType: true, pattern: true } }),
   ]);
   return {
     memberId,
+    poolId,
+    memberRuleKeys: new Set(memberRules.map(r => `${r.matchType}|${r.pattern}`)),
     accounts, debts, bankConnections, incomes, plans, allocations, rules, recurring,
     expenses: expenses.map(({ _count, ...e }) => ({ ...e, hasShares: _count.shares > 0 })),
     memberExternalIds: {
@@ -306,7 +361,13 @@ export async function unlinkMemberFromPool(db: Db, ctx: { memberId: string; pool
     }
   }
 
-  // 2. Clear references that would cross the two scopes.
+  // 2. Unique clashes with what is already under her userId: rename in the
+  //    pool first (to ids free on both sides), drop her duplicate rules.
+  for (const r of plan.clashExternalIds.expense) await db.expense.update({ where: { id: r.id }, data: { externalId: r.externalId } });
+  for (const r of plan.clashExternalIds.income) await db.income.update({ where: { id: r.id }, data: { externalId: r.externalId } });
+  if (plan.dropRuleIds.length) await db.categorizationRule.deleteMany({ where: { id: { in: plan.dropRuleIds } } });
+
+  // 3. Clear references that would cross the two scopes.
   await inChunks(clear.expenseAccount, ids => db.expense.updateMany({ where: { id: { in: ids } }, data: { accountId: null } }));
   await inChunks(clear.expenseAllocation, ids => db.expense.updateMany({ where: { id: { in: ids } }, data: { allocationId: null } }));
   await inChunks(clear.incomeAccount, ids => db.income.updateMany({ where: { id: { in: ids } }, data: { accountId: null } }));
@@ -314,7 +375,7 @@ export async function unlinkMemberFromPool(db: Db, ctx: { memberId: string; pool
   await db.account.updateMany({ where: { id: { in: clear.accountBankConnection } }, data: { bankConnectionId: null } });
   await db.recurringCommitment.updateMany({ where: { id: { in: clear.recurringAllocation } }, data: { allocationId: null } });
 
-  // 3. Move hers back. Ids don't change, so links among her rows hold.
+  // 4. Move hers back. Ids don't change, so links among her rows hold.
   const solo = { ...toHer, householdId: null, visibility: "household" };
   await db.bankConnection.updateMany({ where: { id: { in: move.bankConnectionIds } }, data: solo });
   await db.account.updateMany({ where: { id: { in: move.accountIds } }, data: solo });
@@ -328,11 +389,11 @@ export async function unlinkMemberFromPool(db: Db, ctx: { memberId: string; pool
   await db.monthlyBudget.updateMany({ where: { allocationId: { in: move.allocationIds } }, data: toHer });
   await db.categorizationRule.updateMany({ where: { id: { in: move.ruleIds } }, data: toHer });
 
-  // 4. Original externalIds back, now that the rows are in her scope.
+  // 5. Original externalIds back, now that the rows are in her scope.
   for (const r of plan.restoreExternalIds.expense) await db.expense.update({ where: { id: r.id }, data: { externalId: r.externalId } });
   for (const r of plan.restoreExternalIds.income) await db.income.update({ where: { id: r.id }, data: { externalId: r.externalId } });
 
-  // 5. The link itself, and her place in the owner's household.
+  // 6. The link itself, and her place in the owner's household.
   await db.userSettings.update({ where: { userId: memberId }, data: { linkedUserId: null } });
   await db.householdMember.deleteMany({
     where: { userId: memberId, role: { not: "owner" }, household: { members: { some: { userId: poolId, role: "owner" } } } },
