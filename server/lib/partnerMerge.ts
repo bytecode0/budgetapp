@@ -25,8 +25,12 @@
 //   MonthlyBudget     → moved (those of a merged default are dropped with it)
 //   CategorizationRule, RecurringCommitment → moved, pointing at the merged
 //                       line; on a unique clash with the pool, the pool's wins
-//   Expense/Income with an externalId the pool already has → dropped: the id is
-//                       the same imported transaction, already in the pool
+//   Expense/Income with an externalId the pool already has → kept, with the
+//                       externalId namespaced (`merged:<memberId>:<old>`) so
+//                       the unique key holds. Never dropped: the import hash
+//                       (importStatement.ts externalIdFor) leaves out the
+//                       account, so the same id can be a distinct real
+//                       transaction — or her only record of a debt payment.
 //
 // planPoolMerge() holds every decision as a pure function (unit-tested);
 // loadMergeInput() and applyPoolMerge() are the database around it.
@@ -55,6 +59,7 @@ export interface MergeAccount {
 }
 
 export interface MergeInput {
+  memberId: string;
   memberAllocations: MergeAllocation[];
   poolAllocations: { id: string; type: string; isDefault: boolean }[];
   memberAccounts: MergeAccount[];
@@ -73,8 +78,9 @@ export interface MergePlan {
   allocationRemap: Map<string, string>;
   /** Her seeded "Main account", never used: deleted instead of cluttering the pool. */
   deleteAccountIds: string[];
-  dropExpenseIds: string[];
-  dropIncomeIds: string[];
+  /** Her rows whose externalId the pool already has → their new, namespaced id. */
+  renameExpenseExternalIds: { id: string; externalId: string }[];
+  renameIncomeExternalIds: { id: string; externalId: string }[];
   dropRuleIds: string[];
   dropRecurringIds: string[];
   /** Added to her sortOrders so her rows list after the pool's. */
@@ -97,6 +103,25 @@ export function isUnusedDefaultAccount(a: MergeAccount): boolean {
     && !a.referenced;
 }
 
+/**
+ * `merged:<memberId>:<old>`, suffixed until it is in neither `taken` set (the
+ * pool's ids and hers, both of which end up under the pool). Adds it to `taken`.
+ */
+export function namespacedExternalId(memberId: string, old: string, taken: Set<string>): string {
+  const base = `merged:${memberId}:${old}`;
+  let candidate = base;
+  for (let n = 2; taken.has(candidate); n++) candidate = `${base}:${n}`;
+  taken.add(candidate);
+  return candidate;
+}
+
+function planRenames(memberId: string, rows: { id: string; externalId: string }[], pool: Set<string>) {
+  const taken = new Set([...pool, ...rows.map(r => r.externalId)]);
+  return rows
+    .filter(r => pool.has(r.externalId))
+    .map(r => ({ id: r.id, externalId: namespacedExternalId(memberId, r.externalId, taken) }));
+}
+
 export function planPoolMerge(input: MergeInput): MergePlan {
   // Matched on isDefault + type, never the name: the seeded names changed
   // over time ("Fixed Expenses" → "Gastos fijos") and follow each person's
@@ -116,10 +141,8 @@ export function planPoolMerge(input: MergeInput): MergePlan {
   return {
     allocationRemap,
     deleteAccountIds: input.memberAccounts.filter(isUnusedDefaultAccount).map(a => a.id),
-    dropExpenseIds: input.memberExpenseExternalIds
-      .filter(e => input.poolExternalIds.expense.has(e.externalId)).map(e => e.id),
-    dropIncomeIds: input.memberIncomeExternalIds
-      .filter(i => input.poolExternalIds.income.has(i.externalId)).map(i => i.id),
+    renameExpenseExternalIds: planRenames(input.memberId, input.memberExpenseExternalIds, input.poolExternalIds.expense),
+    renameIncomeExternalIds: planRenames(input.memberId, input.memberIncomeExternalIds, input.poolExternalIds.income),
     dropRuleIds: input.memberRules
       .filter(r => input.poolRuleKeys.has(`${r.matchType}|${r.pattern}`)).map(r => r.id),
     dropRecurringIds: input.memberRecurring
@@ -166,6 +189,7 @@ export async function loadMergeInput(db: Db, memberId: string, poolId: string): 
     rows.map(r => ({ id: r.id, externalId: r.externalId! }));
 
   return {
+    memberId,
     memberAllocations: memberAllocations.map(a => ({ ...a, hasBudgetedMonth: budgeted.has(a.id) })),
     poolAllocations,
     memberAccounts: memberAccounts.map(a => ({ ...a, referenced: usedAccounts.has(a.id) })),
@@ -203,7 +227,8 @@ export interface MergeSummary {
   rules: number;
   recurring: number;
   defaultAccountsDropped: number;
-  duplicatesDropped: number; // expenses/incomes/rules/recurring the pool already has
+  duplicatesDropped: number; // rules/recurring the pool already has
+  externalIdsRenamed: number; // expenses/incomes kept under a namespaced externalId
 }
 
 export function isEmptySummary(s: MergeSummary): boolean {
@@ -228,8 +253,8 @@ type RemainingCounts = Awaited<ReturnType<typeof countRemaining>>;
 export function summarizeMerge(c: RemainingCounts, plan: MergePlan): MergeSummary {
   const merged = plan.allocationRemap.size;
   return {
-    incomes: c.incomes - plan.dropIncomeIds.length,
-    expenses: c.expenses - plan.dropExpenseIds.length,
+    incomes: c.incomes,
+    expenses: c.expenses,
     accounts: c.accounts - plan.deleteAccountIds.length,
     debts: c.debts,
     debtAdjustments: c.debtAdjustments,
@@ -243,7 +268,8 @@ export function summarizeMerge(c: RemainingCounts, plan: MergePlan): MergeSummar
     rules: c.rules - plan.dropRuleIds.length,
     recurring: c.recurring - plan.dropRecurringIds.length,
     defaultAccountsDropped: plan.deleteAccountIds.length,
-    duplicatesDropped: plan.dropExpenseIds.length + plan.dropIncomeIds.length + plan.dropRuleIds.length + plan.dropRecurringIds.length,
+    duplicatesDropped: plan.dropRuleIds.length + plan.dropRecurringIds.length,
+    externalIdsRenamed: plan.renameExpenseExternalIds.length + plan.renameIncomeExternalIds.length,
   };
 }
 
@@ -285,9 +311,11 @@ export async function mergeMemberIntoPool(
     await db.allocation.deleteMany({ where: { ...mine, id: { in: [...plan.allocationRemap.keys()] } } });
   }
 
-  // 2. What the pool already has (unique constraints): the pool's row wins.
-  if (plan.dropExpenseIds.length) await db.expense.deleteMany({ where: { ...mine, id: { in: plan.dropExpenseIds } } });
-  if (plan.dropIncomeIds.length) await db.income.deleteMany({ where: { ...mine, id: { in: plan.dropIncomeIds } } });
+  // 2. Unique clashes with the pool. Transactions are never deleted: hers get
+  //    a namespaced externalId. Rules and recurring commitments are derived
+  //    settings, so for those the pool's row wins.
+  for (const r of plan.renameExpenseExternalIds) await db.expense.update({ where: { id: r.id }, data: { externalId: r.externalId } });
+  for (const r of plan.renameIncomeExternalIds) await db.income.update({ where: { id: r.id }, data: { externalId: r.externalId } });
   if (plan.dropRuleIds.length) await db.categorizationRule.deleteMany({ where: { ...mine, id: { in: plan.dropRuleIds } } });
   if (plan.dropRecurringIds.length) await db.recurringCommitment.deleteMany({ where: { ...mine, id: { in: plan.dropRecurringIds } } });
   if (plan.deleteAccountIds.length) await db.account.deleteMany({ where: { ...mine, id: { in: plan.deleteAccountIds } } });

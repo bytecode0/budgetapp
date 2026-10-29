@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  planPoolMerge, summarizeMerge, isEmptySummary, isUntouchedDefaultAllocation, isUnusedDefaultAccount,
+  planPoolMerge, summarizeMerge, namespacedExternalId, isEmptySummary, isUntouchedDefaultAllocation, isUnusedDefaultAccount,
   type MergeInput, type MergeAllocation, type MergeAccount,
 } from "./partnerMerge.js";
 import { DEFAULT_ACCOUNT_NAME } from "./onboarding.js";
@@ -18,6 +18,7 @@ const account = (over: Partial<MergeAccount>): MergeAccount => ({
 
 // The partner right after her onboarding: seeded defaults, her own data.
 const base: MergeInput = {
+  memberId: "m",
   memberAllocations: [
     line({ id: "m-fixed", name: "Fixed Expenses", type: "fixed" }),
     line({ id: "m-flex", name: "Flexible Spending", type: "flexible" }),
@@ -111,7 +112,7 @@ test("her seeded Main account is dropped only while unused; every other account 
   assert.equal(isUnusedDefaultAccount(account({ referenced: true })), false);
 });
 
-test("rows whose unique key the pool already has are dropped (the pool's wins); the rest move", () => {
+test("transactions whose externalId the pool has are kept under a namespaced id; duplicate rules/recurring drop", () => {
   const plan = planPoolMerge({
     ...base,
     memberExpenseExternalIds: [{ id: "e1", externalId: "dup" }, { id: "e2", externalId: "new" }],
@@ -122,10 +123,20 @@ test("rows whose unique key the pool already has are dropped (the pool's wins); 
     memberRecurring: [{ id: "c1", merchant: "netflix" }, { id: "c2", merchant: "gym" }],
     poolRecurringMerchants: new Set(["netflix"]),
   });
-  assert.deepEqual(plan.dropExpenseIds, ["e1"]);
-  assert.deepEqual(plan.dropIncomeIds, ["i1"]);
+  assert.deepEqual(plan.renameExpenseExternalIds, [{ id: "e1", externalId: "merged:m:dup" }]);
+  assert.deepEqual(plan.renameIncomeExternalIds, [{ id: "i1", externalId: "merged:m:dup-inc" }]);
   assert.deepEqual(plan.dropRuleIds, ["r1"]);
   assert.deepEqual(plan.dropRecurringIds, ["c1"]);
+});
+
+test("a namespaced id never collides with one the pool or she already has", () => {
+  const plan = planPoolMerge({
+    ...base,
+    memberExpenseExternalIds: [{ id: "e1", externalId: "x" }, { id: "e2", externalId: "merged:m:x" }],
+    poolExternalIds: { expense: new Set(["x", "merged:m:x:2"]), income: new Set() },
+  });
+  assert.deepEqual(plan.renameExpenseExternalIds, [{ id: "e1", externalId: "merged:m:x:3" }]);
+  assert.equal(namespacedExternalId("m", "y", new Set()), "merged:m:y");
 });
 
 test("her rows are ordered after the pool's", () => {
@@ -142,6 +153,8 @@ test("summary counts what moves; nothing left means nothing to do (idempotent re
   assert.equal(s.allocations, 0);
   assert.equal(s.allocationsMerged, 2);
   assert.equal(s.debts, 2);
+  assert.equal(s.expenses, 3);
+  assert.equal(s.externalIdsRenamed, 0);
   assert.equal(isEmptySummary(s), false);
 
   const empty = { ...base, memberAllocations: [], memberAccounts: [] };
