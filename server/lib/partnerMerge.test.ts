@@ -2,12 +2,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  planPoolMerge, summarizeMerge, namespacedExternalId, originalExternalId, isEmptySummary, isUntouchedDefaultAllocation, isUnusedDefaultAccount,
+  planPoolMerge, summarizeMerge, mergeMemberIntoPool, namespacedExternalId, originalExternalId, isEmptySummary, isUntouchedDefaultAllocation, isUnusedDefaultAccount,
   type MergeInput, type MergeAllocation, type MergeAccount,
 } from "./partnerMerge.js";
 import { DEFAULT_ACCOUNT_NAME } from "./onboarding.js";
 import { sumBaselines } from "./householdIncome.js";
 import { toCents } from "./money.js";
+import type { Prisma } from "@prisma/client";
 
 const line = (over: Partial<MergeAllocation>): MergeAllocation => ({
   id: "x", name: "Fixed Expenses", type: "fixed", isDefault: true, allocatedAmount: 0, hasBudgetedMonth: false, ...over,
@@ -212,4 +213,34 @@ test("household baseline sums both partners: 3230 € + 925 € = 4155 €", () 
 test("a single user's baseline is just theirs; nobody configured is 0", () => {
   assert.equal(sumBaselines([323000]), 323000);
   assert.equal(sumBaselines([]), 0);
+});
+
+/** A transaction client that answers every read with "nothing there" and
+ *  records each updateMany as `model → data`. */
+function recordingDb() {
+  const updates = new Map<string, unknown[]>();
+  const model = (name: string) => new Proxy({}, {
+    get: (_t, method: string) => async (args: { data?: unknown }) => {
+      if (method === "findMany") return [];
+      if (method === "count") return 0;
+      if (method === "aggregate") return { _max: { sortOrder: null } };
+      if (method === "updateMany") updates.set(name, [...(updates.get(name) ?? []), args.data]);
+      return { count: 0 };
+    },
+  });
+  const db = new Proxy({}, { get: (_t, name: string) => model(name) }) as unknown as Prisma.TransactionClient;
+  return { db, updates };
+}
+
+test("merge: her accounts, debts and bank connections join the household's shared finances, still hers", async () => {
+  const { db, updates } = recordingDb();
+  await mergeMemberIntoPool(db, { memberId: "her", poolId: "pool", householdId: "hh" });
+  for (const m of ["account", "debt", "bankConnection"]) {
+    const data = updates.get(m) as Record<string, unknown>[] | undefined;
+    assert.equal(data?.length, 1, m);
+    assert.equal(data[0].userId, "pool", m);
+    assert.equal(data[0].visibility, "household", m);
+    assert.equal(data[0].householdId, "hh", m);
+    assert.equal("ownerUserId" in data[0], false, `${m}: owner must stay hers`);
+  }
 });

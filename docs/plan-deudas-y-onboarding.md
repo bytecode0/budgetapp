@@ -47,7 +47,7 @@ Siguen abiertos:
 8. Skill `/deploy`: reescribir el paso de schema (variables *Sensitive*, base vacía en el primer despliegue).
 9. Para cuando vuelva Stripe: el webhook responde 200 aunque falle.
 12. **Protección CSRF del login con Google** (`state` aleatorio en cookie): pendiente del OK de Luis.
-13. **Deudas de la pareja: ¿compartidas con el hogar?** Hoy al aceptar quedan privadas, y el futuro comprometido del hogar cuenta los ingresos de los dos pero solo las deudas visibles. Propuesta: deudas compartidas, cuentas privadas. Pendiente del OK de Luis.
+13. **Deudas de la pareja: ¿compartidas con el hogar?** **Decidido (Luis, 29 oct): una sola finanza.** Al aceptar, sus cuentas, deudas y conexiones bancarias entran como "household" (siguen siendo suyas); el futuro comprometido, el timeline y el resultado del onboarding del hogar cuentan las deudas de los dos. Ella puede marcar después una cuenta como privada.
 14. i18n restante: `€` dentro de algunas cadenas traducidas (`planDetail.simulationNote`, `home.overBudgetBy`, `editExpense.splitTotal`…), toasts en inglés en ForgotPassword/VerifyEmail/GoogleCallback/PlanningSettings, meses en inglés en la fecha estimada de PlanDetail.
 15. Gastos y planes creados **estando enlazados antes de esta versión** no tienen autor: al desenlazar se quedan en el pool. El script en seco dice cuántos hay.
 
@@ -451,6 +451,6 @@ En modo restringido, con tus cuentas reales: conectar banco → revisar y confir
 
 **R.** Autorizaciones del 29 oct para trabajar en autónomo:
 - **Schema:** cambios aditivos (columnas o tablas nuevas, sin borrar ni renombrar) aplicados en local con `db push` sin preguntar. Lo que borre o renombre se sigue preguntando.
-- **Finanzas compartidas (pendiente 10):** al aceptar, todo lo que la invitada creó en su onboarding pasa al pool compartido a su nombre; cuentas y deudas como privadas.
+- **Finanzas compartidas (pendiente 10):** al aceptar, todo lo que la invitada creó en su onboarding pasa al pool compartido a su nombre; cuentas y deudas compartidas con el hogar ("household").
 - **Épica 5:** se puede tocar el código de conexión con bancos.
 - **Ritmo:** un PR por bloque (mantenimiento, épica 4, épica 5). Claude sube la rama y da el comando del PR; Luis fusiona, despliega y hace el `db push` de producción.

@@ -20,7 +20,7 @@
 //                       (server/lib/debtAccountLink.ts). householdId cleared,
 //                       visibility back to the schema default "household" —
 //                       what a solo user's rows have (she is alone in her
-//                       scope; a later accept makes them private again).
+//                       scope; a later accept keeps them "household").
 //                       A moved BankConnection keeps syncing into her scope:
 //                       sync writes to connection.userId.
 //   DebtAdjustment    → those of the debts that move (they follow the debt).

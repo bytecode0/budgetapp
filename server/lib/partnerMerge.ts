@@ -14,7 +14,13 @@
 //                                                scoped by the pool userId)
 //   Income            → moved; ownerUserId stays hers
 //   Account, Debt,
-//   BankConnection    → moved; visibility "private", owned by her, household set.
+//   BankConnection    → moved; visibility "household", owned by her, household
+//                       set: a couple's finances are one, so her accounts and
+//                       debts count in the household's futuro comprometido,
+//                       debts timeline and onboarding result (all filtered by
+//                       visibleToWhere, server/lib/ownership.ts). She can still
+//                       mark an account private afterwards (PATCH
+//                       /api/accounts/:id); a card's debt follows its account.
 //                       Her seeded "Main account", never used, is deleted only
 //                       when she keeps another open non-card account of her
 //                       own; otherwise it moves too, so her expenses entered
@@ -375,11 +381,13 @@ export async function mergeMemberIntoPool(
   // 3. Move the rest. Ids don't change, so every foreign key between her rows
   //    (card account ↔ its debt, debt ↔ its budget line, expense ↔ account /
   //    line / debt, plan ↔ deposits) still holds.
-  const personal = { visibility: "private", householdId };
+  //    Her accounts, debts and bank connections join the shared finances
+  //    ("household"), all of them alike, so a card and its debt stay in step.
+  const shared = { visibility: "household", householdId };
   await db.allocation.updateMany({ where: mine, data: { ...toPool, sortOrder: { increment: plan.sortOffset.allocation } } });
-  await db.bankConnection.updateMany({ where: mine, data: { ...toPool, ...personal } });
-  await db.account.updateMany({ where: mine, data: { ...toPool, ...personal, sortOrder: { increment: plan.sortOffset.account } } });
-  await db.debt.updateMany({ where: mine, data: { ...toPool, ...personal, sortOrder: { increment: plan.sortOffset.debt } } });
+  await db.bankConnection.updateMany({ where: mine, data: { ...toPool, ...shared } });
+  await db.account.updateMany({ where: mine, data: { ...toPool, ...shared, sortOrder: { increment: plan.sortOffset.account } } });
+  await db.debt.updateMany({ where: mine, data: { ...toPool, ...shared, sortOrder: { increment: plan.sortOffset.debt } } });
   await db.debtAdjustment.updateMany({ where: mine, data: toPool });
   // Legacy rows without a payer were paid by her; once in the pool the userId
   // no longer says so.

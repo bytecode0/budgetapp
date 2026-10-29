@@ -177,16 +177,21 @@ describe("partner flow (integration, real Postgres)", { skip: !TEST_DATABASE_URL
       userId: B, amount: 1550, description: "Amazon import", merchant: "amazon", source: "import",
       externalId: IMPORT_HASH, payerUserId: B, createdByUserId: B,
     } })).id;
+    const bLoan = (await ok(B, "POST", "/api/debts", {
+      name: "Personal loan", kind: "installment", paymentMode: "installments",
+      installmentAmount: 100, installmentsTotal: 6, installmentsPaid: 1,
+    })).debt.id;
     const bPlan = (await ok(B, "POST", "/api/plans", { title: "Fondo de emergencia", targetAmount: 1000, monthlyContribution: 50, autoCreateAllocation: true })).plan.id;
     await ok(B, "POST", "/api/plan-deposits/confirm", { month: periodKey(), deposits: [{ planId: bPlan, amount: 50 }] });
     const bRule = (await ok(B, "POST", "/api/rules", { pattern: "netflix", allocationId: bFixed })).rule.id;
-    Object.assign(ids, { aMain, aCard, aCardDebt, aLoan, aFlexible, bMain, bCard, bCardDebt, bPurchase, bImported, bPlan, bRule, bFixed, bFlexible });
+    Object.assign(ids, { aMain, aCard, aCardDebt, aLoan, aFlexible, bMain, bCard, bCardDebt, bLoan, bPurchase, bImported, bPlan, bRule, bFixed, bFlexible });
 
     balancesBefore = new Map([...await liveBalances(A), ...await liveBalances(B)]);
     spendingBefore = await countedSpending(A) + await countedSpending(B);
     assert.equal(balancesBefore.get(aCardDebt), 0);   // 500 + 40 − 540
     assert.equal(balancesBefore.get(bCardDebt), 32500); // 300 + 25
     assert.equal(balancesBefore.get(aLoan), 150000);  // 10 cuotas left × 150
+    assert.equal(balancesBefore.get(bLoan), 50000);   // 5 installments left × 100
     assert.equal(spendingBefore, 4000 + 50000 + 1999 + 2500 + 1550);
 
     // ── Accept.
@@ -219,14 +224,29 @@ describe("partner flow (integration, real Postgres)", { skip: !TEST_DATABASE_URL
     assert.equal(rule.allocationId, (await prisma.allocation.findFirstOrThrow({ where: { userId: A, isDefault: true, type: "fixed" } })).id);
 
     // Her untouched Main is her only open non-card account (besides it she
-    // has only a card), so it is kept and moved like the rest: private, hers.
-    // Her card, debt, plan, deposit moved, still hers.
+    // has only a card), so it is kept and moved like the rest. Her accounts
+    // and debts join the shared finances ("household"), still hers; her
+    // card, debt, plan, deposit moved.
     const main = await prisma.account.findUniqueOrThrow({ where: { id: bMain } });
-    assert.deepEqual([main.userId, main.ownerUserId, main.visibility], [A, B, "private"]);
+    assert.deepEqual([main.userId, main.ownerUserId, main.visibility], [A, B, "household"]);
     const card = await prisma.account.findUniqueOrThrow({ where: { id: bCard } });
-    assert.deepEqual([card.userId, card.ownerUserId, card.visibility], [A, B, "private"]);
+    assert.deepEqual([card.userId, card.ownerUserId, card.visibility], [A, B, "household"]);
     const debt = await prisma.debt.findUniqueOrThrow({ where: { id: bCardDebt } });
-    assert.deepEqual([debt.userId, debt.ownerUserId, debt.accountId], [A, B, bCard]);
+    assert.deepEqual([debt.userId, debt.ownerUserId, debt.accountId, debt.visibility], [A, B, bCard, "household"]);
+    const loan = await prisma.debt.findUniqueOrThrow({ where: { id: bLoan } });
+    assert.deepEqual([loan.userId, loan.ownerUserId, loan.visibility], [A, B, "household"]);
+
+    // One finance: A's futuro comprometido, debts list and onboarding result
+    // count her loan next to his, once each.
+    const timeline = (await ok(A, "GET", "/api/debts/timeline?periods=1")).timeline as any[];
+    const committedIds = timeline[0].items.map((it: any) => it.debtId);
+    assert.ok(committedIds.includes(bLoan) && committedIds.includes(aLoan), `timeline items: ${JSON.stringify(committedIds)}`);
+    assert.equal(committedIds.filter((id: string) => id === bLoan).length, 1);
+    assert.ok(((await ok(A, "GET", "/api/debts")).debts as any[]).some(d => d.id === bLoan));
+    const result = (await ok(A, "GET", "/api/onboarding/result")).data;
+    assert.ok((result.payoffOrder as any[]).some(p => p.id === bLoan), "onboarding result payoff order misses her loan");
+    const owedCents = [...balancesBefore.values()].reduce((sum, b) => sum + b, 0);
+    assert.equal(Math.round(result.totalOwed * 100), owedCents);
     const plan = await prisma.lifePlan.findUniqueOrThrow({ where: { id: bPlan } });
     assert.deepEqual([plan.userId, plan.ownerUserId], [A, B]);
     assert.equal(await prisma.planDeposit.count({ where: { planId: bPlan, userId: A } }), 1);
@@ -315,7 +335,7 @@ describe("partner flow (integration, real Postgres)", { skip: !TEST_DATABASE_URL
 
     // Balances unchanged on both sides.
     assert.deepEqual(new Map([...await liveBalances(A), ...await liveBalances(B)]), balancesBefore);
-    assert.deepEqual([...(await liveBalances(B)).keys()], [ids.bCardDebt]);
+    assert.deepEqual([...(await liveBalances(B)).keys()].sort(), [ids.bCardDebt, ids.bLoan].sort());
 
     // Spending: nothing lost or counted twice across the two scopes.
     assert.equal(await countedSpending(A) + await countedSpending(B), spendingLinked);
