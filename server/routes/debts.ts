@@ -218,10 +218,11 @@ debtsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: "Invalid visibility" });
     }
 
-    // A linked account must belong to the user.
+    // A linked account must be in the pool and visible to the caller (another
+    // member's private account is as good as nonexistent).
     let resolvedAccountId: string | null = null;
     if (accountId) {
-      const owned = await prisma.account.findFirst({ where: { id: accountId, userId: req.userId! }, select: { id: true } });
+      const owned = await prisma.account.findFirst({ where: { id: accountId, userId: req.userId!, ...visibleToWhere(req.authUserId!) }, select: { id: true } });
       if (owned) resolvedAccountId = owned.id;
     }
 
@@ -340,7 +341,8 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
       if (!accountId) {
         accountUpdate = { accountId: null };
       } else {
-        const owned = await prisma.account.findFirst({ where: { id: accountId, userId: req.userId! }, select: { id: true } });
+        // Same rule as POST: in the pool and visible to the caller.
+        const owned = await prisma.account.findFirst({ where: { id: accountId, userId: req.userId!, ...visibleToWhere(req.authUserId!) }, select: { id: true } });
         if (owned) accountUpdate = { accountId: owned.id };
       }
     }
@@ -358,6 +360,16 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
     // card) gets one now, as on creation.
     const finalKind = kind ?? existing.kind;
     const finalAccountId = accountUpdate ? accountUpdate.accountId : existing.accountId;
+
+    // A card's debt mirrors its card account's owner and visibility
+    // (server/lib/cardDebt.ts, kept in step from PATCH /api/accounts/:id).
+    // Changed here, the two would drift apart.
+    if (visibility !== undefined && visibility !== existing.visibility && finalKind === "credit_card" && finalAccountId) {
+      const account = await prisma.account.findUnique({ where: { id: finalAccountId }, select: { type: true } });
+      if (account?.type === "card") {
+        return res.status(409).json({ error: "A card's debt follows its card account's visibility; change it on the account", code: "card_debt_visibility_locked" });
+      }
+    }
     if (finalKind === "credit_card" && !finalAccountId) {
       accountUpdate = { accountId: await createCardAccount(req, name ?? existing.name, existing.visibility) };
     }
