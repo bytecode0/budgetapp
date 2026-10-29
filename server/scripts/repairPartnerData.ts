@@ -9,11 +9,16 @@
 // counts only, no names, emails, amounts or ids. Idempotent: once moved,
 // nothing is left under her userId, so a re-run reports nothing to do.
 //
+// Chains are skipped and reported, never repaired: a member who also has
+// someone linked to her, or an inviter who is itself linked to someone else,
+// has no single well-defined pool (server/lib/partnerRepair.ts).
+//
 //   npm run repair:partner-data            # dry run
 //   npm run repair:partner-data -- --apply # move the data
 import { prisma } from "../lib/prisma.js";
 import { ensureHousehold } from "../lib/household.js";
 import { isEmptySummary, mergeMemberIntoPool, previewPoolMerge, type MergeSummary } from "../lib/partnerMerge.js";
+import { planRepairCouples } from "../lib/partnerRepair.js";
 
 const apply = process.argv.includes("--apply");
 
@@ -31,15 +36,17 @@ function line(s: MergeSummary): string {
 
   let pending = 0;
   let skipped = 0;
-  for (const [i, { userId: memberId, linkedUserId }] of linked.entries()) {
-    const poolId = linkedUserId!;
+  const couples = planRepairCouples(linked.map(l => ({ userId: l.userId, linkedUserId: l.linkedUserId! })));
+  for (const [i, { memberId, poolId, skip }] of couples.entries()) {
     const label = `couple #${i + 1}`;
 
     // Only a one-level link has a well-defined pool.
-    const pool = await prisma.userSettings.findUnique({ where: { userId: poolId }, select: { linkedUserId: true } });
     const poolUser = await prisma.user.findUnique({ where: { id: poolId }, select: { id: true } });
-    if (!poolUser || pool?.linkedUserId) {
-      console.warn(`${label}: skipped (${!poolUser ? "inviter not found" : "inviter is itself linked"})`);
+    if (!poolUser || skip) {
+      const why = !poolUser ? "inviter not found"
+        : skip === "pool_is_linked" ? "inviter is itself linked"
+        : "someone is linked to this partner (chain)";
+      console.warn(`${label}: skipped (${why})`);
       skipped++;
       continue;
     }
