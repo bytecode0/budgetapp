@@ -1,0 +1,227 @@
+[
+  {
+    "date": "2026-09-30",
+    "amountCents": -235,
+    "description": "Panaderia de prueba",
+    "merchant": "panaderia de prueba",
+    "balanceCents": 98490,
+    "kind": "expense",
+    "legacyExternalId": "fe9cc7f9a5b1157f737daa825a426429"
+  },
+  {
+    "date": "2026-09-29",
+    "amountCents": -4500,
+    "description": "Transferencia realizada",
+    "merchant": "transferencia realizada",
+    "balanceCents": 98725,
+    "kind": "expense",
+    "legacyExternalId": "3586f2fe3ee71d12aecf4895bb618acd"
+  },
+  {
+    "date": "2026-09-27",
+    "amountCents": -4860,
+    "description": "Restaurante inventado",
+    "merchant": "restaurante inventado",
+    "balanceCents": 103225,
+    "kind": "expense",
+    "legacyExternalId": "61a377b054ddf2242859d79a53212714"
+  },
+  {
+    "date": "2026-09-25",
+    "amountCents": 1000,
+    "description": "Bizum",
+    "merchant": "bizum",
+    "balanceCents": 108085,
+    "kind": "income",
+    "legacyExternalId": "61e943440a8596e8434c567f823c58b6"
+  },
+  {
+    "date": "2026-09-24",
+    "amountCents": 500,
+    "description": "Abono bonificación ejemplo",
+    "merchant": "abono bonificacion ejemplo",
+    "balanceCents": 107085,
+    "kind": "income",
+    "legacyExternalId": "4fc565383be31d5e95d0018309466fdb"
+  },
+  {
+    "date": "2026-09-22",
+    "amountCents": -5710,
+    "description": "Supermercado demo centro",
+    "merchant": "supermercado demo centro",
+    "balanceCents": 106585,
+    "kind": "expense",
+    "legacyExternalId": "2e571a4cc43dac19607c25aff4045dc0"
+  },
+  {
+    "date": "2026-09-21",
+    "amountCents": -3990,
+    "description": "Gimnasio ficticio",
+    "merchant": "gimnasio ficticio",
+    "balanceCents": 112295,
+    "kind": "expense",
+    "legacyExternalId": "e4aed674900e33a502cabe2af425c05a"
+  },
+  {
+    "date": "2026-09-20",
+    "amountCents": -15000,
+    "description": "Pago tarjeta de credito ficticia",
+    "merchant": "de credito ficticia",
+    "balanceCents": 116285,
+    "kind": "expense",
+    "legacyExternalId": "7a05374d34d22ae9597310bbeae952cf"
+  },
+  {
+    "date": "2026-09-18",
+    "amountCents": 10000,
+    "description": "Ingreso en efectivo",
+    "merchant": "ingreso en efectivo",
+    "balanceCents": 131285,
+    "kind": "income",
+    "legacyExternalId": "9b5934214f2e5c9e7719399c924cd0f7"
+  },
+  {
+    "date": "2026-09-17",
+    "amountCents": -845,
+    "description": "Farmacia ejemplo",
+    "merchant": "farmacia ejemplo",
+    "balanceCents": 121285,
+    "kind": "expense",
+    "legacyExternalId": "5f68a861c38e834155af73e7a0233ce4"
+  },
+  {
+    "date": "2026-09-15",
+    "amountCents": -120000,
+    "description": "Transferencia realizada",
+    "merchant": "transferencia realizada",
+    "balanceCents": 122130,
+    "kind": "expense",
+    "legacyExternalId": "eff03c38bb7cfead1e0fceefaefe3eaa"
+  },
+  {
+    "date": "2026-09-15",
+    "amountCents": -2000,
+    "description": "Bizum",
+    "merchant": "bizum",
+    "balanceCents": 242130,
+    "kind": "expense",
+    "legacyExternalId": "f5d0e52d83f40715b5ec7c9b68f186a2"
+  },
+  {
+    "date": "2026-09-13",
+    "amountCents": -2995,
+    "description": "Tienda ropa ejemplo",
+    "merchant": "tienda ropa ejemplo",
+    "balanceCents": 244130,
+    "kind": "expense",
+    "legacyExternalId": "bc7c6ca766acff00864871e7ad780a08"
+  },
+  {
+    "date": "2026-09-12",
+    "amountCents": -450,
+    "description": "Liquidacion de intereses-comisiones-gastos",
+    "merchant": "liquidacion de intereses comisiones gastos",
+    "balanceCents": 247125,
+    "kind": "expense",
+    "legacyExternalId": "28349e646eaa88bf6d51e5657a75a996"
+  },
+  {
+    "date": "2026-09-10",
+    "amountCents": 3500,
+    "description": "Transferencia recibida",
+    "merchant": "transferencia recibida",
+    "balanceCents": 247575,
+    "kind": "income",
+    "legacyExternalId": "d4df51781cfa6da73663420d795deb2c"
+  },
+  {
+    "date": "2026-09-09",
+    "amountCents": -1299,
+    "description": "Plataforma video demo",
+    "merchant": "plataforma video demo",
+    "balanceCents": 244075,
+    "kind": "expense",
+    "legacyExternalId": "94b6dca998d606e6786c7b0d11691e96"
+  },
+  {
+    "date": "2026-09-08",
+    "amountCents": -6412,
+    "description": "Adeudo compañia luz ficticia",
+    "merchant": "adeudo compania luz ficticia",
+    "balanceCents": 245374,
+    "kind": "expense",
+    "legacyExternalId": "0b0a117f1d845a4cc14d5cb6a826f983"
+  },
+  {
+    "date": "2026-09-06",
+    "amountCents": -380,
+    "description": "Cafeteria imaginaria",
+    "merchant": "cafeteria imaginaria",
+    "balanceCents": 251786,
+    "kind": "expense",
+    "legacyExternalId": "23afaa70d15bc0899df4cb860045c6cd"
+  },
+  {
+    "date": "2026-09-06",
+    "amountCents": -380,
+    "description": "Cafeteria imaginaria",
+    "merchant": "cafeteria imaginaria",
+    "balanceCents": 252166,
+    "kind": "expense",
+    "legacyExternalId": "731b635c6799255dd53da6084301765b"
+  },
+  {
+    "date": "2026-09-05",
+    "amountCents": -6000,
+    "description": "Gasolinera ficticia km 12",
+    "merchant": "gasolinera ficticia km",
+    "balanceCents": 252546,
+    "kind": "expense",
+    "legacyExternalId": "bfeb2b446b44452471efe50bd739f469"
+  },
+  {
+    "date": "2026-09-03",
+    "amountCents": 2250,
+    "description": "Bizum",
+    "merchant": "bizum",
+    "balanceCents": 258546,
+    "kind": "income",
+    "legacyExternalId": "caedecfcead590d5024e90877a3e58c6"
+  },
+  {
+    "date": "2026-09-03",
+    "amountCents": -1500,
+    "description": "Bizum",
+    "merchant": "bizum",
+    "balanceCents": 256296,
+    "kind": "expense",
+    "legacyExternalId": "e6498f55051fa66874179e64fbdb06d2"
+  },
+  {
+    "date": "2026-09-02",
+    "amountCents": -4237,
+    "description": "Supermercado demo centro",
+    "merchant": "supermercado demo centro",
+    "balanceCents": 257796,
+    "kind": "expense",
+    "legacyExternalId": "600c2099f6b157aa946489843d3a1acc"
+  },
+  {
+    "date": "2026-09-01",
+    "amountCents": -75000,
+    "description": "Transferencia realizada",
+    "merchant": "transferencia realizada",
+    "balanceCents": 262033,
+    "kind": "expense",
+    "legacyExternalId": "26603b1857496dd3600a4adf347933d5"
+  },
+  {
+    "date": "2026-09-01",
+    "amountCents": 185000,
+    "description": "Abono de nómina",
+    "merchant": "abono de nomina",
+    "balanceCents": 337033,
+    "kind": "income",
+    "legacyExternalId": "6d30a746b90b0e6663f2759e37b07dfa"
+  }
+]

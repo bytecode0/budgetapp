@@ -751,9 +751,9 @@
   "import": {
     "button": "Import",
     "title": "Import statement",
-    "subtitle": "Upload a bank statement (.xlsx or .csv). We'll match it against what you already have.",
+    "subtitle": "Upload a bank statement (.xlsx, .csv, Norma 43 or OFX). We match it against what you already have.",
     "account": "Import into account",
-    "dropHint": "Click to choose a .xlsx or .csv file",
+    "dropHint": "Click to choose a file (.xlsx, .csv, Norma 43 or OFX)",
     "reading": "Reading file…",
     "newCount": "{{count}} new",
     "dupCount": "{{count}} already imported",
@@ -776,7 +776,13 @@
     "aiCategoriesCreated": "Created {{count}} categories",
     "importSelected": "Import {{count}} selected",
     "nothingSelected": "Select at least one row",
-    "importedOk": "Imported {{count}} transactions"
+    "importedOk": "Imported {{count}} transactions",
+    "payment": "card payment",
+    "refund": "refund",
+    "fee": "fee",
+    "possibleDuplicate": "possible duplicate",
+    "otherCurrency": "other currency",
+    "unrecognizedColumns": "We don't recognise this file's columns: we need at least a date and an amount."
   },
   "budgets": {
     "title": "Suggested budgets",

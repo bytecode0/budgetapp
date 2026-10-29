@@ -1,6 +1,8 @@
 import { useState } from 'react';
 
-export type ImportKind = 'expense' | 'income';
+// payment: pays a debt (a card payment); refund: a card refund — lowers its
+// category's spending and the card debt (server/lib/ingest/classify.ts).
+export type ImportKind = 'expense' | 'income' | 'payment' | 'refund';
 
 export interface ImportRow {
   externalId: string;
@@ -13,6 +15,11 @@ export interface ImportRow {
   status: 'new' | 'duplicate';
   suggestedAllocationId: string | null;
   suggestedAllocationName: string | null;
+  debtId?: string | null;
+  isFee?: boolean;
+  duplicateReason?: 'same_movement' | 'same_payment';
+  possibleDuplicate?: { id: string; table: 'expense' | 'income'; date: string; description: string; source: string };
+  warnings?: ('currency_mismatch' | 'ambiguous_credit' | 'card_payment_unassigned')[];
 }
 
 export interface ImportPreview {
@@ -21,6 +28,9 @@ export interface ImportPreview {
   duplicateCount: number;
   expenseCount: number;
   incomeCount: number;
+  paymentCount?: number;
+  refundCount?: number;
+  possibleDuplicateCount?: number;
 }
 
 export interface ConfirmRow {
@@ -32,6 +42,7 @@ export interface ConfirmRow {
   amount: number;
   allocationId?: string | null;
   category?: string;
+  debtId?: string | null;
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -64,7 +75,7 @@ export function useImport() {
   const [classifying, setClassifying] = useState(false);
   const [suggestingCats, setSuggestingCats] = useState(false);
 
-  const preview = async (file: File): Promise<{ error?: string; preview?: ImportPreview }> => {
+  const preview = async (file: File, accountId: string | null): Promise<{ error?: string; code?: string; preview?: ImportPreview }> => {
     setLoading(true);
     try {
       const dataBase64 = await fileToBase64(file);
@@ -72,10 +83,10 @@ export function useImport() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, dataBase64 }),
+        body: JSON.stringify({ filename: file.name, dataBase64, accountId }),
       });
       const data = await res.json();
-      if (!res.ok) return { error: data.error || 'Failed to read the file' };
+      if (!res.ok) return { error: data.error || 'Failed to read the file', code: data.code };
       return { preview: data as ImportPreview };
     } catch {
       return { error: 'Could not read the file' };

@@ -751,9 +751,9 @@
   "import": {
     "button": "Importar",
     "title": "Importar extracto",
-    "subtitle": "Sube un extracto bancario (.xlsx o .csv). Lo cotejamos con lo que ya tienes.",
+    "subtitle": "Sube un extracto bancario (.xlsx, .csv, Norma 43 u OFX). Lo cotejamos con lo que ya tienes.",
     "account": "Importar a la cuenta",
-    "dropHint": "Haz clic para elegir un archivo .xlsx o .csv",
+    "dropHint": "Haz clic para elegir un archivo (.xlsx, .csv, Norma 43 u OFX)",
     "reading": "Leyendo archivo…",
     "newCount": "{{count}} nuevos",
     "dupCount": "{{count}} ya importados",
@@ -776,7 +776,13 @@
     "aiCategoriesCreated": "Creadas {{count}} categorías",
     "importSelected": "Importar {{count}} seleccionados",
     "nothingSelected": "Selecciona al menos una fila",
-    "importedOk": "Importadas {{count}} transacciones"
+    "importedOk": "Importadas {{count}} transacciones",
+    "payment": "pago de tarjeta",
+    "refund": "devolución",
+    "fee": "comisión",
+    "possibleDuplicate": "posible duplicado",
+    "otherCurrency": "otra divisa",
+    "unrecognizedColumns": "No reconocemos las columnas de este archivo: necesitamos al menos fecha e importe."
   },
   "budgets": {
     "title": "Presupuestos sugeridos",

@@ -44,8 +44,8 @@
 //                       externalId namespaced (`merged:<memberId>:<old>`, or
 //                       `merged:<memberId>#<n>:<old>` when that is taken too)
 //                       so the unique key holds. Never dropped: the import hash
-//                       (importStatement.ts externalIdFor) leaves out the
-//                       account, so the same id can be a distinct real
+//                       of imports before epic 4 (ingest/classify.ts
+//                       legacyExternalId) leaves out the account, so the same id can be a distinct real
 //                       transaction — or her only record of a debt payment.
 //                       An id that already carries a prefix is namespaced from
 //                       its original (prefixes never nest), and unlink gives
@@ -140,7 +140,7 @@ function planDeleteAccounts(accounts: MergeAccount[]): string[] {
 
 // `merged:<id>:` or `merged:<id>#<n>:` — ids are cuids (no ':' or '#').
 const NAMESPACE_PREFIX = /^merged:[^:#]+(?:#\d+)?:/;
-// The import hash (importStatement.ts externalIdFor): 32 hex chars.
+// The import hash (ingest/classify.ts, both generations): 32 hex chars.
 const IMPORT_HASH = /^[0-9a-f]{32}$/;
 
 /**

@@ -63,12 +63,19 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
-    const res = await preview(file);
-    if (res.error) { toast.error(res.error); return; }
+    const res = await preview(file, accountId);
+    if (res.error) {
+      toast.error(res.code === 'unrecognized_columns' ? t('import.unrecognizedColumns') : res.error);
+      return;
+    }
     const p = res.preview!;
     setData(p);
-    // Default: select all new rows; pre-fill suggested allocation per expense.
-    setSelected(new Set(p.rows.filter(r => r.status === 'new').map(r => r.externalId)));
+    // Default: select all new rows — except possible duplicates and rows in
+    // another currency, which the user confirms one by one. Pre-fill the
+    // suggested allocation per row.
+    setSelected(new Set(p.rows
+      .filter(r => r.status === 'new' && !r.possibleDuplicate && !r.warnings?.includes('currency_mismatch'))
+      .map(r => r.externalId)));
     setAllocByRow(Object.fromEntries(p.rows.filter(r => r.suggestedAllocationId).map(r => [r.externalId, r.suggestedAllocationId!])));
   };
 
@@ -164,7 +171,8 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
         description: r.description,
         merchant: r.merchant,
         amount: r.amount,
-        allocationId: r.kind === 'expense' ? (allocByRow[r.externalId] || null) : undefined,
+        allocationId: r.kind === 'expense' || r.kind === 'refund' ? (allocByRow[r.externalId] || null) : undefined,
+        debtId: r.kind === 'payment' ? r.debtId ?? null : undefined,
       }));
     if (rows.length === 0) { toast.error(t('import.nothingSelected')); return; }
     const res = await confirm(accountId, rows);
@@ -231,7 +239,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                   <span className="text-sm text-muted-foreground">{loading ? t('import.reading') : t('import.dropHint')}</span>
                   <input
                     type="file"
-                    accept=".xlsx,.csv"
+                    accept=".xlsx,.xls,.csv,.txt,.n43,.aeb,.ofx,.qfx"
                     className="hidden"
                     disabled={loading}
                     onChange={e => handleFile(e.target.files?.[0])}
@@ -372,9 +380,14 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                           <p className="text-xs text-muted-foreground">
                             {fmtDate(r.date)}
                             {isDup && <> · {t('import.duplicate')}</>}
+                            {r.kind === 'payment' && <> · {t('import.payment')}</>}
+                            {r.kind === 'refund' && <> · {t('import.refund')}</>}
+                            {r.isFee && <> · {t('import.fee')}</>}
+                            {!isDup && r.possibleDuplicate && <> · <span className="text-amber-600">{t('import.possibleDuplicate')}</span></>}
+                            {r.warnings?.includes('currency_mismatch') && <> · <span className="text-amber-600">{t('import.otherCurrency')}</span></>}
                           </p>
                         </div>
-                        {r.kind === 'expense' && !isDup && allocations.length > 0 && (
+                        {(r.kind === 'expense' || r.kind === 'refund') && !isDup && allocations.length > 0 && (
                           <select
                             value={allocByRow[r.externalId] ?? ''}
                             onChange={e => setAllocByRow(prev => ({ ...prev, [r.externalId]: e.target.value }))}
@@ -384,8 +397,8 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                             {allocations.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
                           </select>
                         )}
-                        <p className={`text-sm font-display shrink-0 w-20 text-right ${r.kind === 'income' ? 'text-emerald-600' : ''}`}>
-                          {r.kind === 'income' ? '+' : '-'}{fmtEuro(r.signedAmount)}
+                        <p className={`text-sm font-display shrink-0 w-20 text-right ${r.kind === 'income' || r.kind === 'refund' ? 'text-emerald-600' : ''}`}>
+                          {r.signedAmount > 0 ? '+' : '-'}{fmtEuro(r.signedAmount)}
                         </p>
                       </div>
                     );

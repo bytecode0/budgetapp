@@ -1,4 +1,5 @@
 import { Router, Response } from "express";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { mutationAccess, reorderableEntries, visibleToWhere } from "../lib/ownership.js";
@@ -8,6 +9,7 @@ import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { currentPeriodKey, periodBounds } from "../lib/period.js";
 import { loadDebtLedgers, debtState, owedNow, monthlyCommitment } from "../lib/debtBalance.js";
 import { ownerChangeSplitsDebtLink, mirroredCardDebtId } from "../lib/debtAccountLink.js";
+import { parseColumnMapping, storedMapping } from "../lib/ingest/validate.js";
 import { CARD_PAYMENT_MODES, cardDebtOwnershipChanges, createCardDebt, updateCardDebt, type CardSettings } from "../lib/cardDebt.js";
 
 export const accountsRouter = Router();
@@ -240,6 +242,50 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     return res.json(serializeMoney({ account }));
   } catch (err) {
     console.error("[accounts/PATCH]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Statement-import column mapping saved on an account (server/lib/ingest/):
+// used when its files aren't recognised by a bank profile, so the second
+// import doesn't ask again. Owner-only, like every other account change.
+async function ownedAccount(req: AuthRequest, res: Response) {
+  const existing = await prisma.account.findFirst({ where: { id: req.params.id, userId: req.userId! } });
+  const access = existing ? mutationAccess(existing, req.authUserId) : "hidden";
+  if (access === "hidden") { res.status(404).json({ error: "Account not found" }); return null; }
+  if (access === "forbidden") { res.status(403).json({ error: "Only the owner can change this account" }); return null; }
+  return existing;
+}
+
+// GET /api/accounts/:id/import-profile → { data: { importProfile: ColumnMapping | null } }
+accountsRouter.get("/:id/import-profile", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const account = await ownedAccount(req, res);
+    if (!account) return;
+    return res.json({ data: { importProfile: storedMapping(account.importProfile) } });
+  } catch (err) {
+    console.error("[accounts/import-profile GET]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/accounts/:id/import-profile  Body: { importProfile: ColumnMapping | null }
+accountsRouter.patch("/:id/import-profile", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const account = await ownedAccount(req, res);
+    if (!account) return;
+    const { importProfile } = req.body as { importProfile?: unknown };
+    if (importProfile === undefined) return res.status(400).json({ error: "importProfile is required (null to clear)" });
+    let value: Prisma.InputJsonValue | typeof Prisma.DbNull = Prisma.DbNull;
+    if (importProfile !== null) {
+      const parsed = parseColumnMapping(importProfile);
+      if ("error" in parsed) return res.status(400).json({ error: parsed.error });
+      value = { ...parsed.mapping };
+    }
+    const updated = await prisma.account.update({ where: { id: account.id }, data: { importProfile: value }, select: { importProfile: true } });
+    return res.json({ data: { importProfile: storedMapping(updated.importProfile) } });
+  } catch (err) {
+    console.error("[accounts/import-profile PATCH]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

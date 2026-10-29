@@ -6,6 +6,10 @@ import { toCents, serializeMoney } from "../lib/money.js";
 import { categorize, learnFromCorrection } from "../lib/categorize.js";
 import { findDuplicateGroups } from "../lib/dedupe.js";
 import { prepareImport } from "../lib/importStatement.js";
+import { StatementReadError } from "../lib/ingest/read.js";
+import { parseNormalizedRows } from "../lib/ingest/validate.js";
+import { PAID_FROM_CARD, planImportWrites } from "../lib/ingest/writes.js";
+import type { NormalizedRow } from "../lib/ingest/types.js";
 import { aiEnabled, classifyMerchants } from "../lib/ai/classify.js";
 import { suggestCategories } from "../lib/ai/suggestCategories.js";
 import { rebuildExpenseShares } from "../lib/expenseShares.js";
@@ -18,7 +22,6 @@ import { pickDefaultAccount } from "../lib/defaultAccount.js";
 export const expensesRouter = Router();
 
 // `code` lets the client show its own translated message.
-const PAID_FROM_CARD = { error: "A card payment must come from another account, not the card itself", code: "paid_from_card" };
 
 // An expense on a "debt" budget line IS a payment of that debt: the debtId is
 // inherited from the line, never sent by the client. Returns the debt (with its
@@ -279,38 +282,47 @@ expensesRouter.post("/merge", requireAuth, async (req: AuthRequest, res: Respons
 });
 
 // POST /api/expenses/import/preview
-// Body: { filename, dataBase64 }. Parses the statement and returns rows flagged
-// new|duplicate with a suggested category — does NOT write anything.
+// Body: { accountId?, filename, dataBase64, purchasesSign? } — or, instead of
+// the file, { rows: NormalizedRow[] } already read in the browser (decision O).
+// Reads the statement through the ingest core and returns rows flagged
+// new|duplicate with what each one is and a suggested category — writes nothing.
+// 422 { error, code, sample? } when the file can't be read (code
+// "unrecognized_columns" carries the first rows for a manual mapping).
 expensesRouter.post("/import/preview", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { filename, dataBase64 } = req.body as { filename?: string; dataBase64?: string };
-    if (!filename || !dataBase64) {
-      return res.status(400).json({ error: "filename and dataBase64 are required" });
+    const { filename, dataBase64, accountId, purchasesSign, rows } = req.body as {
+      filename?: string; dataBase64?: string; accountId?: string | null; purchasesSign?: string; rows?: unknown;
+    };
+    if (rows === undefined && (!filename || !dataBase64)) {
+      return res.status(400).json({ error: "filename and dataBase64 (or rows) are required" });
+    }
+    if (purchasesSign !== undefined && purchasesSign !== "negative" && purchasesSign !== "positive") {
+      return res.status(400).json({ error: "purchasesSign must be negative or positive" });
+    }
+    let parsedRows: NormalizedRow[] | undefined;
+    if (rows !== undefined) {
+      const parsed = parseNormalizedRows(rows);
+      if ("error" in parsed) return res.status(400).json({ error: parsed.error });
+      parsedRows = parsed.rows;
     }
 
-    const buffer = Buffer.from(dataBase64, "base64");
+    const resolvedAccountId = await resolveAccountId(req.userId!, req.authUserId!, accountId);
     let preview;
     try {
-      preview = await prepareImport(req.userId!, buffer, filename);
-    } catch (e: any) {
-      return res.status(422).json({ error: e?.message || "Could not parse the file" });
-    }
-
-    // Resolve suggested allocation names for display.
-    const ids = [...new Set(preview.rows.map(r => r.suggestedAllocationId).filter(Boolean) as string[])];
-    if (ids.length > 0) {
-      const allocs = await prisma.allocation.findMany({
-        where: { id: { in: ids }, userId: req.userId! },
-        select: { id: true, name: true },
+      preview = await prepareImport(req.userId!, {
+        accountId: resolvedAccountId,
+        ...(parsedRows ? { rows: parsedRows } : { file: { bytes: new Uint8Array(Buffer.from(dataBase64!, "base64")), filename: filename! } }),
+        purchasesSign,
       });
-      const nameById = Object.fromEntries(allocs.map(a => [a.id, a.name]));
-      for (const r of preview.rows) {
-        if (r.suggestedAllocationId) r.suggestedAllocationName = nameById[r.suggestedAllocationId] ?? null;
+    } catch (e) {
+      if (e instanceof StatementReadError) {
+        return res.status(422).json({ error: e.message, code: e.code, ...(e.sample ? { sample: e.sample } : {}) });
       }
+      throw e;
     }
 
     // NOTE: amounts in `preview` are already euros — do not run serializeMoney.
-    return res.json(preview);
+    return res.json({ ...preview, accountId: resolvedAccountId });
   } catch (err) {
     console.error("[expenses/import/preview]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -367,64 +379,48 @@ expensesRouter.post("/import/suggest-categories", requireAuth, async (req: AuthR
 });
 
 // POST /api/expenses/import/confirm
-// Body: { accountId?, rows: ImportRow[] }. Inserts debits as expenses and
-// credits as income, both source='import'. Idempotent via @@unique externalId.
+// Body: { accountId?, rows: ImportRow[] } — the preview rows the user kept,
+// with the allocation chosen. What each kind becomes is decided by
+// planImportWrites (server/lib/ingest/writes.ts). All source='import',
+// idempotent via @@unique externalId.
 expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { accountId, rows } = req.body as {
       accountId?: string;
-      rows: { kind: string; externalId: string; date: string; description?: string; merchant?: string; amount: number; allocationId?: string | null; category?: string }[];
+      rows: { kind: string; externalId: string; date: string; description?: string; merchant?: string; amount: number; allocationId?: string | null; category?: string; debtId?: string | null }[];
     };
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ error: "rows are required" });
     }
 
     const resolvedAccountId = await resolveAccountId(req.userId!, req.authUserId!, accountId);
-
-    const expenseRows = rows.filter(r => r.kind === "expense");
-    const incomeRows = rows.filter(r => r.kind === "income");
-
-    // Rows put on a "debt" line are payments of that debt (see debtForAllocation).
-    const debtLines = await prisma.allocation.findMany({
-      where: { userId: req.userId!, type: "debt", debtId: { not: null } },
-      select: { id: true, debtId: true, debt: { select: { accountId: true } } },
-    });
-    const debtIdByAllocation = new Map(debtLines.map(a => [a.id, a.debtId]));
-    if (debtLines.some(a => a.debt?.accountId && a.debt.accountId === resolvedAccountId
-      && expenseRows.some(r => r.allocationId === a.id))) {
-      return res.status(400).json(PAID_FROM_CARD);
+    const [debtLines, debts] = await Promise.all([
+      prisma.allocation.findMany({
+        where: { userId: req.userId!, type: "debt", debtId: { not: null } },
+        select: { id: true, debtId: true, debt: { select: { accountId: true } } },
+      }),
+      prisma.debt.findMany({ where: { userId: req.userId! }, select: { id: true, accountId: true } }),
+    ]);
+    const plan = planImportWrites(
+      rows.map(r => ({ ...r, amountCents: toCents(r.amount) })),
+      {
+        accountId: resolvedAccountId,
+        debtLines: debtLines.map(l => ({ id: l.id, debtId: l.debtId!, debtAccountId: l.debt?.accountId ?? null })),
+        debts,
+      },
+    );
+    if ("error" in plan) {
+      const { status, ...body } = plan;
+      return res.status(status).json(body);
     }
 
     const [exp, inc] = await Promise.all([
       prisma.expense.createMany({
-        data: expenseRows.map(r => ({
-          userId: req.userId!,
-          accountId: resolvedAccountId,
-          allocationId: r.allocationId || null,
-          debtId: (r.allocationId && debtIdByAllocation.get(r.allocationId)) || null,
-          amount: toCents(r.amount),
-          description: r.description ?? "",
-          merchant: r.merchant || normalizeMerchant(r.description ?? ""),
-          source: "import",
-          externalId: r.externalId,
-          date: new Date(r.date),
-          createdByUserId: req.authUserId!,
-        })),
+        data: plan.expenses.map(e => ({ ...e, userId: req.userId!, source: "import", createdByUserId: req.authUserId! })),
         skipDuplicates: true, // re-importing the same file is a no-op
       }),
       prisma.income.createMany({
-        data: incomeRows.map(r => ({
-          userId: req.userId!,
-          ownerUserId: req.authUserId!,
-          accountId: resolvedAccountId,
-          amount: toCents(r.amount),
-          description: r.description ?? "",
-          merchant: r.merchant || normalizeMerchant(r.description ?? ""),
-          category: r.category || "other",
-          source: "import",
-          externalId: r.externalId,
-          date: new Date(r.date),
-        })),
+        data: plan.incomes.map(i => ({ ...i, userId: req.userId!, ownerUserId: req.authUserId!, source: "import" })),
         skipDuplicates: true,
       }),
     ]);
@@ -432,12 +428,14 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
     // Learn from the categories assigned during import: every classified merchant
     // becomes a `learned` rule so the rest of this file — and future imports — get
     // auto-categorized. Dedupe by merchant (last assignment wins). Best-effort:
-    // a learning failure must not undo the already-committed import.
+    // a learning failure must not undo the already-committed import. A payment
+    // from a bank account teaches its debt line (the next statement proposes
+    // it as a payment); refunds and a card statement's own payment lines don't.
     try {
       const merchantToAllocation = new Map<string, string>();
-      for (const r of expenseRows) {
-        const m = r.merchant || normalizeMerchant(r.description ?? "");
-        if (m && r.allocationId) merchantToAllocation.set(m, r.allocationId);
+      for (const e of plan.expenses) {
+        if (!e.allocationId || !e.merchant || e.kind === "refund" || (e.debtId && !e.accountId)) continue;
+        merchantToAllocation.set(e.merchant, e.allocationId);
       }
       for (const [merchant, allocationId] of merchantToAllocation) {
         await learnFromCorrection(req.userId!, merchant, allocationId);
@@ -446,18 +444,23 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
       console.error("[expenses/import/confirm] learn", learnErr);
     }
 
-    await syncDebtStatus(req.userId!, expenseRows.map(r => r.allocationId && debtIdByAllocation.get(r.allocationId)));
+    await syncDebtStatus(req.userId!, plan.expenses.map(e => e.debtId));
 
     // Attribution for imported expenses (Epic H3): payer = account owner; split
     // across the household when the pool belongs to one. Only touch rows not yet
-    // attributed (payerUserId null), so re-imports don't redo work.
+    // attributed (payerUserId null), so re-imports don't redo work. Refunds stay
+    // personal: household balances (server/lib/balances.ts) add up what each
+    // member fronted and don't read refunds.
     if (req.householdId && exp.count > 0) {
       const account = resolvedAccountId
         ? await prisma.account.findUnique({ where: { id: resolvedAccountId }, select: { ownerUserId: true } })
         : null;
       const payerUserId = account?.ownerUserId ?? req.authUserId!; // a person, never the pool id
       const created = await prisma.expense.findMany({
-        where: { userId: req.userId!, source: "import", payerUserId: null, externalId: { in: expenseRows.map(r => r.externalId) } },
+        where: {
+          userId: req.userId!, source: "import", kind: "expense", payerUserId: null,
+          externalId: { in: plan.expenses.map(e => e.externalId) },
+        },
         select: { id: true, amount: true },
       });
       for (const e of created) {
