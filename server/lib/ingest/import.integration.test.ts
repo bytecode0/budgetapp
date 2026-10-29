@@ -224,7 +224,10 @@ describe("statement import (integration, real Postgres)", { skip: !TEST_DATABASE
   }
 
   async function confirm(userId: string, accountId: string, rows: ConfirmRow[]) {
-    return ok(userId, "POST", "/api/expenses/import/confirm", { accountId, rows }) as Promise<{ expenses: number; income: number; inserted: number }>;
+    return ok(userId, "POST", "/api/expenses/import/confirm", { accountId, rows }) as Promise<{
+      expenses: number; income: number; inserted: number;
+      summary: { expenses: number; refunds: number; incomes: number; payments: { debtId: string; name: string | null; count: number }[] };
+    }>;
   }
 
   /** Counted spending of PERIOD, as the dashboard sums it (countedAmounts: a
@@ -483,7 +486,9 @@ describe("statement import (integration, real Postgres)", { skip: !TEST_DATABASE
     assert.deepEqual(await stored(u.id), before);
 
     // Resolved as a payment: written against the card's debt, from no account.
-    await confirm(u.id, card.accountId, toConfirm(p, [...preselected(p), credit], { resolve: { [credit.externalId]: "payment" } }));
+    // The summary the wizard shows names what was written.
+    const done = await confirm(u.id, card.accountId, toConfirm(p, [...preselected(p), credit], { resolve: { [credit.externalId]: "payment" } }));
+    assert.deepEqual(done.summary, { expenses: 2, refunds: 0, incomes: 0, payments: [{ debtId: card.debtId, name: "Visa Dani", count: 1 }] });
     const payment = await prisma.expense.findFirstOrThrow({ where: { userId: u.id, externalId: credit.externalId } });
     assert.deepEqual([payment.kind, payment.debtId, payment.accountId, payment.amount], ["expense", card.debtId, null, 60000]);
 

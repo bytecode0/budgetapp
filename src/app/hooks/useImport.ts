@@ -69,6 +69,14 @@ export type ReadOutcome =
 
 export type PurchasesSign = 'negative' | 'positive';
 
+/** What a confirm wrote (POST /api/expenses/import/confirm), for the summary. */
+export interface ImportSummary {
+  expenses: number;
+  refunds: number;
+  incomes: number;
+  payments: { debtId: string; name: string | null; count: number }[];
+}
+
 export interface ConfirmRow {
   kind: ConfirmKind;
   externalId: string;
@@ -182,7 +190,9 @@ export function useImport() {
     }
   };
 
-  const confirm = async (accountId: string | null, rows: ConfirmRow[]) => {
+  const confirm = async (
+    accountId: string | null, rows: ConfirmRow[],
+  ): Promise<{ error: string; code?: string } | { inserted: number; summary: ImportSummary }> => {
     setConfirming(true);
     try {
       const res = await fetch('/api/expenses/import/confirm', {
@@ -193,7 +203,7 @@ export function useImport() {
       });
       const data = await res.json();
       if (!res.ok) return { error: data.error || 'Failed to import', code: data.code as string | undefined };
-      return { inserted: data.inserted as number, expenses: data.expenses as number, income: data.income as number };
+      return { inserted: data.inserted as number, summary: data.summary as ImportSummary };
     } catch {
       return { error: 'Network error' };
     } finally {

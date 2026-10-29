@@ -9,7 +9,7 @@ import { detectDelimiter, parseCsv, readCsv } from "./readers/csv.js";
 import { readWorkbook } from "./readers/xlsx.js";
 import { looksLikeNorma43, readNorma43 } from "./readers/norma43.js";
 import { looksLikeOfx, readOfx } from "./readers/ofx.js";
-import { MAX_STATEMENT_ROWS, MAX_WORKBOOK_BYTES, readStatement, StatementReadError } from "./read.js";
+import { MAX_STATEMENT_ROWS, MAX_WORKBOOK_BYTES, readStatement, sampleStatement, StatementReadError } from "./read.js";
 
 // ── Numbers ────────────────────────────────────────────────────────────────
 
@@ -252,4 +252,12 @@ test("limits: more than MAX_STATEMENT_ROWS movements, or a huge workbook, is ref
   const zip = new Uint8Array(MAX_WORKBOOK_BYTES + 1);
   zip[0] = 0x50; zip[1] = 0x4b;
   assert.throws(() => readStatement(zip, "x.xlsx"), (e: unknown) => e instanceof StatementReadError && e.code === "file_too_large");
+});
+
+test("sample for the manual mapping: tabular files only, first rows as text", () => {
+  const csv = new TextEncoder().encode("Día;Qué;Cuánto\n15/09/2026;Algo;-12,50\n");
+  assert.deepEqual(sampleStatement(csv), [{ sheet: "", rows: [["Día", "Qué", "Cuánto"], ["15/09/2026", "Algo", "-12,50"]] }]);
+  const ofx = new TextEncoder().encode("OFXHEADER:100\n<OFX></OFX>");
+  assert.equal(sampleStatement(ofx), null);
+  assert.equal(sampleStatement(new Uint8Array()), null);
 });

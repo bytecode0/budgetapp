@@ -82,6 +82,12 @@ function readGrid(sheet: Sheet, opts: ReadOptions): ReadResult | null {
   return null;
 }
 
+/** Rows shown by the manual mapping (and, as shapes only, by the AI one). */
+export const SAMPLE_ROWS = 15;
+
+const sampleOf = (sheets: Sheet[]): StatementSample[] =>
+  sheets.map(s => ({ sheet: s.name, rows: s.grid.slice(0, SAMPLE_ROWS).map(r => (r ?? []).map(c => String(c ?? ""))) }));
+
 /** Reads the sheets and keeps the one with the most movements. */
 function readSheets(sheets: Sheet[], opts: ReadOptions): ReadResult {
   let best: ReadResult | null = null;
@@ -90,11 +96,7 @@ function readSheets(sheets: Sheet[], opts: ReadOptions): ReadResult {
     if (r && (!best || r.rows.length + r.skipped.length > best.rows.length + best.skipped.length)) best = r;
   }
   if (!best) {
-    throw new StatementReadError(
-      "unrecognized_columns",
-      "No column with a date and an amount was recognised",
-      sheets.map(s => ({ sheet: s.name, rows: s.grid.slice(0, 15).map(r => (r ?? []).map(c => String(c ?? ""))) })),
-    );
+    throw new StatementReadError("unrecognized_columns", "No column with a date and an amount was recognised", sampleOf(sheets));
   }
   if (best.rows.length === 0 && best.skipped.length === 0) {
     throw new StatementReadError("no_movements", "The file has the expected columns but no movements");
@@ -130,4 +132,20 @@ function readAny(bytes: Uint8Array, filename: string, opts: ReadOptions): ReadRe
     return { ...result, purchasesSign: "negative" };
   }
   return readSheets([{ name: filename, grid: readCsv(text) }], opts);
+}
+
+/** The first rows of a tabular file (CSV, XLSX) for the manual mapping —
+ *  also when it WAS read, but the user says its columns came out wrong.
+ *  Null for formats with no columns to map (OFX, Norma 43) or no rows. */
+export function sampleStatement(bytes: Uint8Array): StatementSample[] | null {
+  if (bytes.length === 0) return null;
+  if (looksLikeWorkbook(bytes)) {
+    if (bytes.length > MAX_WORKBOOK_BYTES) return null;
+    const sheets = readWorkbook(bytes);
+    return sheets.length ? sampleOf(sheets) : null;
+  }
+  const { text } = decodeText(bytes);
+  if (looksLikeOfx(text) || looksLikeNorma43(text)) return null;
+  const grid = readCsv(text);
+  return grid.length ? sampleOf([{ name: "", grid }]) : null;
 }

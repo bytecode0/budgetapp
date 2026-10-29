@@ -428,7 +428,7 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
         where: { userId: req.userId!, type: "debt", debtId: { not: null } },
         select: { id: true, debtId: true, debt: { select: { accountId: true } } },
       }),
-      prisma.debt.findMany({ where: { userId: req.userId! }, select: { id: true, accountId: true } }),
+      prisma.debt.findMany({ where: { userId: req.userId! }, select: { id: true, accountId: true, name: true } }),
     ]);
     const plan = planImportWrites(
       rows.map(r => ({ ...r, amountCents: toCents(r.amount) })),
@@ -436,7 +436,7 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
         today: new Date().toISOString().slice(0, 10),
         accountId: resolvedAccountId,
         debtLines: debtLines.map(l => ({ id: l.id, debtId: l.debtId!, debtAccountId: l.debt?.accountId ?? null })),
-        debts,
+        debts: debts.map(d => ({ id: d.id, accountId: d.accountId })),
       },
     );
     if ("error" in plan) {
@@ -450,11 +450,11 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
     // first — are skipped by the unique externalId and not returned).
     // Imported rows on a "plan" line contribute to its life plan like manual
     // ones (refunds take money back out); DELETE/PATCH reverse it.
-    const { exp, inc } = await prisma.$transaction(async tx => {
+    const { exp, inc, inserted } = await prisma.$transaction(async tx => {
       const inserted = await tx.expense.createManyAndReturn({
         data: plan.expenses.map(e => ({ ...e, userId: req.userId!, source: "import", createdByUserId: req.authUserId! })),
         skipDuplicates: true, // re-importing the same file is a no-op
-        select: { kind: true, amount: true, allocationId: true },
+        select: { kind: true, amount: true, allocationId: true, debtId: true },
       });
       const inc = await tx.income.createMany({
         data: plan.incomes.map(i => ({ ...i, userId: req.userId!, ownerUserId: req.authUserId!, source: "import" })),
@@ -468,7 +468,7 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
       for (const [lifePlanId, delta] of deltas) {
         await tx.lifePlan.update({ where: { id: lifePlanId }, data: { currentAmount: { increment: delta } } });
       }
-      return { exp: { count: inserted.length }, inc };
+      return { exp: { count: inserted.length }, inc, inserted };
     }, { timeout: 30_000 }); // an interactive transaction defaults to 5 s; a statement may hold 5,000 rows
 
     // Learn from the categories assigned during import: every classified merchant
@@ -527,7 +527,19 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
       }
     }
 
-    return res.json({ success: true, expenses: exp.count, income: inc.count, inserted: exp.count + inc.count });
+    // What this request wrote, for the wizard's summary ("23 expenses, 2
+    // incomes, 1 payment to the PASS card"): payments by the debt they pay.
+    const nameByDebt = new Map(debts.map(d => [d.id, d.name]));
+    const paymentsByDebt = new Map<string, number>();
+    for (const e of inserted) if (e.debtId) paymentsByDebt.set(e.debtId, (paymentsByDebt.get(e.debtId) ?? 0) + 1);
+    const summary = {
+      expenses: inserted.filter(e => e.kind === "expense" && !e.debtId).length,
+      refunds: inserted.filter(e => e.kind === "refund").length,
+      incomes: inc.count,
+      payments: [...paymentsByDebt].map(([debtId, count]) => ({ debtId, name: nameByDebt.get(debtId) ?? null, count })),
+    };
+
+    return res.json({ success: true, expenses: exp.count, income: inc.count, inserted: exp.count + inc.count, summary });
   } catch (err) {
     console.error("[expenses/import/confirm]", err);
     return res.status(500).json({ error: "Internal server error" });
