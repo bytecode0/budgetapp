@@ -92,9 +92,8 @@ describe("statement import (integration, real Postgres)", { skip: !TEST_DATABASE
     process.env.EMAIL_FROM = "LifePlan <test@example.com>";
     delete process.env.VERCEL;
     delete process.env.VERCEL_ENV;
-    // Period bounds are local-time dates (server/lib/period.ts) and imported
-    // days are midnight UTC; production runs in UTC, so the test does too
-    // (in a zone west of UTC, a movement on the 1st falls in the month before).
+    // Production runs in UTC, so the test does too. Period bounds are UTC
+    // whatever the zone (server/lib/period.ts, unit-tested west of UTC).
     process.env.TZ = "UTC";
 
     ({ prisma } = await import("../prisma.js"));

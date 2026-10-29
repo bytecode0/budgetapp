@@ -5,31 +5,34 @@ import {
   periodKeyFor, periodBounds, currentPeriodKey, periodKeyOffset, enumeratePeriods, clampCycleStartDay,
 } from "./period.js";
 
+// Days are midnight UTC, as movements are stored.
+const utc = (y: number, m0: number, d: number) => new Date(Date.UTC(y, m0, d));
+
 test("cycleStartDay=1 reduces exactly to calendar-month behavior", () => {
-  assert.equal(periodKeyFor(new Date(2026, 7, 1), 1), "2026-08");  // Aug 1
-  assert.equal(periodKeyFor(new Date(2026, 7, 31), 1), "2026-08"); // Aug 31
-  assert.equal(periodKeyFor(new Date(2026, 0, 1), 1), "2026-01");  // Jan 1
+  assert.equal(periodKeyFor(utc(2026, 7, 1), 1), "2026-08");  // Aug 1
+  assert.equal(periodKeyFor(utc(2026, 7, 31), 1), "2026-08"); // Aug 31
+  assert.equal(periodKeyFor(utc(2026, 0, 1), 1), "2026-01");  // Jan 1
 
   const { start, end } = periodBounds("2026-08", 1);
-  assert.deepEqual(start, new Date(2026, 7, 1));
-  assert.deepEqual(end, new Date(2026, 8, 1));
+  assert.deepEqual(start, utc(2026, 7, 1));
+  assert.deepEqual(end, utc(2026, 8, 1));
 });
 
 test("cycleStartDay=25: Jul 25-31 belongs to the August period (the confirmed example)", () => {
-  assert.equal(periodKeyFor(new Date(2026, 6, 25), 25), "2026-08"); // payday itself
-  assert.equal(periodKeyFor(new Date(2026, 6, 28), 25), "2026-08");
-  assert.equal(periodKeyFor(new Date(2026, 6, 31), 25), "2026-08");
+  assert.equal(periodKeyFor(utc(2026, 6, 25), 25), "2026-08"); // payday itself
+  assert.equal(periodKeyFor(utc(2026, 6, 28), 25), "2026-08");
+  assert.equal(periodKeyFor(utc(2026, 6, 31), 25), "2026-08");
 });
 
 test("cycleStartDay=25: early-month days still belong to the prior period", () => {
-  assert.equal(periodKeyFor(new Date(2026, 6, 10), 25), "2026-07"); // Jul 10 -> July cycle (Jun25-Jul24)
-  assert.equal(periodKeyFor(new Date(2026, 6, 24), 25), "2026-07"); // last day before payday
+  assert.equal(periodKeyFor(utc(2026, 6, 10), 25), "2026-07"); // Jul 10 -> July cycle (Jun25-Jul24)
+  assert.equal(periodKeyFor(utc(2026, 6, 24), 25), "2026-07"); // last day before payday
 });
 
 test("cycleStartDay=25: period bounds match the example exactly", () => {
   const { start, end } = periodBounds("2026-08", 25);
-  assert.deepEqual(start, new Date(2026, 6, 25)); // Jul 25
-  assert.deepEqual(end, new Date(2026, 7, 25));   // Aug 25 (exclusive)
+  assert.deepEqual(start, utc(2026, 6, 25)); // Jul 25
+  assert.deepEqual(end, utc(2026, 7, 25));   // Aug 25 (exclusive)
 });
 
 test("periodKeyFor and periodBounds round-trip for a range of cycleStartDay values", () => {
@@ -47,10 +50,10 @@ test("periodKeyFor and periodBounds round-trip for a range of cycleStartDay valu
 });
 
 test("year boundary: December -> January period under a late-month payday", () => {
-  assert.equal(periodKeyFor(new Date(2026, 11, 28), 25), "2027-01"); // Dec 28 -> January cycle
+  assert.equal(periodKeyFor(utc(2026, 11, 28), 25), "2027-01"); // Dec 28 -> January cycle
   const { start, end } = periodBounds("2027-01", 25);
-  assert.deepEqual(start, new Date(2026, 11, 25));
-  assert.deepEqual(end, new Date(2027, 0, 25));
+  assert.deepEqual(start, utc(2026, 11, 25));
+  assert.deepEqual(end, utc(2027, 0, 25));
 });
 
 test("clampCycleStartDay keeps the value within [1, 28]", () => {
@@ -63,8 +66,8 @@ test("clampCycleStartDay keeps the value within [1, 28]", () => {
 });
 
 test("currentPeriodKey delegates to periodKeyFor for 'now'", () => {
-  assert.equal(currentPeriodKey(1, new Date(2026, 5, 15)), "2026-06");
-  assert.equal(currentPeriodKey(25, new Date(2026, 5, 28)), "2026-07");
+  assert.equal(currentPeriodKey(1, utc(2026, 5, 15)), "2026-06");
+  assert.equal(currentPeriodKey(25, utc(2026, 5, 28)), "2026-07");
 });
 
 test("periodKeyOffset walks whole periods regardless of cycleStartDay (labels are always sequential months)", () => {
@@ -77,4 +80,27 @@ test("periodKeyOffset walks whole periods regardless of cycleStartDay (labels ar
 test("enumeratePeriods lists every label inclusive, across a year boundary", () => {
   assert.deepEqual(enumeratePeriods("2026-11", "2027-02"), ["2026-11", "2026-12", "2027-01", "2027-02"]);
   assert.deepEqual(enumeratePeriods("2026-08", "2026-08"), ["2026-08"]);
+});
+
+test("bounds are UTC whatever the server's zone: a movement stored on the 1st is in its month", () => {
+  const saved = process.env.TZ;
+  try {
+    for (const tz of ["America/Los_Angeles", "America/Sao_Paulo", "Pacific/Auckland", "UTC"]) {
+      process.env.TZ = tz; // Node applies a TZ change at runtime
+      const firstOfSept = new Date("2026-09-01"); // how an imported day is stored
+      const lastOfSept = new Date("2026-09-30");
+      assert.equal(periodKeyFor(firstOfSept, 1), "2026-09", tz);
+      assert.equal(periodKeyFor(lastOfSept, 1), "2026-09", tz);
+      const { start, end } = periodBounds("2026-09", 1);
+      assert.equal(start.toISOString(), "2026-09-01T00:00:00.000Z", tz);
+      assert.equal(end.toISOString(), "2026-10-01T00:00:00.000Z", tz);
+      assert.ok(firstOfSept >= start && lastOfSept < end, tz);
+      const payday = periodBounds("2026-09", 25);
+      assert.equal(payday.start.toISOString(), "2026-08-25T00:00:00.000Z", tz);
+      assert.equal(periodKeyFor(new Date("2026-08-25"), 25), "2026-09", tz);
+      assert.equal(periodKeyFor(new Date("2026-08-24"), 25), "2026-08", tz);
+    }
+  } finally {
+    if (saved === undefined) delete process.env.TZ; else process.env.TZ = saved;
+  }
 });
