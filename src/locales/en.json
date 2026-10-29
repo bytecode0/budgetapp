@@ -1448,6 +1448,7 @@
   },
   "apiErrors": {
     "refundOnDebtLine": "A refund can't go on a debt line: it undoes a purchase, it doesn't pay the debt.",
-    "allocationNotFound": "That category no longer exists. Reload and pick another one."
+    "allocationNotFound": "That category no longer exists. Reload and pick another one.",
+    "accountNotFound": "That account isn't available. Reload and pick another one."
   }
 }

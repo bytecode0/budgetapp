@@ -5,6 +5,7 @@
 import { prisma } from "./prisma.js";
 
 export const ALLOCATION_NOT_FOUND = { error: "Category not found", code: "allocation_not_found" };
+export const ACCOUNT_NOT_FOUND = { error: "Account not found", code: "account_not_found" };
 
 /** True when every id given (null/undefined/"" = no category, skipped) is a
  *  budget line of pool `userId`. A non-string id is never one. */

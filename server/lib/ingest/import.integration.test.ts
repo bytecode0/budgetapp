@@ -701,4 +701,43 @@ describe("statement import (integration, real Postgres)", { skip: !TEST_DATABASE
     assert.equal(await planAmount(), 0, "another user's plan was credited");
     assert.equal(await prisma.expense.count({ where: { allocationId: foreignLine } }), 0);
   });
+
+  // ── j ──────────────────────────────────────────────────────────────────
+
+  it("j. a partner's private account can't be previewed, imported into or spent from; a shared one can", async () => {
+    const A = await signUp("Julia");
+    const B = await signUp("Jon");   // joins A's household
+    const C = await signUp("Jose");  // a stranger
+    const main = await mainAccount(A.id);
+    await ok(A.id, "PATCH", `/api/accounts/${main}/import-profile`, { importProfile: { date: "Día", amount: "Cuánto", description: ["Qué"] } });
+    await ok(B.id, "POST", "/api/partner/accept", { token: await invite(A.id, B.email) });
+    const file = csv(["Día;Qué;Cuánto", "15/09/2026;Algo raro;-12,50"]);
+    const notFound = (r: { status: number; body: any }, what: string) => {
+      assert.equal(r.status, 404, `${what}: ${r.status} ${JSON.stringify(r.body)}`);
+      assert.equal(r.body.code, "account_not_found", what);
+    };
+
+    // Shared with the household: B may import into it (with its saved mapping).
+    const shared = await preview(B.id, main, "raro.csv", file);
+    assert.equal(shared.source, "mapping");
+    assert.equal(shared.accountId, main);
+
+    // Private: it doesn't exist for B — no preview (nor its mapping), no
+    // import, no manual expense, no move onto it; never a silent fallback.
+    await prisma.account.update({ where: { id: main }, data: { visibility: "private" } });
+    notFound(await previewCall(B.id, main, "raro.csv", file), "preview");
+    const byB = () => prisma.expense.count({ where: { createdByUserId: B.id } }); // B writes into the pool
+    const before = await byB();
+    notFound(await call(B.id, "POST", "/api/expenses/import/confirm", { accountId: main, rows: toConfirm(shared, preselected(shared)) }), "confirm");
+    notFound(await call(B.id, "POST", "/api/expenses", { amount: 10, description: "x", accountId: main }), "POST /api/expenses");
+    const bExpense = (await ok(B.id, "POST", "/api/expenses", { amount: 10, description: "x" })).expense;
+    assert.notEqual(bExpense.accountId, main, "the default account is one B can see");
+    notFound(await call(B.id, "PATCH", `/api/expenses/${bExpense.id}`, { accountId: main }), "PATCH /api/expenses/:id");
+    assert.equal(await byB(), before + 1, "only the default-account expense was written");
+
+    // Its owner still can; a stranger never could.
+    assert.equal((await preview(A.id, main, "raro.csv", file)).accountId, main);
+    notFound(await previewCall(C.id, main, "raro.csv", file), "stranger preview");
+    notFound(await call(C.id, "POST", "/api/expenses", { amount: 10, description: "x", accountId: main }), "stranger POST /api/expenses");
+  });
 });

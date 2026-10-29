@@ -16,6 +16,7 @@ const ERROR_KEYS: Record<string, string> = {
   paid_from_card: 'debts.paidFromCardError',
   refund_on_debt_line: 'apiErrors.refundOnDebtLine',
   allocation_not_found: 'apiErrors.allocationNotFound',
+  account_not_found: 'apiErrors.accountNotFound',
   // Statement import (server/lib/ingest/read.ts)
   unrecognized_columns: 'import.unrecognizedColumns',
   too_many_rows: 'import.tooManyRows',

@@ -20,7 +20,8 @@ import { periodBounds } from "../lib/period.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { countedAmounts, syncDebtStatus } from "../lib/debtBalance.js";
 import { pickDefaultAccount } from "../lib/defaultAccount.js";
-import { ALLOCATION_NOT_FOUND, allocationsInPool } from "../lib/poolRefs.js";
+import { ACCOUNT_NOT_FOUND, ALLOCATION_NOT_FOUND, allocationsInPool } from "../lib/poolRefs.js";
+import { visibleToWhere } from "../lib/ownership.js";
 
 export const expensesRouter = Router();
 
@@ -38,23 +39,28 @@ async function debtForAllocation(userId: string, allocationId: string | null) {
   return alloc?.debt ?? null;
 }
 
-// Validate a requested accountId belongs to the user's pool; if none given (or
-// not in the pool), fall back to the caller's default account
-// (server/lib/defaultAccount.ts: own first, not a card). Returns null only
-// when the pool has no open accounts at all.
-async function resolveAccountId(userId: string, authUserId: string, accountId?: string | null): Promise<string | null> {
-  if (accountId) {
-    const owned = await prisma.account.findFirst({
-      where: { id: accountId, userId },
+// The account a write (or an import preview, which reads the account's saved
+// import profile) goes to. A requested one must be in the pool AND visible to
+// the caller — their own or a household-shared one (shared finances are one);
+// a partner's private account doesn't exist for them — else ACCOUNT_NOT_FOUND,
+// never a silent fallback. None requested → the caller's default among the
+// visible ones (server/lib/defaultAccount.ts: own first, not a card), null
+// only when there is no open one at all.
+async function resolveAccountId(
+  userId: string, authUserId: string, accountId?: unknown,
+): Promise<{ accountId: string | null } | { error: typeof ACCOUNT_NOT_FOUND }> {
+  if (accountId !== undefined && accountId !== null && accountId !== "") {
+    const visible = typeof accountId === "string" && await prisma.account.findFirst({
+      where: { id: accountId, userId, ...visibleToWhere(authUserId) },
       select: { id: true },
     });
-    if (owned) return owned.id;
+    return visible ? { accountId: visible.id } : { error: ACCOUNT_NOT_FOUND };
   }
   const accounts = await prisma.account.findMany({
-    where: { userId, isArchived: false },
+    where: { userId, isArchived: false, ...visibleToWhere(authUserId) },
     select: { id: true, ownerUserId: true, type: true, isArchived: true, sortOrder: true },
   });
-  return pickDefaultAccount(accounts, authUserId);
+  return { accountId: pickDefaultAccount(accounts, authUserId) };
 }
 
 // GET /api/expenses?month=2026-04&allocationId=xxx
@@ -157,9 +163,10 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
       resolvedAllocationId = await categorize(req.userId!, description ?? "", merchant);
     }
 
-    // Resolve the account: validate ownership if given, else fall back to the
-    // user's default (lowest sortOrder, non-archived) account.
-    const resolvedAccountId = await resolveAccountId(req.userId!, req.authUserId!, accountId);
+    // Resolve the account: a visible one if given, else the caller's default.
+    const resolvedAccount = await resolveAccountId(req.userId!, req.authUserId!, accountId);
+    if ("error" in resolvedAccount) return res.status(404).json(resolvedAccount.error);
+    const resolvedAccountId = resolvedAccount.accountId;
 
     const paidDebt = await debtForAllocation(req.userId!, resolvedAllocationId);
     const lineError = debtLineError("expense", paidDebt, resolvedAccountId);
@@ -314,7 +321,9 @@ expensesRouter.post("/import/preview", requireAuth, async (req: AuthRequest, res
       parsedRows = parsed.rows;
     }
 
-    const resolvedAccountId = await resolveAccountId(req.userId!, req.authUserId!, accountId);
+    const resolvedAccount = await resolveAccountId(req.userId!, req.authUserId!, accountId);
+    if ("error" in resolvedAccount) return res.status(404).json(resolvedAccount.error);
+    const resolvedAccountId = resolvedAccount.accountId;
     let preview;
     try {
       preview = await prepareImport(req.userId!, {
@@ -405,7 +414,9 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
     const namedLines = rows.filter(r => r && (r.kind === "expense" || r.kind === "refund")).map(r => r.allocationId);
     if (!(await allocationsInPool(req.userId!, namedLines))) return res.status(404).json(ALLOCATION_NOT_FOUND);
 
-    const resolvedAccountId = await resolveAccountId(req.userId!, req.authUserId!, accountId);
+    const resolvedAccount = await resolveAccountId(req.userId!, req.authUserId!, accountId);
+    if ("error" in resolvedAccount) return res.status(404).json(resolvedAccount.error);
+    const resolvedAccountId = resolvedAccount.accountId;
     const [debtLines, debts] = await Promise.all([
       prisma.allocation.findMany({
         where: { userId: req.userId!, type: "debt", debtId: { not: null } },
@@ -584,14 +595,12 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
 
     const { amount, description, allocationId, accountId, date } = req.body;
 
-    // Validate a re-assigned account belongs to the user (ignore invalid ids).
+    // A re-assigned account must be one the caller can see (as on create).
     let accountUpdate: { accountId: string } | undefined;
-    if (accountId !== undefined && accountId) {
-      const owned = await prisma.account.findFirst({
-        where: { id: accountId, userId: req.userId! },
-        select: { id: true },
-      });
-      if (owned) accountUpdate = { accountId: owned.id };
+    if (accountId) {
+      const resolvedAccount = await resolveAccountId(req.userId!, req.authUserId!, accountId);
+      if ("error" in resolvedAccount) return res.status(404).json(resolvedAccount.error);
+      if (resolvedAccount.accountId) accountUpdate = { accountId: resolvedAccount.accountId };
     }
 
     // Resolve the allocation that will apply after the update: a new one must

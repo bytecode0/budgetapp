@@ -1448,6 +1448,7 @@
   },
   "apiErrors": {
     "refundOnDebtLine": "Una devolución no puede ir en la partida de una deuda: deshace una compra, no paga la deuda.",
-    "allocationNotFound": "Esa categoría ya no existe. Recarga la página y elige otra."
+    "allocationNotFound": "Esa categoría ya no existe. Recarga la página y elige otra.",
+    "accountNotFound": "Esa cuenta no está disponible. Recarga la página y elige otra."
   }
 }
