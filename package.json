@@ -25,6 +25,7 @@
     "typecheck:app": "tsc --noEmit -p tsconfig.json",
     "typecheck": "npm run typecheck:server && npm run typecheck:app",
     "test": "node --import tsx --test \"server/**/*.test.ts\"",
+    "test:integration": "node --import tsx --test server/lib/partnerFlow.integration.test.ts",
     "verify": "npm run typecheck && npm run test && npm run build",
     "postinstall": "prisma generate"
   },

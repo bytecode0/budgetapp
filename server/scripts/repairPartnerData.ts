@@ -49,9 +49,7 @@ import { isEmptySummary, mergeMemberIntoPool, previewPoolMerge, type MergeSummar
 import { lockSettings, coupleChange } from "../lib/partnerLink.js";
 import { planRepairCouples, baselineFromOwnIncomes, assessCoupleBaseline, type CoupleBaselineCheck } from "../lib/partnerRepair.js";
 import { clampCycleStartDay, currentPeriodKey, periodKeyFor } from "../lib/period.js";
-
-const apply = process.argv.includes("--apply");
-const setBaselines = process.argv.includes("--fix-double-counted-baselines");
+import { pathToFileURL } from "node:url";
 
 function line(s: MergeSummary): string {
   return Object.entries(s).filter(([, n]) => n !== 0).map(([k, n]) => `${k}=${n}`).join(" ");
@@ -104,7 +102,21 @@ async function checkBaselines(memberId: string, poolId: string) {
   return { check, ownerFromIncomes, partnerFromIncomes };
 }
 
-(async () => {
+export interface RepairOptions {
+  apply: boolean;
+  setBaselines: boolean; // --fix-double-counted-baselines
+}
+
+export interface RepairResult {
+  pending: number;      // couples with data to move (moved, with apply)
+  skipped: number;
+  doubleCounts: number;
+  baselinesSet: number;
+}
+
+/** The whole repair (see the header). Exported so the integration test
+ *  (server/lib/partnerFlow.integration.test.ts) can run it in-process. */
+export async function repairPartnerData({ apply, setBaselines }: RepairOptions): Promise<RepairResult> {
   const linked = await prisma.userSettings.findMany({
     where: { linkedUserId: { not: null } },
     select: { userId: true, linkedUserId: true },
@@ -185,9 +197,19 @@ async function checkBaselines(memberId: string, poolId: string) {
   console.log(`Couples whose baseline likely counts the partner twice: ${doubleCounts}.${
     setBaselines && apply ? ` Baselines recomputed: ${baselinesSet}.`
       : " Re-run with --apply --fix-double-counted-baselines to recompute them from each person's own incomes."}`);
-  await prisma.$disconnect();
-})().catch(async (e) => {
-  console.error(e);
-  await prisma.$disconnect();
-  process.exit(1);
-});
+  return { pending, skipped, doubleCounts, baselinesSet };
+}
+
+// Run as a script (npm run repair:partner-data), not when imported.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  repairPartnerData({
+    apply: process.argv.includes("--apply"),
+    setBaselines: process.argv.includes("--fix-double-counted-baselines"),
+  })
+    .then(() => prisma.$disconnect())
+    .catch(async (e) => {
+      console.error(e);
+      await prisma.$disconnect();
+      process.exit(1);
+    });
+}
