@@ -30,11 +30,17 @@
 //   CategorizationRule, RecurringCommitment → moved, pointing at the merged
 //                       line; on a unique clash with the pool, the pool's wins
 //   Expense/Income with an externalId the pool already has → kept, with the
-//                       externalId namespaced (`merged:<memberId>:<old>`) so
-//                       the unique key holds. Never dropped: the import hash
+//                       externalId namespaced (`merged:<memberId>:<old>`, or
+//                       `merged:<memberId>#<n>:<old>` when that is taken too)
+//                       so the unique key holds. Never dropped: the import hash
 //                       (importStatement.ts externalIdFor) leaves out the
 //                       account, so the same id can be a distinct real
 //                       transaction — or her only record of a debt payment.
+//                       An id that already carries a prefix is namespaced from
+//                       its original (prefixes never nest), and unlink gives
+//                       the original back when it is free in her scope
+//                       (server/lib/partnerUnlink.ts), so a re-import still
+//                       finds it.
 //
 // planPoolMerge() holds every decision as a pure function (unit-tested);
 // loadMergeInput() and applyPoolMerge() are the database around it.
@@ -107,14 +113,37 @@ export function isUnusedDefaultAccount(a: MergeAccount): boolean {
     && !a.referenced;
 }
 
+// `merged:<id>:` or `merged:<id>#<n>:` — ids are cuids (no ':' or '#').
+const NAMESPACE_PREFIX = /^merged:[^:#]+(?:#\d+)?:/;
+// The import hash (importStatement.ts externalIdFor): 32 hex chars.
+const IMPORT_HASH = /^[0-9a-f]{32}$/;
+
 /**
- * `merged:<memberId>:<old>`, suffixed until it is in neither `taken` set (the
- * pool's ids and hers, both of which end up under the pool). Adds it to `taken`.
+ * The externalId a row had before any merge namespaced it: every
+ * `merged:<id>[#<n>]:` prefix stripped. Rows renamed before the `#<n>` form
+ * carry a `:<n>` suffix instead; it is stripped when what is left is an
+ * import hash (a provider id may itself end in `:<digits>`, so it is left).
  */
-export function namespacedExternalId(memberId: string, old: string, taken: Set<string>): string {
-  const base = `merged:${memberId}:${old}`;
-  let candidate = base;
-  for (let n = 2; taken.has(candidate); n++) candidate = `${base}:${n}`;
+export function originalExternalId(externalId: string): string {
+  let id = externalId;
+  while (NAMESPACE_PREFIX.test(id)) id = id.replace(NAMESPACE_PREFIX, "");
+  if (id !== externalId) {
+    const legacy = /^(.*):\d+$/.exec(id);
+    if (legacy && IMPORT_HASH.test(legacy[1])) id = legacy[1];
+  }
+  return id;
+}
+
+/**
+ * `merged:<namespaceId>:<original>`, or `merged:<namespaceId>#<n>:<original>`
+ * with the first n ≥ 2 that is in no `taken` set (all ids that end up in the
+ * same scope). Built from the original id, so prefixes never nest. Adds it to
+ * `taken`.
+ */
+export function namespacedExternalId(namespaceId: string, old: string, taken: Set<string>): string {
+  const original = originalExternalId(old);
+  let candidate = `merged:${namespaceId}:${original}`;
+  for (let n = 2; taken.has(candidate); n++) candidate = `merged:${namespaceId}#${n}:${original}`;
   taken.add(candidate);
   return candidate;
 }

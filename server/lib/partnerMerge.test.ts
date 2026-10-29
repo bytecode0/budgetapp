@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  planPoolMerge, summarizeMerge, namespacedExternalId, isEmptySummary, isUntouchedDefaultAllocation, isUnusedDefaultAccount,
+  planPoolMerge, summarizeMerge, namespacedExternalId, originalExternalId, isEmptySummary, isUntouchedDefaultAllocation, isUnusedDefaultAccount,
   type MergeInput, type MergeAllocation, type MergeAccount,
 } from "./partnerMerge.js";
 import { DEFAULT_ACCOUNT_NAME } from "./onboarding.js";
@@ -133,10 +133,34 @@ test("a namespaced id never collides with one the pool or she already has", () =
   const plan = planPoolMerge({
     ...base,
     memberExpenseExternalIds: [{ id: "e1", externalId: "x" }, { id: "e2", externalId: "merged:m:x" }],
-    poolExternalIds: { expense: new Set(["x", "merged:m:x:2"]), income: new Set() },
+    poolExternalIds: { expense: new Set(["x", "merged:m#2:x"]), income: new Set() },
   });
-  assert.deepEqual(plan.renameExpenseExternalIds, [{ id: "e1", externalId: "merged:m:x:3" }]);
+  assert.deepEqual(plan.renameExpenseExternalIds, [{ id: "e1", externalId: "merged:m#3:x" }]);
   assert.equal(namespacedExternalId("m", "y", new Set()), "merged:m:y");
+});
+
+test("re-merging never nests prefixes: a namespaced id is rebuilt from its original", () => {
+  // Left namespaced by an earlier link (its original was taken in her scope at
+  // unlink), and the pool has that same namespaced id again.
+  const plan = planPoolMerge({
+    ...base,
+    memberExpenseExternalIds: [{ id: "e1", externalId: "merged:m:x" }],
+    poolExternalIds: { expense: new Set(["merged:m:x"]), income: new Set() },
+  });
+  assert.deepEqual(plan.renameExpenseExternalIds, [{ id: "e1", externalId: "merged:m#2:x" }]);
+  assert.equal(namespacedExternalId("m", "merged:other#4:gocardless:t1", new Set()), "merged:m:gocardless:t1");
+});
+
+test("originalExternalId strips every merge prefix, and a legacy :n suffix only off an import hash", () => {
+  const hash = "0123456789abcdef0123456789abcdef";
+  assert.equal(originalExternalId(hash), hash);
+  assert.equal(originalExternalId(`merged:m:${hash}`), hash);
+  assert.equal(originalExternalId(`merged:m#3:${hash}`), hash);
+  assert.equal(originalExternalId(`merged:m:merged:p:${hash}`), hash);
+  assert.equal(originalExternalId(`merged:m:${hash}:2`), hash); // legacy suffix
+  // A provider id may end in :digits; never cut it.
+  assert.equal(originalExternalId("merged:m:tink:abc:2"), "tink:abc:2");
+  assert.equal(originalExternalId("tink:abc:2"), "tink:abc:2");
 });
 
 test("her rows are ordered after the pool's", () => {

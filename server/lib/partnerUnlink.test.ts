@@ -1,14 +1,14 @@
 // Run with:  node --import tsx --test server/lib/partnerUnlink.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { planUnlink, type UnlinkInput } from "./partnerUnlink.js";
+import { planUnlink, planRestoreExternalIds, type UnlinkInput } from "./partnerUnlink.js";
 
 const HER = "her";
 const EX = "ex";
 
 type Expense = UnlinkInput["expenses"][number];
 const expense = (over: Partial<Expense> & { id: string }): Expense => ({
-  accountId: null, debtId: null, allocationId: null, payerUserId: HER, createdByUserId: null, scope: "personal", hasShares: false, ...over,
+  accountId: null, externalId: null, debtId: null, allocationId: null, payerUserId: HER, createdByUserId: null, scope: "personal", hasShares: false, ...over,
 });
 
 // A linked couple: each has a checking account and a card (with its card debt),
@@ -29,8 +29,8 @@ const base: UnlinkInput = {
   ],
   bankConnections: [{ id: "her-bank", ownerUserId: HER }, { id: "ex-bank", ownerUserId: EX }],
   incomes: [
-    { id: "her-salary", ownerUserId: HER, accountId: "her-checking" },
-    { id: "ex-salary", ownerUserId: EX, accountId: "ex-checking" },
+    { id: "her-salary", ownerUserId: HER, accountId: "her-checking", externalId: null },
+    { id: "ex-salary", ownerUserId: EX, accountId: "ex-checking", externalId: null },
   ],
   expenses: [],
   plans: [],
@@ -43,6 +43,7 @@ const base: UnlinkInput = {
   ],
   rules: [{ id: "r-her-loan", allocationId: "line-her-loan" }, { id: "r-fixed", allocationId: "fixed" }],
   recurring: [{ id: "c-her-loan", allocationId: "line-her-loan" }, { id: "c-fixed", allocationId: "fixed" }],
+  memberExternalIds: { expense: new Set(), income: new Set() },
 };
 
 test("what she owns moves back; what the ex owns stays", () => {
@@ -129,7 +130,7 @@ test("incomes and accounts never keep a reference across the two scopes", () => 
     ...base,
     accounts: [...base.accounts, { id: "her-on-ex-bank", ownerUserId: HER, bankConnectionId: "ex-bank" }],
     debts: [...base.debts, { id: "her-loan-on-ex-bank", ownerUserId: HER, accountId: null, bankConnectionId: "ex-bank" }],
-    incomes: [...base.incomes, { id: "ex-paid-into-hers", ownerUserId: EX, accountId: "her-checking" }],
+    incomes: [...base.incomes, { id: "ex-paid-into-hers", ownerUserId: EX, accountId: "her-checking", externalId: null }],
   });
   assert.deepEqual(plan.clear.incomeAccount, ["ex-paid-into-hers"]);
   assert.deepEqual(plan.clear.debtBankConnection, ["her-loan-on-ex-bank"]);
@@ -228,6 +229,35 @@ test("her plans come back with their plan lines and the rules on them; unowned a
   // Her contribution keeps its line; the ex's loses it (the line leaves).
   assert.ok(!plan.clear.expenseAllocation.includes("her-saving"));
   assert.ok(plan.clear.expenseAllocation.includes("ex-saving-for-her-trip"));
+});
+
+test("moved rows get back the externalId merge namespaced, when it is free in her scope", () => {
+  const plan = planUnlink({
+    ...base,
+    incomes: [...base.incomes, { id: "her-bonus", ownerUserId: HER, accountId: null, externalId: "merged:her:inc1" }],
+    expenses: [
+      expense({ id: "renamed", accountId: "her-checking", externalId: "merged:her:abc" }),
+      expense({ id: "renamed-twice", accountId: "her-checking", externalId: "merged:her#2:def" }),
+      expense({ id: "taken-in-her-scope", accountId: "her-checking", externalId: "merged:her:ghi" }),
+      expense({ id: "plain", accountId: "her-checking", externalId: "jkl" }),
+      expense({ id: "stays", accountId: "ex-checking", payerUserId: EX, externalId: "merged:her:mno" }),
+    ],
+    memberExternalIds: { expense: new Set(["ghi"]), income: new Set() },
+  });
+  assert.deepEqual(plan.restoreExternalIds.expense, [
+    { id: "renamed", externalId: "abc" },
+    { id: "renamed-twice", externalId: "def" },
+  ]);
+  assert.deepEqual(plan.restoreExternalIds.income, [{ id: "her-bonus", externalId: "inc1" }]);
+});
+
+test("two moved rows with the same original: only the first gets it back", () => {
+  const out = planRestoreExternalIds([
+    { id: "a", externalId: "merged:her:x" },
+    { id: "b", externalId: "merged:her#2:x" },
+    { id: "c", externalId: "x2" },
+  ], new Set());
+  assert.deepEqual(out, [{ id: "a", externalId: "x" }]);
 });
 
 test("a member with nothing of her own moves nothing", () => {
