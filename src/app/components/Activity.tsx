@@ -7,6 +7,7 @@ import { useExpenses, type Expense } from '../hooks/useExpenses';
 import { useIncome, type Income } from '../hooks/useIncome';
 import { useAllocations } from '../hooks/useAllocations';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { useMonth, monthLabel } from '../context/MonthContext';
 import { useDuplicates } from '../hooks/useDuplicates';
 import { AddExpense } from './AddExpense';
@@ -60,6 +61,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
   const { expenses, loading, totalSpent, totalByAllocation, deleteExpense, updateExpense, updateAttribution, fetchExpenses } =
     useExpenses(currentMonth);
   const { incomes, totalIncome, deleteIncome, fetchIncomes } = useIncome(currentMonth);
+  const { user } = useAuth();
   const { groups: duplicateGroups, loading: duplicatesLoading, merge: mergeDuplicates, fetchDuplicates } = useDuplicates();
   const { allocations, monthlyIncome } = useAllocations();
 
@@ -436,21 +438,26 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             <p className="text-lg font-display text-emerald-600">+{currency}{m.amount.toFixed(2)}</p>
-                            <button
-                              onClick={() => setEditingIncome(m.income)}
-                              className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteIncome(m.id)}
-                              disabled={deletingId === m.id}
-                              className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50"
-                            >
-                              {deletingId === m.id
-                                ? <Loader2 className="w-4 h-4 animate-spin" />
-                                : <Trash2 className="w-4 h-4" />}
-                            </button>
+                            {/* Another member's income is read-only (the server answers 403). */}
+                            {m.income.ownerUserId === user?.id && (
+                              <>
+                                <button
+                                  onClick={() => setEditingIncome(m.income)}
+                                  className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteIncome(m.id)}
+                                  disabled={deletingId === m.id}
+                                  className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                  {deletingId === m.id
+                                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                                    : <Trash2 className="w-4 h-4" />}
+                                </button>
+                              </>
+                            )}
                           </div>
                         </>
                       )}

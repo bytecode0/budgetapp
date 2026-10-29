@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Loader2, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAccounts } from '../hooks/useAccounts';
+import { useAuth } from '../context/AuthContext';
 import { CardFields, EMPTY_CARD_FIELDS, cardFieldsError, cardSettingsPayload, type CardFieldsValue } from '../components/shared/CardFields';
 import { useMoney } from './useMoney';
 import { NoneAnswer } from './NoneAnswer';
@@ -13,6 +14,7 @@ export function CardsStep() {
   const { t } = useTranslation();
   const { fmt } = useMoney();
   const { accounts, createAccount, deleteAccount } = useAccounts();
+  const { user } = useAuth();
   const cards = accounts.filter(a => a.type === 'card' && !a.isArchived);
 
   const [adding, setAdding] = useState(false);
@@ -60,9 +62,11 @@ export function CardsStep() {
               <p className={`font-display ${a.card && a.card.owed > 0 ? 'text-red-500' : ''}`}>{fmt(a.card?.owed ?? 0)}</p>
               <p className="text-xs text-muted-foreground">{t('accounts.cardOwed')}</p>
             </div>
-            <button onClick={() => handleDelete(a.id)} className="p-2 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/5 transition-colors" title={t('accounts.delete')}>
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {a.ownerUserId === user?.id && (
+              <button onClick={() => handleDelete(a.id)} className="p-2 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/5 transition-colors" title={t('accounts.delete')}>
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         ))}
       </div>

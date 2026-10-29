@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDebts } from '../hooks/useDebts';
+import { useAuth } from '../context/AuthContext';
 import {
   DebtFormFields, EMPTY_DEBT_FORM, debtPayloadFromForm, kindIcon, type DebtFormState,
 } from '../components/shared/DebtFormFields';
@@ -16,6 +17,7 @@ export function LoansStep() {
   const { t } = useTranslation();
   const { fmt } = useMoney();
   const { debts, createDebt, deleteDebt } = useDebts();
+  const { user } = useAuth();
   const loans = debts.filter(d => d.kind !== 'credit_card');
 
   const [adding, setAdding] = useState(false);
@@ -62,9 +64,11 @@ export function LoansStep() {
                   <p className="text-xs text-muted-foreground">{t('onboarding.loans.owedLabel')} {fmt(d.owed)}</p>
                 )}
               </div>
-              <button onClick={() => handleDelete(d.id)} className="p-2 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/5 transition-colors" title={t('debts.delete')}>
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {d.ownerUserId === user?.id && (
+                <button onClick={() => handleDelete(d.id)} className="p-2 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/5 transition-colors" title={t('debts.delete')}>
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           );
         })}
