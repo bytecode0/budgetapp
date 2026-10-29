@@ -177,20 +177,29 @@ const CARD_WORDS = new Set([
 ]);
 const isCardNumber = (tok: string) => /^\d+$/.test(tok) || /^\d+x+\d+$/.test(tok) || /^x+\d*$/.test(tok);
 
+/** True when `rest` holds only card words, card numbers or the user's card names. */
+function onlyCardWords(rest: string, cardNames: string[]): boolean {
+  let padded = ` ${rest.trim()} `;
+  for (const name of cardNames) if (name.length >= 3) padded = padded.replace(` ${name} `, " ");
+  return padded.trim().split(" ").filter(Boolean).every(tok => CARD_WORDS.has(tok) || isCardNumber(tok));
+}
+
 function isPagoTarjetaPayment(text: string, cardNames: string[]): boolean {
   const m = PAGO_TARJETA.exec(text);
-  if (!m) return false;
-  let rest = ` ${m[1].trim()} `;
-  for (const name of cardNames) if (name.length >= 3) rest = rest.replace(` ${name} `, " ");
-  return rest.trim().split(" ").filter(Boolean).every(tok => CARD_WORDS.has(tok) || isCardNumber(tok));
+  return !!m && onlyCardWords(m[1], cardNames);
 }
 
 // Worded like a card payment (a payment verb and "tarjeta") without being
 // recognised as one: flagged, never decided. "Pago con tarjeta" and "compra"
-// are purchases with a debit card.
+// are purchases with a debit card — and so is "PAGO TARJETA MERCADONA" at
+// some banks: a merchant-like word after "tarjeta" means no flag (it would be
+// noise on every such purchase). "LIQUIDACION MENSUAL TARJETA CREDITO" is flagged.
 const CARD_PAYMENT_VERBS = ["pago", "liquidacion", "liq", "recibo", "cargo", "amortizacion"];
-const looksLikeCardPayment = (text: string) =>
-  text.includes(" tarjeta ") && hasPhrase(text, CARD_PAYMENT_VERBS) && !hasPhrase(text, ["con tarjeta", "compra"]);
+function looksLikeCardPayment(text: string, cardNames: string[]): boolean {
+  const at = text.lastIndexOf(" tarjeta ");
+  if (at < 0 || !hasPhrase(text, CARD_PAYMENT_VERBS) || hasPhrase(text, ["con tarjeta", "compra"])) return false;
+  return onlyCardWords(text.slice(at + " tarjeta ".length), cardNames);
+}
 // Card side: the line that records a payment received.
 const CARD_PAYMENT_RECEIVED = [
   "pago recibido", "su pago", "pago gracias", "abono pago", "abono de pago", "abono por pago",
@@ -353,8 +362,8 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
   const byAmount = indexByAmount(existing);
   const keys = keyRows(rows, account.id);
   const planned: PlannedRow[] = [];
-  // A card this file may pay (a card file never pays itself).
-  const hasCards = debts.some(d => d.kind === "credit_card" && d.accountId && d.accountId !== account.id);
+  // The cards this file may pay (a card file never pays itself), by name.
+  const cardNames = debts.filter(d => d.kind === "credit_card" && d.accountId && d.accountId !== account.id).map(d => normalizeText(d.name));
 
   for (const [i, row] of rows.entries()) {
     const { key, merchant } = keys[i];
@@ -382,7 +391,7 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
         } else {
           kind = "expense";
           if (detected) warnings.push("card_payment_unassigned");
-          else if (hasCards && looksLikeCardPayment(textOf(row))) warnings.push("possible_card_payment");
+          else if (cardNames.length && looksLikeCardPayment(textOf(row), cardNames)) warnings.push("possible_card_payment");
         }
       }
     } else if (row.amountCents < 0) {
