@@ -31,6 +31,22 @@ import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/useP
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
 
+// The partner invite token survives the full-page Google OAuth redirect in
+// sessionStorage (React state is wiped by it). Storage may be unavailable
+// (private mode, blocked site data): the invite then only lasts this page load.
+const PENDING_INVITE_KEY = 'pendingInviteToken';
+
+function readPendingInvite(): string | null {
+  try { return window.sessionStorage.getItem(PENDING_INVITE_KEY); } catch { return null; }
+}
+
+function writePendingInvite(token: string | null): void {
+  try {
+    if (token) window.sessionStorage.setItem(PENDING_INVITE_KEY, token);
+    else window.sessionStorage.removeItem(PENDING_INVITE_KEY);
+  } catch { /* storage unavailable: nothing to persist or clear */ }
+}
+
 function AppInner() {
   const { user, loading, logout, refreshUser } = useAuth();
   const { needsOnboarding, missing: setupMissing, loading: onboardingLoading, refresh: refreshOnboardingStatus } = useOnboardingNeeded(Boolean(user));
@@ -62,12 +78,14 @@ function AppInner() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
 
-  // Partner invite: detect ?invite=TOKEN in URL. Kept in state across the
-  // auth flow; `inviteChecking` holds the app until the token is validated, so
-  // the onboarding never flashes before the accept step.
+  // Partner invite: detect ?invite=TOKEN in URL (or one saved before an OAuth
+  // redirect). Kept in state across the auth flow; `inviteChecking` holds the
+  // app until the token is validated, so the onboarding never flashes before
+  // the accept step.
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [inviteDetails, setInviteDetails] = useState<InviteDetails | null>(null);
-  const [inviteChecking, setInviteChecking] = useState(() => new URLSearchParams(window.location.search).has('invite'));
+  const [inviteChecking, setInviteChecking] = useState(() =>
+    new URLSearchParams(window.location.search).has('invite') || readPendingInvite() !== null);
   const { acceptInvite } = usePartner();
 
   // Open Banking: detect ?bankToken=TOKEN in URL (post-consent redirect hand-off)
@@ -75,13 +93,22 @@ function AppInner() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('invite');
+    const urlInvite = params.get('invite');
+    const token = urlInvite ?? readPendingInvite();
     if (token) {
+      writePendingInvite(token);
       setInviteToken(token);
       fetchInviteDetails(token).then(details => {
+        // Invalid or expired: forget it so it isn't retried on every load.
+        if (!details) {
+          writePendingInvite(null);
+          setInviteToken(null);
+        }
         setInviteDetails(details);
         setInviteChecking(false);
       });
+    }
+    if (urlInvite) {
       // Clean the token from the URL without reloading
       const url = new URL(window.location.href);
       url.searchParams.delete('invite');
@@ -223,6 +250,7 @@ function AppInner() {
   }
   if (inviteToken && inviteDetails) {
     const closeInvite = async () => {
+      writePendingInvite(null); // accepted or declined: done with it
       setInviteToken(null);
       setInviteDetails(null);
       // After accepting, the data scope is the shared pool: re-derive the
