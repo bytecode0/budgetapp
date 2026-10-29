@@ -24,28 +24,32 @@ La épica 1 va primero porque el paso de deudas del onboarding tiene que pregunt
 
 **La app es gratuita.** Stripe queda para un futuro lejano (decisión I): el código sigue ahí, sin variables `STRIPE_*` responde 503 y el frontend oculta Premium.
 
-### Pendientes sueltos (un PR de mantenimiento antes de la épica 4)
-1. **Rotar la contraseña de Neon** (quedó en una conversación) → actualizar `DATABASE_URL` en Vercel y redeploy. Tú.
-2. ~~**Sin valores por defecto silenciosos** en `server/lib/jwt.ts` (`JWT_SECRET`) y `GOOGLE_CALLBACK_URL`~~ → HECHO (`7e468b1`, OK del 29 oct): sin `JWT_SECRET` el servidor no arranca; sin la configuración de Google, el login con Google responde 503. **Antes de desplegarlo:** confirmar que `JWT_SECRET` tiene valor en Vercel.
-3. **Cuentas en un hogar:** `PATCH`/`DELETE /api/accounts/:id` solo comprueban el hogar, no el dueño; un miembro puede editar o borrar las cuentas (incluso privadas) del otro.
-4. Guardar el idioma al registrarse (2.8, abierto menor).
-5. "Completa tu configuración" no se refresca al añadir cosas desde otras pantallas.
-6. Textos sin i18n: partidas "Fixed Expenses"/"Flexible Spending" creadas al registrarse; `€` escritos a mano en Home.
-7. Botón "No tengo tarjetas / préstamos" (`noCardsAt`/`noLoansAt` en `UserSettings`): aceptado en idea, falta tu OK al cambio de schema.
-8. Skill `/deploy`: las variables de Neon son *Sensitive* (`env pull` no las baja) y en un primer despliegue con la base vacía el paso de schema se salta. Hay que reescribir ese paso.
-9. Para cuando vuelva Stripe: el webhook responde 200 aunque falle al procesar un evento (Stripe no reintenta).
-10. **Finanzas compartidas: los datos de la pareja invitada se quedan ocultos** (visto en producción el 28 oct). Prioridad alta de este PR.
-    - **Causa:** `BudgetApp.tsx` pinta el onboarding antes que el modal de `?invite=`. La invitada hace su propio onboarding (sus ingresos se guardan con su `userId`) y solo después acepta. Al aceptar, `requireAuth` cambia su `req.userId` al de quien invitó (`linkedUserId`), y lo que creó antes queda oculto, aunque no borrado.
-    - **Arreglo:**
-      - Con una invitación pendiente, mostrar primero la aceptación y saltar el onboarding de la invitada.
-      - Al aceptar, mover sus filas `Income` al pool compartido (`userId` = quien invitó, `ownerUserId` = ella), en la misma transacción que el enlace. Decidir qué se hace con sus otros datos de onboarding: ahorros, deudas, partidas y cuentas.
-      - El ingreso base del hogar (`UserSettings.monthlyIncome` del pool, que se usa cuando el mes no tiene ingresos registrados) tiene que sumar a los dos miembros, no solo a quien invitó.
-    - **Solución temporal mientras tanto:** la invitada añade su sueldo desde "Añadir ingreso" con su sesión.
-    - **Test:** invitar → registrarse → aceptar → los ingresos de los dos suman en el presupuesto.
-11. **Política de privacidad y términos** (aceptado el 29 oct). El registro y el login dicen "aceptas nuestros Términos de Servicio y Política de Privacidad", pero esas páginas no existen.
-    - Páginas `/privacy` y `/terms` en es/en, enlazadas desde el registro y el login. Son las URLs dadas de alta en Enable Banking.
-    - Contenido ajustado a lo que hace el código: responsable (`contact@luisvespa.com`), datos guardados, encargados (Neon, Vercel, Resend, Anthropic y, con la épica 5, Enable Banking), conservación y derechos RGPD.
-    - Borrador de Claude; **lo revisa Luis** antes de publicarlo, y alguien con criterio legal antes de abrir la beta o firmar con Enable Banking.
+### Pendientes sueltos — PR de mantenimiento (`feature/mantenimiento`, 29 oct)
+Hecho en este PR (317 tests unitarios + 7 de integración contra Postgres real, `npm run test:integration`):
+- ~~2. Sin valores por defecto en `JWT_SECRET` y `GOOGLE_CALLBACK_URL`~~ (`7e468b1`).
+- ~~3. Cuentas, deudas e ingresos: solo el dueño edita o borra~~; reordenar solo lo visible; la deuda de una tarjeta sigue a su cuenta; una deuda solo se enlaza a una cuenta de su mismo dueño.
+- ~~4. Idioma al registrarse~~ (email y Google, por el `state` de OAuth).
+- ~~5. "Completa tu configuración" se refresca~~ al volver a Inicio y al recuperar el foco.
+- ~~6. Textos sin i18n~~: partidas por defecto en el idioma del usuario, sin `€` a mano en componentes, textos junto a importes traducidos. Quedan algunos (ver abajo).
+- ~~7. "No tengo tarjetas / préstamos"~~ (`UserSettings.noCardsAt/noLoansAt`).
+- ~~10. Finanzas compartidas~~: la invitación se acepta antes del onboarding (también tras registrarse con Google); al aceptar, los datos de la invitada pasan al pool a su nombre; el ingreso base del hogar suma a los dos y cada uno edita el suyo; desenlazar devuelve a cada uno lo suyo sin cambiar saldos; script `repair:partner-data` para parejas ya enlazadas.
+- ~~11. `/privacy` y `/terms`~~ (borrador: **revisarlo Luis**, y alguien con criterio legal antes de abrir la beta).
+- Limpieza: 7 pantallas antiguas con datos de prueba borradas.
+
+**Para desplegar este PR (en este orden):**
+1. `db push` en producción **antes** de fusionar: columnas nuevas `UserSettings.noCardsAt`, `noLoansAt`, `Expense.createdByUserId`, `LifePlan.ownerUserId` (todas opcionales). Sin ellas, añadir gastos, importar o crear planes da 500 a todos.
+2. Confirmar que `JWT_SECRET` tiene valor en Vercel.
+3. Fusionar y desplegar.
+4. `repair:partner-data` contra producción: primero en seco, luego `--apply --fix-double-counted-baselines`.
+
+Siguen abiertos:
+1. **Rotar la contraseña de Neon.** Luis.
+8. Skill `/deploy`: reescribir el paso de schema (variables *Sensitive*, base vacía en el primer despliegue).
+9. Para cuando vuelva Stripe: el webhook responde 200 aunque falle.
+12. **Protección CSRF del login con Google** (`state` aleatorio en cookie): pendiente del OK de Luis.
+13. **Deudas de la pareja: ¿compartidas con el hogar?** Hoy al aceptar quedan privadas, y el futuro comprometido del hogar cuenta los ingresos de los dos pero solo las deudas visibles. Propuesta: deudas compartidas, cuentas privadas. Pendiente del OK de Luis.
+14. i18n restante: `€` dentro de algunas cadenas traducidas (`planDetail.simulationNote`, `home.overBudgetBy`, `editExpense.splitTotal`…), toasts en inglés en ForgotPassword/VerifyEmail/GoogleCallback/PlanningSettings, meses en inglés en la fecha estimada de PlanDetail.
+15. Gastos y planes creados **estando enlazados antes de esta versión** no tienen autor: al desenlazar se quedan en el pool. El script en seco dice cuántos hay.
 
 ---
 
