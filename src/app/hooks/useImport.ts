@@ -7,6 +7,8 @@ import { useState } from 'react';
 export type ImportKind = 'expense' | 'income' | 'payment' | 'refund' | 'needs_review';
 export type ConfirmKind = Exclude<ImportKind, 'needs_review'>;
 
+export interface PossibleDuplicate { id: string; table: 'expense' | 'income'; date: string; description: string; source: string }
+
 export interface ImportRow {
   externalId: string;
   date: string;          // yyyy-mm-dd
@@ -21,7 +23,10 @@ export interface ImportRow {
   debtId?: string | null;
   isFee?: boolean;
   duplicateReason?: 'same_movement' | 'same_payment';
-  possibleDuplicate?: { id: string; table: 'expense' | 'income'; date: string; description: string; source: string };
+  possibleDuplicate?: PossibleDuplicate;
+  /** Bank rows whose debt can be changed: stored payments of the same amount
+   *  nearby, by debt — a possible duplicate once that debt is picked. */
+  storedPayments?: (PossibleDuplicate & { debtId: string })[];
   /** A payment proposed from a learned rule: the user confirms it. */
   learnedPayment?: { preselect: boolean };
   warnings?: ('currency_mismatch' | 'ambiguous_credit' | 'card_payment_unassigned' | 'possible_card_payment' | 'learned_payment')[];

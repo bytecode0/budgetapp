@@ -10,7 +10,7 @@
 import { prisma } from "./prisma.js";
 import { pickAllocationId } from "./categorize.js";
 import { normalizeMerchant } from "./normalizeMerchant.js";
-import { classifyRows, LATE_PAYMENT_DAYS, statementIds, type ExistingMovement, type PlannedKind, type PossibleDuplicate, type PurchasesSign, type PurchasesSignGuess, type RowWarning } from "./ingest/classify.js";
+import { classifyRows, LATE_PAYMENT_DAYS, statementIds, type ExistingMovement, type PlannedKind, type PossibleDuplicate, type PurchasesSign, type StoredPayment, type PurchasesSignGuess, type RowWarning } from "./ingest/classify.js";
 import { assertRowCount, readStatement } from "./ingest/read.js";
 import { suggestLearnedPayments } from "./ingest/learnedPayments.js";
 import { storedMapping } from "./ingest/validate.js";
@@ -37,6 +37,9 @@ export interface ImportRow {
   duplicateReason?: "same_movement" | "same_payment";
   /** Same amount, ±2 days, same account, other source: the user decides. */
   possibleDuplicate?: PossibleDuplicate;
+  /** Bank rows whose debt the user may change: stored payments of the same
+   *  amount nearby, by debt (classify.ts), to warn on the debt picked. */
+  storedPayments?: StoredPayment[];
   /** A payment proposed from a learned rule: the user confirms it. */
   learnedPayment?: { preselect: boolean };
   warnings?: RowWarning[];
@@ -199,6 +202,7 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
       isFee: p.isFee,
       ...(p.duplicateReason ? { duplicateReason: p.duplicateReason } : {}),
       ...(p.possibleDuplicate ? { possibleDuplicate: p.possibleDuplicate } : {}),
+      ...(p.storedPayments ? { storedPayments: p.storedPayments } : {}),
       ...(p.learnedPayment ? { learnedPayment: p.learnedPayment } : {}),
       warnings: p.warnings,
     };

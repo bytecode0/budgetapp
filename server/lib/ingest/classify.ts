@@ -86,6 +86,10 @@ export interface PossibleDuplicate {
   source: string;
 }
 
+export interface StoredPayment extends PossibleDuplicate {
+  debtId: string;
+}
+
 export interface PlannedRow {
   rowIndex: number;
   date: string;
@@ -104,6 +108,11 @@ export interface PlannedRow {
   status: "new" | "duplicate";
   duplicateReason?: "same_movement" | "same_payment";
   possibleDuplicate?: PossibleDuplicate;
+  /** Bank rows whose debt the user may pick or change (payments, and card
+   *  payments not yet assigned): stored payments of the same amount to any
+   *  debt within LATE_PAYMENT_DAYS, so the preview can warn when the debt
+   *  picked already has one. */
+  storedPayments?: StoredPayment[];
   /** A payment proposed only from a learned rule ("learned_payment"): the
    *  user confirms it; preselected when the amount is the instalment. */
   learnedPayment?: { preselect: boolean };
@@ -423,6 +432,18 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
   // payment" or a "possible duplicate" of another row.
   const batchIds = new Set(planned.flatMap(p => [p.externalId, p.legacyExternalId].filter((id): id is string => !!id)));
   const claimed = new Set(existing.filter(e => e.externalId && batchIds.has(e.externalId)).map(e => e.id));
+  const toPossible = (e: ExistingMovement): PossibleDuplicate =>
+    ({ id: e.id, table: e.table, date: e.date, description: e.description, source: e.source });
+
+  if (mode === "account") {
+    for (const p of planned) {
+      if (p.status !== "new" || p.isFee) continue;
+      if (p.kind !== "payment" && !p.warnings.includes("card_payment_unassigned") && !p.warnings.includes("possible_card_payment")) continue;
+      const near = (byAmount.get(p.amountCents) ?? []).filter(e => !claimed.has(e.id) && e.table === "expense" && !!e.debtId
+        && e.kind !== "refund" && daysApart(e.date, p.date) <= LATE_PAYMENT_DAYS);
+      if (near.length) p.storedPayments = near.map(e => ({ ...toPossible(e), debtId: e.debtId! }));
+    }
+  }
   /**
    * One matching pass: pairs each eligible row with at most one unclaimed
    * stored movement of its amount, within `maxDays`, closest dates first.
@@ -463,8 +484,6 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
   // flagged. If the card side was stored as a REFUND (a credit the user
   // resolved the wrong way), it's no proof, but recording this payment too
   // would lower the debt twice: flagged as well.
-  const toPossible = (e: ExistingMovement): PossibleDuplicate =>
-    ({ id: e.id, table: e.table, date: e.date, description: e.description, source: e.source });
   const flag = (p: PlannedRow, e: ExistingMovement) => { p.possibleDuplicate = toPossible(e); };
   const isPayment = (p: PlannedRow) => p.kind === "payment" && !p.possibleDuplicate;
   const paysSameDebt = (p: PlannedRow, e: ExistingMovement) => e.table === "expense" && e.debtId === p.debtId;

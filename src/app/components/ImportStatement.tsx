@@ -190,6 +190,24 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   };
   const debtIdOf = (r: ImportPreview['rows'][number]) => (hasPayTarget(r) ? payTarget[r.externalId] || null : r.debtId ?? null);
 
+  // The stored movement a row may repeat. A debt the user picked other than
+  // the one the preview proposed is re-checked against the stored payments of
+  // that debt (same amount, nearby) the preview returned.
+  const possibleDuplicateOf = (r: ImportPreview['rows'][number]) => {
+    const target = hasPayTarget(r) ? payTarget[r.externalId] : '';
+    if (target && target !== r.debtId) return r.storedPayments?.find(s => s.debtId === target);
+    return r.possibleDuplicate;
+  };
+
+  const changePayTarget = (r: ImportPreview['rows'][number], debtId: string) => {
+    setPayTarget(prev => ({ ...prev, [r.externalId]: debtId }));
+    // Paying a debt that already has this payment: unchecked, as every
+    // possible duplicate starts in the preview; the user may re-check it.
+    if (debtId && debtId !== r.debtId && r.storedPayments?.some(s => s.debtId === debtId)) {
+      setSelected(prev => { const next = new Set(prev); next.delete(r.externalId); return next; });
+    }
+  };
+
   const toggle = (id: string) => setSelected(prev => {
     const next = new Set(prev);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -456,7 +474,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                             {r.kind === 'refund' && <> · {t('import.refund')}</>}
                             {isReview && <> · <span className="text-amber-600">{t('import.reviewCredit')}</span></>}
                             {r.isFee && <> · {t('import.fee')}</>}
-                            {!isDup && r.possibleDuplicate && <> · <span className="text-amber-600">{t('import.possibleDuplicate')}</span></>}
+                            {!isDup && possibleDuplicateOf(r) && <> · <span className="text-amber-600">{t('import.possibleDuplicate')}</span></>}
                             {r.warnings?.includes('currency_mismatch') && <> · <span className="text-amber-600">{t('import.otherCurrency')}</span></>}
                           </p>
                         </div>
@@ -479,7 +497,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                           <label className="text-xs text-muted-foreground shrink-0">{t('import.paysDebt')}</label>
                           <select
                             value={payTarget[r.externalId]}
-                            onChange={e => setPayTarget(prev => ({ ...prev, [r.externalId]: e.target.value }))}
+                            onChange={e => changePayTarget(r, e.target.value)}
                             className="text-xs border border-border rounded-lg px-2 py-1 bg-background outline-none focus:border-primary min-w-0 flex-1"
                           >
                             <option value="">{t('import.notAPayment')}</option>

@@ -612,3 +612,19 @@ test("confirm: a row sent twice (repeated FITID, double submit) is written — a
   assert.deepEqual(plan.expenses.map(e => e.externalId), ["fitid-1", "fitid-2"]);
   assert.deepEqual([...planContributions(plan.expenses, new Map([["line-plan", "plan-1"]]))], [["plan-1", 10000]]);
 });
+
+test("bank payments carry the stored payments nearby by debt, so changing the debt re-checks duplicates", () => {
+  const visa: ClassifyDebt = { id: "visa", name: "Visa Oro", kind: "credit_card", accountId: "acc-visa" };
+  const stored = (id: string, debtId: string, date: string, kind = "expense"): ExistingMovement => ({
+    id, table: "expense", externalId: null, accountId: null, debtId, kind, amountCents: 15000, date, description: "PAGO RECIBIDO", source: "import",
+  });
+  const existing = [stored("v1", "visa", "2026-10-08"), stored("v2", "visa", "2026-10-30"), stored("r1", "visa", "2026-10-06", "refund")];
+  // Proposed for PASS (its name), no payment to PASS stored: no possible
+  // duplicate — but VISA has one 3 days away, should the user pick VISA.
+  const p = classifyRows({ rows: [row("2026-10-05", -15000, "RECIBO TARJETA PASS")], account: bank, debts: [passDebt, visa], existing }).rows[0];
+  assert.deepEqual([p.kind, p.debtId, p.possibleDuplicate], ["payment", "pass", undefined]);
+  assert.deepEqual(p.storedPayments?.map(s => [s.id, s.debtId]), [["v1", "visa"]]); // not the far one, not a refund
+  // Plain expenses don't carry them.
+  const e = classifyRows({ rows: [row("2026-10-05", -15000, "MERCADONA")], account: bank, debts: [passDebt, visa], existing }).rows[0];
+  assert.equal(e.storedPayments, undefined);
+});
