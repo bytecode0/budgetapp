@@ -2,6 +2,7 @@
 // mapping to save on an account (Account.importProfile), and the rows (plus
 // skipped rows and source) the browser already read (decision O). Pure.
 import { makeDay } from "./dates.js";
+import { cellShape, isValueShape } from "./shapes.js";
 import type { ColumnMapping, NormalizedRow, SkippedRow, StatementSource } from "./types.js";
 
 const MAX_LABEL = 120;
@@ -29,6 +30,10 @@ export function parseColumnMapping(input: unknown): { mapping: ColumnMapping } |
   if (o.purchasesSign !== undefined && o.purchasesSign !== "negative" && o.purchasesSign !== "positive") {
     return { error: "mapping.purchasesSign is invalid" };
   }
+  // Columns are named by their title: a date or an amount as a "title" means
+  // a data row was taken for the header row.
+  const labels = [date, amount, debit, credit, ...description, ...["balance", "currency", "state", "fee"].map(k => label(o[k]))];
+  if (labels.some(l => l !== undefined && isValueShape(cellShape(l)))) return { error: "mapping columns must be column titles, not values" };
   const mapping: ColumnMapping = {
     date,
     ...(amount ? { amount } : {}),

@@ -10,6 +10,7 @@ import { ImportPreviewStep } from './import/ImportPreviewStep';
 import { ColumnMappingStep } from './import/ColumnMappingStep';
 import { useAuth } from '../context/AuthContext';
 import { apiErrorMessage } from '../lib/apiErrors';
+import { parseColumnMapping } from '../../../shared/ingest/validate';
 
 interface ImportStatementProps {
   isOpen: boolean;
@@ -132,6 +133,9 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   // owner may (a household member's mapping is used for this import only).
   const handleSaveMapping = async (mapping: ColumnMapping) => {
     if (!file) return;
+    // Never saved nor used when its "titles" are values (a data row taken
+    // for the header row); the server refuses it too.
+    if ('error' in parseColumnMapping(mapping)) { toast.error(t('import.mapping.chooseHeaderRow')); return; }
     setSavingMapping(true);
     try {
       if (accountId) {

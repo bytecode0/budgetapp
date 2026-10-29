@@ -24,6 +24,10 @@ test("mapping: invalid input names the problem", () => {
     { date: "Fecha", amount: "Importe", description: [], decimal: ";" },
     { date: "Fecha", amount: "Importe", description: [], purchasesSign: "up" },
     { date: "x".repeat(200), amount: "Importe", description: [] },
+    // A data row saved as the header row.
+    { date: "29/10/2026", amount: "-12,50", description: ["MERCADONA"] },
+    { date: "Fecha", amount: "1.234,56", description: [] },
+    { date: "Fecha", amount: "Importe", description: [], balance: "2026-10-29" },
   ]) {
     assert.ok("error" in parseColumnMapping(bad), JSON.stringify(bad));
   }
