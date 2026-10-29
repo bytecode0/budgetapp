@@ -77,7 +77,7 @@
       "helpCenter": "Help Center",
       "helpCenterSubtitle": "Get support and learn how to plan better",
       "privacy": "Privacy & Security",
-      "privacySubtitle": "Your data is encrypted and secure"
+      "privacySubtitle": "Encrypted connection (HTTPS), and passwords stored hashed, never in plain text"
     },
     "sharedFinances": {
       "sectionTitle": "Shared Finances",

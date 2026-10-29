@@ -77,7 +77,7 @@
       "helpCenter": "Centro de Ayuda",
       "helpCenterSubtitle": "Obtén soporte y aprende a planificar mejor",
       "privacy": "Privacidad y Seguridad",
-      "privacySubtitle": "Tus datos están cifrados y seguros"
+      "privacySubtitle": "Conexión cifrada (HTTPS) y contraseñas guardadas con hash, nunca en claro"
     },
     "sharedFinances": {
       "sectionTitle": "Finanzas Compartidas",
