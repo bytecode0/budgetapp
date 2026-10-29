@@ -1379,7 +1379,7 @@
             "Tu cuenta: nombre, email y contraseña. De la contraseña guardamos solo un hash (bcrypt), nunca la contraseña en sí. Si entras con Google, guardamos el nombre, el email y la dirección de la foto de perfil que Google nos facilita.",
             "Códigos de verificación de un solo uso que te enviamos por email para confirmar tu cuenta o recuperar la contraseña. Caducan a los 15 minutos.",
             "Tus datos financieros: ingresos, gastos (importe, fecha, concepto y categoría), presupuesto y categorías, cuentas y saldos, tarjetas, préstamos, cuotas y deudas con sus pagos, metas de ahorro, reglas para categorizar gastos y tus preferencias (idioma, tema, día de cobro).",
-            "Extractos bancarios que importas: cuando subes un archivo CSV o Excel, el servidor lo lee para extraer los movimientos. Guardamos los movimientos que confirmas (fecha, importe y concepto), no el archivo.",
+            "Extractos bancarios que importas: el archivo (CSV, Excel, Norma 43 u OFX) se lee en tu navegador y al servidor solo llegan los movimientos que contiene (fecha, importe, concepto y, si los trae, saldo y estado). Si tu navegador no consigue leerlo y el archivo es pequeño, se envía al servidor para leerlo allí, sin guardarlo. Guardamos los movimientos que confirmas, no el archivo. Si indicas qué columna es cada una, guardamos esa correspondencia (los títulos de las columnas) en la cuenta para el próximo extracto.",
             "Tu hogar: si invitas a otra persona a compartir las finanzas, guardamos su email y la invitación, y le enviamos un email con el enlace. Las personas de un mismo hogar ven los datos compartidos según el nivel de privacidad que tenga el hogar.",
             "Datos técnicos: los registros que genera el servidor al funcionar (por ejemplo, errores), que incluyen datos como la dirección IP de la petición."
           ]
@@ -1398,10 +1398,11 @@
           ]
         },
         {
-          "title": "Clasificación con inteligencia artificial",
+          "title": "Inteligencia artificial",
           "paragraphs": [
             "Al importar un extracto, la aplicación puede ofrecerte botones para clasificar gastos o sugerir categorías con IA. Solo si pulsas uno de esos botones, enviamos a Anthropic (el proveedor del modelo Claude) los conceptos de comercio sin categoría de ese extracto, hasta 40 a la vez, y, para clasificarlos, los nombres de tus categorías de presupuesto.",
-            "No enviamos importes, fechas, tu nombre, tu email ni números de cuenta. Ten en cuenta que el concepto es el texto que pone tu banco y a veces incluye otros datos, como el nombre de la persona a la que hiciste una transferencia. Lo que devuelve la IA son solo sugerencias, que revisas antes de guardar nada."
+            "No enviamos importes, fechas, tu nombre, tu email ni números de cuenta. Ten en cuenta que el concepto es el texto que pone tu banco y a veces incluye otros datos, como el nombre de la persona a la que hiciste una transferencia. Lo que devuelve la IA son solo sugerencias, que revisas antes de guardar nada.",
+            "Si no reconocemos las columnas de un extracto, puedes pedir que la IA sugiera cuál es cada una. Solo si pulsas «Sugerir columnas con IA», enviamos a un proveedor de IA, a través de OpenRouter, los títulos de las columnas y el formato de los valores de las primeras filas (por ejemplo «dd/mm/aaaa», «-#,##» o «texto de 12 caracteres»). Ese formato lo calcula tu navegador y el servidor comprueba que no lleve ningún valor: no enviamos importes, fechas, conceptos, nombres ni ningún otro dato personal. La sugerencia solo rellena la pantalla de columnas; la revisas y la confirmas tú."
           ]
         },
         {
@@ -1414,7 +1415,8 @@
             "Vercel: alojamiento de la web y del servidor de la aplicación, que se ejecuta en Fráncfort.",
             "Resend: envío de los emails de la aplicación (tu email y el contenido del mensaje).",
             "Google: el inicio de sesión con Google, solo si eliges usarlo. Además, la web carga sus tipografías desde Google Fonts, por lo que tu navegador envía a Google tu dirección IP al abrirla.",
-            "Anthropic: la clasificación con IA descrita arriba, solo cuando la pides."
+            "Anthropic: la clasificación con IA descrita arriba, solo cuando la pides.",
+            "OpenRouter: la sugerencia de columnas con IA descrita arriba (solo títulos de columnas y formatos), cuando la pides. OpenRouter la pasa al proveedor del modelo configurado."
           ],
           "after": "Algunos de estos proveedores son empresas de Estados Unidos y pueden tratar datos fuera del Espacio Económico Europeo. Lo hacen con las garantías previstas en sus condiciones de tratamiento de datos, como las cláusulas contractuales tipo aprobadas por la Comisión Europea."
         },

@@ -1379,7 +1379,7 @@
             "Your account: name, email and password. For the password we store only a hash (bcrypt), never the password itself. If you sign in with Google, we store the name, email and profile picture address that Google provides.",
             "One-time verification codes we email you to confirm your account or reset your password. They expire after 15 minutes.",
             "Your financial data: income, expenses (amount, date, description and category), budget and categories, accounts and balances, cards, loans, installment plans and debts with their payments, savings goals, rules for categorising expenses and your preferences (language, theme, payday).",
-            "Bank statements you import: when you upload a CSV or Excel file, the server reads it to extract the transactions. We store the transactions you confirm (date, amount and description), not the file.",
+            "Bank statements you import: the file (CSV, Excel, Norma 43 or OFX) is read in your browser and only the transactions it contains reach the server (date, amount, description and, if present, balance and status). If your browser can't read it and the file is small, it is sent to the server to be read there, without storing it. We store the transactions you confirm, not the file. If you tell us which column is which, we store that mapping (the column titles) on the account for the next statement.",
             "Your household: if you invite someone to share finances, we store their email and the invitation, and send them an email with the link. People in the same household see the shared data according to the household's privacy level.",
             "Technical data: the logs the server produces while running (for example, errors), which include data such as the request's IP address."
           ]
@@ -1398,10 +1398,11 @@
           ]
         },
         {
-          "title": "Artificial intelligence classification",
+          "title": "Artificial intelligence",
           "paragraphs": [
             "When you import a statement, the app may offer buttons to classify expenses or suggest categories with AI. Only if you press one of those buttons do we send Anthropic (the provider of the Claude model) the uncategorised merchant descriptions from that statement, up to 40 at a time, and, to classify them, the names of your budget categories.",
-            "We do not send amounts, dates, your name, your email or account numbers. Bear in mind that the description is the text your bank writes and sometimes includes other data, such as the name of the person you sent a transfer to. What the AI returns are only suggestions, which you review before anything is saved."
+            "We do not send amounts, dates, your name, your email or account numbers. Bear in mind that the description is the text your bank writes and sometimes includes other data, such as the name of the person you sent a transfer to. What the AI returns are only suggestions, which you review before anything is saved.",
+            "If we don't recognise a statement's columns, you can ask the AI to suggest which is which. Only if you press \"Suggest columns with AI\" do we send an AI provider, through OpenRouter, the column titles and the format of the values in the first rows (for example \"dd/mm/yyyy\", \"-#,##\" or \"12-character text\"). Your browser computes that format and the server checks it carries no value: we do not send amounts, dates, descriptions, names or any other personal data. The suggestion only fills in the columns screen; you review and confirm it."
           ]
         },
         {
@@ -1414,7 +1415,8 @@
             "Vercel: hosting for the website and the app's server, which runs in Frankfurt.",
             "Resend: sending the app's emails (your email address and the message content).",
             "Google: sign-in with Google, only if you choose to use it. The website also loads its fonts from Google Fonts, so your browser sends your IP address to Google when you open it.",
-            "Anthropic: the AI classification described above, only when you ask for it."
+            "Anthropic: the AI classification described above, only when you ask for it.",
+            "OpenRouter: the AI column suggestion described above (column titles and formats only), when you ask for it. OpenRouter passes it to the configured model provider."
           ],
           "after": "Some of these providers are US companies and may process data outside the European Economic Area. They do so with the safeguards set out in their data processing terms, such as the standard contractual clauses approved by the European Commission."
         },
