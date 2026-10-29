@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { toEuros } from "../lib/money.js";
 import { periodBounds } from "../lib/period.js";
+import { spentByPerson } from "../lib/personSpending.js";
 import { countedAmounts } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 
@@ -59,17 +60,8 @@ dashboardRouter.get("/household", requireAuth, async (req: AuthRequest, res: Res
     // Per person: income earned, amount consumed (shares for shared, beneficiary/
     // payer for personal), and income-share contribution %.
     const incomeBy: Record<string, number> = Object.fromEntries(memberIds.map(id => [id, 0]));
-    const spentBy: Record<string, number> = Object.fromEntries(memberIds.map(id => [id, 0]));
     for (const i of incomes) if (i.ownerUserId in incomeBy) incomeBy[i.ownerUserId] += i.amount;
-    for (const e of expenses) {
-      if (e.scope === "shared" && e.shares.length > 0) {
-        const ratio = e.amount > 0 ? spent(e) / e.amount : 1;
-        for (const s of e.shares) if (s.userId in spentBy) spentBy[s.userId] += Math.round(s.amount * ratio);
-      } else {
-        const who = e.beneficiaryUserId ?? e.payerUserId;
-        if (who && who in spentBy) spentBy[who] += spent(e);
-      }
-    }
+    const spentBy = spentByPerson(expenses, memberIds, counted);
     const byPerson = members.map(m => ({
       userId: m.userId,
       name: nameById[m.userId],

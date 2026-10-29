@@ -452,14 +452,23 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
 
     // Attribution for imported expenses (Epic H3): payer = account owner; split
     // across the household when the pool belongs to one. Only touch rows not yet
-    // attributed (payerUserId null), so re-imports don't redo work. Refunds stay
-    // personal: household balances (server/lib/balances.ts) add up what each
-    // member fronted and don't read refunds.
+    // attributed (payerUserId null), so re-imports don't redo work. Refunds get
+    // the same payer — so they're listed to them at shared_stats and count
+    // (negative) in their per-person spending — but stay personal: household
+    // balances (server/lib/balances.ts) add up what each member fronted and
+    // don't read refunds.
     if (req.householdId && exp.count > 0) {
       const account = resolvedAccountId
         ? await prisma.account.findUnique({ where: { id: resolvedAccountId }, select: { ownerUserId: true } })
         : null;
       const payerUserId = account?.ownerUserId ?? req.authUserId!; // a person, never the pool id
+      await prisma.expense.updateMany({
+        where: {
+          userId: req.userId!, source: "import", kind: "refund", payerUserId: null,
+          externalId: { in: plan.expenses.filter(e => e.kind === "refund").map(e => e.externalId) },
+        },
+        data: { payerUserId },
+      });
       const created = await prisma.expense.findMany({
         where: {
           userId: req.userId!, source: "import", kind: "expense", payerUserId: null,
