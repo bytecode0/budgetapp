@@ -585,3 +585,20 @@ test("a charge that may be a card payment is checked against the card's stored p
   const p = classifyRows({ rows: [row("2026-10-05", -10000, "PAGO TARJETA JUAN PEREZ")], account: bank, debts: [passDebt], existing: [stored] }).rows[0];
   assert.deepEqual([p.kind, p.warnings, p.possibleDuplicate?.id], ["expense", ["possible_card_payment"], "p9"]);
 });
+
+test("an unlabelled card credit 5–10 days from a stored bank payment of the card is flagged", () => {
+  // Bank file imported first: 300 € paid to the card on Oct 1. The card file
+  // shows it on Oct 7 as "TRASPASO" (no payment words): to review, and flagged.
+  const storedBank: ExistingMovement = {
+    id: "b1", table: "expense", externalId: "bankrow", accountId: "acc-bank", debtId: "pass", kind: "expense",
+    amountCents: 30000, date: "2026-10-01", description: "LIQUIDACION TARJETA", source: "import",
+  };
+  const purchases = Array.from({ length: 5 }, (_, i) => row(`2026-10-0${i + 2}`, -1000, "COMPRA EN X"));
+  const credit = (date: string) => classifyRows({
+    rows: [row(date, 30000, "TRASPASO"), ...purchases], account: passCard, debts: [passDebt], existing: [storedBank],
+  }).rows[0];
+  const late = credit("2026-10-07");
+  assert.deepEqual([late.kind, late.status, late.possibleDuplicate?.id, late.warnings], ["needs_review", "new", "b1", ["ambiguous_credit"]]);
+  const far = credit("2026-10-15");
+  assert.deepEqual([far.kind, far.possibleDuplicate], ["needs_review", undefined]);
+});

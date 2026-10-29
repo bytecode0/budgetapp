@@ -475,6 +475,12 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
     return !!cardAccountId && e.table === "expense" && e.kind === "refund" && e.accountId === cardAccountId;
   }, flag);
 
+  // A card credit to review (neither payment nor refund by its words) 5–10
+  // days from a stored payment of this card's debt may be that payment seen
+  // from the bank: flagged, so resolving it as a payment doesn't pay twice.
+  matchPass(p => p.kind === "needs_review" && !!p.debtId && !p.possibleDuplicate, LATE_PAYMENT_DAYS,
+    (p, e) => e.table === "expense" && e.debtId === p.debtId && e.kind !== "refund", flag);
+
   // A card payment whose card couldn't be told (several cards), or a charge
   // that only may be one: if a card already has a payment of that amount
   // nearby, say so before the user assigns it.
