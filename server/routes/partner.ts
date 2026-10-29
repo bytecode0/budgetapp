@@ -1,5 +1,4 @@
 import { Router, Response, Request } from "express";
-import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { sendPartnerInviteEmail } from "../lib/mailer.js";
@@ -7,20 +6,12 @@ import { resolveLocale } from "../lib/email/locales/index.js";
 import { ensureHousehold } from "../lib/household.js";
 import { mergeMemberIntoPool } from "../lib/partnerMerge.js";
 import { unlinkMemberFromPool } from "../lib/partnerUnlink.js";
+import { lockSettings, acceptBlocker } from "../lib/partnerLink.js";
 
 export const partnerRouter = Router();
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-/**
- * Locks both people's UserSettings rows until the transaction ends, always in
- * the same order (so two transactions can't deadlock). Every accept and unlink
- * touching either person then runs one after the other, so the link checks
- * re-read after this can't be raced into a chain or a cycle.
- */
-async function lockSettings(tx: Prisma.TransactionClient, userIds: string[]): Promise<void> {
-  await tx.$queryRaw`SELECT "id" FROM "UserSettings" WHERE "userId" IN (${Prisma.join(userIds)}) ORDER BY "userId" FOR UPDATE`;
-}
 const APP_URL = process.env.APP_URL ?? "http://localhost:5173";
 
 // ── GET /api/partner/status ──────────────────────────────────────────────────
@@ -249,16 +240,24 @@ partnerRouter.post("/accept", requireAuth, async (req: AuthRequest, res: Respons
     // would be hidden (server/lib/partnerMerge.ts).
     const outcome = await prisma.$transaction(async (tx) => {
       // The checks above ran outside the transaction; a concurrent accept could
-      // have linked either of us since. Re-check under the locks.
+      // have linked either of us since — including someone else accepting
+      // another invite from the same sender, which would give the pool two
+      // members. Re-check under the locks: every accept touching the sender
+      // waits on the sender's row, so these reads see any earlier one.
       await lockSettings(tx, [myId, invite.senderId]);
-      const [me, sender, linkedToMe] = await Promise.all([
+      const [me, sender, linkedToMe, linkedToSender] = await Promise.all([
         tx.userSettings.findUnique({ where: { userId: myId }, select: { linkedUserId: true } }),
         tx.userSettings.findUnique({ where: { userId: invite.senderId }, select: { linkedUserId: true } }),
         tx.userSettings.findFirst({ where: { linkedUserId: myId }, select: { id: true } }),
+        tx.userSettings.findFirst({ where: { linkedUserId: invite.senderId }, select: { id: true } }),
       ]);
-      if (me?.linkedUserId) return "You are already linked to a partner account";
-      if (linkedToMe) return "Someone is already linked to your account";
-      if (sender?.linkedUserId) return "The sender is already linked to another account";
+      const blocker = acceptBlocker({
+        meLinkedTo: me?.linkedUserId ?? null,
+        someoneLinkedToMe: !!linkedToMe,
+        senderLinkedTo: sender?.linkedUserId ?? null,
+        someoneLinkedToSender: !!linkedToSender,
+      });
+      if (blocker) return blocker;
 
       // Claim the invite first, so a double submit can't merge twice.
       const claimed = await tx.partnerInvite.updateMany({
