@@ -847,7 +847,7 @@
     "noAccounts": "Aún no tienes cuentas. Crea una en Cuentas para importar su extracto.",
     "fileHintCard": "Sube el extracto de la tarjeta (.xlsx, .csv u OFX). Las compras suben su deuda y los pagos la bajan.",
     "tryAnotherFile": "Comprueba que es el extracto de movimientos que da tu banco, o prueba con otro formato (CSV, Excel, Norma 43 u OFX).",
-    "readLocally": "El archivo se lee en tu navegador: al servidor solo llegan los movimientos.",
+    "readLocally": "El archivo se lee en tu navegador y al servidor solo llegan los movimientos. Si tu navegador no puede leerlo, se envía a nuestro servidor para leerlo allí, sin guardarlo.",
     "noRowsToImport": "Este archivo no tiene movimientos que importar.",
     "wrongColumns": "¿Las columnas no se han leído bien? Indícalas a mano",
     "mapping": {

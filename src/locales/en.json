@@ -847,7 +847,7 @@
     "noAccounts": "You don't have any accounts yet. Create one in Accounts to import its statement.",
     "fileHintCard": "Upload the card statement (.xlsx, .csv or OFX). Purchases raise its debt and payments lower it.",
     "tryAnotherFile": "Check that it's the transactions statement your bank gives you, or try another format (CSV, Excel, Norma 43 or OFX).",
-    "readLocally": "The file is read in your browser: only the transactions reach the server.",
+    "readLocally": "The file is read in your browser and only the transactions reach the server. If your browser can't read it, it is sent to our server to be read there, without storing it.",
     "noRowsToImport": "This file has no transactions to import.",
     "wrongColumns": "Columns read wrong? Pick them by hand",
     "mapping": {
