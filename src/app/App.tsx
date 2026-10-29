@@ -1,6 +1,12 @@
 import { lazy, Suspense } from 'react';
+import type { LegalPageKind } from './components/LegalPage';
 
 const BudgetApp = lazy(() => import('./BudgetApp').then((m) => ({ default: m.BudgetApp })));
+const LegalPage = lazy(() => import('./components/LegalPage').then((m) => ({ default: m.LegalPage })));
+
+// Public pages served by path (vercel.json rewrites every path to index.html;
+// there is no router). Everything else is the authenticated app.
+const LEGAL_PATHS: Record<string, LegalPageKind> = { '/privacy': 'privacy', '/terms': 'terms' };
 
 function LoadingSpinner() {
   return (
@@ -11,9 +17,10 @@ function LoadingSpinner() {
 }
 
 export default function App() {
+  const legalPage = LEGAL_PATHS[window.location.pathname.replace(/\/+$/, '')];
   return (
     <Suspense fallback={<LoadingSpinner />}>
-      <BudgetApp />
+      {legalPage ? <LegalPage page={legalPage} /> : <BudgetApp />}
     </Suspense>
   );
 }
