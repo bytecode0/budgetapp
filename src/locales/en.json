@@ -801,6 +801,7 @@
     "sharePlans": "Life plans and savings goals",
     "shareAllocations": "Monthly budget allocations",
     "shareReviews": "Budget reviews and reports",
+    "ownDataMoves": "Anything you've already entered (income, expenses, accounts, debts) moves into the shared finances and stays yours. Your accounts and debts stay private.",
     "decline": "Decline",
     "accept": "Accept",
     "linked": "Linked!",

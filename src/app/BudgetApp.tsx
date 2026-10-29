@@ -39,7 +39,7 @@ function AppInner() {
   const [resumeStep, setResumeStep] = useState<OnboardingStep | null>(null);
   const { t } = useTranslation();
   const { darkMode, updateDarkMode, dbLanguage, updateLanguage, updatePayday } = useAllocations();
-  const { household } = useHousehold();
+  const { household, fetchHousehold } = useHousehold();
   const inHousehold = (household?.members?.length ?? 0) > 1;
   const { language, setLanguage } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
@@ -62,9 +62,12 @@ function AppInner() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
 
-  // Partner invite: detect ?invite=TOKEN in URL
+  // Partner invite: detect ?invite=TOKEN in URL. Kept in state across the
+  // auth flow; `inviteChecking` holds the app until the token is validated, so
+  // the onboarding never flashes before the accept step.
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [inviteDetails, setInviteDetails] = useState<InviteDetails | null>(null);
+  const [inviteChecking, setInviteChecking] = useState(() => new URLSearchParams(window.location.search).has('invite'));
   const { acceptInvite } = usePartner();
 
   // Open Banking: detect ?bankToken=TOKEN in URL (post-consent redirect hand-off)
@@ -75,7 +78,10 @@ function AppInner() {
     const token = params.get('invite');
     if (token) {
       setInviteToken(token);
-      fetchInviteDetails(token).then(details => setInviteDetails(details));
+      fetchInviteDetails(token).then(details => {
+        setInviteDetails(details);
+        setInviteChecking(false);
+      });
       // Clean the token from the URL without reloading
       const url = new URL(window.location.href);
       url.searchParams.delete('invite');
@@ -189,6 +195,38 @@ function AppInner() {
         onAuthenticated={() => refreshUser()}
         inviteBanner={inviteDetails ? { senderName: inviteDetails.senderName, senderEmail: inviteDetails.senderEmail } : null}
       />
+    );
+  }
+
+  // A pending partner invite comes BEFORE the onboarding: whoever accepts joins
+  // the inviter's shared finances (their own data moves there on the server),
+  // so they must not set up a separate budget first. Declining falls through
+  // to the normal onboarding.
+  if (inviteToken && inviteChecking) {
+    return (
+      <div className="size-full bg-background flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (inviteToken && inviteDetails) {
+    const closeInvite = async () => {
+      setInviteToken(null);
+      setInviteDetails(null);
+      // After accepting, the data scope is the shared pool: re-derive the
+      // onboarding status (so the wizard doesn't appear), the pool's payday
+      // and the household.
+      await Promise.all([refreshUser(), refreshOnboardingStatus(), refreshCycleStartDay(), fetchHousehold()]);
+    };
+    return (
+      <div className="size-full bg-background">
+        <PartnerInviteAccept
+          token={inviteToken}
+          invite={inviteDetails}
+          onAccept={acceptInvite}
+          onDismiss={closeInvite}
+        />
+      </div>
     );
   }
 
@@ -408,18 +446,6 @@ function AppInner() {
 
       {/* Add Expense Modal */}
       <AddExpense isOpen={showAddExpense} onClose={() => setShowAddExpense(false)} />
-
-      {/* Partner Invite Accept Modal — shown after login if ?invite= was in URL */}
-      <AnimatePresence>
-        {user && inviteToken && inviteDetails && (
-          <PartnerInviteAccept
-            token={inviteToken}
-            invite={inviteDetails}
-            onAccept={acceptInvite}
-            onDismiss={() => { setInviteToken(null); setInviteDetails(null); refreshUser(); }}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }
