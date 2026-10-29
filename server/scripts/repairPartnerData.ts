@@ -27,26 +27,31 @@
 // above what her own Income rows say, whether it equals both partners' summed,
 // whether a double count is likely, and who would change.
 //
-// --set-owner-baseline-from-own-incomes recomputes EACH person's baseline
-// (owner and partner) from the Income rows that person owns: the sum of their
-// most recent budget period (the pool's payday) with any, transfers in left
-// out. Someone with no such row keeps their stored baseline (never zeroed).
-// It writes only together with --apply; without it, it reports what would change.
-// It never prints amounts, and runs after the data merge of that couple.
+// --fix-double-counted-baselines rewrites the baselines of the couples whose
+// household baseline likely counts the partner twice (likelyDoubleCount) —
+// and only those. Each person (owner and partner) gets the sum of the Income
+// rows they own in their most recent CLOSED budget period (the pool's payday)
+// with any, transfers in left out; the current period is never used, since
+// mid-period it is partial. Someone with no such row keeps their stored
+// baseline: it is never set to 0. It writes only together with --apply, under
+// the same locks and re-check as the merge; without --apply it reports who
+// would change. It never prints amounts, and runs after the data merge of
+// that couple.
 //
-//   npm run repair:partner-data                                              # dry run
-//   npm run repair:partner-data -- --apply                                   # move the data
-//   npm run repair:partner-data -- --set-owner-baseline-from-own-incomes     # dry run incl. baselines
-//   npm run repair:partner-data -- --apply --set-owner-baseline-from-own-incomes
+//   npm run repair:partner-data                                       # dry run
+//   npm run repair:partner-data -- --apply                            # move the data
+//   npm run repair:partner-data -- --fix-double-counted-baselines     # dry run incl. baselines
+//   npm run repair:partner-data -- --apply --fix-double-counted-baselines
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { ensureHousehold } from "../lib/household.js";
 import { isEmptySummary, mergeMemberIntoPool, previewPoolMerge, type MergeSummary } from "../lib/partnerMerge.js";
 import { lockSettings, coupleChange } from "../lib/partnerLink.js";
 import { planRepairCouples, baselineFromOwnIncomes, assessCoupleBaseline, type CoupleBaselineCheck } from "../lib/partnerRepair.js";
-import { clampCycleStartDay, periodKeyFor } from "../lib/period.js";
+import { clampCycleStartDay, currentPeriodKey, periodKeyFor } from "../lib/period.js";
 
 const apply = process.argv.includes("--apply");
-const setBaselines = process.argv.includes("--set-owner-baseline-from-own-incomes");
+const setBaselines = process.argv.includes("--fix-double-counted-baselines");
 
 function line(s: MergeSummary): string {
   return Object.entries(s).filter(([, n]) => n !== 0).map(([k, n]) => `${k}=${n}`).join(" ");
@@ -56,13 +61,28 @@ function flags(c: CoupleBaselineCheck): string {
   return Object.entries(c).map(([k, v]) => `${k}=${v}`).join(" ");
 }
 
+/** Re-reads the couple's link (call with lockSettings held): what changed since
+ *  the script read it, or null when it is still the same one-level link. */
+async function linkChanged(tx: Prisma.TransactionClient, memberId: string, poolId: string) {
+  const [member, linkedToMember, pool] = await Promise.all([
+    tx.userSettings.findUnique({ where: { userId: memberId }, select: { linkedUserId: true } }),
+    tx.userSettings.findFirst({ where: { linkedUserId: memberId }, select: { id: true } }),
+    tx.userSettings.findUnique({ where: { userId: poolId }, select: { linkedUserId: true } }),
+  ]);
+  return coupleChange(poolId, {
+    memberLinkedTo: member?.linkedUserId ?? null,
+    someoneLinkedToMember: !!linkedToMember,
+    poolLinkedTo: pool?.linkedUserId ?? null,
+  });
+}
+
 /** Baseline from the Income rows `personId` owns, in the pool or (not yet merged) under her own userId. */
 async function ownIncomeBaseline(personId: string, poolId: string, cycleStartDay: number): Promise<number | null> {
   const rows = await prisma.income.findMany({
     where: { ownerUserId: personId, userId: { in: [poolId, personId] } },
     select: { amount: true, date: true, category: true },
   });
-  return baselineFromOwnIncomes(rows, d => periodKeyFor(d, cycleStartDay));
+  return baselineFromOwnIncomes(rows, d => periodKeyFor(d, cycleStartDay), currentPeriodKey(cycleStartDay));
 }
 
 async function checkBaselines(memberId: string, poolId: string) {
@@ -124,16 +144,7 @@ async function checkBaselines(memberId: string, poolId: string) {
         // before merging: one that unlinked meanwhile must not be re-merged.
         const result = await prisma.$transaction(async (tx) => {
           await lockSettings(tx, [memberId, poolId]);
-          const [member, linkedToMember, pool] = await Promise.all([
-            tx.userSettings.findUnique({ where: { userId: memberId }, select: { linkedUserId: true } }),
-            tx.userSettings.findFirst({ where: { linkedUserId: memberId }, select: { id: true } }),
-            tx.userSettings.findUnique({ where: { userId: poolId }, select: { linkedUserId: true } }),
-          ]);
-          const changed = coupleChange(poolId, {
-            memberLinkedTo: member?.linkedUserId ?? null,
-            someoneLinkedToMember: !!linkedToMember,
-            poolLinkedTo: pool?.linkedUserId ?? null,
-          });
+          const changed = await linkChanged(tx, memberId, poolId);
           if (changed) return { changed };
           const householdId = await ensureHousehold(poolId, memberId, "transparent", tx);
           return { moved: await mergeMemberIntoPool(tx, { memberId, poolId, householdId }) };
@@ -155,10 +166,16 @@ async function checkBaselines(memberId: string, poolId: string) {
         ...(check.ownerWouldChange ? [{ userId: poolId, monthlyIncome: ownerFromIncomes! }] : []),
         ...(check.partnerWouldChange ? [{ userId: memberId, monthlyIncome: partnerFromIncomes! }] : []),
       ];
-      await prisma.$transaction(writes.map(w =>
-        prisma.userSettings.update({ where: { userId: w.userId }, data: { monthlyIncome: w.monthlyIncome } })));
-      baselinesSet += writes.length;
-      console.log(`${label}: baselines recomputed from own incomes: ${writes.length}`);
+      const written = writes.length === 0 ? 0 : await prisma.$transaction(async (tx) => {
+        await lockSettings(tx, [memberId, poolId]);
+        if (await linkChanged(tx, memberId, poolId)) return 0;
+        for (const w of writes) {
+          await tx.userSettings.update({ where: { userId: w.userId }, data: { monthlyIncome: w.monthlyIncome } });
+        }
+        return writes.length;
+      });
+      baselinesSet += written;
+      console.log(`${label}: double-counted baselines recomputed from own incomes: ${written}`);
     }
   }
 
@@ -167,7 +184,7 @@ async function checkBaselines(memberId: string, poolId: string) {
     : `Dry run. Couples with data to move: ${pending}, skipped: ${skipped}. Re-run with --apply to move it.`);
   console.log(`Couples whose baseline likely counts the partner twice: ${doubleCounts}.${
     setBaselines && apply ? ` Baselines recomputed: ${baselinesSet}.`
-      : " Re-run with --apply --set-owner-baseline-from-own-incomes to recompute them from each person's own incomes."}`);
+      : " Re-run with --apply --fix-double-counted-baselines to recompute them from each person's own incomes."}`);
   await prisma.$disconnect();
 })().catch(async (e) => {
   console.error(e);

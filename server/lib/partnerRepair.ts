@@ -45,21 +45,30 @@ export interface OwnedIncome {
 
 /**
  * A person's baseline from the Income rows they own: the sum of their most
- * recent budget period that has any. Transfers in (`transfer_in`) are left
+ * recent CLOSED budget period (before `currentKey`) that has any. The current
+ * period is left out: mid-period it holds only the paydays so far, and a
+ * partial sum would lower the baseline. Transfers in (`transfer_in`) are left
  * out — moving money between your own accounts, or a partner's transfer, is
  * not earnings and would bring the double count back. Null when they own no
- * such row: their stored baseline is then left alone, never zeroed.
+ * such row (or it sums to 0): their stored baseline is then left alone, never
+ * zeroed.
  */
-export function baselineFromOwnIncomes(incomes: OwnedIncome[], periodKeyOf: (d: Date) => string): number | null {
-  const earned = incomes.filter(i => i.category !== "transfer_in");
-  if (earned.length === 0) return null;
+export function baselineFromOwnIncomes(
+  incomes: OwnedIncome[],
+  periodKeyOf: (d: Date) => string,
+  currentKey: string,
+): number | null {
   const byPeriod = new Map<string, number>();
-  for (const i of earned) {
+  for (const i of incomes) {
+    if (i.category === "transfer_in") continue;
     const key = periodKeyOf(i.date);
+    if (key >= currentKey) continue; // "YYYY-MM" sorts chronologically
     byPeriod.set(key, (byPeriod.get(key) ?? 0) + i.amount);
   }
-  const latest = [...byPeriod.keys()].sort().at(-1)!; // "YYYY-MM" sorts chronologically
-  return byPeriod.get(latest)!;
+  const latest = [...byPeriod.keys()].sort().at(-1);
+  if (latest === undefined) return null;
+  const sum = byPeriod.get(latest)!;
+  return sum > 0 ? sum : null;
 }
 
 export interface CoupleBaselineCheck {
@@ -71,7 +80,8 @@ export interface CoupleBaselineCheck {
   ownerEqualsCombinedIncomes: boolean;
   /** The household baseline most likely counts the partner twice. */
   likelyDoubleCount: boolean;
-  /** Who would get a new baseline with --set-owner-baseline-from-own-incomes. */
+  /** Who would get a new baseline with --fix-double-counted-baselines: only
+   *  when a double count is likely, and never to 0 (fromIncomes is null then). */
   ownerWouldChange: boolean;
   partnerWouldChange: boolean;
 }
@@ -87,12 +97,15 @@ export function assessCoupleBaseline(c: {
   const ownerAboveOwnIncomes = c.ownerFromIncomes === null ? null : c.ownerBaseline > c.ownerFromIncomes;
   const ownerEqualsCombinedIncomes = c.partnerFromIncomes !== null && c.partnerFromIncomes > 0
     && c.ownerBaseline === (c.ownerFromIncomes ?? 0) + c.partnerFromIncomes;
+  const likelyDoubleCount = partnerHasBaseline && (ownerEqualsCombinedIncomes || ownerAboveOwnIncomes === true);
+  const wouldChange = (fromIncomes: number | null, baseline: number) =>
+    likelyDoubleCount && fromIncomes !== null && fromIncomes > 0 && fromIncomes !== baseline;
   return {
     partnerHasBaseline,
     ownerAboveOwnIncomes,
     ownerEqualsCombinedIncomes,
-    likelyDoubleCount: partnerHasBaseline && (ownerEqualsCombinedIncomes || ownerAboveOwnIncomes === true),
-    ownerWouldChange: c.ownerFromIncomes !== null && c.ownerFromIncomes !== c.ownerBaseline,
-    partnerWouldChange: c.partnerFromIncomes !== null && c.partnerFromIncomes !== c.partnerBaseline,
+    likelyDoubleCount,
+    ownerWouldChange: wouldChange(c.ownerFromIncomes, c.ownerBaseline),
+    partnerWouldChange: wouldChange(c.partnerFromIncomes, c.partnerBaseline),
   };
 }
