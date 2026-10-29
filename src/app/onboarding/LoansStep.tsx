@@ -7,6 +7,7 @@ import {
   DebtFormFields, EMPTY_DEBT_FORM, debtPayloadFromForm, kindIcon, type DebtFormState,
 } from '../components/shared/DebtFormFields';
 import { useMoney } from './useMoney';
+import { NoneAnswer } from './NoneAnswer';
 
 // Loans and installment plans (car, Klarna, payday loans, mortgage…), with
 // the same form as Debts. The server creates each debt's budget line.
@@ -96,7 +97,12 @@ export function LoansStep() {
       )}
 
       {loans.length === 0 && !adding && (
-        <p className="mt-6 text-center text-sm text-muted-foreground">{t('onboarding.loans.noLoans')}</p>
+        <NoneAnswer
+          answer="noLoans"
+          hintKey="onboarding.loans.noLoans"
+          buttonKey="onboarding.loans.noLoansButton"
+          answeredKey="onboarding.loans.noLoansAnswered"
+        />
       )}
 
       <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 mt-8 flex gap-3 text-sm text-amber-800 dark:text-amber-400">

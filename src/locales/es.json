@@ -821,7 +821,7 @@
       "signingIn": "Iniciando sesión...",
       "noAccount": "¿No tienes cuenta?",
       "signUpFree": "Regístrate gratis",
-      "terms": "Al iniciar sesión, aceptas nuestros Términos de Servicio y Política de Privacidad",
+      "terms": "Al iniciar sesión, aceptas nuestros <terms>Términos del servicio</terms> y nuestra <privacy>Política de privacidad</privacy>",
       "googleCancelled": "Inicio de sesión con Google cancelado",
       "googleFailed": "Error al iniciar sesión con Google. Inténtalo de nuevo.",
       "verifyEmailFirst": "Por favor, verifica tu email primero.",
@@ -845,7 +845,7 @@
       "freeBenefits": "Planes de vida ilimitados · Seguimiento de gastos · Perspectivas inteligentes",
       "passwordMismatch": "Las contraseñas no coinciden",
       "codeSent": "¡Código de verificación enviado! Revisa tu email.",
-      "terms": "Al crear una cuenta, aceptas nuestros Términos de Servicio y Política de Privacidad"
+      "terms": "Al crear una cuenta, aceptas nuestros <terms>Términos del servicio</terms> y nuestra <privacy>Política de privacidad</privacy>"
     },
     "forgotPassword": {
       "backToLogin": "Volver al inicio de sesión",
@@ -1140,18 +1140,22 @@
       "namePlaceholder": "ej. PASS, Visa BBVA",
       "add": "Añadir una tarjeta",
       "save": "Guardar tarjeta",
-      "noCards": "¿No tienes tarjetas de crédito? Pulsa Continuar.",
-      "createdOk": "Tarjeta añadida"
+      "noCards": "¿No tienes tarjetas de crédito?",
+      "createdOk": "Tarjeta añadida",
+      "noCardsButton": "No tengo tarjetas de crédito",
+      "noCardsAnswered": "Anotado: no tienes tarjetas de crédito. Pulsa Continuar."
     },
     "loans": {
       "title": "Préstamos y cuotas",
       "subtitle": "Coche, Klarna, préstamo rápido, compras a plazos… Todo lo que pagas en cuotas.",
       "add": "Añadir un préstamo o cuotas",
       "save": "Guardar",
-      "noLoans": "¿No pagas nada a plazos? Pulsa Continuar.",
+      "noLoans": "¿No pagas nada a plazos?",
       "createdOk": "Añadido",
       "owedLabel": "Pendiente",
-      "note": "Incluye también la hipoteca: la tratamos distinto a una tarjeta o un préstamo de consumo, y no tendrás que añadirla como gasto fijo."
+      "note": "Incluye también la hipoteca: la tratamos distinto a una tarjeta o un préstamo de consumo, y no tendrás que añadirla como gasto fijo.",
+      "noLoansButton": "No tengo préstamos ni cuotas",
+      "noLoansAnswered": "Anotado: no tienes préstamos ni cuotas. Pulsa Continuar."
     },
     "lines": {
       "income": "Ingreso",
@@ -1193,10 +1197,192 @@
         "cards": "Tus tarjetas de crédito",
         "loans": "Tus préstamos y cuotas",
         "fixed": "Tus gastos fijos"
+      },
+      "sayNo": "No tengo",
+      "answered": {
+        "cards": "Anotado: no tienes tarjetas de crédito",
+        "loans": "Anotado: no tienes préstamos ni cuotas"
       }
-    }
+    },
+    "undo": "Deshacer",
+    "answerFailed": "No se ha podido guardar. Inténtalo de nuevo."
   },
   "currency": {
     "symbol": "€"
+  },
+  "legal": {
+    "lastUpdated": "Última actualización: 29 de octubre de 2026",
+    "backToApp": "Volver a LifePlan",
+    "privacyLink": "Política de privacidad",
+    "termsLink": "Términos del servicio",
+    "privacy": {
+      "title": "Política de privacidad",
+      "intro": "Esta política explica qué datos trata LifePlan (budget.luisvespa.com), para qué los usa y con quién se comparten. LifePlan es una aplicación gratuita, en fase beta, para organizar tu presupuesto y tus deudas.",
+      "sections": [
+        {
+          "title": "Quién es el responsable",
+          "paragraphs": [
+            "El responsable del tratamiento de tus datos es Luis Vespa. Para cualquier cuestión sobre privacidad puedes escribir a contact@luisvespa.com."
+          ]
+        },
+        {
+          "title": "Qué datos tratamos",
+          "paragraphs": [
+            "Solo tratamos los datos que tú introduces en la aplicación o que se generan al usarla:"
+          ],
+          "items": [
+            "Tu cuenta: nombre, email y contraseña. De la contraseña guardamos solo un hash (bcrypt), nunca la contraseña en sí. Si entras con Google, guardamos el nombre, el email y la dirección de la foto de perfil que Google nos facilita.",
+            "Códigos de verificación de un solo uso que te enviamos por email para confirmar tu cuenta o recuperar la contraseña. Caducan a los 15 minutos.",
+            "Tus datos financieros: ingresos, gastos (importe, fecha, concepto y categoría), presupuesto y categorías, cuentas y saldos, tarjetas, préstamos, cuotas y deudas con sus pagos, metas de ahorro, reglas para categorizar gastos y tus preferencias (idioma, tema, día de cobro).",
+            "Extractos bancarios que importas: cuando subes un archivo CSV o Excel, el servidor lo lee para extraer los movimientos. Guardamos los movimientos que confirmas (fecha, importe y concepto), no el archivo.",
+            "Tu hogar: si invitas a otra persona a compartir las finanzas, guardamos su email y la invitación, y le enviamos un email con el enlace. Las personas de un mismo hogar ven los datos compartidos según el nivel de privacidad que tenga el hogar.",
+            "Datos técnicos: los registros que genera el servidor al funcionar (por ejemplo, errores), que incluyen datos como la dirección IP de la petición."
+          ]
+        },
+        {
+          "title": "Lo que LifePlan no hace",
+          "paragraphs": [
+            "LifePlan no se conecta hoy a tu banco: los datos solo entran porque tú los escribes o importas un archivo. No mueve dinero ni hace pagos. No muestra publicidad, no vende tus datos ni los cede a terceros para sus propios fines, y no usa cookies de analítica ni de publicidad. Tampoco toma decisiones automatizadas que te afecten jurídicamente."
+          ]
+        },
+        {
+          "title": "Para qué los usamos y con qué base",
+          "paragraphs": [
+            "Usamos tus datos para prestarte el servicio que pides al registrarte: guardar tu información, calcular tu presupuesto, tu futuro comprometido y tu plan de salida de deudas, y enviarte los emails necesarios (verificación, recuperación de contraseña, bienvenida e invitaciones al hogar). La base jurídica es la ejecución del contrato que aceptas al crear tu cuenta (artículo 6.1.b del RGPD).",
+            "Los registros técnicos se usan para mantener el servicio funcionando y seguro, sobre la base del interés legítimo (artículo 6.1.f del RGPD)."
+          ]
+        },
+        {
+          "title": "Clasificación con inteligencia artificial",
+          "paragraphs": [
+            "Al importar un extracto, la aplicación puede ofrecerte botones para clasificar gastos o sugerir categorías con IA. Solo si pulsas uno de esos botones, enviamos a Anthropic (el proveedor del modelo Claude) los conceptos de comercio sin categoría de ese extracto, hasta 40 a la vez, y, para clasificarlos, los nombres de tus categorías de presupuesto.",
+            "No enviamos importes, fechas, tu nombre, tu email ni números de cuenta. Ten en cuenta que el concepto es el texto que pone tu banco y a veces incluye otros datos, como el nombre de la persona a la que hiciste una transferencia. Lo que devuelve la IA son solo sugerencias, que revisas antes de guardar nada."
+          ]
+        },
+        {
+          "title": "Proveedores que tratan datos por nosotros",
+          "paragraphs": [
+            "Para que LifePlan funcione usamos estos proveedores, que tratan datos solo para prestarnos su servicio:"
+          ],
+          "items": [
+            "Neon: base de datos PostgreSQL donde se guardan tus datos, alojada en la Unión Europea (Fráncfort).",
+            "Vercel: alojamiento de la web y del servidor de la aplicación, que se ejecuta en Fráncfort.",
+            "Resend: envío de los emails de la aplicación (tu email y el contenido del mensaje).",
+            "Google: el inicio de sesión con Google, solo si eliges usarlo. Además, la web carga sus tipografías desde Google Fonts, por lo que tu navegador envía a Google tu dirección IP al abrirla.",
+            "Anthropic: la clasificación con IA descrita arriba, solo cuando la pides."
+          ],
+          "after": "Algunos de estos proveedores son empresas de Estados Unidos y pueden tratar datos fuera del Espacio Económico Europeo. Lo hacen con las garantías previstas en sus condiciones de tratamiento de datos, como las cláusulas contractuales tipo aprobadas por la Comisión Europea."
+        },
+        {
+          "title": "Cookies y almacenamiento local",
+          "paragraphs": [
+            "LifePlan usa una sola cookie, llamada «token», que mantiene tu sesión iniciada. Es técnica e imprescindible: no es accesible desde JavaScript, caduca a los 7 días y se borra al cerrar sesión. Además, tu navegador guarda en su almacenamiento local el idioma que eliges y si has ocultado el aviso «Completa tu configuración». No usamos cookies de analítica, de publicidad ni de terceros, por eso no te pedimos consentimiento para ellas."
+          ]
+        },
+        {
+          "title": "Cuánto tiempo guardamos los datos",
+          "paragraphs": [
+            "Guardamos tus datos mientras tengas la cuenta. Puedes borrar en cualquier momento, desde la propia aplicación, los movimientos, cuentas, deudas y demás elementos que hayas creado. Los códigos de verificación caducan a los 15 minutos y las invitaciones al hogar, a los 7 días.",
+            "La aplicación todavía no tiene un botón para eliminar la cuenta. Para hacerlo, escribe a contact@luisvespa.com desde el email de tu cuenta y la eliminaremos junto con todos sus datos. Las copias de seguridad del proveedor de base de datos pueden conservarlos durante un periodo limitado antes de borrarse."
+          ]
+        },
+        {
+          "title": "Seguridad",
+          "paragraphs": [
+            "Todas las comunicaciones van cifradas por HTTPS, las contraseñas se guardan con hash, la cookie de sesión no es accesible desde JavaScript y cada petición a tus datos exige una sesión iniciada. Ningún sistema es totalmente seguro: si detectamos un problema que afecte a tus datos, te avisaremos como exige la ley."
+          ]
+        },
+        {
+          "title": "Tus derechos",
+          "paragraphs": [
+            "Puedes pedir acceso a tus datos, su rectificación o supresión, oponerte a su tratamiento o pedir que se limite, y pedir una copia en un formato de uso común (portabilidad). Escribe a contact@luisvespa.com y te responderemos en el plazo de un mes. Si crees que no hemos tratado bien tus datos, puedes reclamar ante la Agencia Española de Protección de Datos (www.aepd.es)."
+          ]
+        },
+        {
+          "title": "Menores",
+          "paragraphs": [
+            "LifePlan está pensada para personas mayores de 18 años. No debes crear una cuenta si eres menor de edad."
+          ]
+        },
+        {
+          "title": "Cambios en esta política",
+          "paragraphs": [
+            "Si cambiamos esta política, actualizaremos esta página y su fecha. Si el cambio es importante, te lo comunicaremos antes de que se aplique."
+          ]
+        }
+      ]
+    },
+    "terms": {
+      "title": "Términos del servicio",
+      "intro": "Estos términos regulan el uso de LifePlan (budget.luisvespa.com), una aplicación de Luis Vespa para organizar tu presupuesto y tus deudas. Al crear una cuenta o usar la aplicación, los aceptas.",
+      "sections": [
+        {
+          "title": "Una beta gratuita",
+          "paragraphs": [
+            "LifePlan está en fase beta y es gratuita. Durante la beta las funciones pueden cambiar, aparecer o desaparecer. Si en el futuro hubiera planes de pago, lo anunciaremos con antelación y nunca te cobraremos nada sin que lo aceptes expresamente."
+          ]
+        },
+        {
+          "title": "Tu cuenta",
+          "paragraphs": [
+            "Para usar LifePlan debes tener al menos 18 años y dar datos ciertos al registrarte. Eres responsable de mantener tu contraseña en secreto y de lo que se haga con tu cuenta. Si crees que alguien ha accedido a ella, escríbenos a contact@luisvespa.com."
+          ]
+        },
+        {
+          "title": "No es asesoramiento financiero",
+          "paragraphs": [
+            "LifePlan es una herramienta para organizarte. Sus cifras (presupuesto, futuro comprometido, fecha de salida de deudas, orden de pago) son estimaciones calculadas con los datos que tú introduces, y solo son tan exactas como esos datos. No constituyen asesoramiento financiero, jurídico ni fiscal. LifePlan no es un banco, no mueve dinero ni hace pagos por ti, y las decisiones sobre tu dinero son siempre tuyas."
+          ]
+        },
+        {
+          "title": "Uso aceptable",
+          "paragraphs": [
+            "Te comprometes a usar LifePlan de forma lícita y, en particular, a no:"
+          ],
+          "items": [
+            "intentar acceder a cuentas o datos de otras personas;",
+            "atacar, sobrecargar o intentar saltarse la seguridad del servicio, ni usarlo de forma automatizada abusiva;",
+            "subir archivos con contenido malicioso o datos que no tengas derecho a usar;",
+            "invitar a tu hogar a alguien sin su consentimiento."
+          ]
+        },
+        {
+          "title": "Tus datos y tu hogar",
+          "paragraphs": [
+            "Los datos que introduces siguen siendo tuyos. Cómo los tratamos se explica en la Política de privacidad. Si compartes tus finanzas con otra persona a través del hogar, ella verá los datos compartidos según el nivel de privacidad del hogar; decide con cuidado qué compartes."
+          ]
+        },
+        {
+          "title": "Sin garantías",
+          "paragraphs": [
+            "LifePlan se ofrece «tal cual», sin garantías de ningún tipo. Al ser una beta, puede tener errores, interrupciones o, en casos excepcionales, pérdida de datos: conserva tus propios registros de lo importante. En la medida en que la ley lo permita, no respondemos de los daños derivados del uso de la aplicación o de decisiones tomadas a partir de sus cifras. Nada de esto limita los derechos que te reconoce la normativa de consumidores ni la responsabilidad por dolo o culpa grave."
+          ]
+        },
+        {
+          "title": "Fin del servicio o de tu cuenta",
+          "paragraphs": [
+            "Puedes dejar de usar LifePlan cuando quieras y pedir que eliminemos tu cuenta escribiendo a contact@luisvespa.com. Podemos suspender o cerrar una cuenta que incumpla estos términos. También podemos cerrar la beta o el servicio; en ese caso te avisaremos con antelación razonable siempre que sea posible."
+          ]
+        },
+        {
+          "title": "Cambios en estos términos",
+          "paragraphs": [
+            "Si cambiamos estos términos, actualizaremos esta página y su fecha. Si el cambio es importante, te lo comunicaremos antes de que se aplique; si no estás de acuerdo, puedes dejar de usar el servicio."
+          ]
+        },
+        {
+          "title": "Ley aplicable",
+          "paragraphs": [
+            "Estos términos se rigen por la ley española. Si eres consumidor, cualquier conflicto se resolverá ante los juzgados de tu domicilio."
+          ]
+        },
+        {
+          "title": "Contacto",
+          "paragraphs": [
+            "Para cualquier duda sobre estos términos, escribe a contact@luisvespa.com."
+          ]
+        }
+      ]
+    }
   }
 }

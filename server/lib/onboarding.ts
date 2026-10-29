@@ -2,9 +2,11 @@
 // Pure functions over already-loaded rows, so they're unit-testable without a
 // database; server/routes/onboarding.ts does the loading.
 //
-// Nothing here is a stored flag: "what's still missing" is recomputed from
-// the user's real data on every read, so deleting something brings its step
-// back into the checklist.
+// "What's still missing" is recomputed from the user's real data on every
+// read, so deleting something brings its step back into the checklist. The
+// only stored inputs are the user's explicit answers "I have no credit cards"
+// / "I have no loans" (UserSettings.noCardsAt / noLoansAt): a user without
+// cards or loans could never complete those steps otherwise.
 import { debtState, monthlyCommitment, owedNow, sumOwed, type DebtLedger } from "./debtBalance.js";
 import { buildDebtTimeline } from "./debtTimeline.js";
 import { simulatePayoff } from "./debtPayoff.js";
@@ -36,6 +38,8 @@ export interface StatusInput {
   accounts: StatusAccount[];
   debts: { kind: string; status: string }[];
   allocations: { type: string; allocatedAmount: number }[];
+  noCards: boolean; // the user answered "I have no credit cards"
+  noLoans: boolean; // the user answered "I have no loans"
 }
 
 export interface OnboardingChecklist {
@@ -50,6 +54,8 @@ export interface OnboardingStatus {
   needsOnboarding: boolean;
   checklist: OnboardingChecklist;
   missing: OnboardingStep[]; // in wizard order — the steps that would fill each gap
+  /** The user's stored answers, so the UI can offer to undo them. */
+  answers: { noCards: boolean; noLoans: boolean };
   /** The signed-in user's own seeded checking account while still untouched
    *  — what the bank step fills in. Null once named/funded, if there is none,
    *  or if it belongs to someone else (a partner never edits the primary's). */
@@ -79,9 +85,9 @@ export function deriveOnboardingStatus(input: StatusInput): OnboardingStatus {
   const checklist: OnboardingChecklist = {
     hasIncome: input.monthlyIncome > 0 || input.incomeCount > 0,
     hasBankAccount: open.some(a => a.type === "checking" && !isUntouchedDefaultAccount(a)),
-    hasCards: open.some(a => a.type === "card"),
+    hasCards: input.noCards || open.some(a => a.type === "card"),
     // Loans and installment plans; a card's debt is covered by hasCards.
-    hasDebts: input.debts.some(d => d.kind !== "credit_card"),
+    hasDebts: input.noLoans || input.debts.some(d => d.kind !== "credit_card"),
     // A mortgage held as a debt already covers housing, the main fixed cost.
     hasFixedBudget: input.allocations.some(a => a.type === "fixed" && a.allocatedAmount > 0)
       || input.debts.some(d => d.kind === "mortgage" && d.status === "active"),
@@ -94,7 +100,8 @@ export function deriveOnboardingStatus(input: StatusInput): OnboardingStatus {
   const anyBudget = input.allocations.some(a => a.allocatedAmount > 0);
   const needsOnboarding = missing.length === Object.keys(CHECKLIST_STEP).length && !anyBudget;
   const defaultAccountId = open.find(a => a.ownerUserId === input.authUserId && isUntouchedDefaultAccount(a))?.id ?? null;
-  return { needsOnboarding, checklist, missing, defaultAccountId };
+  const answers = { noCards: input.noCards, noLoans: input.noLoans };
+  return { needsOnboarding, checklist, missing, answers, defaultAccountId };
 }
 
 // ── Result step ────────────────────────────────────────────────────────────

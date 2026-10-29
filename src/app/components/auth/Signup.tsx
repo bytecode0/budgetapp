@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Mail, Lock, Eye, EyeOff, Target, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
+import { TermsNotice } from './TermsNotice';
 import { useAuth } from '../../context/AuthContext';
 
 interface SignupProps {
@@ -201,7 +202,7 @@ export function Signup({ onSignupSuccess, onSwitchToLogin }: SignupProps) {
           transition={{ duration: 0.5, delay: 0.4 }}
           className="text-center text-xs text-muted-foreground mt-6"
         >
-          {t('auth.signup.terms')}
+          <TermsNotice i18nKey="auth.signup.terms" />
         </motion.p>
       </div>
     </div>

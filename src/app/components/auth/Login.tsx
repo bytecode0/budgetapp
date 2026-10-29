@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Mail, Lock, Eye, EyeOff, Target } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
+import { TermsNotice } from './TermsNotice';
 import { useAuth } from '../../context/AuthContext';
 
 interface LoginProps {
@@ -166,7 +167,7 @@ export function Login({ onLogin, onSwitchToSignup, onForgotPassword, onNeedVerif
           transition={{ duration: 0.5, delay: 0.3 }}
           className="text-center text-xs text-muted-foreground mt-6"
         >
-          {t('auth.login.terms')}
+          <TermsNotice i18nKey="auth.login.terms" />
         </motion.p>
       </div>
     </div>

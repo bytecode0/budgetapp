@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useAccounts } from '../hooks/useAccounts';
 import { CardFields, EMPTY_CARD_FIELDS, cardFieldsError, cardSettingsPayload, type CardFieldsValue } from '../components/shared/CardFields';
 import { useMoney } from './useMoney';
+import { NoneAnswer } from './NoneAnswer';
 
 // Credit cards, exactly as in Accounts: a card is an account (type "card") and
 // the server creates its debt and budget line behind it (server/lib/cardDebt.ts).
@@ -103,7 +104,12 @@ export function CardsStep() {
       )}
 
       {cards.length === 0 && !adding && (
-        <p className="mt-6 text-center text-sm text-muted-foreground">{t('onboarding.cards.noCards')}</p>
+        <NoneAnswer
+          answer="noCards"
+          hintKey="onboarding.cards.noCards"
+          buttonKey="onboarding.cards.noCardsButton"
+          answeredKey="onboarding.cards.noCardsAnswered"
+        />
       )}
     </div>
   );

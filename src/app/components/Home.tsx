@@ -37,9 +37,11 @@ interface HomeProps {
   /** Setup steps still missing ("Completa tu configuración"). */
   setupMissing?: OnboardingStep[];
   onResumeSetup?: (step: OnboardingStep) => void;
+  /** Re-reads the setup status (after a "no cards" / "no loans" answer). */
+  onSetupChanged?: () => void;
 }
 
-export function Home({ onNavigate, setupMissing = [], onResumeSetup }: HomeProps) {
+export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChanged = () => {} }: HomeProps) {
   const { t } = useTranslation();
   const { fmt } = useMoney();
   const { language } = useLanguage();
@@ -87,7 +89,7 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup }: HomeProps
   return (
     <div className="space-y-6 pb-8">
 
-      {onResumeSetup && <SetupChecklist missing={setupMissing} onResume={onResumeSetup} />}
+      {onResumeSetup && <SetupChecklist missing={setupMissing} onResume={onResumeSetup} onChanged={onSetupChanged} />}
 
       {/* ── Hero header ── */}
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
