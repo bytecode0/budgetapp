@@ -797,6 +797,7 @@
     "paysDebt": "Paga",
     "notAPayment": "No es un pago de deuda (gasto)",
     "cardPaymentUnassigned": "pago de tarjeta: elige qué tarjeta",
+    "possibleCardPayment": "puede ser el pago de una tarjeta de crédito: si lo es, elige la tarjeta",
     "tooManyRows": "El archivo tiene demasiados movimientos (máximo 5.000). Exporta un periodo más corto.",
     "fileTooLarge": "El archivo Excel es demasiado grande (máximo 5 MB). Exporta un periodo más corto o en CSV.",
     "emptyFile": "El archivo está vacío.",

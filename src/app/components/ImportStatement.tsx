@@ -85,10 +85,10 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     setResolution({});
     // A payment proposed only by a learned rule starts unchecked unless its
     // amount is the debt's instalment (server/lib/ingest/learnedPayments.ts).
-    // A card payment whose card couldn't be told starts as an expense until
-    // the user picks the card.
+    // A card payment whose card couldn't be told, or a charge that only may be
+    // one, starts as an expense until the user picks the card.
     setPayTarget(Object.fromEntries(p.rows
-      .filter(r => p.mode !== 'card' && (r.kind === 'payment' || r.warnings?.includes('card_payment_unassigned')))
+      .filter(r => p.mode !== 'card' && (r.kind === 'payment' || r.warnings?.includes('card_payment_unassigned') || r.warnings?.includes('possible_card_payment')))
       .map(r => [r.externalId, r.kind !== 'payment' || (r.learnedPayment && !r.learnedPayment.preselect) ? '' : r.debtId ?? ''])));
     setSelected(p.purchasesSign === 'unknown' ? new Set() : new Set(p.rows
       .filter(r => r.status === 'new' && r.kind !== 'needs_review' && !r.possibleDuplicate && !r.warnings?.includes('currency_mismatch'))
@@ -452,6 +452,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                             {kind === 'payment' && <> · {t('import.payment')}</>}
                             {!isDup && r.learnedPayment && <> · <span className="text-amber-600">{t('import.learnedPayment')}</span></>}
                             {!isDup && r.warnings?.includes('card_payment_unassigned') && <> · <span className="text-amber-600">{t('import.cardPaymentUnassigned')}</span></>}
+                            {!isDup && r.warnings?.includes('possible_card_payment') && <> · <span className="text-amber-600">{t('import.possibleCardPayment')}</span></>}
                             {r.kind === 'refund' && <> · {t('import.refund')}</>}
                             {isReview && <> · <span className="text-amber-600">{t('import.reviewCredit')}</span></>}
                             {r.isFee && <> · {t('import.fee')}</>}

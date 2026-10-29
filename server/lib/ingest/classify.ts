@@ -43,7 +43,11 @@ export type ImportMode = "account" | "card";
 /** "needs_review": a card credit that is neither recognisably a payment nor a
  *  refund. Never written as such: the user resolves it to one or the other. */
 export type PlannedKind = "expense" | "income" | "payment" | "refund" | "needs_review";
-export type RowWarning = "currency_mismatch" | "ambiguous_credit" | "card_payment_unassigned" | "learned_payment";
+/** possible_card_payment: a bank charge worded like a card payment ("PAGO
+ *  TARJETA …") that couldn't be recognised as one — kept as an expense, but
+ *  flagged so the user can make it a card payment instead of counting the
+ *  card's purchases twice. */
+export type RowWarning = "currency_mismatch" | "ambiguous_credit" | "card_payment_unassigned" | "possible_card_payment" | "learned_payment";
 
 export interface ClassifyAccount {
   id: string | null;
@@ -154,18 +158,30 @@ const BANK_CARD_PAYMENT = [
   "recibo tarjeta", "cargo tarjeta credito", "credit card payment", "credit card repayment", "card repayment",
 ];
 // "PAGO TARJETA" also labels debit-card purchases ("PAGO TARJETA MERCADONA"):
-// a card payment only when nothing but card words, numbers or the name of
-// one of the user's cards follows it.
-const PAGO_TARJETA = /(?:^| )pago (?:de (?:la )?)?tarjeta((?: [a-z0-9]+)*) $/;
-const CARD_WORDS = new Set(["credito", "credit", "visa", "mastercard", "amex", "classic", "oro", "gold", "platinum", "n", "num", "no"]);
+// a card payment only when nothing but card words, connectors, numbers
+// (masked ones too: "4940XXXX1234") or the name of one of the user's cards
+// follows it.
+const PAGO_TARJETA = /(?:^| )pago (?:(?:de|del) (?:la )?)?tarjeta((?: [a-z0-9]+)*) $/;
+const CARD_WORDS = new Set([
+  "credito", "credit", "visa", "mastercard", "amex", "classic", "oro", "gold", "platinum", "n", "num", "no",
+  "de", "la", "del", "el",
+]);
+const isCardNumber = (tok: string) => /^\d+$/.test(tok) || /^\d+x+\d+$/.test(tok) || /^x+\d*$/.test(tok);
 
 function isPagoTarjetaPayment(text: string, cardNames: string[]): boolean {
   const m = PAGO_TARJETA.exec(text);
   if (!m) return false;
   let rest = ` ${m[1].trim()} `;
   for (const name of cardNames) if (name.length >= 3) rest = rest.replace(` ${name} `, " ");
-  return rest.trim().split(" ").filter(Boolean).every(tok => CARD_WORDS.has(tok) || /^\d+$/.test(tok) || /^x+\d*$/.test(tok));
+  return rest.trim().split(" ").filter(Boolean).every(tok => CARD_WORDS.has(tok) || isCardNumber(tok));
 }
+
+// Worded like a card payment (a payment verb and "tarjeta") without being
+// recognised as one: flagged, never decided. "Pago con tarjeta" and "compra"
+// are purchases with a debit card.
+const CARD_PAYMENT_VERBS = ["pago", "liquidacion", "liq", "recibo", "cargo", "amortizacion"];
+const looksLikeCardPayment = (text: string) =>
+  text.includes(" tarjeta ") && hasPhrase(text, CARD_PAYMENT_VERBS) && !hasPhrase(text, ["con tarjeta", "compra"]);
 // Card side: the line that records a payment received.
 const CARD_PAYMENT_RECEIVED = [
   "pago recibido", "su pago", "pago gracias", "abono pago", "abono de pago", "abono por pago",
@@ -313,6 +329,8 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
   const byAmount = indexByAmount(existing);
   const keys = keyRows(rows, account.id);
   const planned: PlannedRow[] = [];
+  // A card this file may pay (a card file never pays itself).
+  const hasCards = debts.some(d => d.kind === "credit_card" && d.accountId && d.accountId !== account.id);
 
   for (const [i, row] of rows.entries()) {
     const { key, merchant } = keys[i];
@@ -340,6 +358,7 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
         } else {
           kind = "expense";
           if (detected) warnings.push("card_payment_unassigned");
+          else if (hasCards && looksLikeCardPayment(textOf(row))) warnings.push("possible_card_payment");
         }
       }
     } else if (row.amountCents < 0) {
@@ -456,11 +475,12 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
     return !!cardAccountId && e.table === "expense" && e.kind === "refund" && e.accountId === cardAccountId;
   }, flag);
 
-  // A card payment whose card couldn't be told (several cards): if one of
-  // them already has a payment of that amount nearby, say so before the user
-  // assigns it.
+  // A card payment whose card couldn't be told (several cards), or a charge
+  // that only may be one: if a card already has a payment of that amount
+  // nearby, say so before the user assigns it.
   const cardDebtIds = new Set(debts.filter(d => d.kind === "credit_card").map(d => d.id));
-  matchPass(p => p.warnings.includes("card_payment_unassigned") && !p.possibleDuplicate, LATE_PAYMENT_DAYS,
+  const mayPayCard = (p: PlannedRow) => p.warnings.includes("card_payment_unassigned") || p.warnings.includes("possible_card_payment");
+  matchPass(p => mayPayCard(p) && !p.possibleDuplicate, LATE_PAYMENT_DAYS,
     (_p, e) => e.table === "expense" && !!e.debtId && cardDebtIds.has(e.debtId) && e.kind !== "refund", flag);
 
   // Possible duplicates across sources: flagged, the user decides.

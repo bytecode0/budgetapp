@@ -24,7 +24,7 @@ export interface ImportRow {
   possibleDuplicate?: { id: string; table: 'expense' | 'income'; date: string; description: string; source: string };
   /** A payment proposed from a learned rule: the user confirms it. */
   learnedPayment?: { preselect: boolean };
-  warnings?: ('currency_mismatch' | 'ambiguous_credit' | 'card_payment_unassigned' | 'learned_payment')[];
+  warnings?: ('currency_mismatch' | 'ambiguous_credit' | 'card_payment_unassigned' | 'possible_card_payment' | 'learned_payment')[];
 }
 
 export interface ImportPreview {

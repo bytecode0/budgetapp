@@ -554,3 +554,34 @@ test("card payment matching: two stored payments, two rows in either order → e
     assert.deepEqual(out.map(p => [p.date, p.status]).sort(), [["2026-10-01", "duplicate"], ["2026-10-09", "duplicate"]]);
   }
 });
+
+test("'pago tarjeta' with connectors and masked card numbers is a card payment; unrecognised ones are flagged", () => {
+  const classify = (description: string, debts: ClassifyDebt[] = [passDebt]) => {
+    const p = classifyRows({ rows: [row("2026-10-05", -10000, description)], account: bank, debts, existing: [] }).rows[0];
+    return [p.kind, p.warnings];
+  };
+  assert.deepEqual(classify("PAGO TARJETA DE CREDITO"), ["payment", []]);
+  assert.deepEqual(classify("PAGO DE TARJETA DE CREDITO 4940XXXX1234"), ["payment", []]);
+  assert.deepEqual(classify("PAGO DEL TARJETA XXXX1234"), ["payment", []]);
+  assert.deepEqual(classify("PAGO TARJETA DE LA VISA 4940XXXXXXXX1234"), ["payment", []]);
+  assert.deepEqual(classify("PAGO TARJETA EL 4940****1234"), ["payment", []]);
+  // A merchant after it: a debit-card purchase — kept as an expense, but
+  // flagged, so a real card payment worded oddly is never silently counted twice.
+  assert.deepEqual(classify("PAGO TARJETA MERCADONA"), ["expense", ["possible_card_payment"]]);
+  assert.deepEqual(classify("LIQUIDACION MENSUAL TARJETA CREDITO"), ["expense", ["possible_card_payment"]]);
+  assert.deepEqual(classify("RECIBO TARJETA JUAN PEREZ"), ["payment", []]); // a listed phrase
+  // Purchases with a debit card aren't flagged.
+  assert.deepEqual(classify("PAGO CON TARJETA MERCADONA"), ["expense", []]);
+  assert.deepEqual(classify("COMPRA TARJETA 4940XXXX1234 MERCADONA"), ["expense", []]);
+  // No card to pay: nothing to flag.
+  assert.deepEqual(classify("PAGO TARJETA MERCADONA", []), ["expense", []]);
+});
+
+test("a charge that may be a card payment is checked against the card's stored payments", () => {
+  const stored: ExistingMovement = {
+    id: "p9", table: "expense", externalId: null, accountId: null, debtId: "pass", kind: "expense",
+    amountCents: 10000, date: "2026-10-09", description: "PAGO RECIBIDO", source: "import",
+  };
+  const p = classifyRows({ rows: [row("2026-10-05", -10000, "PAGO TARJETA JUAN PEREZ")], account: bank, debts: [passDebt], existing: [stored] }).rows[0];
+  assert.deepEqual([p.kind, p.warnings, p.possibleDuplicate?.id], ["expense", ["possible_card_payment"], "p9"]);
+});
