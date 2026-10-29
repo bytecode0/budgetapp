@@ -432,14 +432,20 @@ En modo restringido, con tus cuentas reales: conectar banco → revisar y confir
 
 **K.** ~~Proveedor de email~~ → decidido 23 oct: **Resend** en la beta, con módulo independiente del proveedor; Cloudflare cuando se acerque al límite de 100/día.
 
-**L.** Devoluciones de la tarjeta (4.1): cómo se modelan para que bajen a la vez la deuda y el gasto de su categoría. Hoy los importes de `Expense` son siempre positivos y el saldo de la deuda solo lee gastos, pagos y ajustes. Opciones: un gasto con importe negativo marcado como devolución, o un campo de tipo en `Expense`. Puede necesitar un cambio de schema: se propone antes de aplicarlo.
+**L.** ~~Devoluciones de la tarjeta~~ → decidido 29 oct: **gasto marcado como devolución** (campo de tipo en `Expense`, schema aditivo aprobado). Contexto (4.1): cómo se modelan para que bajen a la vez la deuda y el gasto de su categoría. Hoy los importes de `Expense` son siempre positivos y el saldo de la deuda solo lee gastos, pagos y ajustes. Opciones: un gasto con importe negativo marcado como devolución, o un campo de tipo en `Expense`. Puede necesitar un cambio de schema: se propone antes de aplicarlo.
 
-**M.** Proveedor de Open Banking — **propuesta: Enable Banking** (GoCardless cerrado a clientes nuevos desde julio de 2025). Construir en modo restringido con tus cuentas; usuarios reales tras el contrato. Pendiente de tu OK y de la respuesta de Enable Banking (mínimo mensual, autónomo, tarjetas en España).
+**M.** ~~Proveedor de Open Banking~~ → decidido 29 oct: **Enable Banking** (GoCardless cerrado a clientes nuevos desde julio de 2025). Construir en modo restringido con tus cuentas; usuarios reales tras el contrato. Pendiente de tu OK y de la respuesta de Enable Banking (mínimo mensual, autónomo, tarjetas en España).
 
 **N.** Importar PDF: fuera de la épica 4. La mayoría de bancos exportan CSV/XLSX/Norma 43/OFX; el PDF es frágil y caro de mantener. Se revisa si algún banco o tarjeta importante solo da PDF.
 
-**O.** Ficheros de más de ~3 MB (4.5): leer en el navegador o subir a Vercel Blob. Se decide si aparece en la práctica.
+**O.** ~~Ficheros de más de ~3 MB (4.5)~~ → decidido 29 oct: **se leen en el navegador** y solo se envían las filas; sin Vercel Blob.
 
-**P.** Propuesta: quitar el cliente de GoCardless al empezar la épica 5.
+**P.** ~~Quitar GoCardless~~ → decidido 29 oct: **se quita** al empezar la épica 5.
 
 **Q.** ~~Stripe~~ → decidido 28 oct: **futuro lejano; la app es gratuita**.
+
+**R.** Autorizaciones del 29 oct para trabajar en autónomo:
+- **Schema:** cambios aditivos (columnas o tablas nuevas, sin borrar ni renombrar) aplicados en local con `db push` sin preguntar. Lo que borre o renombre se sigue preguntando.
+- **Finanzas compartidas (pendiente 10):** al aceptar, todo lo que la invitada creó en su onboarding pasa al pool compartido a su nombre; cuentas y deudas como privadas.
+- **Épica 5:** se puede tocar el código de conexión con bancos.
+- **Ritmo:** un PR por bloque (mantenimiento, épica 4, épica 5). Claude sube la rama y da el comando del PR; Luis fusiona, despliega y hace el `db push` de producción.
