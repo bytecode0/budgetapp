@@ -322,7 +322,22 @@ Núcleo y lectores en `server/lib/ingest/`, con tests; las rutas de importación
 - **Mapeo manual**: `Account.importProfile` (Json) + `GET/PATCH /api/accounts/:id/import-profile` (solo el dueño).
 - **Schema (aditivo, falta `db push`)**: `Expense.kind String @default("expense")`, `Account.importProfile Json?`.
 
-Etapa 2: interfaz del asistente (4.6) con mapeo manual y conmutador de signo, leer el fichero en el navegador y enviar `rows`, UX de pagos de tarjeta (elegir tarjeta cuando hay varias, aprender la regla), mostrar devoluciones en Actividad, mapeo de columnas con IA, perfil de la PASS.
+### Etapa 2 — HECHA (rama `feature/importacion`, 29 oct; pendiente de probar en el navegador)
+- **Lectura en el navegador (decisión O):** los módulos puros pasan a `shared/ingest/` (lectores, columnas, perfiles, números, fechas, texto, validación); el asistente lee el fichero en el navegador con el mapeo de la cuenta y envía `rows` + `skipped` + `source` a `/api/expenses/import/preview` (validados como las filas). El servidor solo lee el fichero como respaldo, si el lector del navegador falla y el fichero pesa ≤ 3 MB. El lector (y `xlsx`) se carga bajo demanda.
+- **Asistente (4.6)** en `ImportStatement.tsx` + `components/import/`: cuenta → fichero → (columnas, solo si no se reconoce o se pide) → revisión (categorías, duplicados, pagos de tarjeta, abonos por revisar, signo, avisos, filas omitidas con su motivo) → resumen ("23 gastos, 2 ingresos, 1 pago a PASS", del `summary` que devuelve el confirm con lo realmente insertado). El signo elegido para una tarjeta se guarda en el perfil de la cuenta.
+- **Mapeo manual**: hoja, fila de títulos, fecha y su formato, importe con signo o cargos/abonos, conceptos en orden, signo de la tarjeta; vista previa en vivo de las primeras filas con el mismo código que lee el fichero; se guarda en la cuenta. **Cambio de permiso:** `GET /api/accounts/:id/import-profile` lo puede leer quien puede importar en la cuenta (dueño o miembro del hogar si está compartida), porque el navegador lo necesita para leer; cambiarlo sigue siendo solo del dueño.
+- **Módulo de IA independiente del proveedor** (`server/lib/ai/index.ts`, como el de email): `complete(feature, { system, prompt, json, maxTokens, timeoutMs })`, transporte por `AI_PROVIDER` leído en cada llamada, 10 s, sin modelo por defecto ni clave de respaldo. La clasificación de gastos sigue en su camino de Anthropic (`client.ts`); se puede migrar después.
+- **Mapeo de columnas con IA**: `POST /api/expenses/import/suggest-mapping` (requireAuth, 10/hora por usuario en memoria de cada instancia de Vercel) recibe solo títulos y FORMATOS de celda (`shared/ingest/shapes.ts`), revalidados en el servidor; la sugerencia rellena la pantalla de columnas y el usuario confirma. Sin configurar, la pantalla funciona a mano. Privacidad actualizada.
+- **Variables de entorno nuevas** (en Vercel; todas opcionales — sin ellas no hay sugerencia con IA):
+
+  | Variable | Uso |
+  |---|---|
+  | `AI_PROVIDER` | `openrouter`, `anthropic` o `none`. Sin ella o desconocida, la IA de mapeo no está disponible |
+  | `OPENROUTER_API_KEY` | Clave de OpenRouter, solo con `AI_PROVIDER=openrouter` (con `anthropic` se usa `ANTHROPIC_API_KEY`) |
+  | `AI_MODEL_IMPORT_MAPPING` | Id del modelo para el mapeo de columnas (p. ej. uno de OpenRouter); sin él, no disponible |
+
+- **Schema:** sin cambios en esta etapa (sigue pendiente el `db push` de la etapa 1).
+- **Pendiente:** probar el asistente en el navegador; mostrar devoluciones en Actividad; perfil de la PASS (falta su fichero); migrar la clasificación al módulo de IA.
 
 ### 4.1 Núcleo de ingesta común (`server/lib/ingest/`)
 Una sola función decide qué es cada movimiento, venga de un fichero (épica 4) o de un banco (épica 5):
