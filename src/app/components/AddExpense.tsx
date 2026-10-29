@@ -8,6 +8,7 @@ import { useAccounts } from '../hooks/useAccounts';
 import { useExpenses } from '../hooks/useExpenses';
 import { useLanguage } from '../context/LanguageContext';
 import { useMoney } from '../onboarding/useMoney';
+import { useAuth } from '../context/AuthContext';
 
 interface AddExpenseProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
   const { allocations } = useAllocations();
   const { accounts } = useAccounts();
   const { createExpense, suggestAllocation } = useExpenses();
+  const { user } = useAuth();
 
   const activeAccounts = accounts.filter(a => !a.isArchived);
   // Cards listed apart: picking one means "paid with this card", which raises
@@ -50,11 +52,15 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
   const selectedAllocation = allocations.find(a => a.id === selectedAllocationId) ?? null;
   const selectedAccount = accounts.find(a => a.id === selectedAccountId) ?? null;
 
-  // Default to the first bank account once accounts load — never silently to a
-  // card, which would turn the expense into card debt.
+  // Default once accounts load: the user's own bank account first (in a
+  // couple's pool the partner's may sort first, and the expense would count
+  // as paid with the partner's money), never silently a card, which would
+  // turn the expense into card debt. Same rule as the server
+  // (server/lib/defaultAccount.ts).
   useEffect(() => {
     if (!selectedAccountId && activeAccounts.length > 0) {
-      setSelectedAccountId((bankAccounts[0] ?? activeAccounts[0]).id);
+      const own = bankAccounts.find(a => a.ownerUserId === user?.id);
+      setSelectedAccountId((own ?? bankAccounts[0] ?? activeAccounts.find(a => a.ownerUserId === user?.id) ?? activeAccounts[0]).id);
     }
   }, [activeAccounts, selectedAccountId]);
 

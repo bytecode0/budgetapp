@@ -8,7 +8,7 @@ const EX = "ex";
 
 type Expense = UnlinkInput["expenses"][number];
 const expense = (over: Partial<Expense> & { id: string }): Expense => ({
-  accountId: null, debtId: null, allocationId: null, payerUserId: HER, scope: "personal", hasShares: false, ...over,
+  accountId: null, debtId: null, allocationId: null, payerUserId: HER, createdByUserId: null, scope: "personal", hasShares: false, ...over,
 });
 
 // A linked couple: each has a checking account and a card (with its card debt),
@@ -81,6 +81,28 @@ test("expenses follow what they're attached to, so no debt balance changes on ei
   // Cross-scope account links are cleared: the ex's account on a payment that
   // moves, her account on a payment that stays.
   assert.deepEqual(plan.clear.expenseAccount.sort(), ["pay-ex-card", "pay-her-loan"]);
+});
+
+test("what she entered while linked comes back, unless it would change a debt balance", () => {
+  const plan = planUnlink({
+    ...base,
+    expenses: [
+      // On the ex's checking (the old default account): hers, account cleared.
+      expense({ id: "groceries-on-ex-main", accountId: "ex-checking", payerUserId: EX, createdByUserId: HER }),
+      // A purchase on the ex's card feeds the ex's card debt: stays.
+      expense({ id: "buy-on-ex-card", accountId: "ex-card", payerUserId: EX, createdByUserId: HER }),
+      // A payment of the ex's debt: stays with the debt.
+      expense({ id: "pays-ex-card", debtId: "ex-card-debt", accountId: "ex-checking", payerUserId: EX, createdByUserId: HER }),
+      // No account, shared and split, but she entered it: hers.
+      expense({ id: "shared-dinner", payerUserId: EX, createdByUserId: HER, scope: "shared", hasShares: true }),
+      // The ex entered one on her card: it follows her card.
+      expense({ id: "ex-on-her-card", accountId: "her-card", payerUserId: HER, createdByUserId: EX }),
+      // The ex entered one with no account he paid: stays.
+      expense({ id: "ex-cash", payerUserId: EX, createdByUserId: EX }),
+    ],
+  });
+  assert.deepEqual(plan.move.expenseIds.sort(), ["ex-on-her-card", "groceries-on-ex-main", "shared-dinner"]);
+  assert.deepEqual(plan.clear.expenseAccount, ["groceries-on-ex-main"]);
 });
 
 test("her moved expenses keep their category via a copied line; plan and other debt lines don't copy", () => {

@@ -16,7 +16,9 @@
 //   Account, Debt,
 //   BankConnection    → moved; visibility "private", owned by her, household set
 //   DebtAdjustment    → moved (follows its debt)
-//   Expense           → moved; a legacy row without payer gets her as payer
+//   Expense           → moved; a legacy row without payer gets her as payer,
+//                       one without createdByUserId gets her as its author
+//                       (only she could enter rows in her own scope)
 //   LifePlan,
 //   PlanDeposit       → moved (ids unchanged, so plan links hold)
 //   Allocation        → her untouched defaults merge into the pool's default
@@ -332,6 +334,7 @@ export async function mergeMemberIntoPool(
   // Legacy rows without a payer were paid by her; once in the pool the userId
   // no longer says so.
   await db.expense.updateMany({ where: { ...mine, payerUserId: null }, data: { payerUserId: memberId } });
+  await db.expense.updateMany({ where: { ...mine, createdByUserId: null }, data: { createdByUserId: memberId } });
   await db.expense.updateMany({ where: mine, data: toPool });
   await db.income.updateMany({ where: mine, data: toPool });
   await db.lifePlan.updateMany({ where: mine, data: toPool });

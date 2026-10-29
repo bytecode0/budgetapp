@@ -25,17 +25,25 @@
 //                       sync writes to connection.userId.
 //   DebtAdjustment    → those of the debts that move (they follow the debt).
 //   Income            → those she earned (ownerUserId).
-//   Expense           → decided by what it is attached to, so no debt balance
-//                       changes on either side (debtBalance.ts reads payments
-//                       by debtId and card purchases by accountId, both within
-//                       one userId):
-//                         - a payment (debtId set): moves iff its debt moves;
-//                         - else on an account: moves iff the account moves
-//                           (her bank data — shared ones too, with their shares);
-//                         - else (no account): moves iff she paid it, unless it
-//                           is a shared expense with shares — that one is
-//                           household history both have a claim on, so it
-//                           stays with the pool.
+//   Expense           → hers if she entered it (createdByUserId) or it is on
+//                       her account — but never in a way that changes a debt
+//                       balance on either side (debtBalance.ts reads payments
+//                       by debtId and purchases by the debt's accountId, both
+//                       within one userId):
+//                         - a payment (debtId set): moves iff its debt moves,
+//                           whoever entered it;
+//                         - else on an account that backs a debt (a purchase
+//                           on a card): moves iff the account moves, whoever
+//                           entered it;
+//                         - else on another account: moves iff the account
+//                           moves (her bank data — shared ones too, with their
+//                           shares) or she entered it (then the ex's account
+//                           is cleared from it; account balances are stored,
+//                           not derived from expenses, so none changes);
+//                         - else (no account): moves iff she entered it, or
+//                           she paid it and it is not a shared expense with
+//                           shares — one the ex entered is household history
+//                           both have a claim on, so it stays with the pool.
 //   Allocation        → there is no owner on a budget line, so lines stay with
 //                       the pool, except the debt lines of her debts (they move,
 //                       with their MonthlyBudgets and the rules pointing at
@@ -68,7 +76,7 @@ export interface UnlinkInput {
   incomes: { id: string; ownerUserId: string; accountId: string | null }[];
   expenses: {
     id: string; accountId: string | null; debtId: string | null; allocationId: string | null;
-    payerUserId: string | null; scope: string; hasShares: boolean;
+    payerUserId: string | null; createdByUserId: string | null; scope: string; hasShares: boolean;
   }[];
   allocations: { id: string; type: string; debtId: string | null }[];
   rules: { id: string; allocationId: string }[];
@@ -134,10 +142,13 @@ export function planUnlink(input: UnlinkInput): UnlinkPlan {
   const incomes = new Set(input.incomes.filter(hers).map(i => i.id));
   const allocations = new Set(input.allocations.filter(a => a.debtId !== null && debts.has(a.debtId)).map(a => a.id));
 
+  const backsDebt = new Set(input.debts.map(d => d.accountId).filter((id): id is string => id !== null));
+  const enteredByHer = (e: UnlinkInput["expenses"][number]) => e.createdByUserId === input.memberId;
   const expenseMoves = (e: UnlinkInput["expenses"][number]) =>
     e.debtId !== null ? debts.has(e.debtId)
-      : e.accountId !== null ? accounts.has(e.accountId)
-      : e.payerUserId === input.memberId && !(e.scope === "shared" && e.hasShares);
+      : e.accountId !== null && backsDebt.has(e.accountId) ? accounts.has(e.accountId)
+      : e.accountId !== null ? accounts.has(e.accountId) || enteredByHer(e)
+      : enteredByHer(e) || (e.payerUserId === input.memberId && !(e.scope === "shared" && e.hasShares));
   const expenses = new Set(input.expenses.filter(expenseMoves).map(e => e.id));
 
   // Her moved expenses in a pool line that stays: copy the line if it is a
@@ -188,7 +199,10 @@ export async function loadUnlinkInput(db: Db, memberId: string, poolId: string):
     db.income.findMany({ where: pool, select: { id: true, ownerUserId: true, accountId: true } }),
     db.expense.findMany({
       where: pool,
-      select: { id: true, accountId: true, debtId: true, allocationId: true, payerUserId: true, scope: true, _count: { select: { shares: true } } },
+      select: {
+        id: true, accountId: true, debtId: true, allocationId: true, payerUserId: true, createdByUserId: true, scope: true,
+        _count: { select: { shares: true } },
+      },
     }),
     db.allocation.findMany({ where: pool, select: { id: true, type: true, debtId: true } }),
     db.categorizationRule.findMany({ where: pool, select: { id: true, allocationId: true } }),

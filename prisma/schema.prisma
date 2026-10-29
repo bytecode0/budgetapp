@@ -156,6 +156,10 @@ model Expense {
   beneficiaryUserId String? // when scope=personal and beneficiary ≠ payer
   scopeConfidence   Float?  // 0..1 when scope was set by AI
   scopeSource       String  @default("manual") // manual | ai | rule
+  // Who entered it (req.authUserId), manual or import; null for legacy rows
+  // and bank sync. Decides which partner gets it back on unlink
+  // (server/lib/partnerUnlink.ts) — the payer only says whose money it was.
+  createdByUserId   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

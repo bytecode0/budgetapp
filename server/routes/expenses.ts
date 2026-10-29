@@ -13,6 +13,7 @@ import { expenseListingFilter } from "../lib/visibility.js";
 import { periodBounds } from "../lib/period.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { countedAmounts, syncDebtStatus } from "../lib/debtBalance.js";
+import { pickDefaultAccount } from "../lib/defaultAccount.js";
 
 export const expensesRouter = Router();
 
@@ -31,10 +32,11 @@ async function debtForAllocation(userId: string, allocationId: string | null) {
   return alloc?.debt ?? null;
 }
 
-// Validate a requested accountId belongs to the user; if none given, fall back
-// to the user's default account (lowest sortOrder, non-archived). Returns null
-// only when the user has no accounts at all.
-async function resolveAccountId(userId: string, accountId?: string | null): Promise<string | null> {
+// Validate a requested accountId belongs to the user's pool; if none given (or
+// not in the pool), fall back to the caller's default account
+// (server/lib/defaultAccount.ts: own first, not a card). Returns null only
+// when the pool has no open accounts at all.
+async function resolveAccountId(userId: string, authUserId: string, accountId?: string | null): Promise<string | null> {
   if (accountId) {
     const owned = await prisma.account.findFirst({
       where: { id: accountId, userId },
@@ -42,12 +44,11 @@ async function resolveAccountId(userId: string, accountId?: string | null): Prom
     });
     if (owned) return owned.id;
   }
-  const fallback = await prisma.account.findFirst({
+  const accounts = await prisma.account.findMany({
     where: { userId, isArchived: false },
-    orderBy: { sortOrder: "asc" },
-    select: { id: true },
+    select: { id: true, ownerUserId: true, type: true, isArchived: true, sortOrder: true },
   });
-  return fallback?.id ?? null;
+  return pickDefaultAccount(accounts, authUserId);
 }
 
 // GET /api/expenses?month=2026-04&allocationId=xxx
@@ -149,16 +150,20 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
 
     // Resolve the account: validate ownership if given, else fall back to the
     // user's default (lowest sortOrder, non-archived) account.
-    const resolvedAccountId = await resolveAccountId(req.userId!, accountId);
+    const resolvedAccountId = await resolveAccountId(req.userId!, req.authUserId!, accountId);
 
     const paidDebt = await debtForAllocation(req.userId!, resolvedAllocationId);
     if (paidDebt && paidDebt.accountId && paidDebt.accountId === resolvedAccountId) {
       return res.status(400).json(PAID_FROM_CARD);
     }
 
-    // Attribution (Epic H3). Default payer = the account's owner, else the
-    // logged-in user. Default scope follows the household model (individual →
-    // personal; shared/proportional → shared). All overridable via the body.
+    // Attribution (Epic H3). Default payer = the account's owner — whose
+    // money paid it, which is what household balances settle on
+    // (server/lib/balances.ts) — else the logged-in user. The default account
+    // is the caller's own, so normally that is the caller. Who ENTERED it is
+    // createdByUserId, kept apart. Default scope follows the household model
+    // (individual → personal; shared/proportional → shared). All overridable
+    // via the body.
     const account = resolvedAccountId
       ? await prisma.account.findUnique({ where: { id: resolvedAccountId }, select: { ownerUserId: true } })
       : null;
@@ -181,6 +186,7 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
         debtId: paidDebt?.id ?? null,
         date: date ? new Date(date) : new Date(),
         payerUserId: resolvedPayerId,
+        createdByUserId: req.authUserId!,
         scope: resolvedScope,
         beneficiaryUserId: resolvedScope === "personal" ? (beneficiaryUserId || null) : null,
         scopeSource: "manual",
@@ -373,7 +379,7 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
       return res.status(400).json({ error: "rows are required" });
     }
 
-    const resolvedAccountId = await resolveAccountId(req.userId!, accountId);
+    const resolvedAccountId = await resolveAccountId(req.userId!, req.authUserId!, accountId);
 
     const expenseRows = rows.filter(r => r.kind === "expense");
     const incomeRows = rows.filter(r => r.kind === "income");
@@ -402,6 +408,7 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
           source: "import",
           externalId: r.externalId,
           date: new Date(r.date),
+          createdByUserId: req.authUserId!,
         })),
         skipDuplicates: true, // re-importing the same file is a no-op
       }),
@@ -448,7 +455,7 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
       const account = resolvedAccountId
         ? await prisma.account.findUnique({ where: { id: resolvedAccountId }, select: { ownerUserId: true } })
         : null;
-      const payerUserId = account?.ownerUserId ?? req.userId!;
+      const payerUserId = account?.ownerUserId ?? req.authUserId!; // a person, never the pool id
       const created = await prisma.expense.findMany({
         where: { userId: req.userId!, source: "import", payerUserId: null, externalId: { in: expenseRows.map(r => r.externalId) } },
         select: { id: true, amount: true },

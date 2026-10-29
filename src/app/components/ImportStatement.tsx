@@ -9,6 +9,7 @@ import { useAllocations } from '../hooks/useAllocations';
 import { useImport, type ImportPreview, type ConfirmRow, type AiCategory } from '../hooks/useImport';
 import { BudgetSuggestions } from './BudgetSuggestions';
 import { useMoney } from '../onboarding/useMoney';
+import { useAuth } from '../context/AuthContext';
 
 interface ImportStatementProps {
   isOpen: boolean;
@@ -25,7 +26,14 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const { allocations, createAllocation } = useAllocations();
   const { loading, confirming, classifying, suggestingCats, preview, confirm, classify, suggestCategories } = useImport();
 
+  const { user } = useAuth();
   const activeAccounts = accounts.filter(a => !a.isArchived);
+  // Preselected: the user's own bank account, as the server's default
+  // (server/lib/defaultAccount.ts) — not whichever of the couple's sorts first.
+  const defaultAccount = activeAccounts.find(a => a.type !== 'card' && a.ownerUserId === user?.id)
+    ?? activeAccounts.find(a => a.type !== 'card')
+    ?? activeAccounts.find(a => a.ownerUserId === user?.id)
+    ?? activeAccounts[0];
 
   const [accountId, setAccountId] = useState<string | null>(null);
   const [data, setData] = useState<ImportPreview | null>(null);
@@ -40,7 +48,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
 
   useEffect(() => {
     if (!isOpen) { setData(null); setSelected(new Set()); setAllocByRow({}); setAiMerchants(new Set()); setProposedCats(null); setPostImportBudgets(false); }
-    if (isOpen && !accountId && activeAccounts.length > 0) setAccountId(activeAccounts[0].id);
+    if (isOpen && !accountId && defaultAccount) setAccountId(defaultAccount.id);
     if (isOpen) {
       fetch('/api/ai/status', { credentials: 'include' })
         .then(r => r.ok ? r.json() : { enabled: false })
