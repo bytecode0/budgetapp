@@ -51,7 +51,9 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
 
   const openMapping = (connectionId: string, institutionName: string, bankAccounts: BankAccount[]) => {
     setMapping({ connectionId, institutionName, accounts: bankAccounts });
-    setChoices(Object.fromEntries(bankAccounts.map(a => [a.id, a.linkedAccountId ?? 'new'])));
+    // Once some are linked, the others were skipped on purpose: keep them so.
+    const anyLinked = bankAccounts.some(a => a.linkedAccountId);
+    setChoices(Object.fromEntries(bankAccounts.map(a => [a.id, a.linkedAccountId ?? (anyLinked ? 'skip' : 'new')])));
   };
 
   // Back from the bank: resolve the hand-off, then link the accounts — unless
@@ -104,7 +106,7 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
   const handleLink = async () => {
     if (!mapping) return;
     const mappings: LinkMapping[] = mapping.accounts.flatMap((a): LinkMapping[] => {
-      const choice = choices[a.id] ?? 'new';
+      const choice = choices[a.id] ?? 'skip';
       if (choice === 'skip') return [];
       if (choice === 'new') {
         return [{ externalAccountId: a.id, create: { name: a.name || mapping.institutionName, type: a.kind } }];

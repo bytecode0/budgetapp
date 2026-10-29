@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  autoWritable, externalRefFor, heldForReview, owedFromCardBalance, reviewDateFrom, syncDateFrom, syncErrorCode,
-  toConfirmRow, toNormalizedRows,
+  advancedCursor, autoWritable, bankWindowFrom, dismissedSet, externalRefFor, heldForReview, mergeDismissed, MAX_DISMISSED_IDS,
+  owedFromCardBalance, syncErrorCode, toConfirmRow, toNormalizedRows, withoutDismissed,
 } from "./sync.js";
 import { EnableBankingError } from "./enableBanking.js";
 import { classifyRows, type ClassifyAccount, type ClassifyDebt, type ExistingMovement } from "../ingest/classify.js";
@@ -74,11 +74,14 @@ test("card mode: a DBIT is a purchase, a recognised credit a payment, an unclear
 
 const preview = (over: Partial<ImportRow>): ImportRow => ({
   externalId: "x", date: "2026-10-20", description: "MERCADONA", merchant: "mercadona", amount: 45.5, signedAmount: -45.5,
-  kind: "expense", status: "new", suggestedAllocationId: null, suggestedAllocationName: null, warnings: [], ...over,
+  kind: "expense", status: "new", suggestedAllocationId: "groceries", suggestedAllocationName: null, warnings: [], ...over,
 });
 
 test("autoWritable: only new, clean rows of a sure kind", () => {
   assert.equal(autoWritable(preview({})), true);
+  // An expense no rule recognises may be an unrecognised card payment: held.
+  assert.equal(autoWritable(preview({ suggestedAllocationId: null })), false);
+  assert.equal(autoWritable(preview({ kind: "income", suggestedAllocationId: null })), true);
   assert.equal(autoWritable(preview({ kind: "income" })), true);
   assert.equal(autoWritable(preview({ kind: "payment", debtId: "d" })), true);
   assert.equal(autoWritable(preview({ kind: "refund" })), true);
@@ -102,14 +105,41 @@ test("toConfirmRow: cents from euros, rule category for spending, the debt for a
   assert.equal(toConfirmRow(preview({ amount: 0.29 })).amountCents, 29);
 });
 
-test("sync windows: first review 90 days; later from the review day; daily a week back, never before the review", () => {
+test("window: 90 days the first time, then from the cursor, never more than 89 days back", () => {
   const now = new Date("2026-10-29T10:00:00Z");
-  assert.equal(reviewDateFrom({ bankReviewedAt: null }, now), "2026-07-31");
-  assert.equal(reviewDateFrom({ bankReviewedAt: new Date("2026-10-20T08:00:00Z") }, now), "2026-10-20");
-  const reviewed = { bankReviewedAt: new Date("2026-10-01T08:00:00Z") };
-  assert.equal(syncDateFrom(reviewed, new Date("2026-10-28T05:00:00Z")), "2026-10-21");
-  assert.equal(syncDateFrom(reviewed, new Date("2026-10-03T05:00:00Z")), "2026-10-01");
-  assert.equal(syncDateFrom(reviewed, null), "2026-10-01");
+  assert.equal(bankWindowFrom({ bankReviewedAt: null }, now), "2026-07-31");
+  assert.equal(bankWindowFrom({ bankReviewedAt: new Date("2026-10-20T08:00:00Z") }, now), "2026-10-20");
+  assert.equal(bankWindowFrom({ bankReviewedAt: new Date("2026-03-01T08:00:00Z") }, now), "2026-08-01");
+});
+
+test("the cursor moves to a week ago, never back — a held movement keeps it pinned", () => {
+  const now = new Date("2026-10-29T10:00:00Z");
+  assert.equal(advancedCursor(new Date("2026-10-01T00:00:00Z"), now).toISOString(), "2026-10-22T10:00:00.000Z");
+  assert.equal(advancedCursor(null, now).toISOString(), "2026-10-22T10:00:00.000Z");
+  assert.equal(advancedCursor(new Date("2026-10-25T00:00:00Z"), now).toISOString(), "2026-10-25T00:00:00.000Z");
+  // A movement held on day D stays in every later window until reviewed
+  // (the cursor doesn't move while something waits): the window from a
+  // cursor before D always contains D.
+  const cursor = new Date("2026-10-10T00:00:00Z");
+  assert.ok(bankWindowFrom({ bankReviewedAt: cursor }, new Date("2026-11-20T00:00:00Z")) <= "2026-10-12");
+});
+
+test("dismissed movements: never written, not counted, not shown again", () => {
+  const rows = [preview({ externalId: "keep" }), preview({ externalId: "gone", suggestedAllocationId: null }), preview({ externalId: "old", status: "duplicate" })];
+  const shown = withoutDismissed({ rows, newCount: 2 }, dismissedSet(["gone", 42, "old"]));
+  assert.deepEqual(shown.rows.map(r => r.externalId), ["keep", "old"]); // a stored duplicate still shows as such
+  assert.equal(shown.newCount, 1);
+  assert.equal(heldForReview(shown.rows), 0);
+  assert.equal(dismissedSet("garbage").size, 0);
+});
+
+test("mergeDismissed keeps the newest, ignores junk, caps the list", () => {
+  assert.deepEqual(mergeDismissed(["a", "b"], ["b", "c", 7, ""]), ["a", "b", "c"]);
+  assert.deepEqual(mergeDismissed(null, undefined), []);
+  const many = Array.from({ length: MAX_DISMISSED_IDS + 5 }, (_, i) => `id${i}`);
+  const merged = mergeDismissed(many, ["new"]);
+  assert.equal(merged.length, MAX_DISMISSED_IDS);
+  assert.equal(merged[merged.length - 1], "new");
 });
 
 test("a card's owed amount is the magnitude of its balance", () => {

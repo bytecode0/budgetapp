@@ -108,10 +108,16 @@ export async function applyLinks(client: BankingProviderClient, ctx: LinkContext
     const isCard = provider.kind === "card";
     const balance = await client.getAccountBalance(provider.id, provider.kind);
     const link = { bankConnectionId: ctx.connectionId, externalAccountId: provider.id, externalAccountKey: provider.stableKey ?? null };
+    // Read before anything is unlinked below: the review state carries on only
+    // when this account was already linked to this same bank account.
+    const before = "accountId" in action
+      ? await prisma.account.findUniqueOrThrow({ where: { id: action.accountId }, select: { bankConnectionId: true, externalAccountId: true } })
+      : null;
+    const sameLink = !!before && before.bankConnectionId === ctx.connectionId && before.externalAccountId === provider.id;
 
     // One local account per bank account in a connection.
     await prisma.account.updateMany({
-      where: { userId: ctx.userId, bankConnectionId: ctx.connectionId, externalAccountId: provider.id },
+      where: { userId: ctx.userId, bankConnectionId: ctx.connectionId, externalAccountId: provider.id, ...("accountId" in action && { id: { not: action.accountId } }) },
       data: { bankConnectionId: null, externalAccountId: null, externalAccountKey: null, balanceSource: "manual" },
     });
     await prisma.debt.updateMany({
@@ -121,13 +127,11 @@ export async function applyLinks(client: BankingProviderClient, ctx: LinkContext
 
     let accountId: string;
     if ("accountId" in action) {
-      const before = await prisma.account.findUniqueOrThrow({ where: { id: action.accountId }, select: { bankConnectionId: true } });
       await prisma.account.update({
         where: { id: action.accountId },
         data: {
           ...link,
-          // Same connection (a re-link): the review state carries on.
-          ...(before.bankConnectionId !== ctx.connectionId && { bankReviewedAt: null, bankPendingReview: 0 }),
+          ...(!sameLink && { bankReviewedAt: null, bankPendingReview: 0, bankDismissedIds: [] }),
           ...(!isCard && { balanceSource: "bank_sync" }),
         },
       });
@@ -195,4 +199,17 @@ export async function relinkByStableKey(connectionId: string, accounts: BankProv
     relinked++;
   }
   return relinked;
+}
+
+/** Unlinks the accounts (and card debts) of a connection whose bank account
+ *  id is not among `keepIds` — after a reconnect, the ones the new consent
+ *  doesn't cover. Movements stay; the user can link them again. */
+export async function unlinkMissing(connectionId: string, keepIds: string[]): Promise<number> {
+  const stale = { bankConnectionId: connectionId, externalAccountId: { notIn: keepIds } };
+  await prisma.debt.updateMany({ where: stale, data: { bankConnectionId: null, externalAccountId: null, balanceSource: "manual" } });
+  const { count } = await prisma.account.updateMany({
+    where: stale,
+    data: { bankConnectionId: null, externalAccountId: null, externalAccountKey: null, balanceSource: "manual", bankReviewedAt: null, bankPendingReview: 0, bankDismissedIds: [] },
+  });
+  return count;
 }

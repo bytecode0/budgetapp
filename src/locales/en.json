@@ -1581,7 +1581,7 @@
     "reviewTitle": "Review {{name}}",
     "reviewLoading": "Reading the bank's transactions…",
     "reviewIntroFirst": "These are the last 90 days of transactions. Choose which to keep and their category: nothing is imported until you confirm. After that, new ones arrive on their own every day.",
-    "reviewIntro": "These transactions need your decision (possible duplicates, card payments or unclear credits).",
+    "reviewIntro": "These transactions need your decision (no category, possible duplicates, card payments or unclear credits). What you leave unticked won't be imported.",
     "reviewPendingNote_one": "{{count}} pending transaction isn't imported until the bank books it.",
     "reviewPendingNote_other": "{{count}} pending transactions aren't imported until the bank books them.",
     "reviewNothingNew": "No new transactions",

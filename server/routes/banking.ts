@@ -22,8 +22,8 @@ import {
   BANKING_STATE_COOKIE, BANKING_STATE_COOKIE_OPTS, BANKING_STATE_MAX_AGE_MS,
   createConnectState, createExchangeToken, newBankingNonce, readConnectState, readExchangeToken,
 } from "../lib/banking/handoff.js";
-import { applyLinks, planLinks, relinkByStableKey } from "../lib/banking/link.js";
-import { PROVIDER, previewBankAccount, refreshBalance, reviewDateFrom, syncConnection, syncErrorCode } from "../lib/banking/sync.js";
+import { applyLinks, planLinks, relinkByStableKey, unlinkMissing } from "../lib/banking/link.js";
+import { PROVIDER, advancedCursor, bankWindowFrom, mergeDismissed, previewBankAccount, refreshBalance, syncConnection, syncErrorCode } from "../lib/banking/sync.js";
 import { cronAuthorized, runBankingCron } from "../lib/banking/cron.js";
 import type { BankingProviderClient, BankProviderAccount } from "../lib/banking/types.js";
 
@@ -130,8 +130,9 @@ bankingRouter.get("/connections", ...guarded, async (req: AuthRequest, res: Resp
       select: {
         id: true, institutionName: true, institutionCountry: true, status: true, ownerUserId: true,
         consentGivenAt: true, expiresAt: true, lastSyncedAt: true, lastSyncError: true,
-        accounts: { select: { id: true, name: true, type: true, bankReviewedAt: true, bankPendingReview: true } },
-        debts: { select: { id: true, name: true } },
+        // A household member never sees the owner's private accounts or debts.
+        accounts: { where: visibleToWhere(req.authUserId!), select: { id: true, name: true, type: true, bankReviewedAt: true, bankPendingReview: true } },
+        debts: { where: visibleToWhere(req.authUserId!), select: { id: true, name: true } },
       },
     });
     return res.json({ data: { connections: connections.map(c => ({ ...c, isOwner: c.ownerUserId === req.authUserId })) } });
@@ -250,6 +251,9 @@ bankingRouter.get("/callback", async (req: Request, res: Response) => {
     });
     // A renewed consent hands out new account ids: re-point what was linked.
     await relinkByStableKey(connection.id, session.accounts);
+    // Accounts the new consent doesn't cover (or couldn't be re-pointed) are
+    // unlinked: syncing them with a dead id would fail every day.
+    await unlinkMissing(connection.id, session.accounts.map(a => a.id));
     if (previous && previous !== session.sessionId) {
       await client.deleteSession(previous).catch(err => console.error(`[banking/callback] old session not revoked: ${syncErrorCode(err)}`));
     }
@@ -337,7 +341,7 @@ async function linkedAccount(req: AuthRequest, res: Response, connectionId: stri
   const account = typeof accountId === "string" && accountId
     ? await prisma.account.findFirst({
       where: { id: accountId, userId: req.userId!, ownerUserId: req.authUserId!, bankConnectionId: connectionId, externalAccountId: { not: null } },
-      select: { id: true, type: true, externalAccountId: true, bankReviewedAt: true },
+      select: { id: true, type: true, externalAccountId: true, bankReviewedAt: true, bankDismissedIds: true },
     })
     : null;
   if (!account) res.status(400).json({ error: "Account is not linked to this connection", code: "banking_account_not_linked" });
@@ -346,8 +350,8 @@ async function linkedAccount(req: AuthRequest, res: Response, connectionId: stri
 
 // GET /api/banking/connections/:id/preview?accountId=… → { data: ImportPreview }
 // The review step, in the import wizard's preview shape: the first time, the
-// last 90 days; then everything since the last review (movements the daily
-// sync held back included). Nothing is written.
+// last 90 days; then everything since the review cursor (movements the daily
+// sync held back included, those the user dismissed left out). Nothing is written.
 bankingRouter.get("/connections/:id/preview", ...guarded, async (req: BankingRequest, res: Response) => {
   try {
     const connection = await ownedConnection(req, res);
@@ -357,7 +361,7 @@ bankingRouter.get("/connections/:id/preview", ...guarded, async (req: BankingReq
     if (!account) return;
     let preview;
     try {
-      preview = await previewBankAccount(req.bankingClient!, connection, account, reviewDateFrom(account, new Date()));
+      preview = await previewBankAccount(req.bankingClient!, connection, account, bankWindowFrom(account, new Date()));
     } catch (err) {
       if (err instanceof EnableBankingError) return providerError(res, "preview", err);
       throw err;
@@ -370,22 +374,25 @@ bankingRouter.get("/connections/:id/preview", ...guarded, async (req: BankingReq
   }
 });
 
-// POST /api/banking/connections/:id/confirm { accountId, rows } → { data: { inserted, summary } }
+// POST /api/banking/connections/:id/confirm { accountId, rows, dismissed? } → { data: { inserted, summary } }
 // The rows the user kept in the review, written exactly like a file import
-// (confirmImport) with source "bank_sync". From now on the daily sync writes
-// this account's clean movements on its own.
+// (confirmImport) with source "bank_sync"; `dismissed` = the new rows they
+// didn't keep, never written by the daily sync. From now on the daily sync
+// writes this account's clean movements on its own.
 bankingRouter.post("/connections/:id/confirm", ...guarded, async (req: BankingRequest, res: Response) => {
   try {
     const connection = await ownedConnection(req, res);
     if (!connection) return;
-    const { accountId, rows } = req.body as {
+    const { accountId, rows, dismissed } = req.body as {
       accountId?: unknown;
+      dismissed?: unknown;
       rows?: { kind: string; externalId: string; date: string; description?: string; merchant?: string; amount: number; allocationId?: string | null; debtId?: string | null }[];
     };
     const account = await linkedAccount(req, res, connection.id, accountId);
     if (!account) return;
     // An empty list is a valid review: nothing kept.
     if (!Array.isArray(rows)) return res.status(400).json({ error: "rows are required", code: "invalid_rows" });
+    if (dismissed !== undefined && !Array.isArray(dismissed)) return res.status(400).json({ error: "dismissed must be a list", code: "invalid_rows" });
     const namedLines = rows.filter(r => r && (r.kind === "expense" || r.kind === "refund")).map(r => r.allocationId);
     if (!(await allocationsInPool(req.userId!, namedLines))) return res.status(404).json(ALLOCATION_NOT_FOUND);
 
@@ -400,7 +407,15 @@ bankingRouter.post("/connections/:id/confirm", ...guarded, async (req: BankingRe
         return res.status(status).json(body);
       }
     }
-    await prisma.account.update({ where: { id: account.id }, data: { bankReviewedAt: new Date(), bankPendingReview: 0 } });
+    // Everything in the review window is now settled: kept, or dismissed.
+    await prisma.account.update({
+      where: { id: account.id },
+      data: {
+        bankReviewedAt: advancedCursor(account.bankReviewedAt, new Date()),
+        bankPendingReview: 0,
+        bankDismissedIds: mergeDismissed(account.bankDismissedIds, dismissed),
+      },
+    });
     // Nothing waits for review now: the balance (a card's debt) can follow the bank.
     try {
       await refreshBalance(req.bankingClient!, connection, account);

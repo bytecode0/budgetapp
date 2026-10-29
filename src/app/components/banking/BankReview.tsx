@@ -15,7 +15,7 @@ interface BankReviewProps {
   onClose: () => void;
   onDone: () => void;
   preview: (connectionId: string, accountId: string) => Promise<BankResult<ImportPreview & { accountId: string; pendingCount: number }>>;
-  confirm: (connectionId: string, accountId: string, rows: ConfirmRow[]) => Promise<BankResult<{ inserted: number; summary: ImportSummary }>>;
+  confirm: (connectionId: string, accountId: string, rows: ConfirmRow[], dismissed: string[]) => Promise<BankResult<{ inserted: number; summary: ImportSummary }>>;
 }
 
 // The review of an account's bank movements (§5.5): the import wizard's own
@@ -41,8 +41,8 @@ export function BankReview({ target, onClose, onDone, preview, confirm }: BankRe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target?.connectionId, target?.accountId]);
 
-  const runConfirm = async (rows: ConfirmRow[]) => {
-    const res = await confirm(target!.connectionId, target!.accountId, rows);
+  const runConfirm = async (rows: ConfirmRow[], dismissed: string[]) => {
+    const res = await confirm(target!.connectionId, target!.accountId, rows, dismissed);
     return res.ok ? { inserted: res.inserted, summary: res.summary } : { error: res.error, code: res.code };
   };
 
@@ -51,7 +51,7 @@ export function BankReview({ target, onClose, onDone, preview, confirm }: BankRe
   // Nothing new to keep: confirming an empty review still starts the daily sync.
   const startWithoutRows = async () => {
     setStarting(true);
-    const res = await runConfirm([]);
+    const res = await runConfirm([], []);
     setStarting(false);
     if ('error' in res) { toast.error(apiErrorMessage(t, { code: res.code, error: t('import.confirmFailed') })); return; }
     finish(res.summary);

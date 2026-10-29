@@ -262,12 +262,16 @@ model Account {
   externalAccountKey String?
   balanceSource      String   @default("manual") // manual | bank_sync
   balanceSyncedAt    DateTime?
-  // Bank sync review (server/lib/banking/sync.ts): when the user last confirmed
-  // this account's bank movements. Null = first sync not reviewed yet, so the
-  // daily sync writes nothing for it. bankPendingReview = movements the last
-  // sync held back for the user (flagged by the ingest core).
+  // Bank sync review cursor (server/lib/banking/sync.ts): movements booked
+  // before this day are settled (written, or dismissed by the user). Null =
+  // first sync not reviewed yet, so the daily sync writes nothing for it.
+  // It only moves forward when nothing waits for review.
   bankReviewedAt     DateTime?
+  // Movements the last sync held back for the user (flagged by the ingest core).
   bankPendingReview  Int      @default(0)
+  // externalIds of bank movements the user chose not to keep in a review, so
+  // the daily sync never writes them (newest kept, capped).
+  bankDismissedIds   Json?
 
   // Column mapping saved for statement imports of this account when its file
   // isn't recognised (server/lib/ingest/types.ts ColumnMapping). Null = none.

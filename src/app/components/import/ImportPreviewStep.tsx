@@ -20,8 +20,9 @@ interface ImportPreviewStepProps {
   onMapByHand?: () => void;
   onConfirmed: (summary: ImportSummary) => void;
   /** Writes the kept rows somewhere else than a file import (the bank review,
-   *  /api/banking/connections/:id/confirm). Default: useImport().confirm. */
-  onConfirm?: (rows: ConfirmRow[]) => Promise<{ error: string; code?: string } | { inserted: number; summary: ImportSummary }>;
+   *  /api/banking/connections/:id/confirm), with the new rows NOT kept. Then
+   *  keeping nothing is a valid answer. Default: useImport().confirm. */
+  onConfirm?: (rows: ConfirmRow[], dismissed: string[]) => Promise<{ error: string; code?: string } | { inserted: number; summary: ImportSummary }>;
 }
 
 /** Skipped-row reason codes (shared/ingest/columns.ts: "state:PENDING"…) → text. */
@@ -212,11 +213,13 @@ export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, si
           debtId: kind === 'payment' ? debtIdOf(r) : undefined,
         }];
       });
-    if (rows.length === 0) { toast.error(t('import.nothingSelected')); return; }
+    if (rows.length === 0 && !onConfirm) { toast.error(t('import.nothingSelected')); return; }
     let res;
     if (onConfirm) {
+      const kept = new Set(rows.map(r => r.externalId));
+      const dismissed = data.rows.filter(r => r.status === 'new' && !kept.has(r.externalId)).map(r => r.externalId);
       setOverrideConfirming(true);
-      try { res = await onConfirm(rows); } finally { setOverrideConfirming(false); }
+      try { res = await onConfirm(rows, dismissed); } finally { setOverrideConfirming(false); }
     } else {
       res = await confirm(accountId, rows);
     }
@@ -484,7 +487,7 @@ export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, si
 
       <button
         onClick={handleConfirm}
-        disabled={confirming || selectedCount === 0}
+        disabled={confirming || (selectedCount === 0 && !onConfirm)}
         className="w-full py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
       >
         {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}

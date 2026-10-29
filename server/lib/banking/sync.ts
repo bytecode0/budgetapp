@@ -10,8 +10,14 @@
 //  - Nothing is written for an account until the user reviewed its first sync
 //    (Account.bankReviewedAt).
 //  - The daily sync writes only CLEAN rows: new, an expense/income/payment/
-//    refund the core is sure of, no warning, no possible duplicate. Anything
-//    else waits for the user (Account.bankPendingReview).
+//    refund the core is sure of, no warning, no possible duplicate, and an
+//    expense only with a category from the user's rules. Anything else waits
+//    for the user (Account.bankPendingReview); rows the user dismissed in a
+//    review are never written (Account.bankDismissedIds).
+//  - Account.bankReviewedAt is a cursor: movements before it are settled. The
+//    sync reads from it (at most MAX_WINDOW_DAYS back) and moves it forward —
+//    to OVERLAP_DAYS ago, for late bookings — only when nothing waits, so a
+//    held movement stays in every window until the user decides.
 //  - Categories come from the user's rules only (categorize.ts via
 //    prepareImport): no merchant name goes to any AI here.
 //  - A card account's balance is never written (it stays 0: what's owed lives
@@ -33,8 +39,12 @@ import type { BankAccountKind, BankingProviderClient, BankProviderTxn } from "./
 export const PROVIDER = "enablebanking";
 /** History read for the first review. */
 export const FIRST_SYNC_DAYS = 90;
-/** Later syncs re-read this many days before the last one: banks book late. */
+/** The cursor stays this many days behind: banks book late. */
 export const OVERLAP_DAYS = 7;
+/** Banks usually give 90 days of history without the user present. */
+export const MAX_WINDOW_DAYS = 89;
+/** Dismissed ids kept per account (newest). */
+export const MAX_DISMISSED_IDS = 2000;
 
 const DAY_MS = 86_400_000;
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
@@ -63,18 +73,41 @@ export function toNormalizedRows(txns: BankProviderTxn[]): NormalizedRow[] {
 
 const AUTO_KINDS = new Set(["expense", "income", "payment", "refund"]);
 
-/** Whether the daily sync may write a preview row without the user. */
+/** Whether the daily sync may write a preview row without the user. An
+ *  expense needs a rule category: one nobody recognised may well be a card
+ *  payment the wording didn't reveal, and counting it as spending would
+ *  count the card's purchases twice. */
 export function autoWritable(row: ImportRow): boolean {
   return row.status === "new"
     && AUTO_KINDS.has(row.kind)
     && !row.possibleDuplicate
     && !row.learnedPayment
-    && (row.warnings ?? []).length === 0;
+    && (row.warnings ?? []).length === 0
+    && !(row.kind === "expense" && !row.suggestedAllocationId);
 }
 
-/** Rows the user must look at: new, but not clean. */
+/** Rows the user must look at: new, not clean, not dismissed before. */
 export function heldForReview(rows: ImportRow[]): number {
   return rows.filter(r => r.status === "new" && !autoWritable(r)).length;
+}
+
+/** The stored dismissed ids (Json column), tolerant of anything odd in it. */
+export function dismissedSet(value: unknown): Set<string> {
+  return new Set(Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : []);
+}
+
+/** Adds newly dismissed ids, newest kept, capped. */
+export function mergeDismissed(stored: unknown, added: unknown): string[] {
+  const fresh = Array.isArray(added) ? added.filter((v): v is string => typeof v === "string" && v.length > 0 && v.length <= 200) : [];
+  const all = [...dismissedSet(stored)].filter(id => !fresh.includes(id)).concat(fresh);
+  return all.slice(-MAX_DISMISSED_IDS);
+}
+
+/** A preview without the movements the user already dismissed. */
+export function withoutDismissed<T extends { rows: ImportRow[]; newCount: number }>(preview: T, dismissed: Set<string>): T {
+  if (dismissed.size === 0) return preview;
+  const rows = preview.rows.filter(r => !(r.status === "new" && dismissed.has(r.externalId)));
+  return { ...preview, rows, newCount: rows.filter(r => r.status === "new").length };
 }
 
 /** A clean preview row as the confirm writes it (rule category, or the debt it pays). */
@@ -91,20 +124,19 @@ export function toConfirmRow(row: ImportRow): ConfirmRow {
   };
 }
 
-/** First day the daily sync reads for an account already reviewed: a week
- *  before the last sync (late bookings), never before the last review (the
- *  user has seen, and kept or dismissed, everything up to then). */
-export function syncDateFrom(account: { bankReviewedAt: Date }, lastSyncedAt: Date | null): string {
-  const base = lastSyncedAt && lastSyncedAt > account.bankReviewedAt ? lastSyncedAt : account.bankReviewedAt;
-  const overlap = isoDay(new Date(base.getTime() - OVERLAP_DAYS * DAY_MS));
-  const reviewed = isoDay(account.bankReviewedAt);
-  return overlap > reviewed ? overlap : reviewed;
+/** First day read, for the daily sync and the review alike: FIRST_SYNC_DAYS
+ *  back the first time; then the cursor, never more than MAX_WINDOW_DAYS. */
+export function bankWindowFrom(account: { bankReviewedAt: Date | null }, now: Date): string {
+  if (!account.bankReviewedAt) return isoDay(new Date(now.getTime() - FIRST_SYNC_DAYS * DAY_MS));
+  const cursor = isoDay(account.bankReviewedAt);
+  const oldest = isoDay(new Date(now.getTime() - MAX_WINDOW_DAYS * DAY_MS));
+  return cursor > oldest ? cursor : oldest;
 }
 
-/** First day the review preview reads: FIRST_SYNC_DAYS back the first time;
- *  afterwards from the day of the last review. */
-export function reviewDateFrom(account: { bankReviewedAt: Date | null }, now: Date): string {
-  return account.bankReviewedAt ? isoDay(account.bankReviewedAt) : isoDay(new Date(now.getTime() - FIRST_SYNC_DAYS * DAY_MS));
+/** Where the cursor goes once nothing waits: OVERLAP_DAYS ago, never back. */
+export function advancedCursor(current: Date | null, now: Date): Date {
+  const next = new Date(now.getTime() - OVERLAP_DAYS * DAY_MS);
+  return current && current > next ? current : next;
 }
 
 /** What a card's balance says is owed. Banks report it negative (holder's
@@ -118,6 +150,7 @@ export interface LinkedAccount {
   type: string;
   externalAccountId: string | null;
   bankReviewedAt: Date | null;
+  bankDismissedIds?: unknown;
 }
 
 interface ConnectionCtx {
@@ -142,7 +175,7 @@ export async function previewBankAccount(
     purchasesSign: "negative",
   });
   const { purchasesSign: _sign, purchasesSignDetected: _detected, skipped: _skipped, source: _source, ...rest } = preview;
-  return { ...rest, pendingCount: txns.pendingCount };
+  return withoutDismissed({ ...rest, pendingCount: txns.pendingCount }, dismissedSet(account.bankDismissedIds));
 }
 
 const kindOf = (account: { type: string }): BankAccountKind => (account.type === "card" ? "card" : account.type === "savings" ? "savings" : "checking");
@@ -180,11 +213,12 @@ export interface AccountSyncResult { written: number; held: number }
  *  then the balance (a card's only when nothing waits). */
 export async function syncAccount(
   client: BankingProviderClient,
-  connection: ConnectionCtx & { lastSyncedAt: Date | null },
+  connection: ConnectionCtx,
   account: LinkedAccount & { bankReviewedAt: Date },
   householdId: string | null,
+  now: Date,
 ): Promise<AccountSyncResult> {
-  const preview = await previewBankAccount(client, connection, account, syncDateFrom(account, connection.lastSyncedAt));
+  const preview = await previewBankAccount(client, connection, account, bankWindowFrom(account, now));
   const clean = preview.rows.filter(autoWritable).map(toConfirmRow);
   let written = 0;
   if (clean.length > 0) {
@@ -196,7 +230,10 @@ export async function syncAccount(
     written = result.inserted;
   }
   const held = heldForReview(preview.rows);
-  await prisma.account.update({ where: { id: account.id }, data: { bankPendingReview: held } });
+  await prisma.account.update({
+    where: { id: account.id },
+    data: { bankPendingReview: held, ...(held === 0 && { bankReviewedAt: advancedCursor(account.bankReviewedAt, now) }) },
+  });
   if (account.type !== "card" || held === 0) await refreshBalance(client, connection, account);
   return { written, held };
 }
@@ -237,19 +274,28 @@ export async function syncConnection(client: BankingProviderClient, connectionId
 
   const householdId = await householdOf(connection.ownerUserId);
   const result = { ...empty };
-  try {
-    for (const account of connection.accounts) {
-      if (!account.bankReviewedAt) { result.awaitingFirstReview++; continue; }
-      const r = await syncAccount(client, connection, { ...account, bankReviewedAt: account.bankReviewedAt }, householdId);
+  // One failing account never stops the others.
+  let firstError: unknown = null;
+  for (const account of connection.accounts) {
+    if (!account.bankReviewedAt) { result.awaitingFirstReview++; continue; }
+    try {
+      const r = await syncAccount(client, connection, { ...account, bankReviewedAt: account.bankReviewedAt }, householdId, now);
       result.written += r.written;
       result.held += r.held;
+    } catch (err) {
+      firstError ??= err;
+      console.error(`[banking/sync] account ${account.id} of connection ${connection.id} failed: ${syncErrorCode(err)}`);
     }
+  }
+  if (!firstError) {
     await prisma.bankConnection.update({
       where: { id: connection.id },
       data: { status: "active", lastSyncedAt: now, lastSyncError: null },
     });
     return { ok: true, ...result };
-  } catch (err) {
+  }
+  {
+    const err = firstError;
     const code = syncErrorCode(err);
     let expired = false;
     if (err instanceof EnableBankingError && [401, 403, 404, 422].includes(err.status) && connection.requisitionId) {

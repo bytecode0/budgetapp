@@ -1581,7 +1581,7 @@
     "reviewTitle": "Revisar {{name}}",
     "reviewLoading": "Leyendo los movimientos del banco…",
     "reviewIntroFirst": "Estos son los movimientos de los últimos 90 días. Elige cuáles guardar y su categoría: nada se importa hasta que confirmes. Después, los nuevos llegarán solos cada día.",
-    "reviewIntro": "Estos movimientos necesitan que decidas tú (posibles duplicados, pagos de tarjeta o abonos dudosos).",
+    "reviewIntro": "Estos movimientos necesitan que decidas tú (sin categoría, posibles duplicados, pagos de tarjeta o abonos dudosos). Lo que no marques no se importará.",
     "reviewPendingNote_one": "{{count}} movimiento pendiente no se importa hasta que el banco lo contabilice.",
     "reviewPendingNote_other": "{{count}} movimientos pendientes no se importan hasta que el banco los contabilice.",
     "reviewNothingNew": "No hay movimientos nuevos",

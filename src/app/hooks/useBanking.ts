@@ -100,8 +100,8 @@ export function useBanking() {
     call<ImportPreview & { accountId: string; pendingCount: number }>(`/api/banking/connections/${connectionId}/preview?accountId=${encodeURIComponent(accountId)}`);
 
   /** Same contract as useImport().confirm, so the import preview step can use it. */
-  const confirm = async (connectionId: string, accountId: string, rows: ConfirmRow[]) => {
-    const res = await call<{ inserted: number; summary: ImportSummary }>(`/api/banking/connections/${connectionId}/confirm`, post({ accountId, rows }));
+  const confirm = async (connectionId: string, accountId: string, rows: ConfirmRow[], dismissed: string[]) => {
+    const res = await call<{ inserted: number; summary: ImportSummary }>(`/api/banking/connections/${connectionId}/confirm`, post({ accountId, rows, dismissed }));
     if (res.ok) await fetchConnections();
     return res;
   };
