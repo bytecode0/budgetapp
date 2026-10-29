@@ -4,6 +4,7 @@ import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { sendPartnerInviteEmail } from "../lib/mailer.js";
 import { resolveLocale } from "../lib/email/locales/index.js";
 import { ensureHousehold } from "../lib/household.js";
+import { mergeMemberIntoPool } from "../lib/partnerMerge.js";
 
 export const partnerRouter = Router();
 
@@ -211,26 +212,42 @@ partnerRouter.post("/accept", requireAuth, async (req: AuthRequest, res: Respons
       return res.status(400).json({ error: "You are already linked to a partner account" });
     }
 
-    // Accept: link my account to the sender
-    await prisma.$transaction([
-      prisma.userSettings.upsert({
+    // Data lives in ONE pool (the sender's). If I already have a partner
+    // linked to me, or the sender is themself linked to someone else, linking
+    // would chain pools and hide that third person's data.
+    const [someoneLinkedToMe, senderSettings] = await Promise.all([
+      prisma.userSettings.findFirst({ where: { linkedUserId: myId }, select: { id: true } }),
+      prisma.userSettings.findUnique({ where: { userId: invite.senderId }, select: { linkedUserId: true } }),
+    ]);
+    if (someoneLinkedToMe) {
+      return res.status(400).json({ error: "Someone is already linked to your account" });
+    }
+    if (senderSettings?.linkedUserId) {
+      return res.status(400).json({ error: "The sender is already linked to another account" });
+    }
+
+    // Accept, all or nothing: link my account to the sender, mirror the link
+    // into the Household model (sender = owner, me = member), and move what I
+    // created on my own (e.g. my onboarding) into the sender's pool — once
+    // linked my data scope is that pool, so anything left under my own userId
+    // would be hidden (server/lib/partnerMerge.ts).
+    const accepted = await prisma.$transaction(async (tx) => {
+      // Claim the invite first, so a double submit can't merge twice.
+      const claimed = await tx.partnerInvite.updateMany({
+        where: { token, status: "pending" },
+        data: { status: "accepted" },
+      });
+      if (claimed.count === 0) return false;
+      await tx.userSettings.upsert({
         where: { userId: myId },
         update: { linkedUserId: invite.senderId },
         create: { userId: myId, linkedUserId: invite.senderId },
-      }),
-      prisma.partnerInvite.update({
-        where: { token },
-        data: { status: "accepted" },
-      }),
-    ]);
-
-    // Mirror the link into the new Household model (Epic H1): sender = primary
-    // (owner), acceptor = member. Idempotent; best-effort (never block linking).
-    try {
-      await ensureHousehold(invite.senderId, myId);
-    } catch (e) {
-      console.error("[partner/accept] ensureHousehold", e);
-    }
+      });
+      const householdId = await ensureHousehold(invite.senderId, myId, "transparent", tx);
+      await mergeMemberIntoPool(tx, { memberId: myId, poolId: invite.senderId, householdId });
+      return true;
+    }, { timeout: 30_000 });
+    if (!accepted) return res.status(400).json({ error: "Invite not found or expired" });
 
     return res.json({
       success: true,
