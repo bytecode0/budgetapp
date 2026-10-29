@@ -131,6 +131,10 @@ export interface ClassifyResult {
 
 // Matching windows, in days.
 const SAME_PAYMENT_DAYS = 4;    // a card payment shows on the card a few days after the bank charge
+// Further apart than SAME_PAYMENT_DAYS but within this, a payment of the same
+// amount to the same card may still be the same one (slow issuers, weekends):
+// not assumed, flagged as a possible duplicate for the user.
+export const LATE_PAYMENT_DAYS = 10;
 const POSSIBLE_DUP_DAYS = 2;
 
 const textOf = (r: { description: string; details?: string }) =>
@@ -371,11 +375,25 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
     const same = claim(e => e.table === "expense" && e.debtId === p.debtId && e.amountCents === p.amountCents
       && daysApart(e.date, p.date) <= SAME_PAYMENT_DAYS);
     if (same) { p.status = "duplicate"; p.duplicateReason = "same_payment"; continue; }
+    const late = claim(e => e.table === "expense" && e.debtId === p.debtId && e.amountCents === p.amountCents
+      && daysApart(e.date, p.date) <= LATE_PAYMENT_DAYS);
+    if (late) { p.possibleDuplicate = toPossible(late); continue; }
     const cardAccountId = debts.find(d => d.id === p.debtId)?.accountId ?? null;
     if (!cardAccountId) continue;
     const credit = claim(e => e.table === "expense" && e.kind === "refund" && e.accountId === cardAccountId
       && e.amountCents === p.amountCents && daysApart(e.date, p.date) <= SAME_PAYMENT_DAYS);
     if (credit) p.possibleDuplicate = toPossible(credit);
+  }
+
+  // A card payment whose card couldn't be told (several cards): if one of
+  // them already has a payment of that amount nearby, say so before the user
+  // assigns it.
+  const cardDebtIds = new Set(debts.filter(d => d.kind === "credit_card").map(d => d.id));
+  for (const p of planned) {
+    if (p.status !== "new" || !p.warnings.includes("card_payment_unassigned")) continue;
+    const hit = claim(e => e.table === "expense" && !!e.debtId && cardDebtIds.has(e.debtId) && e.kind !== "refund"
+      && e.amountCents === p.amountCents && daysApart(e.date, p.date) <= LATE_PAYMENT_DAYS);
+    if (hit) p.possibleDuplicate = toPossible(hit);
   }
 
   // Possible duplicates across sources: flagged, the user decides.

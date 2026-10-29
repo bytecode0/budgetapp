@@ -795,7 +795,8 @@
     "signPositive": "Purchases as positive (+)",
     "learnedPayment": "payment suggested by a rule: confirm it",
     "paysDebt": "Pays",
-    "notAPayment": "Not a debt payment (expense)"
+    "notAPayment": "Not a debt payment (expense)",
+    "cardPaymentUnassigned": "card payment: pick which card"
   },
   "budgets": {
     "title": "Suggested budgets",

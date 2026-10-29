@@ -795,7 +795,8 @@
     "signPositive": "Compras en positivo (+)",
     "learnedPayment": "pago sugerido por una regla: confírmalo",
     "paysDebt": "Paga",
-    "notAPayment": "No es un pago de deuda (gasto)"
+    "notAPayment": "No es un pago de deuda (gasto)",
+    "cardPaymentUnassigned": "pago de tarjeta: elige qué tarjeta"
   },
   "budgets": {
     "title": "Presupuestos sugeridos",

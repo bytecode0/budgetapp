@@ -9,7 +9,7 @@
 // (the API speaks euros; the confirm route converts back with toCents).
 import { prisma } from "./prisma.js";
 import { pickAllocationId } from "./categorize.js";
-import { classifyRows, type ExistingMovement, type PlannedKind, type PossibleDuplicate, type PurchasesSign, type PurchasesSignGuess, type RowWarning } from "./ingest/classify.js";
+import { classifyRows, LATE_PAYMENT_DAYS, type ExistingMovement, type PlannedKind, type PossibleDuplicate, type PurchasesSign, type PurchasesSignGuess, type RowWarning } from "./ingest/classify.js";
 import { readStatement } from "./ingest/read.js";
 import { suggestLearnedPayments } from "./ingest/learnedPayments.js";
 import { storedMapping } from "./ingest/validate.js";
@@ -76,7 +76,8 @@ export interface PrepareImportInput {
 }
 
 const DAY_MS = 86400000;
-const WINDOW_DAYS = 5; // covers the same-payment (4) and possible-duplicate (2) windows
+// Covers every matching window of classify.ts (late payment 10, same payment 4, possible duplicate 2).
+const WINDOW_DAYS = LATE_PAYMENT_DAYS + 1;
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 const euros = (cents: number) => cents / 100;
 

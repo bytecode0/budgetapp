@@ -450,3 +450,26 @@ test("debt lines: a refund never pays a debt, a card never pays itself (PATCH/PO
   assert.equal(debtLineError("expense", { accountId: "acc-pass" }, "acc-bank"), null);
   assert.equal(debtLineError("refund", null, "acc-bank"), null); // not a debt line: fine
 });
+
+test("card payment 5–10 days from a stored payment of the same card: flagged, not merged nor silently added", () => {
+  const stored: ExistingMovement = {
+    id: "p1", table: "expense", externalId: "card-file", accountId: null, debtId: "pass", kind: "expense",
+    amountCents: 35000, date: "2026-10-30", description: "PAGO RECIBIDO", source: "import",
+  };
+  const near = classifyRows({ rows: [row("2026-10-27", -35000, "LIQUIDACION TARJETA")], account: bank, debts: [passDebt], existing: [stored] }).rows[0];
+  assert.equal(near.status, "duplicate"); // ≤ 4 days: the same payment
+  const late = classifyRows({ rows: [row("2026-10-22", -35000, "LIQUIDACION TARJETA")], account: bank, debts: [passDebt], existing: [stored] }).rows[0];
+  assert.deepEqual([late.kind, late.status, late.possibleDuplicate?.id], ["payment", "new", "p1"]);
+  const far = classifyRows({ rows: [row("2026-10-15", -35000, "LIQUIDACION TARJETA")], account: bank, debts: [passDebt], existing: [stored] }).rows[0];
+  assert.deepEqual([far.status, far.possibleDuplicate], ["new", undefined]);
+});
+
+test("unassigned card payment (several cards): flagged with the stored payment it may repeat", () => {
+  const visa: ClassifyDebt = { id: "visa", name: "Visa Oro", kind: "credit_card", accountId: "acc-visa" };
+  const stored: ExistingMovement = {
+    id: "v1", table: "expense", externalId: null, accountId: null, debtId: "visa", kind: "expense",
+    amountCents: 12000, date: "2026-10-12", description: "PAGO RECIBIDO", source: "import",
+  };
+  const r = classifyRows({ rows: [row("2026-10-05", -12000, "LIQUIDACION TARJETA")], account: bank, debts: [passDebt, visa], existing: [stored] }).rows[0];
+  assert.deepEqual([r.kind, r.warnings, r.possibleDuplicate?.id], ["expense", ["card_payment_unassigned"], "v1"]);
+});
