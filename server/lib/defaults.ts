@@ -17,7 +17,8 @@ export const SEEDED_DEFAULT_ALLOCATION_NAMES: ReadonlySet<string> = new Set([
   "Fixed Expenses", "Flexible Spending", // seeded before the names were localized
 ]);
 
-function defaultAllocations(language: string | null | undefined) {
+/** The default budget lines signup seeds, in `language` (isDefault: true). */
+export function defaultAllocations(language: string | null | undefined) {
   const names = DEFAULT_ALLOCATION_NAMES[resolveLocale(language)];
   return [
     { name: names.fixed,    icon: "🏠", type: "fixed",    sortOrder: 0 },

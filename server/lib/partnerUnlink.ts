@@ -56,6 +56,11 @@
 //                       is COPIED into her scope (0 € budgeted) so they keep
 //                       their category; other plan and debt lines are not
 //                       copied — those expenses become uncategorised.
+//                       She always ends with a default line (isDefault) of
+//                       each seeded type (fixed, flexible), so a later
+//                       re-link merges them like signup's: the copy of the
+//                       pool's default line of that type becomes hers, else a
+//                       fresh one is seeded in her language (0 € budgeted).
 //   MonthlyBudget (other lines), CategorizationRule (other lines),
 //   RecurringCommitment → stay with the pool (no owner).
 //   HouseholdMember   → her membership in the owner's household is removed.
@@ -82,6 +87,7 @@
 // database around it.
 import type { Prisma } from "@prisma/client";
 import { namespacedExternalId, originalExternalId } from "./partnerMerge.js";
+import { defaultAllocations } from "./defaults.js";
 
 type Db = Prisma.TransactionClient;
 
@@ -96,7 +102,9 @@ export interface UnlinkInput {
     payerUserId: string | null; createdByUserId: string | null; scope: string; hasShares: boolean;
   }[];
   plans: { id: string; ownerUserId: string | null }[];
-  allocations: { id: string; type: string; debtId: string | null; lifePlanId: string | null }[];
+  allocations: { id: string; type: string; isDefault: boolean; debtId: string | null; lifePlanId: string | null }[];
+  /** Budget lines already under her own userId. */
+  memberAllocations: { type: string; isDefault: boolean }[];
   rules: { id: string; allocationId: string; matchType: string; pattern: string }[];
   recurring: { id: string; allocationId: string | null }[];
   poolId: string;
@@ -123,6 +131,10 @@ export interface UnlinkPlan {
   clashExternalIds: { expense: ExternalIdChange[]; income: ExternalIdChange[] };
   /** Pool lines to copy into her scope → her moved expenses that use each. */
   copyAllocations: Map<string, string[]>;
+  /** Copied pool lines whose copy becomes her default line of its type. */
+  copyAsDefault: Set<string>;
+  /** Default line types she still lacks: seeded in her scope. */
+  seedDefaultTypes: string[];
   /** Moved rows whose original externalId is free in her scope: set after the move. */
   restoreExternalIds: { expense: ExternalIdChange[]; income: ExternalIdChange[] };
   /** References that would cross scopes after the move: set to null. */
@@ -247,6 +259,20 @@ export function planUnlink(input: UnlinkInput): UnlinkPlan {
     }
   }
 
+  // Her default lines: she keeps any she has; a copy of the pool's default
+  // line of a type she lacks takes its place; any type still missing is seeded.
+  const SEEDED_TYPES = defaultAllocations(null).map(a => a.type);
+  const hasDefault = new Set(input.memberAllocations.filter(a => a.isDefault).map(a => a.type));
+  const copyAsDefault = new Set<string>();
+  for (const id of copyAllocations.keys()) {
+    const line = input.allocations.find(a => a.id === id)!;
+    if (line.isDefault && SEEDED_TYPES.includes(line.type) && !hasDefault.has(line.type)) {
+      copyAsDefault.add(id);
+      hasDefault.add(line.type);
+    }
+  }
+  const seedDefaultTypes = SEEDED_TYPES.filter(t => !hasDefault.has(t));
+
   const movingExpenses = input.expenses.filter(e => expenses.has(e.id));
   const movingIncomes = input.incomes.filter(i => incomes.has(i.id));
   const poolIds = (rows: { externalId: string | null }[]) =>
@@ -272,6 +298,8 @@ export function planUnlink(input: UnlinkInput): UnlinkPlan {
     dropRuleIds: movingRules.filter(dropRule).map(r => r.id),
     clashExternalIds,
     copyAllocations,
+    copyAsDefault,
+    seedDefaultTypes,
     restoreExternalIds: {
       expense: planRestoreExternalIds(withRenames(movingExpenses, clashExternalIds.expense), input.memberExternalIds.expense),
       income: planRestoreExternalIds(withRenames(movingIncomes, clashExternalIds.income), input.memberExternalIds.income),
@@ -294,7 +322,7 @@ export async function loadUnlinkInput(db: Db, memberId: string, poolId: string):
   const hersWithId = { userId: memberId, externalId: { not: null } };
   const [
     accounts, debts, bankConnections, incomes, expenses, plans, allocations, rules, recurring,
-    memberExpenseIds, memberIncomeIds, memberRules,
+    memberExpenseIds, memberIncomeIds, memberRules, memberAllocations,
   ] = await Promise.all([
     db.account.findMany({ where: pool, select: { id: true, ownerUserId: true, bankConnectionId: true } }),
     db.debt.findMany({ where: pool, select: { id: true, ownerUserId: true, accountId: true, bankConnectionId: true } }),
@@ -308,16 +336,18 @@ export async function loadUnlinkInput(db: Db, memberId: string, poolId: string):
       },
     }),
     db.lifePlan.findMany({ where: pool, select: { id: true, ownerUserId: true } }),
-    db.allocation.findMany({ where: pool, select: { id: true, type: true, debtId: true, lifePlanId: true } }),
+    db.allocation.findMany({ where: pool, select: { id: true, type: true, isDefault: true, debtId: true, lifePlanId: true } }),
     db.categorizationRule.findMany({ where: pool, select: { id: true, allocationId: true, matchType: true, pattern: true } }),
     db.recurringCommitment.findMany({ where: pool, select: { id: true, allocationId: true } }),
     db.expense.findMany({ where: hersWithId, select: { externalId: true } }),
     db.income.findMany({ where: hersWithId, select: { externalId: true } }),
     db.categorizationRule.findMany({ where: { userId: memberId }, select: { matchType: true, pattern: true } }),
+    db.allocation.findMany({ where: { userId: memberId }, select: { type: true, isDefault: true } }),
   ]);
   return {
     memberId,
     poolId,
+    memberAllocations,
     memberRuleKeys: new Set(memberRules.map(r => `${r.matchType}|${r.pattern}`)),
     accounts, debts, bankConnections, incomes, plans, allocations, rules, recurring,
     expenses: expenses.map(({ _count, ...e }) => ({ ...e, hasShares: _count.shares > 0 })),
@@ -354,11 +384,24 @@ export async function unlinkMemberFromPool(db: Db, ctx: { memberId: string; pool
     });
     for (const s of sources) {
       const copy = await db.allocation.create({
-        data: { userId: memberId, name: s.name, icon: s.icon, type: s.type, sortOrder: s.sortOrder, allocatedAmount: 0, actualAmount: 0 },
+        data: {
+          userId: memberId, name: s.name, icon: s.icon, type: s.type, sortOrder: s.sortOrder, allocatedAmount: 0, actualAmount: 0,
+          isDefault: plan.copyAsDefault.has(s.id),
+        },
       });
       await inChunks(plan.copyAllocations.get(s.id)!, ids =>
         db.expense.updateMany({ where: { id: { in: ids } }, data: { allocationId: copy.id } }));
     }
+  }
+
+  // Default lines she still lacks, as signup seeds them, in her language.
+  if (plan.seedDefaultTypes.length > 0) {
+    const settings = await db.userSettings.findUnique({ where: { userId: memberId }, select: { language: true } });
+    await db.allocation.createMany({
+      data: defaultAllocations(settings?.language).filter(a => plan.seedDefaultTypes.includes(a.type)).map(a => ({
+        ...a, userId: memberId, allocatedAmount: 0, actualAmount: 0, isDefault: true,
+      })),
+    });
   }
 
   // 2. Unique clashes with what is already under her userId: rename in the

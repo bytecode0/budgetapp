@@ -35,11 +35,11 @@ const base: UnlinkInput = {
   expenses: [],
   plans: [],
   allocations: [
-    { id: "fixed", type: "fixed", debtId: null, lifePlanId: null },
-    { id: "flex", type: "flexible", debtId: null, lifePlanId: null },
-    { id: "plan", type: "plan", debtId: null, lifePlanId: null },
-    { id: "line-her-loan", type: "debt", debtId: "her-loan", lifePlanId: null },
-    { id: "line-ex-card", type: "debt", debtId: "ex-card-debt", lifePlanId: null },
+    { id: "fixed", type: "fixed", isDefault: true, debtId: null, lifePlanId: null },
+    { id: "flex", type: "flexible", isDefault: true, debtId: null, lifePlanId: null },
+    { id: "plan", type: "plan", isDefault: false, debtId: null, lifePlanId: null },
+    { id: "line-her-loan", type: "debt", isDefault: false, debtId: "her-loan", lifePlanId: null },
+    { id: "line-ex-card", type: "debt", isDefault: false, debtId: "ex-card-debt", lifePlanId: null },
   ],
   rules: [
     { id: "r-her-loan", allocationId: "line-her-loan", matchType: "contains", pattern: "cofidis" },
@@ -47,6 +47,7 @@ const base: UnlinkInput = {
   ],
   recurring: [{ id: "c-her-loan", allocationId: "line-her-loan" }, { id: "c-fixed", allocationId: "fixed" }],
   poolId: EX,
+  memberAllocations: [],
   memberExternalIds: { expense: new Set(), income: new Set() },
   memberRuleKeys: new Set(),
 };
@@ -164,7 +165,7 @@ test("her debt on the ex's account stays in the pool with it, payments and all",
   const plan = planUnlink({
     ...base,
     debts: [...base.debts, { id: "her-loan-on-ex-card", ownerUserId: HER, accountId: "ex-card", bankConnectionId: null }],
-    allocations: [...base.allocations, { id: "line-her-loan-on-ex-card", type: "debt", debtId: "her-loan-on-ex-card", lifePlanId: null }],
+    allocations: [...base.allocations, { id: "line-her-loan-on-ex-card", type: "debt", isDefault: false, debtId: "her-loan-on-ex-card", lifePlanId: null }],
     expenses: [
       expense({ id: "pay-it", debtId: "her-loan-on-ex-card", accountId: "her-checking" }),
       expense({ id: "ex-card-buy", accountId: "ex-card", payerUserId: EX }),
@@ -218,8 +219,8 @@ test("her plans come back with their plan lines and the rules on them; unowned a
     ],
     allocations: [
       ...base.allocations,
-      { id: "line-her-trip", type: "plan", debtId: null, lifePlanId: "her-trip" },
-      { id: "line-ex-car", type: "plan", debtId: null, lifePlanId: "ex-car" },
+      { id: "line-her-trip", type: "plan", isDefault: false, debtId: null, lifePlanId: "her-trip" },
+      { id: "line-ex-car", type: "plan", isDefault: false, debtId: null, lifePlanId: "ex-car" },
     ],
     rules: [...base.rules, { id: "r-trip", allocationId: "line-her-trip", matchType: "contains", pattern: "ryanair" }],
     expenses: [
@@ -301,6 +302,25 @@ test("a moving rule she already has is dropped in favour of hers", () => {
   const plan = planUnlink({ ...base, memberRuleKeys: new Set(["contains|cofidis"]) });
   assert.deepEqual(plan.dropRuleIds, ["r-her-loan"]);
   assert.deepEqual(plan.move.ruleIds, []);
+});
+
+test("she ends with a default line of each seeded type: the copy of the pool's default, else a fresh one", () => {
+  // Her groceries use the pool's default flexible line: its copy becomes her
+  // default. Nothing of hers uses a fixed line: one is seeded.
+  const plan = planUnlink({ ...base, expenses: [expense({ id: "groceries", allocationId: "flex" })] });
+  assert.deepEqual([...plan.copyAsDefault], ["flex"]);
+  assert.deepEqual(plan.seedDefaultTypes, ["fixed"]);
+});
+
+test("a copied line that isn't the pool's default never becomes hers; defaults she has are kept", () => {
+  const plan = planUnlink({
+    ...base,
+    allocations: [...base.allocations, { id: "gym", type: "flexible", isDefault: false, debtId: null, lifePlanId: null }],
+    memberAllocations: [{ type: "fixed", isDefault: true }],
+    expenses: [expense({ id: "gym-fee", allocationId: "gym" })],
+  });
+  assert.deepEqual([...plan.copyAsDefault], []);
+  assert.deepEqual(plan.seedDefaultTypes, ["flexible"]);
 });
 
 test("a member with nothing of her own moves nothing", () => {
