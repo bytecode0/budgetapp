@@ -15,8 +15,13 @@ import { parseLocale, resolveLocale } from "../lib/email/locales/index.js";
 
 export const authRouter = Router();
 
-const GOOGLE_CALLBACK_URL =
-  process.env.GOOGLE_CALLBACK_URL ?? "http://localhost:3002/api/auth/google/callback";
+// Google sign-in needs all three, with no fallback: a default callback URL hid
+// a missing variable in the first deploy (it redirected to localhost).
+const GOOGLE_ENV = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_CALLBACK_URL"] as const;
+
+export function missingGoogleEnv(env: Record<string, string | undefined> = process.env): string[] {
+  return GOOGLE_ENV.filter((name) => !env[name]);
+}
 
 // Token temporal para el intercambio post-OAuth: un JWT firmado de 2 min, no un
 // Map en memoria — en Vercel el callback y el exchange pueden caer en instancias
@@ -39,11 +44,20 @@ export function readGoogleSession(token: string): string | null {
   }
 }
 
-const googleClient = new OAuth2Client(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  GOOGLE_CALLBACK_URL
-);
+// One client per request: getToken/setCredentials mutate it, and a shared
+// client would mix up concurrent sign-ins. Null when Google isn't configured.
+function newGoogleClient(): OAuth2Client | null {
+  const missing = missingGoogleEnv();
+  if (missing.length) {
+    console.error(`[auth/google] not configured, missing: ${missing.join(", ")}`);
+    return null;
+  }
+  return new OAuth2Client(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_CALLBACK_URL
+  );
+}
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -60,6 +74,8 @@ function setAuthCookie(res: Response, userId: string) {
 // ── Google OAuth ──────────────────────────────────────────────
 
 authRouter.get("/google", (_req: Request, res: Response) => {
+  const googleClient = newGoogleClient();
+  if (!googleClient) return res.status(503).json({ error: "Google sign-in is not configured" });
   const url = googleClient.generateAuthUrl({
     access_type: "offline",
     prompt: "select_account",
@@ -78,6 +94,9 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
   if (error || !code) {
     return res.redirect(`${appUrl}/?error=google_denied`);
   }
+
+  const googleClient = newGoogleClient();
+  if (!googleClient) return res.redirect(`${appUrl}/?error=google_failed`);
 
   try {
     const { tokens } = await googleClient.getToken(code);
