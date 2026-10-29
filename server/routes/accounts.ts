@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
+import { mutationAccess } from "../lib/ownership.js";
 import { createDefaultAccount } from "../lib/defaults.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
@@ -155,6 +156,9 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     const { id } = req.params;
     const existing = await prisma.account.findFirst({ where: { id, userId: req.userId! } });
     if (!existing) return res.status(404).json({ error: "Account not found" });
+    const access = mutationAccess(existing, req.authUserId);
+    if (access === "hidden") return res.status(404).json({ error: "Account not found" });
+    if (access === "forbidden") return res.status(403).json({ error: "Only the owner can change this account" });
 
     const { name, type, currency, currentBalance, isArchived, sortOrder, visibility, ownerUserId } = req.body;
     if (type !== undefined && !ACCOUNT_TYPES.has(type)) {
@@ -219,6 +223,9 @@ accountsRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Respons
     const { id } = req.params;
     const existing = await prisma.account.findFirst({ where: { id, userId: req.userId! } });
     if (!existing) return res.status(404).json({ error: "Account not found" });
+    const access = mutationAccess(existing, req.authUserId);
+    if (access === "hidden") return res.status(404).json({ error: "Account not found" });
+    if (access === "forbidden") return res.status(403).json({ error: "Only the owner can change this account" });
 
     // A card account backs a debt's purchases (server/lib/debtBalance.ts):
     // without it, the debt's payments would count in full in past months. A
