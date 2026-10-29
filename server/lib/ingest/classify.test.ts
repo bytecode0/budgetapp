@@ -230,6 +230,27 @@ test("sign: not guessed from a month of only payments, a single payment, or paym
   ]), "negative");
 });
 
+test("sign: transfer-like lines without payment words don't vote as purchases", () => {
+  const guess = (rows: NormalizedRow[]) => classifyRows({ rows, account: passCard, debts: [passDebt], existing: [] }).purchasesSign;
+  const transfers = (n: number) => Array.from({ length: n }, (_, i) => row(`2026-10-0${i + 1}`, 20000, "TRANSFERENCIA RECIBIDA"));
+  // Payments the user made to the card, worded as a plain transfer: they say
+  // nothing about the convention (they used to outvote it as "positive").
+  assert.equal(guess(transfers(5)), "unknown");
+  assert.equal(guess([...transfers(6), row("2026-10-20", -1500, "MERCADONA")]), "unknown");
+  assert.equal(guess([...transfers(4), row("2026-10-20", 3000, "AJUSTE SALDO 0001")]), "unknown");
+  // Three anchored lines decide, whatever the transfers around them.
+  assert.equal(guess([
+    ...transfers(5),
+    row("2026-10-10", 5000, "PAGO RECIBIDO"), row("2026-10-11", -2000, "COMPRA EN DEMO"), row("2026-10-12", -900, "INTERESES"),
+  ]), "negative");
+  // Merchant lines still carry a plain statement with one anchor.
+  assert.equal(guess([
+    ...transfers(2),
+    ...["MERCADONA", "FARMACIA DEMO", "CAFETERIA DEMO", "LIBRERIA DEMO"].map((d, i) => row(`2026-10-1${i}`, 1000 + i, d)),
+    row("2026-10-20", -8000, "PAGO RECIBIDO"),
+  ]), "positive");
+});
+
 // ── Decisions ──────────────────────────────────────────────────────────────
 
 test("bank account: debit → expense, credit → income; 'pago con tarjeta' is NOT a card payment", () => {

@@ -36,7 +36,7 @@
 //    is only flagged for the user to decide, never dropped.
 import crypto from "crypto";
 import { normalizeMerchant } from "../normalizeMerchant.js";
-import type { LearnedPayment } from "./learnedPayments.js";
+import { isGenericMerchant, type LearnedPayment } from "./learnedPayments.js";
 import type { NormalizedRow } from "./types.js";
 
 export type ImportMode = "account" | "card";
@@ -232,7 +232,18 @@ const SIGN_CREDIT_ANCHORS = [
 const SIGN_DEBIT_ANCHORS = [
   "compra", "compras", "compra en", "compra tarj", "pago en", "purchase", "intereses", "interes", "comision", "interest",
 ];
-/** Fewer voting lines than this and the convention isn't guessed. */
+// Words that say how money moved, not who got it: a line with one of them
+// ("TRANSFERENCIA RECIBIDA", "TRASPASO", "AJUSTE SALDO"…) can be a payment as
+// easily as a charge, so it doesn't vote as a purchase.
+const SIGN_NOT_A_MERCHANT = [
+  "transferencia", "transferencias", "transfer", "traspaso", "bizum", "ingreso", "abono", "recibo", "pago", "payment",
+  "cargo", "ajuste", "saldo", "regularizacion", "liquidacion", "liq",
+];
+const isMerchantLine = (r: NormalizedRow, text: string) =>
+  !hasPhrase(text, SIGN_NOT_A_MERCHANT) && !isGenericMerchant(normalizeMerchant(r.description));
+/** This many anchored lines decide on their own… */
+const SIGN_MIN_ANCHORS = 3;
+/** …otherwise anchored plus merchant lines must reach this. */
 const SIGN_MIN_VOTES = 5;
 /** The losing side may hold at most this share of the (weighted) votes. */
 const SIGN_MAX_MINORITY = 0.25;
@@ -247,9 +258,11 @@ export type PurchasesSignGuess = PurchasesSign | "unknown";
  *
  * Anchored lines vote twice: a "PAGO RECIBIDO" / refund line is a credit and a
  * "COMPRA EN…" / interest line a debit, so their sign gives the convention.
- * Other lines vote once as purchases (the bulk of a statement). No guess with
- * fewer than SIGN_MIN_VOTES votes, when anchors contradict each other or the
- * bulk, or when the vote is close.
+ * Lines that name a merchant vote once as purchases (the bulk of a
+ * statement); any other line ("TRANSFERENCIA RECIBIDA"…) doesn't vote. No
+ * guess with fewer than SIGN_MIN_ANCHORS anchored lines unless anchored and
+ * merchant lines reach SIGN_MIN_VOTES, when anchors contradict each other or
+ * the bulk, or when the vote is close.
  */
 export function guessPurchasesSign(rows: NormalizedRow[]): PurchasesSignGuess {
   let strongNeg = 0, strongPos = 0, weakNeg = 0, weakPos = 0;
@@ -261,10 +274,12 @@ export function guessPurchasesSign(rows: NormalizedRow[]): PurchasesSignGuess {
     if (credit && debit) continue; // "abono compra": says nothing about the sign
     if (credit) { if (r.amountCents > 0) strongNeg++; else strongPos++; }
     else if (debit) { if (r.amountCents < 0) strongNeg++; else strongPos++; }
+    else if (!isMerchantLine(r, text)) continue;
     else if (r.amountCents < 0) weakNeg++;
     else weakPos++;
   }
-  if (strongNeg + strongPos + weakNeg + weakPos < SIGN_MIN_VOTES) return "unknown";
+  const anchored = strongNeg + strongPos;
+  if (anchored < SIGN_MIN_ANCHORS && anchored + weakNeg + weakPos < SIGN_MIN_VOTES) return "unknown";
   if (strongNeg > 0 && strongPos > 0) return "unknown";
   const neg = 2 * strongNeg + weakNeg, pos = 2 * strongPos + weakPos;
   if (Math.min(neg, pos) > SIGN_MAX_MINORITY * (neg + pos)) return "unknown";
