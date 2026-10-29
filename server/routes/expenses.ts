@@ -8,8 +8,9 @@ import { findDuplicateGroups } from "../lib/dedupe.js";
 import { prepareImport } from "../lib/importStatement.js";
 import { StatementReadError } from "../lib/ingest/read.js";
 import { parseNormalizedRows } from "../lib/ingest/validate.js";
-import { PAID_FROM_CARD, planImportWrites } from "../lib/ingest/writes.js";
+import { debtLineError, planImportWrites } from "../lib/ingest/writes.js";
 import { isGenericMerchant } from "../lib/ingest/learnedPayments.js";
+import { planContribution, planContributions } from "../lib/planContribution.js";
 import type { NormalizedRow } from "../lib/ingest/types.js";
 import { aiEnabled, classifyMerchants } from "../lib/ai/classify.js";
 import { suggestCategories } from "../lib/ai/suggestCategories.js";
@@ -157,9 +158,8 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
     const resolvedAccountId = await resolveAccountId(req.userId!, req.authUserId!, accountId);
 
     const paidDebt = await debtForAllocation(req.userId!, resolvedAllocationId);
-    if (paidDebt && paidDebt.accountId && paidDebt.accountId === resolvedAccountId) {
-      return res.status(400).json(PAID_FROM_CARD);
-    }
+    const lineError = debtLineError("expense", paidDebt, resolvedAccountId);
+    if (lineError) return res.status(400).json(lineError);
 
     // Attribution (Epic H3). Default payer = the account's owner — whose
     // money paid it, which is what household balances settle on
@@ -268,7 +268,7 @@ expensesRouter.post("/merge", requireAuth, async (req: AuthRequest, res: Respons
       if (e.allocation?.type === "plan" && e.allocation.lifePlanId) {
         await prisma.lifePlan.update({
           where: { id: e.allocation.lifePlanId },
-          data: { currentAmount: { decrement: e.amount } },
+          data: { currentAmount: { decrement: planContribution(e) } },
         });
       }
     }
@@ -415,6 +415,13 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
       return res.status(status).json(body);
     }
 
+    // Rows already stored under these ids are skipped by createMany: only the
+    // new ones may add to a life plan.
+    const alreadyStored = new Set((await prisma.expense.findMany({
+      where: { userId: req.userId!, externalId: { in: plan.expenses.map(e => e.externalId) } },
+      select: { externalId: true },
+    })).map(e => e.externalId));
+
     const [exp, inc] = await Promise.all([
       prisma.expense.createMany({
         data: plan.expenses.map(e => ({ ...e, userId: req.userId!, source: "import", createdByUserId: req.authUserId! })),
@@ -425,6 +432,20 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
         skipDuplicates: true,
       }),
     ]);
+
+    // Imported rows on a "plan" line contribute to its life plan like manual
+    // ones (refunds take money back out); DELETE/PATCH reverse it.
+    const planLines = await prisma.allocation.findMany({
+      where: { userId: req.userId!, type: "plan", lifePlanId: { not: null } },
+      select: { id: true, lifePlanId: true },
+    });
+    const deltas = planContributions(
+      plan.expenses.filter(e => !alreadyStored.has(e.externalId)),
+      new Map(planLines.map(l => [l.id, l.lifePlanId!])),
+    );
+    for (const [lifePlanId, delta] of deltas) {
+      await prisma.lifePlan.update({ where: { id: lifePlanId }, data: { currentAmount: { increment: delta } } });
+    }
 
     // Learn from the categories assigned during import: every classified merchant
     // becomes a `learned` rule so the rest of this file — and future imports — get
@@ -574,25 +595,24 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     }) : null;
     const newAmount = amount !== undefined ? toCents(amount) : existing.amount;
 
-    // Moving onto / off a "debt" line makes it / stops it being a payment.
+    // Moving onto / off a "debt" line makes it / stops it being a payment —
+    // never for a refund, which undoes a purchase and can't pay a debt.
     const paidDebt = await debtForAllocation(req.userId!, newAllocId);
-    const newAccountId = accountUpdate?.accountId ?? existing.accountId;
-    if (paidDebt && paidDebt.accountId && paidDebt.accountId === newAccountId) {
-      return res.status(400).json(PAID_FROM_CARD);
-    }
+    const lineError = debtLineError(existing.kind, paidDebt, accountUpdate?.accountId ?? existing.accountId);
+    if (lineError) return res.status(400).json(lineError);
 
-    // Reverse old plan contribution
+    // Reverse old plan contribution (a refund's is negative: planContribution)
     if (existing.allocation?.type === "plan" && existing.allocation.lifePlanId) {
       await prisma.lifePlan.update({
         where: { id: existing.allocation.lifePlanId },
-        data: { currentAmount: { decrement: existing.amount } },
+        data: { currentAmount: { decrement: planContribution(existing) } },
       });
     }
     // Apply new plan contribution
     if (newAlloc?.type === "plan" && newAlloc.lifePlanId) {
       await prisma.lifePlan.update({
         where: { id: newAlloc.lifePlanId },
-        data: { currentAmount: { increment: newAmount } },
+        data: { currentAmount: { increment: planContribution({ kind: existing.kind, amount: newAmount }) } },
       });
     }
 
@@ -648,7 +668,7 @@ expensesRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Respons
     if (existing.allocation?.type === "plan" && existing.allocation.lifePlanId) {
       await prisma.lifePlan.update({
         where: { id: existing.allocation.lifePlanId },
-        data: { currentAmount: { decrement: existing.amount } },
+        data: { currentAmount: { decrement: planContribution(existing) } },
       });
     }
 

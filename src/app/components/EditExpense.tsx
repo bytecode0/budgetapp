@@ -7,6 +7,7 @@ import type { Expense, AttributionPayload } from '../hooks/useExpenses';
 import type { Allocation } from '../hooks/useAllocations';
 import { useHousehold } from '../hooks/useHousehold';
 import { useMoney } from '../onboarding/useMoney';
+import { apiErrorMessage } from '../lib/apiErrors';
 
 interface EditExpenseProps {
   isOpen: boolean;
@@ -14,7 +15,7 @@ interface EditExpenseProps {
   allocations: Allocation[];
   onClose: () => void;
   onSave: (payload: { amount: number; description: string; allocationId: string | null; date: string }) =>
-    Promise<{ error?: string } | { expense: Expense }>;
+    Promise<{ error?: string; code?: string } | { expense: Expense }>;
   onSaveAttribution?: (payload: AttributionPayload) => Promise<{ error?: string } | { expense: Expense }>;
 }
 
@@ -76,7 +77,7 @@ export function EditExpense({ isOpen, expense, allocations, onClose, onSave, onS
 
     setSaving(true);
     const result = await onSave({ amount: parsed, description: description.trim(), allocationId, date });
-    if ('error' in result && result.error) { setSaving(false); toast.error(result.error); return; }
+    if ('error' in result && result.error) { setSaving(false); toast.error(apiErrorMessage(t, result)); return; }
 
     if (showAttribution && onSaveAttribution) {
       const payload: AttributionPayload = { scope, payerUserId: payerUserId || undefined };

@@ -1435,5 +1435,8 @@
         }
       ]
     }
+  },
+  "apiErrors": {
+    "refundOnDebtLine": "Una devolución no puede ir en la partida de una deuda: deshace una compra, no paga la deuda."
   }
 }

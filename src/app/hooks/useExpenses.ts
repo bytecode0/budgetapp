@@ -112,7 +112,7 @@ export function useExpenses(month?: string) {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (!res.ok) return { error: data.error || 'Failed to update expense' };
+    if (!res.ok) return { error: data.error || 'Failed to update expense', code: data.code as string | undefined };
     setExpenses(prev => prev.map(e => e.id === id ? data.expense : e));
     return { expense: data.expense };
   };

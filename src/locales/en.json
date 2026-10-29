@@ -1435,5 +1435,8 @@
         }
       ]
     }
+  },
+  "apiErrors": {
+    "refundOnDebtLine": "A refund can't go on a debt line: it undoes a purchase, it doesn't pay the debt."
   }
 }

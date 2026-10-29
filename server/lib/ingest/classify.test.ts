@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { classifyRows, type ClassifyAccount, type ClassifyDebt, type ExistingMovement, type PlannedRow } from "./classify.js";
-import { planImportWrites, type ConfirmRow } from "./writes.js";
+import { debtLineError, planImportWrites, type ConfirmRow } from "./writes.js";
 import { buildLedgers, countedFrom, debtState, type LedgerDebt, type LedgerExpense } from "../debtBalance.js";
 import type { NormalizedRow } from "./types.js";
 import { isGenericMerchant, preselectLearnedPayment, suggestLearnedPayments, type LearnedDebt } from "./learnedPayments.js";
@@ -442,4 +442,11 @@ test("writes: a card can't pay itself; refunds never on a debt line; payments ne
   // From a bank account, an expense on the card's line is a payment of it.
   const fromBank = planImportWrites([{ ...base, kind: "expense", allocationId: "line-pass" }], { ...ctx, accountId: "acc-bank" });
   assert.ok(!("error" in fromBank) && fromBank.expenses[0].debtId === "pass");
+});
+
+test("debt lines: a refund never pays a debt, a card never pays itself (PATCH/POST share this)", () => {
+  assert.equal(debtLineError("refund", { accountId: null }, "acc-bank")?.code, "refund_on_debt_line");
+  assert.equal(debtLineError("expense", { accountId: "acc-pass" }, "acc-pass")?.code, "paid_from_card");
+  assert.equal(debtLineError("expense", { accountId: "acc-pass" }, "acc-bank"), null);
+  assert.equal(debtLineError("refund", null, "acc-bank"), null); // not a debt line: fine
 });

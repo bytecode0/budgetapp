@@ -59,6 +59,21 @@ export type WritePlan =
   | { error: string; code?: string; status: number };
 
 export const PAID_FROM_CARD = { error: "A card payment must come from another account, not the card itself", code: "paid_from_card" };
+export const REFUND_ON_DEBT_LINE = { error: "A refund can't go on a debt line", code: "refund_on_debt_line" };
+
+/** Why an Expense of `kind` paid from `accountId` can't sit on the debt line
+ *  of `debt` (null = not a debt line), or null when it can: a refund never
+ *  pays a debt, and a card never pays itself. Used by every write path. */
+export function debtLineError(
+  kind: string | null | undefined,
+  debt: { accountId: string | null } | null,
+  accountId: string | null,
+): { error: string; code: string } | null {
+  if (!debt) return null;
+  if (kind === "refund") return REFUND_ON_DEBT_LINE;
+  if (debt.accountId && debt.accountId === accountId) return PAID_FROM_CARD;
+  return null;
+}
 
 export function planImportWrites(rows: ConfirmRow[], ctx: WriteContext): WritePlan {
   if (rows.some(r => !r || !IMPORT_KINDS.has(r.kind))) return { error: "Invalid row kind", status: 400 };
@@ -101,7 +116,7 @@ export function planImportWrites(rows: ConfirmRow[], ctx: WriteContext): WritePl
         break;
       }
       case "refund":
-        if (r.allocationId && lineById.has(r.allocationId)) return { error: "A refund can't go on a debt line", status: 400 };
+        if (r.allocationId && lineById.has(r.allocationId)) return { ...REFUND_ON_DEBT_LINE, status: 400 };
         expenses.push({ ...common(r), kind: "refund", accountId: ctx.accountId, allocationId: r.allocationId || null, debtId: null });
         break;
     }

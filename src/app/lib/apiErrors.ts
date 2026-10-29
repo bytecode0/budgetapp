@@ -1,5 +1,5 @@
-// Translation keys for the `code` the debt and account routes send next to
-// their `{ error }` (server/routes/debts.ts, server/routes/accounts.ts). The
+// Translation keys for the `code` the debt, account and expense routes send
+// next to their `{ error }` (server/routes/debts.ts, accounts.ts, expenses.ts). The
 // server's `error` text is English and only a fallback for unknown codes.
 const ERROR_KEYS: Record<string, string> = {
   debt_has_payments: 'debts.hasPaymentsError',
@@ -12,6 +12,8 @@ const ERROR_KEYS: Record<string, string> = {
   account_backs_debt: 'accounts.backsDebtError',
   account_backs_owner_debt: 'accounts.backsOwnerDebtError',
   card_has_movements: 'accounts.cardHasMovementsError',
+  paid_from_card: 'debts.paidFromCardError',
+  refund_on_debt_line: 'apiErrors.refundOnDebtLine',
 };
 
 /** The message to show for a failed debt/account request (call it only once
