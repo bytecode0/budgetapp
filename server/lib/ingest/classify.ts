@@ -404,59 +404,75 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
   // payment" or a "possible duplicate" of another row.
   const batchIds = new Set(planned.flatMap(p => [p.externalId, p.legacyExternalId].filter((id): id is string => !!id)));
   const claimed = new Set(existing.filter(e => e.externalId && batchIds.has(e.externalId)).map(e => e.id));
-  /** The earliest unclaimed stored movement of `amountCents` matching `pred`. */
-  const claim = (amountCents: number, pred: (e: ExistingMovement) => boolean) => {
-    const hit = (byAmount.get(amountCents) ?? []).find(e => !claimed.has(e.id) && pred(e));
-    if (hit) claimed.add(hit.id);
-    return hit;
+  /**
+   * One matching pass: pairs each eligible row with at most one unclaimed
+   * stored movement of its amount, within `maxDays`, closest dates first.
+   * Every candidate pair of the pass is weighed together, so the result
+   * doesn't depend on the file's row order (BBVA lists newest first): a row
+   * can't take, as a looser match, the stored movement another row needed as
+   * its close one.
+   */
+  const matchPass = (
+    eligible: (p: PlannedRow) => boolean,
+    maxDays: number,
+    pred: (p: PlannedRow, e: ExistingMovement) => boolean,
+    apply: (p: PlannedRow, e: ExistingMovement) => void,
+  ) => {
+    const pairs: { p: PlannedRow; e: ExistingMovement; days: number }[] = [];
+    for (const p of planned) {
+      if (p.status !== "new" || !eligible(p)) continue;
+      for (const e of byAmount.get(p.amountCents) ?? []) {
+        if (claimed.has(e.id)) continue;
+        const days = daysApart(e.date, p.date);
+        if (days <= maxDays && pred(p, e)) pairs.push({ p, e, days });
+      }
+    }
+    pairs.sort((a, b) => a.days - b.days || a.e.date.localeCompare(b.e.date) || a.e.id.localeCompare(b.e.id)
+      || a.p.date.localeCompare(b.p.date) || a.p.externalId.localeCompare(b.p.externalId));
+    const matched = new Set<PlannedRow>();
+    for (const { p, e } of pairs) {
+      if (matched.has(p) || claimed.has(e.id)) continue;
+      matched.add(p);
+      claimed.add(e.id);
+      apply(p, e);
+    }
   };
 
-  // The same card payment seen from the other side (bank file ↔ card file).
-  // If the card side was stored as a REFUND (a credit the user resolved the
-  // wrong way), it's no proof, but recording this payment too would lower the
-  // debt twice: flagged as a possible duplicate for the user to decide.
+  // The same card payment seen from the other side (bank file ↔ card file):
+  // ≤ SAME_PAYMENT_DAYS apart it IS that payment — this pass runs over every
+  // row before any looser one. Further apart (≤ LATE_PAYMENT_DAYS), only
+  // flagged. If the card side was stored as a REFUND (a credit the user
+  // resolved the wrong way), it's no proof, but recording this payment too
+  // would lower the debt twice: flagged as well.
   const toPossible = (e: ExistingMovement): PossibleDuplicate =>
     ({ id: e.id, table: e.table, date: e.date, description: e.description, source: e.source });
-  for (const p of planned) {
-    if (p.status !== "new" || p.kind !== "payment") continue;
-    const same = claim(p.amountCents, e => e.table === "expense" && e.debtId === p.debtId
-      && daysApart(e.date, p.date) <= SAME_PAYMENT_DAYS);
-    if (same) { p.status = "duplicate"; p.duplicateReason = "same_payment"; continue; }
-    const late = claim(p.amountCents, e => e.table === "expense" && e.debtId === p.debtId
-      && daysApart(e.date, p.date) <= LATE_PAYMENT_DAYS);
-    if (late) { p.possibleDuplicate = toPossible(late); continue; }
+  const flag = (p: PlannedRow, e: ExistingMovement) => { p.possibleDuplicate = toPossible(e); };
+  const isPayment = (p: PlannedRow) => p.kind === "payment" && !p.possibleDuplicate;
+  const paysSameDebt = (p: PlannedRow, e: ExistingMovement) => e.table === "expense" && e.debtId === p.debtId;
+  matchPass(isPayment, SAME_PAYMENT_DAYS, paysSameDebt, p => { p.status = "duplicate"; p.duplicateReason = "same_payment"; });
+  matchPass(isPayment, LATE_PAYMENT_DAYS, paysSameDebt, flag);
+  matchPass(isPayment, SAME_PAYMENT_DAYS, (p, e) => {
     const cardAccountId = debts.find(d => d.id === p.debtId)?.accountId ?? null;
-    if (!cardAccountId) continue;
-    const credit = claim(p.amountCents, e => e.table === "expense" && e.kind === "refund" && e.accountId === cardAccountId
-      && daysApart(e.date, p.date) <= SAME_PAYMENT_DAYS);
-    if (credit) p.possibleDuplicate = toPossible(credit);
-  }
+    return !!cardAccountId && e.table === "expense" && e.kind === "refund" && e.accountId === cardAccountId;
+  }, flag);
 
   // A card payment whose card couldn't be told (several cards): if one of
   // them already has a payment of that amount nearby, say so before the user
   // assigns it.
   const cardDebtIds = new Set(debts.filter(d => d.kind === "credit_card").map(d => d.id));
-  for (const p of planned) {
-    if (p.status !== "new" || !p.warnings.includes("card_payment_unassigned")) continue;
-    const hit = claim(p.amountCents, e => e.table === "expense" && !!e.debtId && cardDebtIds.has(e.debtId) && e.kind !== "refund"
-      && daysApart(e.date, p.date) <= LATE_PAYMENT_DAYS);
-    if (hit) p.possibleDuplicate = toPossible(hit);
-  }
+  matchPass(p => p.warnings.includes("card_payment_unassigned") && !p.possibleDuplicate, LATE_PAYMENT_DAYS,
+    (_p, e) => e.table === "expense" && !!e.debtId && cardDebtIds.has(e.debtId) && e.kind !== "refund", flag);
 
   // Possible duplicates across sources: flagged, the user decides.
-  for (const p of planned) {
-    if (p.status !== "new" || p.isFee || p.possibleDuplicate) continue;
+  const sameAccount = (e: ExistingMovement) => e.debtId === null && (e.accountId === account.id || e.accountId === null);
+  matchPass(p => !p.isFee && !p.possibleDuplicate, POSSIBLE_DUP_DAYS, (p, e) => {
     const table = p.kind === "income" ? "income" : "expense";
     const storedKind = p.kind === "refund" ? "refund" : p.kind === "income" ? "income" : "expense";
-    const sameAccount = (e: ExistingMovement) => e.debtId === null && (e.accountId === account.id || e.accountId === null);
-    const hit = claim(p.amountCents, e => e.table === table
-      && daysApart(e.date, p.date) <= POSSIBLE_DUP_DAYS
-      && (p.kind === "needs_review"
-        // Either reading of the credit may already be stored.
-        ? (e.kind === "refund" && sameAccount(e)) || (e.kind === "expense" && !!p.debtId && e.debtId === p.debtId)
-        : (e.kind || "expense") === storedKind && (p.kind === "payment" ? e.debtId === p.debtId : sameAccount(e))));
-    if (hit) p.possibleDuplicate = toPossible(hit);
-  }
+    return e.table === table && (p.kind === "needs_review"
+      // Either reading of the credit may already be stored.
+      ? (e.kind === "refund" && sameAccount(e)) || (e.kind === "expense" && !!p.debtId && e.debtId === p.debtId)
+      : (e.kind || "expense") === storedKind && (p.kind === "payment" ? e.debtId === p.debtId : sameAccount(e)));
+  }, flag);
 
   return { mode, rows: planned, purchasesSign, purchasesSignDetected };
 }

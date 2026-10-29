@@ -522,3 +522,35 @@ test("'pago tarjeta' is a card payment only when no merchant follows it", () => 
   assert.equal(kindOf("PAGO TARJETA", "GASOLINERA DEMO"), "expense");
   assert.equal(kindOf("PAGO CON TARJETA"), "expense");
 });
+
+test("card payment matching doesn't depend on row order: the exact match is never stolen as a late one", () => {
+  // Stored: the card-file side (Oct 3) of the bank charge of Oct 1. The bank
+  // file has that charge and next month's-looking one of Oct 8 (5 days from
+  // the stored one). Whatever the order (BBVA lists newest first), Oct 1 is
+  // the same payment and Oct 8 a new one — never the other way round.
+  const stored: ExistingMovement = {
+    id: "s1", table: "expense", externalId: "cardrow", accountId: null, debtId: "pass", kind: "expense",
+    amountCents: 20000, date: "2026-10-03", description: "PAGO RECIBIDO", source: "import",
+  };
+  const rows = [row("2026-10-01", -20000, "LIQUIDACION TARJETA VISA"), row("2026-10-08", -20000, "LIQUIDACION TARJETA VISA")];
+  for (const order of [rows, [...rows].reverse()]) {
+    const out = classifyRows({ rows: order, account: bank, debts: [passDebt], existing: [stored] }).rows;
+    const byDate = Object.fromEntries(out.map(p => [p.date, [p.kind, p.status, p.duplicateReason ?? null, p.possibleDuplicate?.id ?? null]]));
+    assert.deepEqual(byDate, {
+      "2026-10-01": ["payment", "duplicate", "same_payment", null],
+      "2026-10-08": ["payment", "new", null, null],
+    });
+  }
+});
+
+test("card payment matching: two stored payments, two rows in either order → each row its closest", () => {
+  const stored = (id: string, date: string): ExistingMovement => ({
+    id, table: "expense", externalId: id, accountId: null, debtId: "pass", kind: "expense",
+    amountCents: 20000, date, description: "PAGO RECIBIDO", source: "import",
+  });
+  const rows = [row("2026-10-01", -20000, "LIQUIDACION TARJETA"), row("2026-10-09", -20000, "LIQUIDACION TARJETA")];
+  for (const order of [rows, [...rows].reverse()]) {
+    const out = classifyRows({ rows: order, account: bank, debts: [passDebt], existing: [stored("a", "2026-10-04"), stored("b", "2026-10-12")] }).rows;
+    assert.deepEqual(out.map(p => [p.date, p.status]).sort(), [["2026-10-01", "duplicate"], ["2026-10-09", "duplicate"]]);
+  }
+});
