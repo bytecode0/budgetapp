@@ -312,6 +312,18 @@ Cada paso escribe filas reales (como hoy) y se puede saltar. "Atrás" no borra n
 - Duplicados: la huella no incluye la cuenta y, sin columna de saldo (típico de tarjetas), dos compras idénticas el mismo día se toman por una.
 - Vercel limita el cuerpo de la petición a 4,5 MB: ficheros de más de ~3 MB fallan con 413.
 
+### Etapa 1 — HECHA (rama `feature/importacion`, 29 oct; pendiente de `db push` y de probar en el navegador)
+Núcleo y lectores en `server/lib/ingest/`, con tests; las rutas de importación ya los usan:
+- **Lectores** (TypeScript puro, sin APIs de Node: la etapa 2 los ejecuta en el navegador, decisión O): CSV robusto (comillas, `;` `,` tab `|`, UTF-8/Windows-1252/UTF-16), XLSX (elige la hoja), Norma 43, OFX/QFX; números (`1.234`, `1,234.56`, `(12,34)`, `12,34-`…) a céntimos sin pasar por float; fechas a día natural (`yyyy-mm-dd`), sin zona horaria.
+- **Columnas**: mapeo guardado de la cuenta → perfil de banco (BBVA; Revolut *pendiente de validar con un fichero real*) → sinónimos es/en. Si nada encaja: 422 `unrecognized_columns` con las primeras filas para el mapeo manual.
+- **Núcleo** (`classify.ts`): cuenta vs. tarjeta, pago de tarjeta detectado por frase ("liquidación tarjeta", "recibo visa"…; nunca "pago con tarjeta") o por regla aprendida, mismo pago reconocido entre fichero del banco y de la tarjeta, devoluciones, signo de la tarjeta detectado. Huella por cuenta + nº de aparición sin saldo; ids antiguos reconocidos; "posible duplicado" solo avisa.
+- **Devoluciones (L)**: `Expense.kind = "refund"`, importe positivo que cuenta negativo en `countedAmounts()` y en las compras de la deuda.
+- **Revolut**: solo filas `COMPLETED` (pendientes, revertidas y rechazadas se listan como omitidas); la comisión es un gasto aparte; otra divisa se marca, no se convierte.
+- **Mapeo manual**: `Account.importProfile` (Json) + `GET/PATCH /api/accounts/:id/import-profile` (solo el dueño).
+- **Schema (aditivo, falta `db push`)**: `Expense.kind String @default("expense")`, `Account.importProfile Json?`.
+
+Etapa 2: interfaz del asistente (4.6) con mapeo manual y conmutador de signo, leer el fichero en el navegador y enviar `rows`, UX de pagos de tarjeta (elegir tarjeta cuando hay varias, aprender la regla), mostrar devoluciones en Actividad, mapeo de columnas con IA, perfil de la PASS.
+
 ### 4.1 Núcleo de ingesta común (`server/lib/ingest/`)
 Una sola función decide qué es cada movimiento, venga de un fichero (épica 4) o de un banco (épica 5):
 - **Entrada normalizada:** fecha, importe en céntimos con signo **desde el punto de vista del titular**, descripción, comercio, saldo (opcional), referencia externa (opcional), cuenta destino.
