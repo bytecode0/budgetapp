@@ -15,3 +15,21 @@ export function mutationAccess(
   if (authUserId && record.ownerUserId === authUserId) return "ok";
   return record.visibility === "private" ? "hidden" : "forbidden";
 }
+
+/** Prisma `where` fragment for the per-person records a caller can see: their
+ *  own plus other members' household-shared ones (private ones are hidden).
+ *  The same rule GET uses, so reorder can't touch rows the caller can't see. */
+export function visibleToWhere(authUserId: string) {
+  return { OR: [{ ownerUserId: authUserId }, { visibility: "household" }] };
+}
+
+/** Keeps the reorder entries that name a row visible to the caller (see
+ *  visibleToWhere) with an integer sortOrder. Others are dropped silently:
+ *  the client only ever sends the list it was shown. */
+export function reorderableEntries(
+  order: { id: string; sortOrder: number }[],
+  visibleIds: ReadonlySet<string>,
+): { id: string; sortOrder: number }[] {
+  return order.filter(e =>
+    e && typeof e.id === "string" && visibleIds.has(e.id) && Number.isInteger(e.sortOrder));
+}

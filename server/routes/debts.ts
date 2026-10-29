@@ -1,7 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
-import { mutationAccess } from "../lib/ownership.js";
+import { mutationAccess, reorderableEntries, visibleToWhere } from "../lib/ownership.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { buildDebtTimeline } from "../lib/debtTimeline.js";
 import { householdBaselineIncome } from "../lib/householdIncome.js";
@@ -92,7 +92,7 @@ debtsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
     const debts = await prisma.debt.findMany({
       where: {
         userId: req.userId!,
-        OR: [{ ownerUserId: req.authUserId! }, { visibility: "household" }],
+        ...visibleToWhere(req.authUserId!),
       },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     });
@@ -293,8 +293,15 @@ debtsRouter.patch("/reorder", requireAuth, async (req: AuthRequest, res: Respons
       return res.status(400).json({ error: "order array is required" });
     }
 
+    // Only rows the caller can see (the same rule as GET); others are ignored.
+    const visible = await prisma.debt.findMany({
+      where: { userId: req.userId!, ...visibleToWhere(req.authUserId!) },
+      select: { id: true },
+    });
+    const entries = reorderableEntries(order, new Set(visible.map(r => r.id)));
+
     await prisma.$transaction(
-      order.map(({ id, sortOrder }) =>
+      entries.map(({ id, sortOrder }) =>
         prisma.debt.updateMany({ where: { id, userId: req.userId! }, data: { sortOrder } })
       )
     );
