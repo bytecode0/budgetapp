@@ -6,6 +6,7 @@ import { toCents, serializeMoney } from "../lib/money.js";
 import { buildDebtTimeline } from "../lib/debtTimeline.js";
 import { householdBaselineIncome } from "../lib/householdIncome.js";
 import { simulatePayoff, type PayoffMethod } from "../lib/debtPayoff.js";
+import { debtAccountLinkError, cardDebtKindLocked, type DebtAccountLinkError } from "../lib/debtAccountLink.js";
 import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/period.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import {
@@ -74,6 +75,26 @@ async function createCardAccount(req: AuthRequest, name: string, visibility?: st
     },
   });
   return account.id;
+}
+
+const LINK_ERROR_MESSAGES: Record<DebtAccountLinkError, string> = {
+  card_already_has_debt: "This card already has its debt; record it on the card account",
+};
+
+/** The account `accountId` if it's in the pool, visible to the caller and a
+ *  valid link for the debt (server/lib/debtAccountLink.ts). `null` when it
+ *  isn't usable (ignored, as before), `{ error }` when the link is refused. */
+async function linkableAccount(
+  req: AuthRequest, accountId: string, debtId?: string,
+): Promise<{ id: string } | { error: DebtAccountLinkError } | null> {
+  const account = await prisma.account.findFirst({
+    where: { id: accountId, userId: req.userId!, ...visibleToWhere(req.authUserId!) },
+    select: { id: true, type: true },
+  });
+  if (!account) return null;
+  const onAccount = await prisma.debt.findMany({ where: { userId: req.userId!, accountId: account.id }, select: { id: true } });
+  const code = debtAccountLinkError(debtId, account, onAccount);
+  return code ? { error: code } : { id: account.id };
 }
 
 function defaultPaymentMode(kind: string | undefined): string {
@@ -222,8 +243,9 @@ debtsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     // member's private account is as good as nonexistent).
     let resolvedAccountId: string | null = null;
     if (accountId) {
-      const owned = await prisma.account.findFirst({ where: { id: accountId, userId: req.userId!, ...visibleToWhere(req.authUserId!) }, select: { id: true } });
-      if (owned) resolvedAccountId = owned.id;
+      const linked = await linkableAccount(req, accountId);
+      if (linked && "error" in linked) return res.status(409).json({ error: LINK_ERROR_MESSAGES[linked.error], code: linked.error });
+      if (linked) resolvedAccountId = linked.id;
     }
 
     if (kind === "credit_card" && !resolvedAccountId) {
@@ -341,9 +363,10 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
       if (!accountId) {
         accountUpdate = { accountId: null };
       } else {
-        // Same rule as POST: in the pool and visible to the caller.
-        const owned = await prisma.account.findFirst({ where: { id: accountId, userId: req.userId!, ...visibleToWhere(req.authUserId!) }, select: { id: true } });
-        if (owned) accountUpdate = { accountId: owned.id };
+        // Same rule as POST: in the pool, visible to the caller, a valid link.
+        const linked = await linkableAccount(req, accountId, id);
+        if (linked && "error" in linked) return res.status(409).json({ error: LINK_ERROR_MESSAGES[linked.error], code: linked.error });
+        if (linked) accountUpdate = { accountId: linked.id };
       }
     }
     // The linked account decides which expenses are purchases and how past
@@ -354,6 +377,15 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
       if (ledger && ledger.payments.length + ledger.purchases.length + ledger.adjustments.length > 0) {
         return res.status(409).json({ error: "The account of a debt with recorded movements can't change", code: "debt_account_locked" });
       }
+    }
+
+    // The debt behind a card account is a credit_card for good: another kind
+    // would slip out of the rules that keep it mirroring its card.
+    const existingAccount = existing.accountId
+      ? await prisma.account.findUnique({ where: { id: existing.accountId }, select: { type: true } })
+      : null;
+    if (cardDebtKindLocked(existing, existingAccount?.type ?? null, kind)) {
+      return res.status(409).json({ error: "A card's debt stays a credit card; change the card account instead", code: "card_debt_kind_locked" });
     }
 
     // A card created before cards got their own account (or edited into a
