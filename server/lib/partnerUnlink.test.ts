@@ -101,17 +101,82 @@ test("her moved expenses keep their category via a copied line; plan and other d
   assert.deepEqual(plan.clear.expenseAllocation.sort(), ["ex-in-her-line", "into-ex-line", "saving"]);
 });
 
-test("incomes, debts and accounts never keep a reference across the two scopes", () => {
+test("incomes and accounts never keep a reference across the two scopes", () => {
   const plan = planUnlink({
     ...base,
     accounts: [...base.accounts, { id: "her-on-ex-bank", ownerUserId: HER, bankConnectionId: "ex-bank" }],
-    debts: [...base.debts, { id: "ex-loan-on-her-account", ownerUserId: EX, accountId: "her-checking", bankConnectionId: "her-bank" }],
+    debts: [...base.debts, { id: "her-loan-on-ex-bank", ownerUserId: HER, accountId: null, bankConnectionId: "ex-bank" }],
     incomes: [...base.incomes, { id: "ex-paid-into-hers", ownerUserId: EX, accountId: "her-checking" }],
   });
   assert.deepEqual(plan.clear.incomeAccount, ["ex-paid-into-hers"]);
-  assert.deepEqual(plan.clear.debtAccount, ["ex-loan-on-her-account"]);
-  assert.deepEqual(plan.clear.debtBankConnection, ["ex-loan-on-her-account"]);
+  assert.deepEqual(plan.clear.debtBankConnection, ["her-loan-on-ex-bank"]);
   assert.deepEqual(plan.clear.accountBankConnection, ["her-on-ex-bank"]);
+});
+
+// A debt linked to an account of the other owner (only possible before the
+// same-owner rule): its balance reads the account's purchases, so the pair
+// stays together in the pool and no balance changes on either side.
+test("the ex's debt on her account keeps her account in the pool, with its purchases", () => {
+  const plan = planUnlink({
+    ...base,
+    debts: [...base.debts, { id: "ex-loan-on-her-checking", ownerUserId: EX, accountId: "her-checking", bankConnectionId: null }],
+    expenses: [
+      expense({ id: "buy-on-her-checking", accountId: "her-checking" }),
+      expense({ id: "pay-ex-loan", debtId: "ex-loan-on-her-checking", accountId: "her-card" }),
+    ],
+  });
+  assert.deepEqual(plan.move.accountIds, ["her-card"]);
+  assert.ok(!plan.move.expenseIds.includes("buy-on-her-checking"));
+  // Her bank connection still moves; the account staying behind loses it.
+  assert.deepEqual(plan.clear.accountBankConnection, ["her-checking"]);
+});
+
+test("her debt on the ex's account stays in the pool with it, payments and all", () => {
+  const plan = planUnlink({
+    ...base,
+    debts: [...base.debts, { id: "her-loan-on-ex-card", ownerUserId: HER, accountId: "ex-card", bankConnectionId: null }],
+    allocations: [...base.allocations, { id: "line-her-loan-on-ex-card", type: "debt", debtId: "her-loan-on-ex-card" }],
+    expenses: [
+      expense({ id: "pay-it", debtId: "her-loan-on-ex-card", accountId: "her-checking" }),
+      expense({ id: "ex-card-buy", accountId: "ex-card", payerUserId: EX }),
+    ],
+  });
+  assert.ok(!plan.move.debtIds.includes("her-loan-on-ex-card"));
+  assert.ok(!plan.move.allocationIds.includes("line-her-loan-on-ex-card"));
+  assert.ok(!plan.move.expenseIds.includes("pay-it"));
+});
+
+test("a pair kept in the pool also keeps her other debt on that account", () => {
+  // The ex's loan holds her checking in the pool; her own loan on that same
+  // account must then stay too, or its purchases would be left behind.
+  const plan = planUnlink({
+    ...base,
+    debts: [
+      ...base.debts,
+      { id: "ex-loan", ownerUserId: EX, accountId: "her-checking", bankConnectionId: null },
+      { id: "her-loan-on-checking", ownerUserId: HER, accountId: "her-checking", bankConnectionId: null },
+    ],
+  });
+  assert.ok(!plan.move.accountIds.includes("her-checking"));
+  assert.ok(!plan.move.debtIds.includes("her-loan-on-checking"));
+  assert.ok(plan.move.debtIds.includes("her-card-debt"));
+});
+
+test("after the move no debt is linked to an account in the other scope", () => {
+  const input: UnlinkInput = {
+    ...base,
+    debts: [
+      ...base.debts,
+      { id: "ex-loan", ownerUserId: EX, accountId: "her-checking", bankConnectionId: null },
+      { id: "her-loan2", ownerUserId: HER, accountId: "ex-checking", bankConnectionId: null },
+    ],
+  };
+  const plan = planUnlink(input);
+  const debtMoves = new Set(plan.move.debtIds);
+  const accountMoves = new Set(plan.move.accountIds);
+  for (const d of input.debts) {
+    if (d.accountId) assert.equal(debtMoves.has(d.id), accountMoves.has(d.accountId), d.id);
+  }
 });
 
 test("a member with nothing of her own moves nothing", () => {

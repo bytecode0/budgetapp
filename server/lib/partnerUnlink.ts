@@ -8,20 +8,29 @@
 //
 // What moves back to her own scope (userId = member), model by model:
 //   Account, Debt,
-//   BankConnection    → those she owns (ownerUserId). householdId cleared,
+//   BankConnection    → those she owns (ownerUserId), except a debt and the
+//                       account it is linked to (Debt.accountId) whose owners
+//                       differ: that pair stays in the pool, together with
+//                       whatever else hangs on either. The account's
+//                       purchases feed the debt's balance and how its payments
+//                       split (debtBalance.ts, for every kind of debt), and
+//                       those are read within one userId — splitting the pair,
+//                       or clearing the link, would change a balance. Such a
+//                       pair can only predate the same-owner rule
+//                       (server/lib/debtAccountLink.ts). householdId cleared,
 //                       visibility back to the schema default "household" —
 //                       what a solo user's rows have (she is alone in her
 //                       scope; a later accept makes them private again).
 //                       A moved BankConnection keeps syncing into her scope:
 //                       sync writes to connection.userId.
-//   DebtAdjustment    → those of her debts (they follow the debt).
+//   DebtAdjustment    → those of the debts that move (they follow the debt).
 //   Income            → those she earned (ownerUserId).
 //   Expense           → decided by what it is attached to, so no debt balance
 //                       changes on either side (debtBalance.ts reads payments
 //                       by debtId and card purchases by accountId, both within
 //                       one userId):
-//                         - a payment (debtId set): moves iff the debt is hers;
-//                         - else on an account: moves iff the account is hers
+//                         - a payment (debtId set): moves iff its debt moves;
+//                         - else on an account: moves iff the account moves
 //                           (her bank data — shared ones too, with their shares);
 //                         - else (no account): moves iff she paid it, unless it
 //                           is a shared expense with shares — that one is
@@ -39,8 +48,10 @@
 //   (other lines), RecurringCommitment → stay with the pool (no owner).
 //   HouseholdMember   → her membership in the owner's household is removed.
 //
-// Any reference that would cross the two scopes after the move (e.g. the ex's
-// debt drawn on her account, an ex's expense in her debt line) is cleared.
+// Any other reference that would cross the two scopes after the move (e.g. an
+// ex's expense in her debt line, the ex's income paid into her account) is
+// cleared. Debt.accountId never crosses (see above), so no debt balance
+// changes on either side.
 //
 // planUnlink() holds every decision as a pure function (unit-tested in
 // partnerUnlink.test.ts); loadUnlinkInput() and unlinkMemberFromPool() are the
@@ -81,7 +92,6 @@ export interface UnlinkPlan {
     expenseAccount: string[];
     expenseAllocation: string[];
     incomeAccount: string[];
-    debtAccount: string[];
     debtBankConnection: string[];
     accountBankConnection: string[];
     recurringAllocation: string[];
@@ -95,10 +105,31 @@ function crosses(fromMoves: boolean, target: string | null, moving: Set<string>)
   return target !== null && fromMoves !== moving.has(target);
 }
 
-export function planUnlink(input: UnlinkInput): UnlinkPlan {
+/**
+ * Her accounts and debts that can move: hers, minus every debt–account link
+ * whose two ends would land in different scopes — both ends stay. Repeated
+ * until stable, since keeping an account in the pool can strand another debt
+ * of hers linked to it.
+ */
+function movableAccountsAndDebts(input: UnlinkInput): { accounts: Set<string>; debts: Set<string> } {
   const hers = (r: { ownerUserId: string }) => r.ownerUserId === input.memberId;
   const accounts = new Set(input.accounts.filter(hers).map(a => a.id));
   const debts = new Set(input.debts.filter(hers).map(d => d.id));
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const d of input.debts) {
+      if (d.accountId === null || debts.has(d.id) === accounts.has(d.accountId)) continue;
+      debts.delete(d.id);
+      accounts.delete(d.accountId);
+      changed = true;
+    }
+  }
+  return { accounts, debts };
+}
+
+export function planUnlink(input: UnlinkInput): UnlinkPlan {
+  const hers = (r: { ownerUserId: string }) => r.ownerUserId === input.memberId;
+  const { accounts, debts } = movableAccountsAndDebts(input);
   const connections = new Set(input.bankConnections.filter(hers).map(c => c.id));
   const incomes = new Set(input.incomes.filter(hers).map(i => i.id));
   const allocations = new Set(input.allocations.filter(a => a.debtId !== null && debts.has(a.debtId)).map(a => a.id));
@@ -141,7 +172,6 @@ export function planUnlink(input: UnlinkInput): UnlinkPlan {
       expenseAccount: input.expenses.filter(e => crosses(expenses.has(e.id), e.accountId, accounts)).map(e => e.id),
       expenseAllocation,
       incomeAccount: input.incomes.filter(i => crosses(incomes.has(i.id), i.accountId, accounts)).map(i => i.id),
-      debtAccount: input.debts.filter(d => crosses(debts.has(d.id), d.accountId, accounts)).map(d => d.id),
       debtBankConnection: input.debts.filter(d => crosses(debts.has(d.id), d.bankConnectionId, connections)).map(d => d.id),
       accountBankConnection: input.accounts.filter(a => crosses(accounts.has(a.id), a.bankConnectionId, connections)).map(a => a.id),
       recurringAllocation: input.recurring.filter(r => crosses(false, r.allocationId, allocations)).map(r => r.id),
@@ -208,7 +238,6 @@ export async function unlinkMemberFromPool(db: Db, ctx: { memberId: string; pool
   await inChunks(clear.expenseAccount, ids => db.expense.updateMany({ where: { id: { in: ids } }, data: { accountId: null } }));
   await inChunks(clear.expenseAllocation, ids => db.expense.updateMany({ where: { id: { in: ids } }, data: { allocationId: null } }));
   await inChunks(clear.incomeAccount, ids => db.income.updateMany({ where: { id: { in: ids } }, data: { accountId: null } }));
-  await db.debt.updateMany({ where: { id: { in: clear.debtAccount } }, data: { accountId: null } });
   await db.debt.updateMany({ where: { id: { in: clear.debtBankConnection } }, data: { bankConnectionId: null } });
   await db.account.updateMany({ where: { id: { in: clear.accountBankConnection } }, data: { bankConnectionId: null } });
   await db.recurringCommitment.updateMany({ where: { id: { in: clear.recurringAllocation } }, data: { allocationId: null } });

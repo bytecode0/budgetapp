@@ -7,6 +7,7 @@ import { toCents, serializeMoney } from "../lib/money.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { currentPeriodKey, periodBounds } from "../lib/period.js";
 import { loadDebtLedgers, debtState, owedNow, monthlyCommitment } from "../lib/debtBalance.js";
+import { ownerChangeSplitsDebtLink } from "../lib/debtAccountLink.js";
 import { CARD_PAYMENT_MODES, cardDebtOwnershipChanges, createCardDebt, updateCardDebt, type CardSettings } from "../lib/cardDebt.js";
 
 export const accountsRouter = Router();
@@ -189,6 +190,16 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     const card = finalType === "card" ? cardSettingsFrom(req.body) : null;
     if (card && "error" in card) return res.status(400).json({ error: card.error });
     const linkedDebt = await prisma.debt.findFirst({ where: { userId: req.userId!, accountId: id, kind: "credit_card" }, select: { id: true } });
+
+    // Any other debt on this account must keep the account's owner
+    // (server/lib/debtAccountLink.ts): refuse a handover that would split them.
+    // The card's own debt follows its card (or is dropped with it, below).
+    if (ownerUserId !== undefined && ownerUserId !== existing.ownerUserId) {
+      const onAccount = await prisma.debt.findMany({ where: { userId: req.userId!, accountId: id }, select: { id: true, ownerUserId: true } });
+      if (ownerChangeSplitsDebtLink(ownerUserId, onAccount, linkedDebt?.id ?? null)) {
+        return res.status(409).json({ error: "This account backs a debt of its current owner; it can't change owner", code: "account_backs_owner_debt" });
+      }
+    }
 
     // No longer a card: drop its debt — unless anything was recorded on it,
     // which would rewrite closed months (server/lib/debtBalance.ts).

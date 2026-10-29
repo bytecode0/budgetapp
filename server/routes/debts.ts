@@ -79,21 +79,22 @@ async function createCardAccount(req: AuthRequest, name: string, visibility?: st
 
 const LINK_ERROR_MESSAGES: Record<DebtAccountLinkError, string> = {
   card_already_has_debt: "This card already has its debt; record it on the card account",
+  debt_account_owner_mismatch: "A debt can only be linked to an account of its own owner",
 };
 
 /** The account `accountId` if it's in the pool, visible to the caller and a
  *  valid link for the debt (server/lib/debtAccountLink.ts). `null` when it
  *  isn't usable (ignored, as before), `{ error }` when the link is refused. */
 async function linkableAccount(
-  req: AuthRequest, accountId: string, debtId?: string,
+  req: AuthRequest, accountId: string, debt: { id?: string; ownerUserId: string },
 ): Promise<{ id: string } | { error: DebtAccountLinkError } | null> {
   const account = await prisma.account.findFirst({
     where: { id: accountId, userId: req.userId!, ...visibleToWhere(req.authUserId!) },
-    select: { id: true, type: true },
+    select: { id: true, type: true, ownerUserId: true },
   });
   if (!account) return null;
   const onAccount = await prisma.debt.findMany({ where: { userId: req.userId!, accountId: account.id }, select: { id: true } });
-  const code = debtAccountLinkError(debtId, account, onAccount);
+  const code = debtAccountLinkError(debt, account, onAccount);
   return code ? { error: code } : { id: account.id };
 }
 
@@ -243,7 +244,7 @@ debtsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     // member's private account is as good as nonexistent).
     let resolvedAccountId: string | null = null;
     if (accountId) {
-      const linked = await linkableAccount(req, accountId);
+      const linked = await linkableAccount(req, accountId, { ownerUserId: req.authUserId! });
       if (linked && "error" in linked) return res.status(409).json({ error: LINK_ERROR_MESSAGES[linked.error], code: linked.error });
       if (linked) resolvedAccountId = linked.id;
     }
@@ -364,7 +365,7 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
         accountUpdate = { accountId: null };
       } else {
         // Same rule as POST: in the pool, visible to the caller, a valid link.
-        const linked = await linkableAccount(req, accountId, id);
+        const linked = await linkableAccount(req, accountId, existing);
         if (linked && "error" in linked) return res.status(409).json({ error: LINK_ERROR_MESSAGES[linked.error], code: linked.error });
         if (linked) accountUpdate = { accountId: linked.id };
       }
