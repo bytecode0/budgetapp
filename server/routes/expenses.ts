@@ -405,6 +405,7 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
     const plan = planImportWrites(
       rows.map(r => ({ ...r, amountCents: toCents(r.amount) })),
       {
+        today: new Date().toISOString().slice(0, 10),
         accountId: resolvedAccountId,
         debtLines: debtLines.map(l => ({ id: l.id, debtId: l.debtId!, debtAccountId: l.debt?.accountId ?? null })),
         debts,
@@ -422,7 +423,8 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
       select: { externalId: true },
     })).map(e => e.externalId));
 
-    const [exp, inc] = await Promise.all([
+    // One transaction: a file is imported whole or not at all.
+    const [exp, inc] = await prisma.$transaction([
       prisma.expense.createMany({
         data: plan.expenses.map(e => ({ ...e, userId: req.userId!, source: "import", createdByUserId: req.authUserId! })),
         skipDuplicates: true, // re-importing the same file is a no-op

@@ -13,6 +13,7 @@
 //             debt line.
 //   income  → Income.
 import { normalizeMerchant } from "../normalizeMerchant.js";
+import { makeDay } from "./dates.js";
 
 export const IMPORT_KINDS = new Set(["expense", "income", "payment", "refund"]);
 
@@ -29,6 +30,8 @@ export interface ConfirmRow {
 }
 
 export interface WriteContext {
+  /** Today ("yyyy-mm-dd"): dates more than a year ahead are rejected. */
+  today: string;
   accountId: string | null;
   /** The pool's "debt" budget lines. */
   debtLines: { id: string; debtId: string; debtAccountId: string | null }[];
@@ -75,9 +78,34 @@ export function debtLineError(
   return null;
 }
 
+/** Amounts are Int columns (Postgres int4). */
+export const MAX_AMOUNT_CENTS = 2_147_483_647;
+const MAX_EXTERNAL_ID = 200;
+const MAX_TEXT = 500;
+const MIN_DAY = "1990-01-01";
+
+const addDays = (day: string, n: number) =>
+  new Date(Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10) + n)).toISOString().slice(0, 10);
+
+/** A real calendar day "yyyy-mm-dd" between 1990 and a year from today. */
+export function isImportDay(v: unknown, today: string): v is string {
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)
+    && makeDay(+v.slice(0, 4), +v.slice(5, 7), +v.slice(8, 10)) === v
+    && v >= MIN_DAY && v <= addDays(today, 366);
+}
+
+const optText = (v: unknown) => v === undefined || v === null || (typeof v === "string" && v.length <= MAX_TEXT);
+
 export function planImportWrites(rows: ConfirmRow[], ctx: WriteContext): WritePlan {
-  if (rows.some(r => !r || !IMPORT_KINDS.has(r.kind))) return { error: "Invalid row kind", status: 400 };
-  if (rows.some(r => !Number.isSafeInteger(r.amountCents) || r.amountCents <= 0)) return { error: "Invalid amount", status: 400 };
+  if (rows.some(r => !r || typeof r !== "object" || !IMPORT_KINDS.has(r.kind))) return { error: "Invalid row kind", status: 400 };
+  if (rows.some(r => !Number.isSafeInteger(r.amountCents) || r.amountCents <= 0 || r.amountCents > MAX_AMOUNT_CENTS)) {
+    return { error: "Invalid amount", status: 400 };
+  }
+  if (rows.some(r => !isImportDay(r.date, ctx.today))) return { error: "Invalid date", status: 400 };
+  if (rows.some(r => typeof r.externalId !== "string" || !r.externalId || r.externalId.length > MAX_EXTERNAL_ID)) {
+    return { error: "Invalid externalId", status: 400 };
+  }
+  if (rows.some(r => !optText(r.description) || !optText(r.merchant))) return { error: "Invalid text", status: 400 };
 
   const lineById = new Map(ctx.debtLines.map(l => [l.id, l]));
   const lineByDebt = new Map(ctx.debtLines.map(l => [l.debtId, l.id]));
@@ -87,7 +115,7 @@ export function planImportWrites(rows: ConfirmRow[], ctx: WriteContext): WritePl
     description: r.description ?? "",
     merchant: r.merchant || normalizeMerchant(r.description ?? ""),
     externalId: r.externalId,
-    date: new Date(r.date),
+    date: new Date(r.date), // a calendar day: midnight UTC, as the reader's days
   });
 
   const expenses: ExpenseWrite[] = [];

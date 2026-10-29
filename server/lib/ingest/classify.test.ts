@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { classifyRows, type ClassifyAccount, type ClassifyDebt, type ExistingMovement, type PlannedRow } from "./classify.js";
-import { debtLineError, planImportWrites, type ConfirmRow } from "./writes.js";
+import { debtLineError, MAX_AMOUNT_CENTS, planImportWrites, type ConfirmRow } from "./writes.js";
 import { buildLedgers, countedFrom, debtState, type LedgerDebt, type LedgerExpense } from "../debtBalance.js";
 import type { NormalizedRow } from "./types.js";
 import { isGenericMerchant, preselectLearnedPayment, suggestLearnedPayments, type LearnedDebt } from "./learnedPayments.js";
@@ -27,6 +27,7 @@ const PASS_LEDGER_DEBT: LedgerDebt & { balanceAsOf: Date } = {
   currentBalance: 30000, installmentsPaid: 0, installmentsTotal: null, installmentAmount: null, minimumPayment: null,
   balanceAsOf: new Date(Date.UTC(2026, 8, 30, 12)),
 };
+const TODAY = "2026-10-29";
 const LINES = [{ id: "line-pass", debtId: "pass", debtAccountId: "acc-pass" }];
 const SUPER = "line-super";
 
@@ -67,7 +68,7 @@ class Pool {
       kind, externalId: p.externalId, date: p.date, description: p.description, merchant: p.merchant,
       amountCents: p.amountCents, debtId: kind === "payment" ? p.debtId : null, allocationId: kind === "expense" || kind === "refund" ? SUPER : null,
     }));
-    const plan = planImportWrites(confirm, { accountId: account.id, debtLines: LINES, debts: [{ id: "pass", accountId: "acc-pass" }] });
+    const plan = planImportWrites(confirm, { today: TODAY, accountId: account.id, debtLines: LINES, debts: [{ id: "pass", accountId: "acc-pass" }] });
     if ("error" in plan) throw new Error(plan.error);
     for (const e of plan.expenses) {
       if (this.expenses.some(x => x.externalId === e.externalId)) continue; // @@unique + skipDuplicates
@@ -292,7 +293,7 @@ test("MONEY: a rent 'Transferencia realizada' of 750 never lowers a loan, even w
   assert.deepEqual([r.rows[0].kind, r.rows[0].debtId], ["expense", null]);
   const plan = planImportWrites(
     r.rows.map(p => ({ kind: p.kind as ConfirmRow["kind"], externalId: p.externalId, date: p.date, amountCents: p.amountCents, debtId: p.debtId })),
-    { accountId: "acc-bank", debtLines: [{ id: "line-loan", debtId: "loan", debtAccountId: null }], debts: [{ id: "loan", accountId: null }] },
+    { today: TODAY, accountId: "acc-bank", debtLines: [{ id: "line-loan", debtId: "loan", debtAccountId: null }], debts: [{ id: "loan", accountId: null }] },
   );
   assert.ok(!("error" in plan) && plan.expenses.every(e => e.debtId === null));
 });
@@ -324,7 +325,7 @@ test("card: an unlabelled credit needs review (never guessed); refund wins over 
   ]);
   // A review row is never writable as such: the user must pick a side.
   const plan = planImportWrites([{ kind: "needs_review", externalId: "x", date: "2026-10-05", amountCents: 1500 }],
-    { accountId: "acc-pass", debtLines: LINES, debts: [{ id: "pass", accountId: "acc-pass" }] });
+    { today: TODAY, accountId: "acc-pass", debtLines: LINES, debts: [{ id: "pass", accountId: "acc-pass" }] });
   assert.ok("error" in plan);
 });
 
@@ -431,7 +432,7 @@ test("zero-amount lines are dropped; fees become their own expense; currency mis
 // ── Writes ─────────────────────────────────────────────────────────────────
 
 test("writes: a card can't pay itself; refunds never on a debt line; payments need a known debt", () => {
-  const ctx = { accountId: "acc-pass", debtLines: LINES, debts: [{ id: "pass", accountId: "acc-pass" }] };
+  const ctx = { today: TODAY, accountId: "acc-pass", debtLines: LINES, debts: [{ id: "pass", accountId: "acc-pass" }] };
   const base = { externalId: "x", date: "2026-10-05", amountCents: 100 };
   const paid = planImportWrites([{ ...base, kind: "expense", allocationId: "line-pass" }], ctx);
   assert.ok("error" in paid && paid.code === "paid_from_card");
@@ -472,4 +473,24 @@ test("unassigned card payment (several cards): flagged with the stored payment i
   };
   const r = classifyRows({ rows: [row("2026-10-05", -12000, "LIQUIDACION TARJETA")], account: bank, debts: [passDebt, visa], existing: [stored] }).rows[0];
   assert.deepEqual([r.kind, r.warnings, r.possibleDuplicate?.id], ["expense", ["card_payment_unassigned"], "v1"]);
+});
+
+test("confirm validation: real days in a sane range, bounded ids, Int32 amounts > 0", () => {
+  const ctx = { today: TODAY, accountId: "acc-bank", debtLines: LINES, debts: [{ id: "pass", accountId: "acc-pass" }] };
+  const ok = { kind: "expense", externalId: "x", date: "2026-10-05", amountCents: 100 };
+  const err = (r: Partial<ConfirmRow> & Record<string, unknown>) => {
+    const plan = planImportWrites([{ ...ok, ...r } as ConfirmRow], ctx);
+    return "error" in plan ? plan.error : null;
+  };
+  assert.equal(err({}), null);
+  assert.equal(err({ amountCents: MAX_AMOUNT_CENTS }), null);
+  assert.equal(err({ amountCents: MAX_AMOUNT_CENTS + 1 }), "Invalid amount");
+  assert.equal(err({ amountCents: 0 }), "Invalid amount");
+  assert.equal(err({ amountCents: -5 }), "Invalid amount");
+  for (const date of ["2026-02-30", "05/10/2026", "2026-10-05T00:00:00Z", "1989-12-31", "2027-11-01", "", 20261005]) {
+    assert.equal(err({ date: date as string }), "Invalid date", String(date));
+  }
+  assert.equal(err({ date: "2027-10-29" }), null); // up to a year ahead (scheduled movements)
+  for (const externalId of ["", "x".repeat(201), 42, null]) assert.equal(err({ externalId: externalId as string }), "Invalid externalId");
+  assert.equal(err({ description: "x".repeat(501) }), "Invalid text");
 });
