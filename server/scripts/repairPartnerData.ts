@@ -13,6 +13,12 @@
 // someone linked to her, or an inviter who is itself linked to someone else,
 // has no single well-defined pool (server/lib/partnerRepair.ts).
 //
+// The couples are read once at the start, so with --apply each one is merged
+// in its own transaction under the same row locks as accept/unlink
+// (server/lib/partnerLink.ts), after re-checking that it is still the same
+// one-level link. A couple that unlinked, relinked or became a chain since is
+// skipped, never re-merged.
+//
 // Income baseline (UserSettings.monthlyIncome). The household baseline is now
 // the owner's + the partner's (server/lib/householdIncome.ts), but the old
 // income step wrote the WHOLE pool's income into the owner's row — so for
@@ -35,6 +41,7 @@
 import { prisma } from "../lib/prisma.js";
 import { ensureHousehold } from "../lib/household.js";
 import { isEmptySummary, mergeMemberIntoPool, previewPoolMerge, type MergeSummary } from "../lib/partnerMerge.js";
+import { lockSettings, coupleChange } from "../lib/partnerLink.js";
 import { planRepairCouples, baselineFromOwnIncomes, assessCoupleBaseline, type CoupleBaselineCheck } from "../lib/partnerRepair.js";
 import { clampCycleStartDay, periodKeyFor } from "../lib/period.js";
 
@@ -112,11 +119,31 @@ async function checkBaselines(memberId: string, poolId: string) {
       if (!apply) {
         console.log(`${label}: would move ${line(preview)}`);
       } else {
-        const moved = await prisma.$transaction(async (tx) => {
+        // The couples were read once, at the start. Under the same locks as
+        // accept/unlink, make sure this is still the same one-level link
+        // before merging: one that unlinked meanwhile must not be re-merged.
+        const result = await prisma.$transaction(async (tx) => {
+          await lockSettings(tx, [memberId, poolId]);
+          const [member, linkedToMember, pool] = await Promise.all([
+            tx.userSettings.findUnique({ where: { userId: memberId }, select: { linkedUserId: true } }),
+            tx.userSettings.findFirst({ where: { linkedUserId: memberId }, select: { id: true } }),
+            tx.userSettings.findUnique({ where: { userId: poolId }, select: { linkedUserId: true } }),
+          ]);
+          const changed = coupleChange(poolId, {
+            memberLinkedTo: member?.linkedUserId ?? null,
+            someoneLinkedToMember: !!linkedToMember,
+            poolLinkedTo: pool?.linkedUserId ?? null,
+          });
+          if (changed) return { changed };
           const householdId = await ensureHousehold(poolId, memberId, "transparent", tx);
-          return mergeMemberIntoPool(tx, { memberId, poolId, householdId });
+          return { moved: await mergeMemberIntoPool(tx, { memberId, poolId, householdId }) };
         }, { timeout: 60_000 });
-        console.log(`${label}: moved ${line(moved)}`);
+        if ("changed" in result) {
+          console.warn(`${label}: skipped (link changed since the start: ${result.changed})`);
+          skipped++;
+          continue;
+        }
+        console.log(`${label}: moved ${line(result.moved)}`);
       }
     }
 

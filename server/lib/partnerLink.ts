@@ -38,3 +38,23 @@ export function acceptBlocker(s: AcceptState): string | null {
   if (s.someoneLinkedToSender) return "The sender already has a linked partner";
   return null;
 }
+
+export interface CoupleState {
+  /** Who the member is linked to now (null: unlinked meanwhile). */
+  memberLinkedTo: string | null;
+  /** Someone is linked to the member now. */
+  someoneLinkedToMember: boolean;
+  /** Who the pool owner is linked to now. */
+  poolLinkedTo: string | null;
+}
+
+export type CoupleChange = "unlinked" | "relinked" | "member_has_partner_linked" | "pool_is_linked";
+
+/** Whether a couple read earlier is still the same one-level link, or what changed. */
+export function coupleChange(poolId: string, s: CoupleState): CoupleChange | null {
+  if (s.memberLinkedTo === null) return "unlinked";
+  if (s.memberLinkedTo !== poolId) return "relinked";
+  if (s.someoneLinkedToMember) return "member_has_partner_linked";
+  if (s.poolLinkedTo !== null) return "pool_is_linked";
+  return null;
+}
