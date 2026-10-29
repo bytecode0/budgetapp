@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { OAuth2Client } from "google-auth-library";
 import { prisma } from "../lib/prisma.js";
@@ -11,7 +12,7 @@ import {
   sendWelcomeEmail,
   sendWelcomeGoogleEmail,
 } from "../lib/mailer.js";
-import { parseLocale, resolveLocale } from "../lib/email/locales/index.js";
+import { parseLocale, resolveLocale, type EmailLocale } from "../lib/email/locales/index.js";
 
 export const authRouter = Router();
 
@@ -42,6 +43,47 @@ export function readGoogleSession(token: string): string | null {
   } catch {
     return null;
   }
+}
+
+// OAuth CSRF protection: GET /google puts a random nonce in an httpOnly cookie
+// and the same nonce in `state`; the callback only exchanges a code when the
+// two match, so a sign-in can't be completed in a browser that didn't start it
+// (login CSRF). `state` is `<nonce>` or `<nonce>.<lang>`: the UI language rides
+// along so a new user's settings are created in it (not a secret, re-validated
+// on the way back). base64url never contains a '.'.
+export const GOOGLE_STATE_COOKIE = "google_oauth_state";
+const GOOGLE_STATE_COOKIE_OPTS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  path: "/api/auth/google", // also covers /api/auth/google/callback
+};
+const GOOGLE_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+const NONCE_PATTERN = /^[A-Za-z0-9_-]{43}$/; // 32 bytes, base64url, no padding
+
+export function newGoogleNonce(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+export function buildGoogleState(nonce: string, lang: EmailLocale | null): string {
+  return lang ? `${nonce}.${lang}` : nonce;
+}
+
+/** The nonce and (validated) language inside a `state`; null when malformed. */
+export function parseGoogleState(state: unknown): { nonce: string; lang: EmailLocale | null } | null {
+  if (typeof state !== "string") return null;
+  const dot = state.indexOf(".");
+  const nonce = dot === -1 ? state : state.slice(0, dot);
+  if (!NONCE_PATTERN.test(nonce)) return null;
+  return { nonce, lang: dot === -1 ? null : parseLocale(state.slice(dot + 1)) };
+}
+
+/** Constant-time comparison of the cookie's nonce with the one in `state`. */
+export function googleNonceMatches(cookieNonce: unknown, stateNonce: string): boolean {
+  if (typeof cookieNonce !== "string") return false;
+  const a = Buffer.from(cookieNonce);
+  const b = Buffer.from(stateNonce);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 // One client per request: getToken/setCredentials mutate it, and a shared
@@ -78,13 +120,12 @@ authRouter.get("/google", (req: Request, res: Response) => {
   // A top-level navigation, not a fetch: send the browser back to the app with
   // the same error the callback uses, never to Google.
   if (!googleClient) return res.redirect(`${process.env.APP_URL ?? "http://localhost:5173"}/?error=google_failed`);
-  // The UI language (?lang=es|en) rides in `state` so a new user's settings are
-  // created in it. It is not a secret and is re-validated on the way back.
-  const lang = parseLocale(req.query.lang);
+  const nonce = newGoogleNonce();
+  res.cookie(GOOGLE_STATE_COOKIE, nonce, { ...GOOGLE_STATE_COOKIE_OPTS, maxAge: GOOGLE_STATE_MAX_AGE_MS });
   const url = googleClient.generateAuthUrl({
     access_type: "offline",
     prompt: "select_account",
-    ...(lang && { state: lang }),
+    state: buildGoogleState(nonce, parseLocale(req.query.lang)),
     scope: [
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile",
@@ -96,9 +137,18 @@ authRouter.get("/google", (req: Request, res: Response) => {
 authRouter.get("/google/callback", async (req: Request, res: Response) => {
   const appUrl = process.env.APP_URL ?? "http://localhost:5173";
   const { code, error, state } = req.query as Record<string, string>;
+  // Single use: cleared whatever happens next.
+  const cookieNonce = req.cookies?.[GOOGLE_STATE_COOKIE];
+  res.clearCookie(GOOGLE_STATE_COOKIE, GOOGLE_STATE_COOKIE_OPTS);
 
   if (error || !code) {
     return res.redirect(`${appUrl}/?error=google_denied`);
+  }
+
+  const parsedState = parseGoogleState(state);
+  if (!parsedState || !googleNonceMatches(cookieNonce, parsedState.nonce)) {
+    console.error("[auth/google/callback] state does not match the sign-in cookie");
+    return res.redirect(`${appUrl}/?error=google_failed`);
   }
 
   const googleClient = newGoogleClient();
@@ -138,7 +188,7 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
     });
 
     if (isNewUser) {
-      const locale = parseLocale(state) ?? undefined;
+      const locale = parsedState.lang ?? undefined;
       sendWelcomeGoogleEmail(user.email!, user.name ?? "", locale).catch((e) =>
         console.error("[auth/google/callback] welcome google email failed:", e)
       );
