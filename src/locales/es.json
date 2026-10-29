@@ -791,7 +791,10 @@
     "signQuestion": "¿Cómo aparecen las compras en este extracto de tarjeta?",
     "signUnknown": "No podemos saber cómo escribe las compras este extracto de tarjeta. Elige una opción para ver los movimientos bien clasificados; hasta entonces no se importa nada.",
     "signNegative": "Compras en negativo (−)",
-    "signPositive": "Compras en positivo (+)"
+    "signPositive": "Compras en positivo (+)",
+    "learnedPayment": "pago sugerido por una regla: confírmalo",
+    "paysDebt": "Paga",
+    "notAPayment": "No es un pago de deuda (gasto)"
   },
   "budgets": {
     "title": "Presupuestos sugeridos",

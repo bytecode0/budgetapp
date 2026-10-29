@@ -9,6 +9,7 @@ import { prepareImport } from "../lib/importStatement.js";
 import { StatementReadError } from "../lib/ingest/read.js";
 import { parseNormalizedRows } from "../lib/ingest/validate.js";
 import { PAID_FROM_CARD, planImportWrites } from "../lib/ingest/writes.js";
+import { isGenericMerchant } from "../lib/ingest/learnedPayments.js";
 import type { NormalizedRow } from "../lib/ingest/types.js";
 import { aiEnabled, classifyMerchants } from "../lib/ai/classify.js";
 import { suggestCategories } from "../lib/ai/suggestCategories.js";
@@ -430,11 +431,14 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
     // auto-categorized. Dedupe by merchant (last assignment wins). Best-effort:
     // a learning failure must not undo the already-committed import. A payment
     // from a bank account teaches its debt line (the next statement proposes
-    // it as a payment); refunds and a card statement's own payment lines don't.
+    // it as a payment, for the user to confirm) — unless the merchant is a
+    // generic label ("Transferencia realizada"…) that could be anything;
+    // refunds and a card statement's own payment lines don't teach either.
     try {
       const merchantToAllocation = new Map<string, string>();
       for (const e of plan.expenses) {
         if (!e.allocationId || !e.merchant || e.kind === "refund" || (e.debtId && !e.accountId)) continue;
+        if (e.debtId && isGenericMerchant(e.merchant)) continue;
         merchantToAllocation.set(e.merchant, e.allocationId);
       }
       for (const [merchant, allocationId] of merchantToAllocation) {
@@ -599,10 +603,14 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     });
 
     // Learn from manual re-assignment: when the user moves an expense to a (real)
-    // allocation, remember the merchant -> allocation mapping for next time.
+    // allocation, remember the merchant -> allocation mapping for next time —
+    // except a debt line for a generic label ("Transferencia realizada"…),
+    // which would make every such transfer look like that debt's payment.
     if (allocationId !== undefined && newAllocId && newAllocId !== existing.allocationId) {
       const effectiveMerchant = description !== undefined ? normalizeMerchant(description) : existing.merchant;
-      await learnFromCorrection(req.userId!, effectiveMerchant, newAllocId);
+      if (!(paidDebt && isGenericMerchant(effectiveMerchant))) {
+        await learnFromCorrection(req.userId!, effectiveMerchant, newAllocId);
+      }
     }
 
     await syncDebtStatus(req.userId!, [existing.debtId, expense.debtId]);

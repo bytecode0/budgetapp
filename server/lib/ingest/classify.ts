@@ -36,13 +36,14 @@
 //    is only flagged for the user to decide, never dropped.
 import crypto from "crypto";
 import { normalizeMerchant } from "../normalizeMerchant.js";
+import type { LearnedPayment } from "./learnedPayments.js";
 import type { NormalizedRow } from "./types.js";
 
 export type ImportMode = "account" | "card";
 /** "needs_review": a card credit that is neither recognisably a payment nor a
  *  refund. Never written as such: the user resolves it to one or the other. */
 export type PlannedKind = "expense" | "income" | "payment" | "refund" | "needs_review";
-export type RowWarning = "currency_mismatch" | "ambiguous_credit" | "card_payment_unassigned";
+export type RowWarning = "currency_mismatch" | "ambiguous_credit" | "card_payment_unassigned" | "learned_payment";
 
 export interface ClassifyAccount {
   id: string | null;
@@ -99,6 +100,9 @@ export interface PlannedRow {
   status: "new" | "duplicate";
   duplicateReason?: "same_movement" | "same_payment";
   possibleDuplicate?: PossibleDuplicate;
+  /** A payment proposed only from a learned rule ("learned_payment"): the
+   *  user confirms it; preselected when the amount is the instalment. */
+  learnedPayment?: { preselect: boolean };
   warnings: RowWarning[];
 }
 
@@ -109,9 +113,10 @@ export interface ClassifyInput {
   existing: ExistingMovement[];
   /** Card files: how purchases appear. Undefined → detected. */
   purchasesSign?: PurchasesSign;
-  /** Bank rows (by rowIndex) the user's categorisation rules already put on a
-   *  debt's budget line: payments of that debt, as the user taught. */
-  learnedPayments?: ReadonlyMap<number, string>;
+  /** Bank rows (by rowIndex) the user's categorisation rules put on a debt's
+   *  budget line (learnedPayments.ts): proposed as payments of that debt, for
+   *  the user to confirm — never decided by the rule alone. */
+  learnedPayments?: ReadonlyMap<number, LearnedPayment>;
 }
 
 export interface ClassifyResult {
@@ -266,15 +271,22 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
 
     let kind: PlannedKind;
     let debtId: string | null = null;
+    let learnedPayment: PlannedRow["learnedPayment"];
     if (mode === "account") {
       if (row.amountCents > 0) kind = "income";
       else {
+        // A card-payment phrase naming one card decides; a learned rule only proposes.
+        const detected = detectCardPayment(row, account, debts);
         const learned = input.learnedPayments?.get(row.rowIndex);
-        const payment = learned ? { debtId: learned } : detectCardPayment(row, account, debts);
-        if (payment?.debtId) { kind = "payment"; debtId = payment.debtId; }
-        else {
+        if (detected?.debtId) { kind = "payment"; debtId = detected.debtId; }
+        else if (learned) {
+          kind = "payment";
+          debtId = learned.debtId;
+          learnedPayment = { preselect: learned.preselect };
+          warnings.push("learned_payment");
+        } else {
           kind = "expense";
-          if (payment) warnings.push("card_payment_unassigned");
+          if (detected) warnings.push("card_payment_unassigned");
         }
       }
     } else if (row.amountCents < 0) {
@@ -311,6 +323,7 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
       legacyExternalId: legacy,
       status: existingIds.has(hash(key)) || existingIds.has(legacy) ? "duplicate" : "new",
       ...(existingIds.has(hash(key)) || existingIds.has(legacy) ? { duplicateReason: "same_movement" as const } : {}),
+      ...(learnedPayment ? { learnedPayment } : {}),
       warnings,
     });
 

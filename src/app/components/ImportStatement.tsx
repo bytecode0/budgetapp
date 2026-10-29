@@ -42,6 +42,8 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const [allocByRow, setAllocByRow] = useState<Record<string, string>>({});
   // needs_review rows: what the user says the card credit is.
   const [resolution, setResolution] = useState<Record<string, 'payment' | 'refund'>>({});
+  // Bank rows that may pay a debt: the debt chosen, '' = not a payment (an expense).
+  const [payTarget, setPayTarget] = useState<Record<string, string>>({});
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiMerchants, setAiMerchants] = useState<Set<string>>(new Set());
   const [proposedCats, setProposedCats] = useState<AiCategory[] | null>(null);
@@ -50,7 +52,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const [postImportBudgets, setPostImportBudgets] = useState(false);
 
   useEffect(() => {
-    if (!isOpen) { setData(null); setFile(null); setSelected(new Set()); setAllocByRow({}); setResolution({}); setAiMerchants(new Set()); setProposedCats(null); setPostImportBudgets(false); }
+    if (!isOpen) { setData(null); setFile(null); setSelected(new Set()); setAllocByRow({}); setResolution({}); setPayTarget({}); setAiMerchants(new Set()); setProposedCats(null); setPostImportBudgets(false); }
     if (isOpen && !accountId && defaultAccount) setAccountId(defaultAccount.id);
     if (isOpen) {
       fetch('/api/ai/status', { credentials: 'include' })
@@ -79,10 +81,17 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     // one by one; and nothing while a card file's sign is unknown. Pre-fill
     // the suggested allocation per row.
     setResolution({});
+    // A payment proposed only by a learned rule starts unchecked unless its
+    // amount is the debt's instalment (server/lib/ingest/learnedPayments.ts).
+    setPayTarget(Object.fromEntries(p.rows
+      .filter(r => r.kind === 'payment' && p.mode !== 'card')
+      .map(r => [r.externalId, r.learnedPayment && !r.learnedPayment.preselect ? '' : r.debtId ?? ''])));
     setSelected(p.purchasesSign === 'unknown' ? new Set() : new Set(p.rows
       .filter(r => r.status === 'new' && r.kind !== 'needs_review' && !r.possibleDuplicate && !r.warnings?.includes('currency_mismatch'))
       .map(r => r.externalId)));
-    setAllocByRow(Object.fromEntries(p.rows.filter(r => r.suggestedAllocationId).map(r => [r.externalId, r.suggestedAllocationId!])));
+    // (A payment's suggestion is its debt line: never prefilled as a category,
+    // or turning the payment into an expense would still pay the debt.)
+    setAllocByRow(Object.fromEntries(p.rows.filter(r => r.suggestedAllocationId && r.kind !== 'payment').map(r => [r.externalId, r.suggestedAllocationId!])));
   };
 
   // Group new expense rows by merchant so the user can categorize a whole shop at
@@ -165,9 +174,17 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     setSelected(prev => new Set(prev).add(id));
   };
 
-  // The kind a row is imported as: a review row only once resolved.
-  const confirmKindOf = (r: ImportPreview['rows'][number]): ConfirmRow['kind'] | null =>
-    r.kind === 'needs_review' ? resolution[r.externalId] ?? null : r.kind;
+  // Rows whose debt the user picks: bank-side payments.
+  const hasPayTarget = (r: ImportPreview['rows'][number]) => r.externalId in payTarget;
+
+  // The kind a row is imported as: a review row only once resolved; a bank
+  // payment only while a debt is picked for it.
+  const confirmKindOf = (r: ImportPreview['rows'][number]): ConfirmRow['kind'] | null => {
+    if (r.kind === 'needs_review') return resolution[r.externalId] ?? null;
+    if (hasPayTarget(r)) return payTarget[r.externalId] ? 'payment' : 'expense';
+    return r.kind;
+  };
+  const debtIdOf = (r: ImportPreview['rows'][number]) => (hasPayTarget(r) ? payTarget[r.externalId] || null : r.debtId ?? null);
 
   const toggle = (id: string) => setSelected(prev => {
     const next = new Set(prev);
@@ -190,7 +207,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
           merchant: r.merchant,
           amount: r.amount,
           allocationId: kind === 'expense' || kind === 'refund' ? (allocByRow[r.externalId] || null) : undefined,
-          debtId: kind === 'payment' ? r.debtId ?? null : undefined,
+          debtId: kind === 'payment' ? debtIdOf(r) : undefined,
         }];
       });
     if (rows.length === 0) { toast.error(t('import.nothingSelected')); return; }
@@ -428,7 +445,8 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                           <p className="text-xs text-muted-foreground">
                             {fmtDate(r.date)}
                             {isDup && <> · {t('import.duplicate')}</>}
-                            {r.kind === 'payment' && <> · {t('import.payment')}</>}
+                            {kind === 'payment' && <> · {t('import.payment')}</>}
+                            {!isDup && r.learnedPayment && <> · <span className="text-amber-600">{t('import.learnedPayment')}</span></>}
                             {r.kind === 'refund' && <> · {t('import.refund')}</>}
                             {isReview && <> · <span className="text-amber-600">{t('import.reviewCredit')}</span></>}
                             {r.isFee && <> · {t('import.fee')}</>}
@@ -450,6 +468,19 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                           {r.signedAmount > 0 ? '+' : '-'}{fmtEuro(r.signedAmount)}
                         </p>
                       </div>
+                      {hasPayTarget(r) && !isDup && (
+                        <div className="pl-7 flex items-center gap-2">
+                          <label className="text-xs text-muted-foreground shrink-0">{t('import.paysDebt')}</label>
+                          <select
+                            value={payTarget[r.externalId]}
+                            onChange={e => setPayTarget(prev => ({ ...prev, [r.externalId]: e.target.value }))}
+                            className="text-xs border border-border rounded-lg px-2 py-1 bg-background outline-none focus:border-primary min-w-0 flex-1"
+                          >
+                            <option value="">{t('import.notAPayment')}</option>
+                            {(data.debts ?? []).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                          </select>
+                        </div>
+                      )}
                       {isReview && (
                         <div className="pl-7 flex flex-wrap items-center gap-2">
                           <p className="text-xs text-amber-700 dark:text-amber-400 flex-1 min-w-[12rem]">{t('import.reviewCreditHint')}</p>

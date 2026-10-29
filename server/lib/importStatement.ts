@@ -11,6 +11,7 @@ import { prisma } from "./prisma.js";
 import { pickAllocationId } from "./categorize.js";
 import { classifyRows, type ExistingMovement, type PlannedKind, type PossibleDuplicate, type PurchasesSign, type PurchasesSignGuess, type RowWarning } from "./ingest/classify.js";
 import { readStatement } from "./ingest/read.js";
+import { suggestLearnedPayments } from "./ingest/learnedPayments.js";
 import { storedMapping } from "./ingest/validate.js";
 import type { NormalizedRow, SkippedRow, StatementSource } from "./ingest/types.js";
 
@@ -35,6 +36,8 @@ export interface ImportRow {
   duplicateReason?: "same_movement" | "same_payment";
   /** Same amount, ±2 days, same account, other source: the user decides. */
   possibleDuplicate?: PossibleDuplicate;
+  /** A payment proposed from a learned rule: the user confirms it. */
+  learnedPayment?: { preselect: boolean };
   warnings?: RowWarning[];
 }
 
@@ -53,6 +56,9 @@ export interface ImportPreview {
   skipped?: SkippedRow[];
   source?: StatementSource;
   mode?: "account" | "card";
+  /** Debts a bank row may pay (the preview lets the user pick or change a
+   *  payment's debt): the active ones, never the imported card's own. */
+  debts?: { id: string; name: string }[];
   /** Card files: how purchases appeared, and whether that was guessed.
    *  "unknown": the file doesn't say — the user must choose before importing. */
   purchasesSign?: PurchasesSignGuess;
@@ -105,22 +111,24 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
     : readStatement(input.file!.bytes, input.file!.filename, { mapping });
 
   const [debts, debtLines, rules, allocations] = await Promise.all([
-    prisma.debt.findMany({ where: { userId }, select: { id: true, name: true, kind: true, accountId: true, status: true } }),
+    prisma.debt.findMany({
+      where: { userId },
+      select: { id: true, name: true, kind: true, accountId: true, status: true, installmentAmount: true, minimumPayment: true },
+    }),
     prisma.allocation.findMany({ where: { userId, type: "debt", debtId: { not: null } }, select: { id: true, debtId: true } }),
     prisma.categorizationRule.findMany({ where: { userId }, orderBy: [{ priority: "desc" }, { createdAt: "asc" }] }),
     prisma.allocation.findMany({ where: { userId }, select: { id: true, name: true } }),
   ]);
   const lineByDebt = new Map(debtLines.map(a => [a.debtId!, a.id]));
   const debtByLine = new Map(debtLines.map(a => [a.id, a.debtId!]));
-  const debtById = new Map(debts.map(d => [d.id, d]));
   const cardDebt = account?.type === "card"
     ? debts.find(d => d.accountId === account.id && d.kind === "credit_card") ?? null
     : null;
   const isCard = account?.type === "card";
 
-  // Rules first: a merchant the user already put on a debt's line is a
-  // payment of that debt (as the confirm route has always treated it) — and
-  // the core must know before dedup, to recognise it as the same payment.
+  // Rules first: a specific merchant the user already put on a debt's line is
+  // PROPOSED as a payment of that debt (learnedPayments.ts) — and the core
+  // must know before dedup, to recognise it as the same payment.
   const ruleFor = (r: { description: string; merchant: string }) => pickAllocationId(rules, r.description, r.merchant);
 
   const context = {
@@ -154,14 +162,10 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
   if (missingIds.length) existing = [...existing, ...await loadExisting(userId, { externalId: { in: missingIds } })];
 
   // Rule-learned payments (bank accounts only: a card can't pay itself).
-  const learnedPayments = new Map<number, string>();
-  if (!isCard) {
-    for (const p of firstPass.rows) {
-      if (p.kind !== "expense" || p.isFee) continue;
-      const debtId = debtByLine.get(ruleFor(p) ?? "");
-      if (debtId && debtById.get(debtId)?.accountId !== account?.id) learnedPayments.set(p.rowIndex, debtId);
-    }
-  }
+  const learnedPayments = isCard ? undefined : suggestLearnedPayments(
+    firstPass.rows.filter(p => p.kind === "expense" && !p.isFee),
+    { accountId: account?.id ?? null, ruleFor, debtByLine, debts: new Map(context.debts.map(d => [d.id, d])) },
+  );
   const result = classifyRows({ ...context, rows: read.rows, existing, learnedPayments });
 
   const nameById = new Map(allocations.map(a => [a.id, a.name]));
@@ -188,6 +192,7 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
       isFee: p.isFee,
       ...(p.duplicateReason ? { duplicateReason: p.duplicateReason } : {}),
       ...(p.possibleDuplicate ? { possibleDuplicate: p.possibleDuplicate } : {}),
+      ...(p.learnedPayment ? { learnedPayment: p.learnedPayment } : {}),
       warnings: p.warnings,
     };
   });
@@ -205,6 +210,7 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
     possibleDuplicateCount: count(r => r.status === "new" && !!r.possibleDuplicate),
     skipped: read.skipped,
     source: read.source,
+    debts: context.debts.filter(d => !(account && d.accountId === account.id)).map(d => ({ id: d.id, name: d.name })),
     mode: result.mode,
     ...(result.purchasesSign ? { purchasesSign: result.purchasesSign, purchasesSignDetected: result.purchasesSignDetected } : {}),
   };

@@ -6,6 +6,8 @@ import { classifyRows, type ClassifyAccount, type ClassifyDebt, type ExistingMov
 import { planImportWrites, type ConfirmRow } from "./writes.js";
 import { buildLedgers, countedFrom, debtState, type LedgerDebt, type LedgerExpense } from "../debtBalance.js";
 import type { NormalizedRow } from "./types.js";
+import { isGenericMerchant, preselectLearnedPayment, suggestLearnedPayments, type LearnedDebt } from "./learnedPayments.js";
+import { normalizeMerchant } from "../normalizeMerchant.js";
 
 let seq = 0;
 const row = (date: string, amountCents: number, description: string, extra: Partial<NormalizedRow> = {}): NormalizedRow =>
@@ -252,12 +254,63 @@ test("bank card payment: several cards → by name; none matches → expense fla
   assert.equal(loanOnly.rows[0].kind, "expense");
 });
 
-test("rules the user taught (merchant → debt line) make a bank row a payment", () => {
+test("rules the user taught (merchant → debt line) only PROPOSE a payment; a phrase naming a card decides", () => {
   const r = classifyRows({
     rows: [row("2026-10-05", -6000, "CETELEM RECIBO")], account: bank, debts: [], existing: [],
-    learnedPayments: new Map([[seq - 1, "cetelem"]]),
+    learnedPayments: new Map([[seq - 1, { debtId: "cetelem", preselect: false }]]),
   });
-  assert.deepEqual([r.rows[0].kind, r.rows[0].debtId], ["payment", "cetelem"]);
+  assert.deepEqual([r.rows[0].kind, r.rows[0].debtId, r.rows[0].learnedPayment, r.rows[0].warnings],
+    ["payment", "cetelem", { preselect: false }, ["learned_payment"]]);
+  const phrase = classifyRows({
+    rows: [row("2026-10-05", -6000, "LIQUIDACION TARJETA")], account: bank, debts: [passDebt], existing: [],
+    learnedPayments: new Map([[seq - 1, { debtId: "cetelem", preselect: true }]]),
+  });
+  assert.deepEqual([phrase.rows[0].debtId, phrase.rows[0].learnedPayment], ["pass", undefined]);
+});
+
+// ── Learned debt-line rules (learnedPayments.ts) ──────────────────────────
+
+const LOAN: LearnedDebt = { id: "loan", accountId: null, installmentAmount: 25000, minimumPayment: null };
+const loanRule = (_: { description: string; merchant: string }) => "line-loan";
+const suggest = (rows: NormalizedRow[]) => suggestLearnedPayments(
+  rows.map(r => ({ rowIndex: r.rowIndex, description: r.description, merchant: normalizeMerchant(r.description), amountCents: Math.abs(r.amountCents) })),
+  { accountId: "acc-bank", ruleFor: loanRule, debtByLine: new Map([["line-loan", "loan"]]), debts: new Map([["loan", LOAN]]) },
+);
+
+test("generic merchants: transfers, Bizum, direct debits and very short keys are never debt-specific", () => {
+  for (const m of ["Transferencia realizada", "TRASPASO", "Bizum", "Recibo", "PAGO", "Cargo", "Abono", "Ingreso",
+    "Transfer to", "Payment", "SEPA direct debit", "ab", "Transferencia 1234"]) {
+    assert.equal(isGenericMerchant(m), true, m);
+  }
+  for (const m of ["Cetelem", "Wizink", "Klarna", "Mercadona", "Alquiler Juan Perez"]) assert.equal(isGenericMerchant(m), false, m);
+});
+
+test("MONEY: a rent 'Transferencia realizada' of 750 never lowers a loan, even with a learned rule", () => {
+  const rent = row("2026-10-01", -75000, "Transferencia realizada");
+  assert.equal(suggest([rent]).size, 0);
+  const r = classifyRows({ rows: [rent], account: bank, debts: [], existing: [], learnedPayments: suggest([rent]) });
+  assert.deepEqual([r.rows[0].kind, r.rows[0].debtId], ["expense", null]);
+  const plan = planImportWrites(
+    r.rows.map(p => ({ kind: p.kind as ConfirmRow["kind"], externalId: p.externalId, date: p.date, amountCents: p.amountCents, debtId: p.debtId })),
+    { accountId: "acc-bank", debtLines: [{ id: "line-loan", debtId: "loan", debtAccountId: null }], debts: [{ id: "loan", accountId: null }] },
+  );
+  assert.ok(!("error" in plan) && plan.expenses.every(e => e.debtId === null));
+});
+
+test("learned payment of a specific merchant: preselected only at the instalment amount (±1 €)", () => {
+  const exact = row("2026-10-05", -25050, "CETELEM PRESTAMO");
+  const off = row("2026-10-05", -40000, "CETELEM PRESTAMO");
+  const s = suggest([exact, off]);
+  assert.deepEqual(s.get(exact.rowIndex), { debtId: "loan", preselect: true });
+  assert.deepEqual(s.get(off.rowIndex), { debtId: "loan", preselect: false });
+  assert.equal(preselectLearnedPayment(25101, LOAN), false);
+  assert.equal(preselectLearnedPayment(25000, { ...LOAN, installmentAmount: null }), false);
+  // A card never pays itself through a rule.
+  const own = suggestLearnedPayments([{ rowIndex: 0, description: "PASS", merchant: "pass carrefour", amountCents: 100 }], {
+    accountId: "acc-pass", ruleFor: () => "line-pass", debtByLine: new Map([["line-pass", "pass"]]),
+    debts: new Map([["pass", { id: "pass", accountId: "acc-pass", installmentAmount: null, minimumPayment: null }]]),
+  });
+  assert.equal(own.size, 0);
 });
 
 test("card: an unlabelled credit needs review (never guessed); refund wins over payment words", () => {

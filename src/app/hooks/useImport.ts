@@ -22,7 +22,9 @@ export interface ImportRow {
   isFee?: boolean;
   duplicateReason?: 'same_movement' | 'same_payment';
   possibleDuplicate?: { id: string; table: 'expense' | 'income'; date: string; description: string; source: string };
-  warnings?: ('currency_mismatch' | 'ambiguous_credit' | 'card_payment_unassigned')[];
+  /** A payment proposed from a learned rule: the user confirms it. */
+  learnedPayment?: { preselect: boolean };
+  warnings?: ('currency_mismatch' | 'ambiguous_credit' | 'card_payment_unassigned' | 'learned_payment')[];
 }
 
 export interface ImportPreview {
@@ -36,6 +38,8 @@ export interface ImportPreview {
   reviewCount?: number;
   possibleDuplicateCount?: number;
   mode?: 'account' | 'card';
+  /** Debts a bank row may pay (for the payment's debt picker). */
+  debts?: { id: string; name: string }[];
   /** Card files: how purchases appear; 'unknown' until the user chooses. */
   purchasesSign?: PurchasesSign | 'unknown';
   purchasesSignDetected?: boolean;
