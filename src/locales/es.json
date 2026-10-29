@@ -884,7 +884,11 @@
       "saveFailed": "No se pudieron guardar las columnas; se usan para esta importación.",
       "mapByHand": "Indicar las columnas a mano",
       "aiSuggest": "Sugerir columnas con IA",
-      "aiPrivacy": "Para sugerirlas, enviamos a un proveedor de IA solo los títulos de las columnas y el formato de los valores (por ejemplo «dd/mm/aaaa» o «-#,##»), nunca importes, conceptos ni nombres.",
+      "aiPrivacy": "Para sugerirlas, enviamos a un proveedor de IA solo los títulos de columna que ves aquí y el formato de los valores (por ejemplo «dd/mm/aaaa» o «-#,##»), nunca los importes ni los movimientos. Revisa los títulos antes de enviarlos.",
+      "aiTitlesToSend": "Se enviarán estos títulos: {{titles}}",
+      "aiTitlesLookLikeData": "Algunos títulos de esta fila parecen datos (fechas, importes, nombres o números de cuenta), así que no los enviamos a la IA. Comprueba la fila de títulos o elige las columnas a mano.",
+      "chooseHeaderRow": "Esa fila parece de movimientos, no de títulos. Elige la fila de títulos de las columnas. Si el archivo no tiene ninguna, descárgalo de tu banco con los títulos.",
+      "chooseHeaderRowOption": "Elige la fila de títulos",
       "aiSuggested": "Sugerencia de la IA: revisa cada columna en la vista previa antes de guardar.",
       "aiRateLimited": "Has pedido muchas sugerencias seguidas. Inténtalo en un rato o elige las columnas a mano.",
       "aiNoSuggestion": "La IA no ha encontrado una correspondencia clara. Elige las columnas a mano.",
@@ -1402,7 +1406,7 @@
           "paragraphs": [
             "Al importar un extracto, la aplicación puede ofrecerte botones para clasificar gastos o sugerir categorías con IA. Solo si pulsas uno de esos botones, enviamos a Anthropic (el proveedor del modelo Claude) los conceptos de comercio sin categoría de ese extracto, hasta 40 a la vez, y, para clasificarlos, los nombres de tus categorías de presupuesto.",
             "No enviamos importes, fechas, tu nombre, tu email ni números de cuenta. Ten en cuenta que el concepto es el texto que pone tu banco y a veces incluye otros datos, como el nombre de la persona a la que hiciste una transferencia. Lo que devuelve la IA son solo sugerencias, que revisas antes de guardar nada.",
-            "Si no reconocemos las columnas de un extracto, puedes pedir que la IA sugiera cuál es cada una. Solo si pulsas «Sugerir columnas con IA», enviamos a un proveedor de IA, a través de OpenRouter, los títulos de las columnas y el formato de los valores de las primeras filas (por ejemplo «dd/mm/aaaa», «-#,##» o «texto de 12 caracteres»). Ese formato lo calcula tu navegador y el servidor comprueba que no lleve ningún valor: no enviamos importes, fechas, conceptos, nombres ni ningún otro dato personal. La sugerencia solo rellena la pantalla de columnas; la revisas y la confirmas tú."
+            "Si no reconocemos las columnas de un extracto, puedes pedir que la IA sugiera cuál es cada una. Antes te mostramos los títulos que se enviarán, y solo si pulsas «Sugerir columnas con IA» enviamos a un proveedor de IA, a través de OpenRouter, los títulos de columna que ves y el formato de los valores de las primeras filas (por ejemplo «dd/mm/aaaa», «-#,##» o «texto de 12 caracteres»), calculado en tu navegador. Nunca enviamos los importes ni los movimientos. Los títulos son texto de tu archivo: si la fila elegida no parece de títulos no enviamos nada, pero revísalos antes de enviarlos. La sugerencia solo rellena la pantalla de columnas; la revisas y la confirmas tú."
           ]
         },
         {

@@ -795,7 +795,9 @@ describe("statement import (integration, real Postgres)", { skip: !TEST_DATABASE
       "15/09/2026;BIZUM DE JUAN PEREZ;-12,50",
       "16/09/2026;NOMINA ACME SL;1500,00",
     ]);
-    const input = shapesFromSample(sampleStatement(file)![0].rows, 0);
+    const sampled = shapesFromSample(sampleStatement(file)![0].rows, 0);
+    assert.ok("input" in sampled);
+    const input = sampled.input;
     const AI_ENV = ["AI_PROVIDER", "OPENROUTER_API_KEY", "AI_MODEL_IMPORT_MAPPING"] as const;
     const savedEnv = Object.fromEntries(AI_ENV.map(k => [k, process.env[k]]));
     const realFetch = globalThis.fetch;
@@ -829,6 +831,20 @@ describe("statement import (integration, real Postgres)", { skip: !TEST_DATABASE
       // Raw values instead of formats: refused, nothing sent.
       const raw = await call(u.id, "POST", "/api/expenses/import/suggest-mapping", { headers: input.headers, shapes: [["15/09/2026", "BIZUM DE JUAN PEREZ", "-12,50"]] });
       assert.deepEqual([raw.status, raw.body.code], [400, "invalid_shapes"]);
+      // A data row sent as the header row: refused, nothing sent — a value
+      // shape among the titles, a name, or text that reads like the rows below.
+      for (const body of [
+        { headers: ["15/09/2026", "BIZUM DE JUAN PEREZ", "-12,50"], headerShapes: ["dd/mm/yyyy", "TEXT(19)", "-#,##"], shapes: input.shapes },
+        { headers: ["", "BIZUM DE JUAN PEREZ", ""], headerShapes: ["EMPTY", "TEXT(19)", "EMPTY"], shapes: input.shapes },
+        { headers: ["", "Mercadona", ""], headerShapes: ["EMPTY", "TEXT(9)", "EMPTY"], shapes: input.shapes },
+        { headers: input.headers, shapes: input.shapes },
+      ]) {
+        const r = await call(u.id, "POST", "/api/expenses/import/suggest-mapping", body);
+        assert.deepEqual([r.status, r.body.code], [400, "invalid_shapes"], JSON.stringify(body));
+      }
+      // A headerless file: the browser has nothing to send.
+      const headerless = csv(["15/09/2026;BIZUM DE JUAN PEREZ;-12,50", "16/09/2026;NOMINA ACME SL;1500,00"]);
+      assert.ok("problem" in shapesFromSample(sampleStatement(headerless)![0].rows, 0));
       assert.equal(toProvider.length, 1);
 
       // 10 per hour per user (this instance's memory): the 11th is refused unsent.

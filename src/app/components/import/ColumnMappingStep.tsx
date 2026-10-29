@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { applyMapping, columnIndex, normHeader } from '../../../../shared/ingest/columns';
 import type { ColumnMapping, DateOrder } from '../../../../shared/ingest/types';
-import { shapesFromSample, type ShapeInput } from '../../../../shared/ingest/shapes';
+import { guessHeaderRow, sampleHeaderProblem, shapesFromSample, type ShapeInput } from '../../../../shared/ingest/shapes';
 import type { StatementSample } from '../../hooks/useImport';
 import { useMoney } from '../../onboarding/useMoney';
 
@@ -29,17 +29,6 @@ type SignChoice = 'detect' | 'negative' | 'positive';
 const MAX_DESCRIPTION_COLUMNS = 5; // as shared/ingest/validate.ts accepts
 const PREVIEW_ROWS = 5;
 
-/** The header row a person would pick: the first of the fullest rows (titles
- *  and holder lines above a table have fewer cells than the table's header). */
-function guessHeaderRow(rows: string[][]): number {
-  let best = 0, bestCount = -1;
-  rows.forEach((r, i) => {
-    const n = r.filter(c => c.trim()).length;
-    if (n > bestCount) { best = i; bestCount = n; }
-  });
-  return best;
-}
-
 // Manual column mapping (4.2): the user says which column is the date, the
 // amount (or money out / money in), the description, how dates are written
 // and — for cards — how purchases appear. A live preview reads the first rows
@@ -54,6 +43,9 @@ export function ColumnMappingStep({ sample, isCard, reason, initial, saving, onS
   const rows = sample[sheetIdx]?.rows ?? [];
   const [headerRow, setHeaderRow] = useState(() => guessHeaderRow(sample[firstSheet]?.rows ?? []));
   const header = rows[headerRow] ?? [];
+  // A data row can't be the header row: nothing goes to the AI and no mapping
+  // is saved from it (shared/ingest/shapes.ts, re-checked by the server).
+  const headerProblem = useMemo(() => sampleHeaderProblem(rows, headerRow), [rows, headerRow]);
 
   // The columns to choose from: the header row's non-empty cells, once each
   // (a mapping names columns by header text; the first match is the one read).
@@ -83,13 +75,15 @@ export function ColumnMappingStep({ sample, isCard, reason, initial, saving, onS
 
   const [suggesting, setSuggesting] = useState(false);
   const [suggested, setSuggested] = useState(false);
+  // What a suggestion would send: the titles shown to the user before the
+  // click, and cell formats — or nothing, when the row isn't a header row.
+  const aiInput = useMemo(() => (onSuggest ? shapesFromSample(rows, headerRow) : null), [onSuggest, rows, headerRow]);
   // The AI's suggestion fills the form; the user still checks it and saves.
-  // Only titles and cell formats are sent (shared/ingest/shapes.ts).
   const handleSuggest = async () => {
-    if (!onSuggest) return;
+    if (!onSuggest || !aiInput || !('input' in aiInput)) return;
     setSuggesting(true);
     try {
-      const res = await onSuggest(shapesFromSample(rows, headerRow));
+      const res = await onSuggest(aiInput.input);
       if ('code' in res) {
         toast.error(t(res.code === 'rate_limited' ? 'import.mapping.aiRateLimited' : res.code === 'no_suggestion' ? 'import.mapping.aiNoSuggestion' : 'import.mapping.aiFailed'));
         return;
@@ -115,7 +109,7 @@ export function ColumnMappingStep({ sample, isCard, reason, initial, saving, onS
   const flipped = isCard && amountMode === 'single' && sign === 'positive';
   const mapping: ColumnMapping | null = useMemo(() => {
     const hasAmount = amountMode === 'single' ? !!amount : !!(debit || credit);
-    if (!date || !hasAmount) return null;
+    if (headerProblem || !date || !hasAmount) return null;
     return {
       date,
       ...(amountMode === 'single' ? { amount } : { ...(debit ? { debit } : {}), ...(credit ? { credit } : {}) }),
@@ -123,10 +117,10 @@ export function ColumnMappingStep({ sample, isCard, reason, initial, saving, onS
       dateOrder,
       ...(isCard && amountMode === 'single' && sign !== 'detect' ? { purchasesSign: sign } : {}),
     };
-  }, [date, amountMode, amount, debit, credit, description, dateOrder, isCard, sign]);
+  }, [headerProblem, date, amountMode, amount, debit, credit, description, dateOrder, isCard, sign]);
 
   const parsed = useMemo(() => (mapping ? applyMapping(rows, headerRow, mapping) : null), [mapping, rows, headerRow]);
-  const dataRowCount = Math.max(0, rows.length - headerRow - 1);
+  const dataRowCount = Math.max(0, rows.length - Math.max(headerRow, 0) - 1);
 
   const fmtCents = (cents: number) => {
     // Cards: shown from the holder's view (a purchase negative), as imported.
@@ -156,21 +150,6 @@ export function ColumnMappingStep({ sample, isCard, reason, initial, saving, onS
         <p className="text-sm">{t(reason === 'unrecognized' ? 'import.mapping.unrecognizedIntro' : 'import.mapping.manualIntro')}</p>
       </div>
 
-      {onSuggest && (
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={handleSuggest}
-            disabled={suggesting}
-            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/5 transition-colors disabled:opacity-50"
-          >
-            {suggesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-            {t('import.mapping.aiSuggest')}
-          </button>
-          <p className="text-xs text-muted-foreground">{t(suggested ? 'import.mapping.aiSuggested' : 'import.mapping.aiPrivacy')}</p>
-        </div>
-      )}
-
       {sample.length > 1 && (
         <div className="space-y-2">
           <label htmlFor="map-sheet" className="text-xs text-muted-foreground">{t('import.mapping.sheet')}</label>
@@ -183,9 +162,38 @@ export function ColumnMappingStep({ sample, isCard, reason, initial, saving, onS
       <div className="space-y-2">
         <label htmlFor="map-header" className="text-xs text-muted-foreground">{t('import.mapping.headerRow')}</label>
         <select id="map-header" value={headerRow} onChange={e => { setHeaderRow(Number(e.target.value)); resetColumns(); }} className={selectClass}>
+          {headerRow < 0 && <option value={-1}>{t('import.mapping.chooseHeaderRowOption')}</option>}
           {rows.map((r, i) => <option key={i} value={i}>{t('import.mapping.rowN', { n: i + 1 })}: {rowLabel(r)}</option>)}
         </select>
       </div>
+
+      {headerProblem ? (
+        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 flex gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-sm">{t('import.mapping.chooseHeaderRow')}</p>
+        </div>
+      ) : onSuggest && aiInput && (
+        <div className="space-y-2">
+          {'input' in aiInput ? (
+            <>
+              <p className="text-xs text-muted-foreground">{t('import.mapping.aiPrivacy')}</p>
+              <p className="text-sm">{t('import.mapping.aiTitlesToSend', { titles: aiInput.input.headers.filter(Boolean).join(' · ') })}</p>
+              <button
+                type="button"
+                onClick={handleSuggest}
+                disabled={suggesting}
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/5 transition-colors disabled:opacity-50"
+              >
+                {suggesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {t('import.mapping.aiSuggest')}
+              </button>
+              {suggested && <p className="text-xs text-muted-foreground">{t('import.mapping.aiSuggested')}</p>}
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">{t('import.mapping.aiTitlesLookLikeData')}</p>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">

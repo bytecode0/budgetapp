@@ -404,10 +404,11 @@ expensesRouter.post("/import/suggest-categories", requireAuth, async (req: AuthR
 });
 
 // POST /api/expenses/import/suggest-mapping
-// Body: { headers: string[], shapes: string[][] } — the column titles of an
-// unrecognised statement and the FORMAT of its first cells, computed in the
-// browser (shared/ingest/shapes.ts) and re-validated here: no value ever
-// reaches the AI. → { data: { mapping } }, a suggestion the manual mapping
+// Body: { headers: string[], headerShapes: string[], shapes: string[][] } —
+// the column titles of an unrecognised statement, their formats and the
+// FORMAT of its first cells, computed in the browser (shared/ingest/shapes.ts)
+// and re-validated here: no cell value, and no header row that is really a
+// data row, is passed on to the AI. → { data: { mapping } }, a suggestion the manual mapping
 // screen pre-fills for the user to confirm. 503 ai_unavailable when the
 // feature isn't configured (the screen stays fully manual), 429 per user.
 const mappingSuggestions = createRateLimiter({ limit: 10, windowMs: 60 * 60 * 1000 });

@@ -884,7 +884,11 @@
       "saveFailed": "The columns could not be saved; they are used for this import.",
       "mapByHand": "Pick the columns by hand",
       "aiSuggest": "Suggest columns with AI",
-      "aiPrivacy": "To suggest them, we send an AI provider only the column titles and the format of the values (for example \"dd/mm/yyyy\" or \"-#,##\"), never amounts, descriptions or names.",
+      "aiPrivacy": "To suggest them, we send an AI provider only the column titles you see here and the format of the values (for example \"dd/mm/yyyy\" or \"-#,##\"), never the amounts or the transactions. Check the titles before sending them.",
+      "aiTitlesToSend": "These titles will be sent: {{titles}}",
+      "aiTitlesLookLikeData": "Some titles in this row look like data (dates, amounts, names or account numbers), so we don't send them to the AI. Check the title row or choose the columns by hand.",
+      "chooseHeaderRow": "That row looks like transactions, not titles. Choose the row with the column titles. If the file has none, download it from your bank with titles.",
+      "chooseHeaderRowOption": "Choose the title row",
       "aiSuggested": "AI suggestion: check every column in the preview before saving.",
       "aiRateLimited": "You've asked for many suggestions in a row. Try again later or pick the columns by hand.",
       "aiNoSuggestion": "The AI found no clear match. Pick the columns by hand.",
@@ -1402,7 +1406,7 @@
           "paragraphs": [
             "When you import a statement, the app may offer buttons to classify expenses or suggest categories with AI. Only if you press one of those buttons do we send Anthropic (the provider of the Claude model) the uncategorised merchant descriptions from that statement, up to 40 at a time, and, to classify them, the names of your budget categories.",
             "We do not send amounts, dates, your name, your email or account numbers. Bear in mind that the description is the text your bank writes and sometimes includes other data, such as the name of the person you sent a transfer to. What the AI returns are only suggestions, which you review before anything is saved.",
-            "If we don't recognise a statement's columns, you can ask the AI to suggest which is which. Only if you press \"Suggest columns with AI\" do we send an AI provider, through OpenRouter, the column titles and the format of the values in the first rows (for example \"dd/mm/yyyy\", \"-#,##\" or \"12-character text\"). Your browser computes that format and the server checks it carries no value: we do not send amounts, dates, descriptions, names or any other personal data. The suggestion only fills in the columns screen; you review and confirm it."
+            "If we don't recognise a statement's columns, you can ask the AI to suggest which is which. First we show you the titles that will be sent, and only if you press \"Suggest columns with AI\" do we send an AI provider, through OpenRouter, the column titles you see and the format of the values in the first rows (for example \"dd/mm/yyyy\", \"-#,##\" or \"12-character text\"), computed in your browser. We never send the amounts or the transactions. The titles are text from your file: if the chosen row doesn't look like titles we send nothing, but check them before sending. The suggestion only fills in the columns screen; you review and confirm it."
           ]
         },
         {

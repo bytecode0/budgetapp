@@ -201,8 +201,8 @@ export function useImport() {
     }
   };
 
-  /** An AI suggestion for the manual mapping, from column titles and cell
-   *  formats only (shared/ingest/shapes.ts) — never the file's values. */
+  /** An AI suggestion for the manual mapping, from the column titles the
+   *  user saw and cell formats (shared/ingest/shapes.ts) — never amounts or rows. */
   const suggestMapping = async (input: ShapeInput): Promise<{ mapping: ColumnMapping } | { code: string }> => {
     try {
       const res = await fetch('/api/expenses/import/suggest-mapping', {

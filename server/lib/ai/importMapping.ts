@@ -1,8 +1,11 @@
 // AI column mapping for statements no profile recognises (4.2). The model
-// sees ONLY the header row's titles and the FORMAT of the first cells
-// (shared/ingest/shapes.ts: "dd/mm/yyyy", "-#,##", "TEXT(12)"…), never an
-// amount, a date, a description or a name — the input is re-validated here,
-// whatever the client sent. Its answer is a SUGGESTION: validated as a
+// gets the header row's titles, as the user saw and confirmed them, and the
+// FORMAT of the first cells (shared/ingest/shapes.ts: "dd/mm/yyyy", "-#,##",
+// "TEXT(12)"…). Formats carry no value. Titles are checked here again, but
+// only as far as a check can: a value-shaped title, a header row that reads
+// like the data below it, ids, emails and name-like titles are refused. A
+// title is still text from the file, so this is a best effort, not a
+// guarantee that no personal data is sent. Its answer is a SUGGESTION: validated as a
 // ColumnMapping naming only columns that exist, then pre-filled in the
 // manual mapping screen, where the user confirms it.
 import { columnIndex } from "../../../shared/ingest/columns.js";
