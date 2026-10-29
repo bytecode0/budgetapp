@@ -4,6 +4,7 @@ import { X, Loader2, Check, Wallet, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useAllocations, type BudgetSuggestionRow } from '../hooks/useAllocations';
+import { useMoney } from '../onboarding/useMoney';
 
 interface BudgetSuggestionsProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface BudgetSuggestionsProps {
 // €0 so it fills the gaps without touching budgets the user already set.
 export function BudgetSuggestions({ isOpen, onClose, onApplied }: BudgetSuggestionsProps) {
   const { t } = useTranslation();
+  const { fmt } = useMoney();
   const { monthlyIncome, fetchSuggestedBudgets, applyBudgets } = useAllocations();
 
   const [loading, setLoading] = useState(true);
@@ -122,9 +124,9 @@ export function BudgetSuggestions({ isOpen, onClose, onApplied }: BudgetSuggesti
                       </div>
                       <div className="text-right shrink-0">
                         {r.current > 0 && (
-                          <p className="text-[11px] text-muted-foreground line-through">€{r.current.toLocaleString()}</p>
+                          <p className="text-[11px] text-muted-foreground line-through">{fmt(r.current)}</p>
                         )}
-                        <p className="text-sm font-display">€{r.suggested.toLocaleString()}</p>
+                        <p className="text-sm font-display">{fmt(r.suggested)}</p>
                       </div>
                     </label>
                   ))}

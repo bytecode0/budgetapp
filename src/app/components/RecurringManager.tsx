@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
 import { useRecurring } from '../hooks/useRecurring';
 import { useAllocations } from '../hooks/useAllocations';
+import { useMoney } from '../onboarding/useMoney';
 
 interface RecurringManagerProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface RecurringManagerProps {
 
 export function RecurringManager({ isOpen, onClose }: RecurringManagerProps) {
   const { t } = useTranslation();
+  const { currency } = useMoney();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
   const { commitments, loading, fetchRecurring, update } = useRecurring();
@@ -24,7 +26,7 @@ export function RecurringManager({ isOpen, onClose }: RecurringManagerProps) {
   const [links, setLinks] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const fmtEuro = (v: number) => `€${v.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  const fmtEuro = (v: number) => `${currency}${v.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
   const detected = commitments.filter(c => c.status === 'detected');
   const confirmed = commitments.filter(c => c.status === 'confirmed');

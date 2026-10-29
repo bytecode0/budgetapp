@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useMonth, monthKeyOffset } from '../context/MonthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAnalytics } from '../hooks/useAnalytics';
+import { useMoney } from '../onboarding/useMoney';
 
 const WINDOW_MONTHS = 6; // selected month + 5 preceding
 
@@ -24,6 +25,7 @@ const tooltipStyle = {
 
 export function Analytics() {
   const { t } = useTranslation();
+  const { fmt } = useMoney();
   const { language } = useLanguage();
   const { selectedMonth } = useMonth();
 
@@ -31,7 +33,7 @@ export function Analytics() {
   const { analytics, loading } = useAnalytics(from, selectedMonth);
 
   const fmtMonth = (key: string) => shortMonthLabel(key, language);
-  const fmtEuro = (v: number) => `€${Math.round(v).toLocaleString()}`;
+  const fmtEuro = (v: number) => fmt(Math.round(v));
 
   const hasSpending = !!analytics && analytics.months.some(m => m.total > 0);
   const hasIncome = !!analytics && analytics.months.some(m => (m.income ?? 0) > 0);

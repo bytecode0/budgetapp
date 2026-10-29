@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useAccounts } from '../hooks/useAccounts';
 import { useIncome, type Income, type IncomeCategory } from '../hooks/useIncome';
+import { useMoney } from '../onboarding/useMoney';
 
 const CATEGORIES: { key: IncomeCategory; icon: typeof Briefcase }[] = [
   { key: 'salary', icon: Briefcase },
@@ -23,6 +24,7 @@ interface AddIncomeProps {
 
 export function AddIncome({ isOpen, onClose, onSaved, defaultDate, editing }: AddIncomeProps) {
   const { t } = useTranslation();
+  const { currency } = useMoney();
   const { accounts } = useAccounts();
   const { createIncome, updateIncome } = useIncome();
 
@@ -94,7 +96,7 @@ export function AddIncome({ isOpen, onClose, onSaved, defaultDate, editing }: Ad
             <div className="space-y-2">
               <label className="text-xs text-muted-foreground">{t('addIncome.amount')}</label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600">€</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600">{currency}</span>
                 <input
                   type="number"
                   value={amount}

@@ -13,6 +13,7 @@ import { useDebts } from '../hooks/useDebts';
 import { useLanguage } from '../context/LanguageContext';
 import { SetupChecklist } from './SetupChecklist';
 import type { OnboardingStep } from '../hooks/useOnboardingNeeded';
+import { useMoney } from '../onboarding/useMoney';
 
 function greeting(t: (key: string) => string) {
   const h = new Date().getHours();
@@ -40,6 +41,7 @@ interface HomeProps {
 
 export function Home({ onNavigate, setupMissing = [], onResumeSetup }: HomeProps) {
   const { t } = useTranslation();
+  const { fmt } = useMoney();
   const { language } = useLanguage();
   const { selectedMonth, isCurrentMonth } = useMonth();
   const { plans } = usePlans();
@@ -104,13 +106,13 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup }: HomeProps
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-6 pt-6 border-t border-white/20">
             <div>
               <p className="text-xs opacity-70 mb-1">{t('home.monthlyIncome')}</p>
-              <p className="text-2xl font-display">€{displayIncome.toLocaleString()}</p>
+              <p className="text-2xl font-display">{fmt(displayIncome)}</p>
               {incomes.length > 0 && <p className="text-xs opacity-60">{t('home.actualIncome')}</p>}
             </div>
             <div>
               <p className="text-xs opacity-70 mb-1">{t('home.spentSoFar')}</p>
               <p className="text-2xl font-display">
-                €{(review?.totalActual ?? 0).toLocaleString()}
+                {fmt(review?.totalActual ?? 0)}
               </p>
             </div>
             <div>
@@ -121,7 +123,7 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup }: HomeProps
             </div>
             <div>
               <p className="text-xs opacity-70 mb-1">{t('home.totalSaved')}</p>
-              <p className="text-2xl font-display">€{totalSaved.toLocaleString()}</p>
+              <p className="text-2xl font-display">{fmt(totalSaved)}</p>
               <p className="text-xs opacity-60">{t('home.acrossAllPlans')}</p>
             </div>
             <div>

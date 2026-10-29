@@ -3,6 +3,7 @@ import { CheckCircle2, TrendingUp, AlertCircle, Sparkles, Target, TrendingDown, 
 import { motion } from 'motion/react';
 import { differenceInDays } from 'date-fns';
 import { usePlans, getPlanStatus } from '../hooks/usePlans';
+import { useMoney } from '../onboarding/useMoney';
 
 function StatusBadge({ status, t }: { status: string; t: (key: string) => string }) {
   if (status === 'completed') return (
@@ -29,6 +30,7 @@ function StatusBadge({ status, t }: { status: string; t: (key: string) => string
 
 export function PlanningDashboard({ onNavigate, onViewPlan }: { onNavigate?: (screen: string) => void; onViewPlan?: (planId: string) => void }) {
   const { t } = useTranslation();
+  const { fmt } = useMoney();
   const { plans, loading } = usePlans();
 
   const totalPlans = plans.length;
@@ -157,7 +159,7 @@ export function PlanningDashboard({ onNavigate, onViewPlan }: { onNavigate?: (sc
             </div>
             <div>
               <p className="text-sm text-muted-foreground">{t('dashboard.totalSaved')}</p>
-              <p className="font-display text-2xl">€{totalSaved.toLocaleString()}</p>
+              <p className="font-display text-2xl">{fmt(totalSaved)}</p>
             </div>
           </div>
           <p className="text-sm text-muted-foreground">{t('dashboard.acrossAllPlans')}</p>
@@ -170,7 +172,7 @@ export function PlanningDashboard({ onNavigate, onViewPlan }: { onNavigate?: (sc
             </div>
             <div>
               <p className="text-sm text-muted-foreground">{t('dashboard.monthlyContributions')}</p>
-              <p className="font-display text-2xl">€{totalMonthlyContributions.toLocaleString()}</p>
+              <p className="font-display text-2xl">{fmt(totalMonthlyContributions)}</p>
             </div>
           </div>
           <p className="text-sm text-muted-foreground">{t('dashboard.committedToPlans')}</p>
@@ -276,8 +278,8 @@ export function PlanningDashboard({ onNavigate, onViewPlan }: { onNavigate?: (sc
                     <div className="flex items-end justify-between">
                       <div>
                         <p className="text-sm text-muted-foreground mb-1">{progress.toFixed(0)}{t('dashboard.pctComplete')}</p>
-                        <p className="text-2xl font-display" style={{ color: plan.color }}>€{plan.currentAmount.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">of €{plan.targetAmount.toLocaleString()}</p>
+                        <p className="text-2xl font-display" style={{ color: plan.color }}>{fmt(plan.currentAmount)}</p>
+                        <p className="text-xs text-muted-foreground">of {fmt(plan.targetAmount)}</p>
                       </div>
                       <div className="text-right">
                         {monthsLeft !== null ? (
@@ -291,7 +293,7 @@ export function PlanningDashboard({ onNavigate, onViewPlan }: { onNavigate?: (sc
                           </>
                         )}
                         {plan.monthlyContribution > 0 && (
-                          <p className="text-xs text-muted-foreground">€{plan.monthlyContribution.toLocaleString()}/mo</p>
+                          <p className="text-xs text-muted-foreground">{fmt(plan.monthlyContribution)}/mo</p>
                         )}
                       </div>
                     </div>
