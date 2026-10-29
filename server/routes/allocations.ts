@@ -6,7 +6,7 @@ import { toCents, toEuros, serializeMoney } from "../lib/money.js";
 import { suggestBudgets } from "../lib/suggestBudgets.js";
 import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/period.js";
 import { debtCommitments } from "../lib/debtBalance.js";
-import { householdBaselineIncome } from "../lib/householdIncome.js";
+import { incomeBaselines } from "../lib/householdIncome.js";
 
 export const allocationsRouter = Router();
 
@@ -16,13 +16,13 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
     // Ensure defaults exist for this user
     await createDefaultAllocations(req.userId!);
 
-    const [allocations, settings, monthlyIncome] = await Promise.all([
+    const [allocations, settings, baselines] = await Promise.all([
       prisma.allocation.findMany({
         where: { userId: req.userId! },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       }),
       prisma.userSettings.findUnique({ where: { userId: req.userId! } }),
-      householdBaselineIncome(req.userId!),
+      incomeBaselines(req.userId!, req.authUserId!),
     ]);
 
     // A debt line's amount depends on payments and on which period we're in
@@ -37,7 +37,7 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
 
     return res.json(serializeMoney({
       allocations: withDebtLines,
-      monthlyIncome,
+      ...baselines, // monthlyIncome (household), ownMonthlyIncome (editable), isCouple
       darkMode: settings?.darkMode ?? false,
       language: settings?.language ?? 'es',
       cycleStartDay: settings?.cycleStartDay ?? 1,
@@ -297,8 +297,8 @@ allocationsRouter.patch("/settings/display", requireAuth, async (req: AuthReques
 });
 
 // PATCH /api/allocations/settings/income  (update the signed-in person's own
-// monthly income baseline; returns the household's, which sums every member's
-// — see server/lib/householdIncome.ts)
+// monthly income baseline — the body is HER figure, never the household's;
+// returns both, see server/lib/householdIncome.ts)
 allocationsRouter.patch("/settings/income", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { monthlyIncome } = req.body;
@@ -310,7 +310,7 @@ allocationsRouter.patch("/settings/income", requireAuth, async (req: AuthRequest
       create: { userId: req.authUserId!, monthlyIncome: toCents(monthlyIncome) },
     });
 
-    return res.json(serializeMoney({ monthlyIncome: await householdBaselineIncome(req.userId!) }));
+    return res.json(serializeMoney(await incomeBaselines(req.userId!, req.authUserId!)));
   } catch (err) {
     console.error("[allocations/settings/income]", err);
     return res.status(500).json({ error: "Internal server error" });

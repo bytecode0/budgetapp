@@ -111,7 +111,7 @@ export function AllocationFlow() {
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
 
   const {
-    allocations: rawAllocations, monthlyIncome: baseIncome, loading,
+    allocations: rawAllocations, monthlyIncome: baseIncome, ownMonthlyIncome, isCouple, loading,
     updateIncome, createAllocation, updateAllocation, deleteAllocation, reorderAllocations, fetchAllocations,
   } = useAllocations();
 
@@ -380,6 +380,10 @@ export function AllocationFlow() {
                   </div>
                 </div>
               ) : editingIncome ? (
+                /* Edits only the signed-in person's own baseline: in a couple the
+                   figure shown above it is the household's (both summed). */
+                <div className="space-y-2">
+                {isCouple && <p className="text-xs opacity-75">{t('allocation.ownIncomeLabel')}</p>}
                 <div className="flex items-center gap-3">
                   <span className="text-3xl opacity-75">{currency}</span>
                   <input
@@ -393,17 +397,23 @@ export function AllocationFlow() {
                   <button onClick={handleSaveIncome} className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors"><Check className="w-4 h-4" /></button>
                   <button onClick={() => setEditingIncome(false)} className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors"><X className="w-4 h-4" /></button>
                 </div>
+                {isCouple && <p className="text-xs opacity-60">{t('allocation.householdIncomeTotal', { total: fmt(baseIncome) })}</p>}
+                </div>
               ) : (
                 <div>
                   <button
                     className="text-5xl font-display hover:opacity-80 transition-opacity flex items-center gap-3 group"
-                    onClick={() => { setIncomeInput(String(baseIncome)); setEditingIncome(true); }}
+                    onClick={() => { setIncomeInput(String(ownMonthlyIncome)); setEditingIncome(true); }}
                   >
                     {fmt(monthlyIncome)}
                     <Pencil className="w-5 h-5 opacity-0 group-hover:opacity-60 transition-opacity" />
                   </button>
                   <div className="flex items-center gap-3 mt-2">
-                    <span className="text-xs opacity-60">{t('allocation.incomeBaseline')}</span>
+                    <span className="text-xs opacity-60">
+                      {isCouple
+                        ? t('allocation.incomeBaselineCouple', { own: fmt(ownMonthlyIncome) })
+                        : t('allocation.incomeBaseline')}
+                    </span>
                     <button
                       onClick={() => setShowAddIncome(true)}
                       className="inline-flex items-center gap-1 text-xs bg-white/15 hover:bg-white/25 rounded-lg px-2.5 py-1 transition-colors"
