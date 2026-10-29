@@ -239,7 +239,8 @@ export class EnableBankingClient implements BankingProviderClient {
   async startAuthorization(input: StartAuthorizationInput): Promise<{ url: string }> {
     const data = await this.request<{ url?: string }>("POST", "/auth", "/auth", {
       body: {
-        access: { valid_until: input.validUntil.toISOString() },
+        // Both asked for explicitly: the API documents no default.
+        access: { valid_until: input.validUntil.toISOString(), balances: true, transactions: true },
         aspsp: { name: input.institution.name, country: input.institution.country },
         state: input.state,
         redirect_url: input.redirectUrl,

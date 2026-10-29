@@ -93,7 +93,7 @@ test("startAuthorization posts aspsp name+country, state, redirect_url, valid_un
   assert.equal(url, "https://bank.test/consent");
   assert.equal(calls[0].init.method, "POST");
   assert.deepEqual(JSON.parse(String(calls[0].init.body)), {
-    access: { valid_until: "2027-04-27T00:00:00.000Z" },
+    access: { valid_until: "2027-04-27T00:00:00.000Z", balances: true, transactions: true },
     aspsp: { name: "BBVA", country: "ES" },
     state: "st",
     redirect_url: CONFIG.callbackUrl,
