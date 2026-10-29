@@ -125,7 +125,7 @@ function AppInner() {
   const renderScreen = () => {
     switch (currentScreen) {
       case 'home':
-        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} />;
+        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} onSetupChanged={refreshOnboardingStatus} />;
       case 'dashboard':
         return <PlanningDashboard onNavigate={(screen) => setCurrentScreen(screen as Screen)} onViewPlan={handleViewPlan} />;
       case 'activity':
@@ -158,7 +158,7 @@ function AppInner() {
           />
         );
       default:
-        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} />;
+        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} onSetupChanged={refreshOnboardingStatus} />;
     }
   };
 

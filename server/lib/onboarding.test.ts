@@ -20,6 +20,8 @@ const fresh: StatusInput = {
   accounts: [defaultAccount],
   debts: [],
   allocations: [{ type: "fixed", allocatedAmount: 0 }, { type: "flexible", allocatedAmount: 0 }],
+  noCards: false,
+  noLoans: false,
 };
 
 test("a brand-new user needs the onboarding and is missing every step", () => {
@@ -57,6 +59,30 @@ test("cards count by their account; loans exclude the card's own debt", () => {
   assert.equal(s.checklist.hasCards, true);
   assert.equal(s.checklist.hasDebts, false);
   assert.equal(deriveOnboardingStatus({ ...withCard, debts: [{ kind: "credit_card", status: "active" }, { kind: "bnpl", status: "active" }] }).checklist.hasDebts, true);
+});
+
+test("answering \"no cards\" / \"no loans\" marks those steps done", () => {
+  const s = deriveOnboardingStatus({ ...fresh, noCards: true });
+  assert.equal(s.checklist.hasCards, true);
+  assert.equal(s.checklist.hasDebts, false);
+  assert.deepEqual(s.missing, ["income", "bank", "loans", "fixed"]);
+  assert.deepEqual(s.answers, { noCards: true, noLoans: false });
+  const both = deriveOnboardingStatus({ ...fresh, noCards: true, noLoans: true });
+  assert.deepEqual(both.missing, ["income", "bank", "fixed"]);
+  // An answer means the user went through the wizard: no full wizard again.
+  assert.equal(both.needsOnboarding, false);
+});
+
+test("the answer and real data together: the step stays done either way", () => {
+  const withCard = { ...fresh, noCards: true, accounts: [defaultAccount, { ...defaultAccount, type: "card", name: "PASS" }] };
+  assert.equal(deriveOnboardingStatus(withCard).checklist.hasCards, true);
+  const withLoan = { ...fresh, noLoans: true, debts: [{ kind: "bnpl", status: "active" }] };
+  assert.equal(deriveOnboardingStatus(withLoan).checklist.hasDebts, true);
+  // Undone (false) with nothing added: the step comes back.
+  assert.equal(deriveOnboardingStatus({ ...fresh, noCards: false }).checklist.hasCards, false);
+  // A card's own debt doesn't answer the loans step.
+  const cardOnly = { ...fresh, noCards: false, debts: [{ kind: "credit_card", status: "active" }] };
+  assert.equal(deriveOnboardingStatus(cardOnly).checklist.hasDebts, false);
 });
 
 test("a fixed budget needs a fixed line with an amount", () => {

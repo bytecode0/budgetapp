@@ -59,6 +59,10 @@ model UserSettings {
   language      String  @default("es")
   linkedUserId  String? // Points to primary user's id when this is a linked (partner) account
   cycleStartDay Int     @default(1) // 1-28; day the budget period starts (payday). 1 = calendar month (unchanged behavior)
+  // Onboarding answers "I have no credit cards" / "I have no loans": they mark
+  // those setup steps done. Null = not answered (or undone). server/lib/onboarding.ts
+  noCardsAt     DateTime?
+  noLoansAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

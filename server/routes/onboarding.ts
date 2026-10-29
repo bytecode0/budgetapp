@@ -16,13 +16,14 @@ const visibleTo = (req: AuthRequest) => ({
 });
 
 // GET /api/onboarding/status
-// Derived on every read, never a stored flag (server/lib/onboarding.ts): if
-// the user later deletes something, its step comes back into the checklist.
+// Derived on every read (server/lib/onboarding.ts): if the user later deletes
+// something, its step comes back into the checklist. The only stored inputs
+// are the "no cards" / "no loans" answers (PATCH /api/onboarding/answers).
 onboardingRouter.get("/status", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
     const [settings, incomeCount, accounts, debts, allocations] = await Promise.all([
-      prisma.userSettings.findUnique({ where: { userId }, select: { monthlyIncome: true } }),
+      prisma.userSettings.findUnique({ where: { userId }, select: { monthlyIncome: true, noCardsAt: true, noLoansAt: true } }),
       prisma.income.count({ where: { userId } }),
       prisma.account.findMany({
         where: visibleTo(req),
@@ -39,10 +40,42 @@ onboardingRouter.get("/status", requireAuth, async (req: AuthRequest, res: Respo
       accounts,
       debts,
       allocations,
+      noCards: settings?.noCardsAt != null,
+      noLoans: settings?.noLoansAt != null,
     });
     return res.json({ data: status });
   } catch (err) {
     console.error("[onboarding/status]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/onboarding/answers  { noCards?: boolean, noLoans?: boolean }
+// "I have no credit cards" / "I have no loans": marks that setup step done.
+// false undoes the answer. Stored on the pool's settings, like the income.
+onboardingRouter.patch("/answers", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { noCards, noLoans } = req.body ?? {};
+    if (noCards === undefined && noLoans === undefined) {
+      return res.status(400).json({ error: "noCards or noLoans is required" });
+    }
+    if ((noCards !== undefined && typeof noCards !== "boolean") || (noLoans !== undefined && typeof noLoans !== "boolean")) {
+      return res.status(400).json({ error: "noCards and noLoans must be booleans" });
+    }
+    const now = new Date();
+    const data: { noCardsAt?: Date | null; noLoansAt?: Date | null } = {};
+    if (noCards !== undefined) data.noCardsAt = noCards ? now : null;
+    if (noLoans !== undefined) data.noLoansAt = noLoans ? now : null;
+
+    const settings = await prisma.userSettings.upsert({
+      where: { userId: req.userId! },
+      update: data,
+      create: { userId: req.userId!, ...data },
+      select: { noCardsAt: true, noLoansAt: true },
+    });
+    return res.json({ data: { noCards: settings.noCardsAt != null, noLoans: settings.noLoansAt != null } });
+  } catch (err) {
+    console.error("[onboarding/answers]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

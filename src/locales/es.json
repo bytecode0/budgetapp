@@ -1139,18 +1139,22 @@
       "namePlaceholder": "ej. PASS, Visa BBVA",
       "add": "Añadir una tarjeta",
       "save": "Guardar tarjeta",
-      "noCards": "¿No tienes tarjetas de crédito? Pulsa Continuar.",
-      "createdOk": "Tarjeta añadida"
+      "noCards": "¿No tienes tarjetas de crédito?",
+      "createdOk": "Tarjeta añadida",
+      "noCardsButton": "No tengo tarjetas de crédito",
+      "noCardsAnswered": "Anotado: no tienes tarjetas de crédito. Pulsa Continuar."
     },
     "loans": {
       "title": "Préstamos y cuotas",
       "subtitle": "Coche, Klarna, préstamo rápido, compras a plazos… Todo lo que pagas en cuotas.",
       "add": "Añadir un préstamo o cuotas",
       "save": "Guardar",
-      "noLoans": "¿No pagas nada a plazos? Pulsa Continuar.",
+      "noLoans": "¿No pagas nada a plazos?",
       "createdOk": "Añadido",
       "owedLabel": "Pendiente",
-      "note": "Incluye también la hipoteca: la tratamos distinto a una tarjeta o un préstamo de consumo, y no tendrás que añadirla como gasto fijo."
+      "note": "Incluye también la hipoteca: la tratamos distinto a una tarjeta o un préstamo de consumo, y no tendrás que añadirla como gasto fijo.",
+      "noLoansButton": "No tengo préstamos ni cuotas",
+      "noLoansAnswered": "Anotado: no tienes préstamos ni cuotas. Pulsa Continuar."
     },
     "lines": {
       "income": "Ingreso",
@@ -1192,8 +1196,15 @@
         "cards": "Tus tarjetas de crédito",
         "loans": "Tus préstamos y cuotas",
         "fixed": "Tus gastos fijos"
+      },
+      "sayNo": "No tengo",
+      "answered": {
+        "cards": "Anotado: no tienes tarjetas de crédito",
+        "loans": "Anotado: no tienes préstamos ni cuotas"
       }
-    }
+    },
+    "undo": "Deshacer",
+    "answerFailed": "No se ha podido guardar. Inténtalo de nuevo."
   },
   "currency": {
     "symbol": "€"

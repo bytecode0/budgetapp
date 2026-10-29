@@ -1139,18 +1139,22 @@
       "namePlaceholder": "e.g. PASS, BBVA Visa",
       "add": "Add a card",
       "save": "Save card",
-      "noCards": "No credit cards? Press Continue.",
-      "createdOk": "Card added"
+      "noCards": "No credit cards?",
+      "createdOk": "Card added",
+      "noCardsButton": "I don't have credit cards",
+      "noCardsAnswered": "Noted: you don't have credit cards. Press Continue."
     },
     "loans": {
       "title": "Loans and installments",
       "subtitle": "Car, Klarna, payday loan, buy-now-pay-later… Everything you pay in installments.",
       "add": "Add a loan or installment plan",
       "save": "Save",
-      "noLoans": "Nothing paid in installments? Press Continue.",
+      "noLoans": "Nothing paid in installments?",
       "createdOk": "Added",
       "owedLabel": "Outstanding",
-      "note": "Include your mortgage too: it is treated differently from a card or a consumer loan, and you will not need to add it as a fixed expense."
+      "note": "Include your mortgage too: it is treated differently from a card or a consumer loan, and you will not need to add it as a fixed expense.",
+      "noLoansButton": "I don't have loans or installments",
+      "noLoansAnswered": "Noted: you don't have loans or installments. Press Continue."
     },
     "lines": {
       "income": "Income",
@@ -1192,8 +1196,15 @@
         "cards": "Your credit cards",
         "loans": "Your loans and installments",
         "fixed": "Your fixed expenses"
+      },
+      "sayNo": "I don't have any",
+      "answered": {
+        "cards": "Noted: you don't have credit cards",
+        "loans": "Noted: you don't have loans or installments"
       }
-    }
+    },
+    "undo": "Undo",
+    "answerFailed": "Couldn't save. Please try again."
   },
   "currency": {
     "symbol": "€"
