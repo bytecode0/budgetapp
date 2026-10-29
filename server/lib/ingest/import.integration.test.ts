@@ -21,6 +21,7 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import * as XLSX from "xlsx";
 import { buildBbva } from "./fixtures/makeFixtures.js";
+import { readStatement } from "../../../shared/ingest/read.js";
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 
@@ -52,6 +53,7 @@ interface Preview {
   paymentCount?: number;
   refundCount?: number;
   reviewCount?: number;
+  skipped?: { rowIndex: number; reason: string }[];
   source?: string;
   mode?: "account" | "card";
   purchasesSign?: "negative" | "positive" | "unknown";
@@ -567,7 +569,7 @@ describe("statement import (integration, real Postgres)", { skip: !TEST_DATABASE
 
   // ── g ──────────────────────────────────────────────────────────────────
 
-  it("g. import profile: a saved mapping reads an unrecognised CSV; only the account's owner reads or writes it", async () => {
+  it("g. import profile: a saved mapping reads an unrecognised CSV; who may import reads it, only the owner writes it", async () => {
     const A = await signUp("Gema");
     const B = await signUp("Gus");   // joins A's household
     const C = await signUp("Hugo");  // a stranger
@@ -594,15 +596,14 @@ describe("statement import (integration, real Postgres)", { skip: !TEST_DATABASE
       ["2026-09-16", "income", 30, "Otra cosa"],
     ]);
 
-    // B joins A's household: A's account is shared with B, but only A may
-    // read or change how its files are read.
+    // B joins A's household: A's account is shared with B. B may import into
+    // it, so B reads its mapping (the browser reads the file with it), but
+    // only A may change how its files are read.
     await ok(B.id, "POST", "/api/partner/accept", { token: await invite(A.id, B.email) });
     const other = { importProfile: { date: "Día", amount: "Cuánto", description: ["Qué"], purchasesSign: "positive" } };
-    const asMember = [
-      await call(B.id, "GET", `/api/accounts/${main}/import-profile`),
-      await call(B.id, "PATCH", `/api/accounts/${main}/import-profile`, other),
-    ];
-    assert.deepEqual(asMember.map(r => r.status), [403, 403], JSON.stringify(asMember));
+    assert.deepEqual((await ok(B.id, "GET", `/api/accounts/${main}/import-profile`)).data.importProfile, mapping);
+    const asMember = await call(B.id, "PATCH", `/api/accounts/${main}/import-profile`, other);
+    assert.equal(asMember.status, 403, JSON.stringify(asMember));
     // Made private, the account doesn't exist for B.
     await prisma.account.update({ where: { id: main }, data: { visibility: "private" } });
     const asMemberPrivate = [
@@ -738,5 +739,45 @@ describe("statement import (integration, real Postgres)", { skip: !TEST_DATABASE
     assert.equal((await preview(A.id, main, "raro.csv", file)).accountId, main);
     notFound(await previewCall(C.id, main, "raro.csv", file), "stranger preview");
     notFound(await call(C.id, "POST", "/api/expenses", { amount: 10, description: "x", accountId: main }), "stranger POST /api/expenses");
+  });
+  // ── k ──────────────────────────────────────────────────────────────────
+
+  it("k. rows read in the browser: same movements and ids as the file path, skipped rows and source kept", async () => {
+    const u = await signUp("Kike");
+    const main = await mainAccount(u.id);
+    const file = csv([
+      "Fecha;Concepto;Importe;Estado",
+      "15/09/2026;SUPERMERCADO DEMO;-42,10;COMPLETED",
+      "16/09/2026;CAFETERIA DEMO;-3,20;PENDING",
+      "17/09/2026;NOMINA DEMO;1500,00;COMPLETED",
+    ]);
+
+    // What the import wizard does: read in the browser, post only rows.
+    const read = readStatement(file, "banco.csv");
+    assert.equal(read.source, "generic");
+    const body = { accountId: main, rows: read.rows, skipped: read.skipped, source: read.source };
+    const fromRows = await ok(u.id, "POST", "/api/expenses/import/preview", body) as Preview;
+    assert.equal(fromRows.source, "generic");
+    assert.deepEqual(fromRows.skipped, [{ rowIndex: 1, reason: "state:PENDING" }]);
+    assert.deepEqual(fromRows.rows.map(r => [r.date, r.kind, r.amount]), [["2026-09-15", "expense", 42.1], ["2026-09-17", "income", 1500]]);
+
+    // The server's file path (fallback) gives the same ids: a file imported
+    // one way is a re-import the other way.
+    const fromFile = await preview(u.id, main, "banco.csv", file);
+    assert.deepEqual(fromFile.rows.map(r => r.externalId), fromRows.rows.map(r => r.externalId));
+    await confirm(u.id, main, toConfirm(fromRows, preselected(fromRows)));
+    const again = await preview(u.id, main, "banco.csv", file);
+    assert.deepEqual(again.rows.map(r => r.status), ["duplicate", "duplicate"]);
+
+    // Untrusted rows are refused with a code the client translates.
+    for (const bad of [
+      { ...body, rows: [{ ...read.rows[0], amountCents: 42.1 }] },
+      { ...body, skipped: [{ rowIndex: -1, reason: "x" }] },
+      { ...body, source: "evil" },
+    ]) {
+      const r = await call(u.id, "POST", "/api/expenses/import/preview", bad);
+      assert.equal(r.status, 400, JSON.stringify(r.body));
+      assert.equal(r.body.code, "invalid_rows");
+    }
   });
 });

@@ -37,7 +37,7 @@
 import crypto from "crypto";
 import { normalizeMerchant } from "../normalizeMerchant.js";
 import { isGenericMerchant, type LearnedPayment } from "./learnedPayments.js";
-import type { NormalizedRow } from "./types.js";
+import type { NormalizedRow } from "../../../shared/ingest/types.js";
 
 export type ImportMode = "account" | "card";
 /** "needs_review": a card credit that is neither recognisably a payment nor a

@@ -1,4 +1,4 @@
-// Run with:  node --import tsx --test server/lib/ingest/readers.test.ts
+// Run with:  node --import tsx --test shared/ingest/readers.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";

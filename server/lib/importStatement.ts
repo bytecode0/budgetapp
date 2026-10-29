@@ -11,10 +11,10 @@ import { prisma } from "./prisma.js";
 import { pickAllocationId } from "./categorize.js";
 import { normalizeMerchant } from "./normalizeMerchant.js";
 import { classifyRows, LATE_PAYMENT_DAYS, statementIds, type ExistingMovement, type PlannedKind, type PossibleDuplicate, type PurchasesSign, type StoredPayment, type PurchasesSignGuess, type RowWarning } from "./ingest/classify.js";
-import { assertRowCount, readStatement } from "./ingest/read.js";
+import { assertRowCount, readStatement } from "../../shared/ingest/read.js";
 import { suggestLearnedPayments } from "./ingest/learnedPayments.js";
-import { storedMapping } from "./ingest/validate.js";
-import type { NormalizedRow, SkippedRow, StatementSource } from "./ingest/types.js";
+import { storedMapping } from "../../shared/ingest/validate.js";
+import type { NormalizedRow, SkippedRow, StatementSource } from "../../shared/ingest/types.js";
 
 export type ImportKind = PlannedKind;
 
@@ -73,8 +73,11 @@ export interface PrepareImportInput {
   accountId: string | null;
   /** A statement file… */
   file?: { bytes: Uint8Array; filename: string };
-  /** …or rows already read in the browser (decision O; stage 2). */
+  /** …or rows already read in the browser (decision O), with what its
+   *  reader left out and which reader understood the file. */
   rows?: NormalizedRow[];
+  skipped?: SkippedRow[];
+  source?: StatementSource;
   /** Overrides the card sign convention (saved mapping, or detected). */
   purchasesSign?: PurchasesSign;
 }
@@ -112,7 +115,7 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
   const mapping = storedMapping(account?.importProfile);
 
   const read = input.rows
-    ? { rows: input.rows, skipped: [] as SkippedRow[], source: "rows" as const, purchasesSign: undefined }
+    ? { rows: input.rows, skipped: input.skipped ?? [], source: input.source ?? ("rows" as const), purchasesSign: undefined }
     : readStatement(input.file!.bytes, input.file!.filename, { mapping });
   assertRowCount(read.rows.length);
 

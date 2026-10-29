@@ -6,12 +6,12 @@ import { toCents, serializeMoney } from "../lib/money.js";
 import { categorize, learnFromCorrection } from "../lib/categorize.js";
 import { findDuplicateGroups } from "../lib/dedupe.js";
 import { prepareImport } from "../lib/importStatement.js";
-import { MAX_STATEMENT_ROWS, StatementReadError } from "../lib/ingest/read.js";
-import { parseNormalizedRows } from "../lib/ingest/validate.js";
+import { MAX_STATEMENT_ROWS, StatementReadError } from "../../shared/ingest/read.js";
+import { parseNormalizedRows, parseSkippedRows, parseSource } from "../../shared/ingest/validate.js";
 import { debtLineError, planImportWrites } from "../lib/ingest/writes.js";
 import { isGenericMerchant } from "../lib/ingest/learnedPayments.js";
 import { planContribution, planContributions } from "../lib/planContribution.js";
-import type { NormalizedRow } from "../lib/ingest/types.js";
+import type { NormalizedRow, SkippedRow, StatementSource } from "../../shared/ingest/types.js";
 import { aiEnabled, classifyMerchants } from "../lib/ai/classify.js";
 import { suggestCategories } from "../lib/ai/suggestCategories.js";
 import { rebuildExpenseShares } from "../lib/expenseShares.js";
@@ -294,16 +294,18 @@ expensesRouter.post("/merge", requireAuth, async (req: AuthRequest, res: Respons
 });
 
 // POST /api/expenses/import/preview
-// Body: { accountId?, filename, dataBase64, purchasesSign? } — or, instead of
-// the file, { rows: NormalizedRow[] } already read in the browser (decision O).
-// Reads the statement through the ingest core and returns rows flagged
-// new|duplicate with what each one is and a suggested category — writes nothing.
-// 422 { error, code, sample? } when the file can't be read (code
-// "unrecognized_columns" carries the first rows for a manual mapping).
+// Body: { accountId?, rows: NormalizedRow[], skipped?, source?, purchasesSign? }
+// — rows the browser already read (decision O: no file in the body, so no
+// 4.5 MB limit) — or, as a fallback for small files, { accountId?, filename,
+// dataBase64, purchasesSign? }. Reads the statement through the ingest core
+// and returns rows flagged new|duplicate with what each one is and a
+// suggested category — writes nothing. 422 { error, code, sample? } when the
+// file can't be read (code "unrecognized_columns" carries the first rows for
+// a manual mapping).
 expensesRouter.post("/import/preview", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { filename, dataBase64, accountId, purchasesSign, rows } = req.body as {
-      filename?: string; dataBase64?: string; accountId?: string | null; purchasesSign?: string; rows?: unknown;
+    const { filename, dataBase64, accountId, purchasesSign, rows, skipped, source } = req.body as {
+      filename?: string; dataBase64?: string; accountId?: string | null; purchasesSign?: string; rows?: unknown; skipped?: unknown; source?: unknown;
     };
     if (rows === undefined && (!filename || !dataBase64)) {
       return res.status(400).json({ error: "filename and dataBase64 (or rows) are required" });
@@ -314,11 +316,15 @@ expensesRouter.post("/import/preview", requireAuth, async (req: AuthRequest, res
     if (Array.isArray(rows) && rows.length > MAX_STATEMENT_ROWS) {
       return res.status(422).json({ error: `At most ${MAX_STATEMENT_ROWS} movements per import`, code: "too_many_rows" });
     }
-    let parsedRows: NormalizedRow[] | undefined;
+    let fromBrowser: { rows: NormalizedRow[]; skipped: SkippedRow[]; source: StatementSource } | undefined;
     if (rows !== undefined) {
       const parsed = parseNormalizedRows(rows);
-      if ("error" in parsed) return res.status(400).json({ error: parsed.error });
-      parsedRows = parsed.rows;
+      if ("error" in parsed) return res.status(400).json({ error: parsed.error, code: "invalid_rows" });
+      const parsedSkipped = parseSkippedRows(skipped);
+      if ("error" in parsedSkipped) return res.status(400).json({ error: parsedSkipped.error, code: "invalid_rows" });
+      const parsedSource = parseSource(source);
+      if (!parsedSource) return res.status(400).json({ error: "source is invalid", code: "invalid_rows" });
+      fromBrowser = { rows: parsed.rows, skipped: parsedSkipped.skipped, source: parsedSource };
     }
 
     const resolvedAccount = await resolveAccountId(req.userId!, req.authUserId!, accountId);
@@ -328,7 +334,7 @@ expensesRouter.post("/import/preview", requireAuth, async (req: AuthRequest, res
     try {
       preview = await prepareImport(req.userId!, {
         accountId: resolvedAccountId,
-        ...(parsedRows ? { rows: parsedRows } : { file: { bytes: new Uint8Array(Buffer.from(dataBase64!, "base64")), filename: filename! } }),
+        ...(fromBrowser ?? { file: { bytes: new Uint8Array(Buffer.from(dataBase64!, "base64")), filename: filename! } }),
         purchasesSign,
       });
     } catch (e) {

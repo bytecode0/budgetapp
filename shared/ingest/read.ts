@@ -1,6 +1,7 @@
 // Statement bytes → NormalizedRow[]. The single entry point for every file
-// format. Pure (Uint8Array in, plain objects out, no Node-only API): stage 2
-// runs it in the browser and posts only the rows (decision O).
+// format. Pure (Uint8Array in, plain objects out, no Node-only API): the
+// import wizard runs it in the browser and posts only the rows (decision O);
+// the server runs it on the fallback file path.
 //
 // Format by content first (an .csv that is really Norma 43 is read as Norma 43),
 // the file name only as a hint. For tabular files (CSV, XLSX), the columns
@@ -32,12 +33,18 @@ export function assertRowCount(n: number): void {
   }
 }
 
+/** The first rows of one sheet, as text (what the manual mapping shows). */
+export interface StatementSample {
+  sheet: string;
+  rows: string[][];
+}
+
 export class StatementReadError extends Error {
   constructor(
     readonly code: StatementErrorCode,
     message: string,
     /** For "unrecognized_columns": the first rows of each sheet, as text. */
-    readonly sample?: { sheet: string; rows: string[][] }[],
+    readonly sample?: StatementSample[],
   ) {
     super(message);
     this.name = "StatementReadError";
@@ -60,16 +67,18 @@ function readGrid(sheet: Sheet, opts: ReadOptions): ReadResult | null {
   if (opts.mapping) {
     const headerRow = findHeaderRow(grid, opts.mapping);
     if (headerRow >= 0) {
-      return { ...applyMapping(grid, headerRow, opts.mapping), source: "mapping", purchasesSign: mappingSign(opts.mapping) };
+      return { ...applyMapping(grid, headerRow, opts.mapping), source: "mapping", purchasesSign: mappingSign(opts.mapping), mapping: opts.mapping };
     }
   }
   const profile = matchProfile(grid);
   if (profile) {
     const { mapping } = profile.profile;
-    return { ...applyMapping(grid, profile.headerRow, mapping), source: profile.profile.id, purchasesSign: mappingSign(mapping) };
+    return { ...applyMapping(grid, profile.headerRow, mapping), source: profile.profile.id, purchasesSign: mappingSign(mapping), mapping };
   }
   const detected = detectMapping(grid);
-  if (detected) return { ...applyMapping(grid, detected.headerRow, detected.mapping), source: "generic", purchasesSign: mappingSign(detected.mapping) };
+  if (detected) {
+    return { ...applyMapping(grid, detected.headerRow, detected.mapping), source: "generic", purchasesSign: mappingSign(detected.mapping), mapping: detected.mapping };
+  }
   return null;
 }
 

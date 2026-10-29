@@ -9,7 +9,7 @@ import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { currentPeriodKey, periodBounds } from "../lib/period.js";
 import { loadDebtLedgers, debtState, owedNow, monthlyCommitment } from "../lib/debtBalance.js";
 import { ownerChangeSplitsDebtLink, mirroredCardDebtId } from "../lib/debtAccountLink.js";
-import { parseColumnMapping, storedMapping } from "../lib/ingest/validate.js";
+import { parseColumnMapping, storedMapping } from "../../shared/ingest/validate.js";
 import { CARD_PAYMENT_MODES, cardDebtOwnershipChanges, createCardDebt, updateCardDebt, type CardSettings } from "../lib/cardDebt.js";
 
 export const accountsRouter = Router();
@@ -246,9 +246,13 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
   }
 });
 
-// Statement-import column mapping saved on an account (server/lib/ingest/):
-// used when its files aren't recognised by a bank profile, so the second
-// import doesn't ask again. Owner-only, like every other account change.
+// Statement-import column mapping saved on an account (shared/ingest/): used
+// when its files aren't recognised by a bank profile, so the second import
+// doesn't ask again. Changing it is owner-only, like every other account
+// change. Reading it follows the import itself: the browser reads the file
+// (decision O) with this mapping, and anyone who may import into the account
+// (its owner, or a household member when it's shared) needs it — the server
+// path applied it for them too.
 async function ownedAccount(req: AuthRequest, res: Response) {
   const existing = await prisma.account.findFirst({ where: { id: req.params.id, userId: req.userId! } });
   const access = existing ? mutationAccess(existing, req.authUserId) : "hidden";
@@ -260,8 +264,11 @@ async function ownedAccount(req: AuthRequest, res: Response) {
 // GET /api/accounts/:id/import-profile → { data: { importProfile: ColumnMapping | null } }
 accountsRouter.get("/:id/import-profile", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const account = await ownedAccount(req, res);
-    if (!account) return;
+    const account = await prisma.account.findFirst({
+      where: { id: req.params.id, userId: req.userId!, ...visibleToWhere(req.authUserId!) },
+      select: { importProfile: true },
+    });
+    if (!account) return res.status(404).json({ error: "Account not found" });
     return res.json({ data: { importProfile: storedMapping(account.importProfile) } });
   } catch (err) {
     console.error("[accounts/import-profile GET]", err);

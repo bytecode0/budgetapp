@@ -24,7 +24,7 @@
     "typecheck:server": "tsc --noEmit -p tsconfig.server.json",
     "typecheck:app": "tsc --noEmit -p tsconfig.json",
     "typecheck": "npm run typecheck:server && npm run typecheck:app",
-    "test": "node --import tsx --test \"server/**/*.test.ts\"",
+    "test": "node --import tsx --test \"server/**/*.test.ts\" \"shared/**/*.test.ts\"",
     "test:integration": "node --import tsx --test --test-concurrency=1 server/lib/partnerFlow.integration.test.ts server/lib/ingest/import.integration.test.ts",
     "verify": "npm run typecheck && npm run test && npm run build",
     "postinstall": "prisma generate"

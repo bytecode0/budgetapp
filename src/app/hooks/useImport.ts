@@ -1,4 +1,9 @@
 import { useState } from 'react';
+import type { StatementSample } from '../../../shared/ingest/read';
+import type { ColumnMapping, ReadResult, SkippedRow, StatementSource } from '../../../shared/ingest/types';
+import { readStatementFile, SERVER_READ_MAX_BYTES } from '../lib/readStatementFile';
+
+export type { ColumnMapping, StatementSample };
 
 // payment: pays a debt (a card payment); refund: a card refund — lowers its
 // category's spending and the card debt (server/lib/ingest/classify.ts).
@@ -48,7 +53,19 @@ export interface ImportPreview {
   /** Card files: how purchases appear; 'unknown' until the user chooses. */
   purchasesSign?: PurchasesSign | 'unknown';
   purchasesSignDetected?: boolean;
+  /** Rows the file lists that aren't movements yet (Revolut PENDING…). */
+  skipped?: SkippedRow[];
+  source?: StatementSource;
 }
+
+/** What the preview is built from: rows read in this browser (decision O),
+ *  or — only when the browser's reader failed and the file is small — the
+ *  file itself, read by the server. */
+export type PreviewSource = { kind: 'rows'; read: ReadResult } | { kind: 'file'; file: File };
+
+export type ReadOutcome =
+  | { source: PreviewSource }
+  | { code: string; sample?: StatementSample[] };
 
 export type PurchasesSign = 'negative' | 'positive';
 
@@ -94,25 +111,74 @@ export function useImport() {
   const [classifying, setClassifying] = useState(false);
   const [suggestingCats, setSuggestingCats] = useState(false);
 
-  const preview = async (
-    file: File, accountId: string | null, purchasesSign?: PurchasesSign,
-  ): Promise<{ error?: string; code?: string; preview?: ImportPreview }> => {
+  /** Reads the file here with the account's mapping (if any). A reader
+   *  failure falls back to the server for files under its body limit. */
+  const read = async (file: File, mapping: ColumnMapping | null): Promise<ReadOutcome> => {
     setLoading(true);
     try {
-      const dataBase64 = await fileToBase64(file);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const r = await readStatementFile(bytes, file.name, mapping);
+      if (r.ok) return { source: { kind: 'rows', read: r.result } };
+      if (r.code === 'reader_failed' && file.size <= SERVER_READ_MAX_BYTES) return { source: { kind: 'file', file } };
+      return { code: r.code, ...('sample' in r && r.sample ? { sample: r.sample } : {}) };
+    } catch {
+      return { code: 'reader_failed' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const preview = async (
+    source: PreviewSource, accountId: string | null, purchasesSign?: PurchasesSign,
+  ): Promise<{ error?: string; code?: string; sample?: StatementSample[]; preview?: ImportPreview }> => {
+    setLoading(true);
+    try {
+      // A sign the user chose wins over the one the mapping states.
+      const sign = purchasesSign ?? (source.kind === 'rows' ? source.read.purchasesSign : undefined);
+      const body = source.kind === 'rows'
+        ? { accountId, rows: source.read.rows, skipped: source.read.skipped, source: source.read.source }
+        : { accountId, filename: source.file.name, dataBase64: await fileToBase64(source.file) };
       const res = await fetch('/api/expenses/import/preview', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, dataBase64, accountId, ...(purchasesSign ? { purchasesSign } : {}) }),
+        body: JSON.stringify({ ...body, ...(sign ? { purchasesSign: sign } : {}) }),
       });
       const data = await res.json();
-      if (!res.ok) return { error: data.error || 'Failed to read the file', code: data.code };
+      if (!res.ok) return { error: data.error || 'Failed to read the file', code: data.code, sample: data.sample };
       return { preview: data as ImportPreview };
     } catch {
       return { error: 'Could not read the file' };
     } finally {
       setLoading(false);
+    }
+  };
+
+  /** The account's saved column mapping; null when none or not readable. */
+  const loadProfile = async (accountId: string): Promise<ColumnMapping | null> => {
+    try {
+      const res = await fetch(`/api/accounts/${encodeURIComponent(accountId)}/import-profile`, { credentials: 'include' });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data?.data?.importProfile ?? null) as ColumnMapping | null;
+    } catch {
+      return null;
+    }
+  };
+
+  /** Saves how this account's files are read (owner only: 403 otherwise). */
+  const saveProfile = async (accountId: string, mapping: ColumnMapping): Promise<{ ok: true } | { error: string; status?: number }> => {
+    try {
+      const res = await fetch(`/api/accounts/${encodeURIComponent(accountId)}/import-profile`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ importProfile: mapping }),
+      });
+      if (!res.ok) return { error: 'save_failed', status: res.status };
+      return { ok: true };
+    } catch {
+      return { error: 'network' };
     }
   };
 
@@ -180,5 +246,5 @@ export function useImport() {
     }
   };
 
-  return { loading, confirming, classifying, suggestingCats, preview, confirm, classify, suggestCategories };
+  return { loading, confirming, classifying, suggestingCats, read, preview, loadProfile, saveProfile, confirm, classify, suggestCategories };
 }

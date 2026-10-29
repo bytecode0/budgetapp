@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
 import { useAccounts } from '../hooks/useAccounts';
 import { useAllocations } from '../hooks/useAllocations';
-import { useImport, type ImportPreview, type ConfirmRow, type AiCategory, type PurchasesSign } from '../hooks/useImport';
+import { useImport, type ImportPreview, type ConfirmRow, type AiCategory, type PurchasesSign, type PreviewSource } from '../hooks/useImport';
 import { BudgetSuggestions } from './BudgetSuggestions';
 import { useMoney } from '../onboarding/useMoney';
 import { useAuth } from '../context/AuthContext';
@@ -25,7 +25,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
   const { accounts } = useAccounts();
   const { allocations, createAllocation } = useAllocations();
-  const { loading, confirming, classifying, suggestingCats, preview, confirm, classify, suggestCategories } = useImport();
+  const { loading, confirming, classifying, suggestingCats, read, preview, loadProfile, confirm, classify, suggestCategories } = useImport();
 
   const { user } = useAuth();
   const activeAccounts = accounts.filter(a => !a.isArchived);
@@ -38,7 +38,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
 
   const [accountId, setAccountId] = useState<string | null>(null);
   const [data, setData] = useState<ImportPreview | null>(null);
-  const [file, setFile] = useState<File | null>(null);
+  const [source, setSource] = useState<PreviewSource | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allocByRow, setAllocByRow] = useState<Record<string, string>>({});
   // needs_review rows: what the user says the card credit is.
@@ -53,7 +53,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const [postImportBudgets, setPostImportBudgets] = useState(false);
 
   useEffect(() => {
-    if (!isOpen) { setData(null); setFile(null); setSelected(new Set()); setAllocByRow({}); setResolution({}); setPayTarget({}); setAiMerchants(new Set()); setProposedCats(null); setPostImportBudgets(false); }
+    if (!isOpen) { setData(null); setSource(null); setSelected(new Set()); setAllocByRow({}); setResolution({}); setPayTarget({}); setAiMerchants(new Set()); setProposedCats(null); setPostImportBudgets(false); }
     if (isOpen && !accountId && defaultAccount) setAccountId(defaultAccount.id);
     if (isOpen) {
       fetch('/api/ai/status', { credentials: 'include' })
@@ -67,10 +67,20 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const fmtEuro = (v: number) => `${currency}${Math.abs(v).toFixed(2)}`;
   const fmtDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 
-  const handleFile = async (file: File | undefined, purchasesSign?: PurchasesSign) => {
+  const handleFile = async (file: File | undefined) => {
     if (!file) return;
-    setFile(file);
-    const res = await preview(file, accountId, purchasesSign);
+    // Read here (decision O): only the rows go to the server.
+    const outcome = await read(file, accountId ? await loadProfile(accountId) : null);
+    if ('code' in outcome) {
+      toast.error(apiErrorMessage(t, { code: outcome.code, error: t('import.readFailed') }));
+      return;
+    }
+    setSource(outcome.source);
+    await runPreview(outcome.source);
+  };
+
+  const runPreview = async (src: PreviewSource, purchasesSign?: PurchasesSign) => {
+    const res = await preview(src, accountId, purchasesSign);
     if (res.error) {
       // Unknown codes and network failures: our own text, never the server's.
       toast.error(apiErrorMessage(t, { code: res.code, error: t('import.readFailed') }));
@@ -330,7 +340,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                           key={sign}
                           type="button"
                           disabled={loading}
-                          onClick={() => handleFile(file ?? undefined, sign)}
+                          onClick={() => source && runPreview(source, sign)}
                           className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${data.purchasesSign === sign ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'}`}
                         >
                           {t(sign === 'negative' ? 'import.signNegative' : 'import.signPositive')}

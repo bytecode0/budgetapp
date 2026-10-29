@@ -1,7 +1,7 @@
-// Run with:  node --import tsx --test server/lib/ingest/validate.test.ts
+// Run with:  node --import tsx --test shared/ingest/validate.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseColumnMapping, parseNormalizedRows, storedMapping } from "./validate.js";
+import { parseColumnMapping, parseNormalizedRows, parseSkippedRows, parseSource, storedMapping } from "./validate.js";
 
 test("mapping: a valid one is kept, unknown keys dropped", () => {
   const r = parseColumnMapping({
@@ -45,4 +45,15 @@ test("rows from the browser: strict cents and days", () => {
   ]) {
     assert.ok("error" in parseNormalizedRows(bad), JSON.stringify(bad));
   }
+});
+
+test("skipped rows and source from the browser", () => {
+  assert.deepEqual(parseSkippedRows(undefined), { skipped: [] });
+  assert.deepEqual(parseSkippedRows([{ rowIndex: 3, reason: "state:PENDING", extra: 1 }]), { skipped: [{ rowIndex: 3, reason: "state:PENDING" }] });
+  for (const bad of ["x", [{ rowIndex: -1, reason: "a" }], [{ rowIndex: 1.5, reason: "a" }], [{ rowIndex: 1, reason: "" }], [{ rowIndex: 1, reason: "x".repeat(61) }], [null]]) {
+    assert.ok("error" in parseSkippedRows(bad), JSON.stringify(bad));
+  }
+  assert.equal(parseSource(undefined), "rows");
+  assert.equal(parseSource("revolut"), "revolut");
+  assert.equal(parseSource("<script>"), null);
 });

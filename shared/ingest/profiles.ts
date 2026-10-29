@@ -2,7 +2,7 @@
 // Pure; runs in Node and browser. A profile is recognised by its exact header
 // set, so it never steals a file another profile (or the user's own saved
 // mapping) reads better. Add a bank: one entry here + an anonymised fixture
-// and a test in ingest.test.ts.
+// and a test in server/lib/ingest/profiles.test.ts.
 import { normHeader } from "./columns.js";
 import type { ColumnMapping, StatementSource } from "./types.js";
 
@@ -20,7 +20,7 @@ export const PROFILES: BankProfile[] = [
     // Divisa, Disponible, Divisa, Observaciones"; newest first; dates as
     // dd/mm/yyyy text; Importe/Disponible as numbers. Concepto is often a
     // generic label ("Bizum", "Transferencia realizada"): the meaning lives in
-    // Movimiento/Observaciones, kept as details. Fixture: fixtures/bbva-cuenta.xlsx.
+    // Movimiento/Observaciones, kept as details. Fixture: server/lib/ingest/fixtures/makeFixtures.ts.
     id: "bbva",
     headers: ["F.Valor", "Fecha", "Concepto", "Movimiento", "Importe", "Disponible"],
     mapping: {
@@ -35,7 +35,7 @@ export const PROFILES: BankProfile[] = [
   {
     // Revolut — current account CSV ("Statement" → Excel/CSV).
     // PENDING VALIDATION WITH A REAL FILE: built from Revolut's documented
-    // export columns, not from a real export yet (fixtures/revolut-cuenta.csv
+    // export columns, not from a real export yet (server/lib/ingest/fixtures/makeFixtures.ts
     // is synthetic). Decisions (docs/plan-deudas-y-onboarding.md §4.7):
     //  - only COMPLETED rows are imported; PENDING, REVERTED, DECLINED, FAILED
     //    are skipped and listed (a pending row comes back as COMPLETED in the

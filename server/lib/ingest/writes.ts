@@ -13,7 +13,7 @@
 //             debt line.
 //   income  → Income.
 import { normalizeMerchant } from "../normalizeMerchant.js";
-import { makeDay } from "./dates.js";
+import { makeDay } from "../../../shared/ingest/dates.js";
 
 export const IMPORT_KINDS = new Set(["expense", "income", "payment", "refund"]);
 

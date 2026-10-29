@@ -1,8 +1,8 @@
 // Untrusted input → ingest shapes. Used for what a client sends: a column
-// mapping to save on an account (Account.importProfile), and — in stage 2 —
-// rows the browser already read (decision O). Pure.
+// mapping to save on an account (Account.importProfile), and the rows (plus
+// skipped rows and source) the browser already read (decision O). Pure.
 import { makeDay } from "./dates.js";
-import type { ColumnMapping, NormalizedRow } from "./types.js";
+import type { ColumnMapping, NormalizedRow, SkippedRow, StatementSource } from "./types.js";
 
 const MAX_LABEL = 120;
 const MAX_ROWS = 20000;
@@ -88,4 +88,29 @@ export function parseNormalizedRows(input: unknown): { rows: NormalizedRow[] } |
     });
   }
   return { rows };
+}
+
+/** Rows the browser's reader left out (pending, declined…), shown in the
+ *  preview with their reason. Absent → none. */
+export function parseSkippedRows(input: unknown): { skipped: SkippedRow[] } | { error: string } {
+  if (input === undefined || input === null) return { skipped: [] };
+  if (!Array.isArray(input) || input.length > MAX_ROWS) return { error: `skipped must be a list of up to ${MAX_ROWS}` };
+  const skipped: SkippedRow[] = [];
+  for (const [i, raw] of input.entries()) {
+    const r = raw as Record<string, unknown> | null;
+    if (!r || typeof r !== "object" || !Number.isSafeInteger(r.rowIndex) || (r.rowIndex as number) < 0
+      || typeof r.reason !== "string" || !r.reason || r.reason.length > 60) {
+      return { error: `skipped ${i}: invalid` };
+    }
+    skipped.push({ rowIndex: r.rowIndex as number, reason: r.reason });
+  }
+  return { skipped };
+}
+
+const SOURCES: StatementSource[] = ["bbva", "revolut", "generic", "mapping", "norma43", "ofx", "rows"];
+
+/** Which reader understood the file, as the browser reports it; "rows" when unsaid. */
+export function parseSource(input: unknown): StatementSource | null {
+  if (input === undefined || input === null) return "rows";
+  return SOURCES.includes(input as StatementSource) ? (input as StatementSource) : null;
 }

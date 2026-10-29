@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { classifyRows, type ClassifyAccount, type ClassifyDebt, type ExistingMovement, type PlannedRow } from "./classify.js";
 import { debtLineError, MAX_AMOUNT_CENTS, planImportWrites, type ConfirmRow } from "./writes.js";
 import { buildLedgers, countedFrom, debtState, type LedgerDebt, type LedgerExpense } from "../debtBalance.js";
-import type { NormalizedRow } from "./types.js";
+import type { NormalizedRow } from "../../../shared/ingest/types.js";
 import { isGenericMerchant, preselectLearnedPayment, suggestLearnedPayments, type LearnedDebt } from "./learnedPayments.js";
 import { normalizeMerchant } from "../normalizeMerchant.js";
 import { planContributions } from "../planContribution.js";

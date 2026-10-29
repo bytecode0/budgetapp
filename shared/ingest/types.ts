@@ -3,8 +3,10 @@
 //   bytes ──readers/──▶ grid | rows ──columns/profiles──▶ NormalizedRow[]
 //         ──classify──▶ PlannedRow[] (decision + dedup) ──importStatement──▶ preview / DB
 //
-// Everything up to NormalizedRow is pure TypeScript with no Node-only API, so
-// the browser can run the same code and send only rows (decision O). Money is
+// Everything up to NormalizedRow lives in shared/ingest/: pure TypeScript with
+// no Node-only API, run by the browser (the import wizard reads the file and
+// posts only rows, decision O) and by the server (fallback file path). What
+// needs the database or Node (classify, writes) stays in server/lib/ingest/. Money is
 // integer cents from the first step; dates are calendar days ("yyyy-mm-dd"),
 // never Date objects, so no timezone can move a movement to another day.
 
@@ -81,4 +83,7 @@ export interface ReadResult {
   purchasesSign?: "negative" | "positive";
   /** Currency the file declares for the whole statement (OFX, Norma 43). */
   currency?: string | null;
+  /** Tabular files: the mapping that read it (saved, bank profile or header
+   *  synonyms). The wizard saves it with the user's card sign choice. */
+  mapping?: ColumnMapping;
 }

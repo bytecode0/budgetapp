@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import * as XLSX from "xlsx";
-import { readStatement } from "./read.js";
+import { readStatement } from "../../../shared/ingest/read.js";
 import { buildBbva, REVOLUT_CSV } from "./fixtures/makeFixtures.js";
 import { classifyRows, type ClassifyAccount } from "./classify.js";
 
