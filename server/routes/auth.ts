@@ -75,7 +75,9 @@ function setAuthCookie(res: Response, userId: string) {
 
 authRouter.get("/google", (req: Request, res: Response) => {
   const googleClient = newGoogleClient();
-  if (!googleClient) return res.status(503).json({ error: "Google sign-in is not configured" });
+  // A top-level navigation, not a fetch: send the browser back to the app with
+  // the same error the callback uses, never to Google.
+  if (!googleClient) return res.redirect(`${process.env.APP_URL ?? "http://localhost:5173"}/?error=google_failed`);
   // The UI language (?lang=es|en) rides in `state` so a new user's settings are
   // created in it. It is not a secret and is re-validated on the way back.
   const lang = parseLocale(req.query.lang);

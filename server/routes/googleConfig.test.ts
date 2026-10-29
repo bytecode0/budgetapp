@@ -23,15 +23,16 @@ test("missingGoogleEnv lists every unset Google var", () => {
   assert.deepEqual(missingGoogleEnv({}), ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_CALLBACK_URL"]);
 });
 
-test("without Google config, sign-in answers 503 instead of redirecting to localhost", async () => {
+test("without Google config, sign-in redirects back to the app with an error, never to Google", async () => {
+  process.env.APP_URL = "https://app.example.test";
   const { default: app } = await import("../app.js");
   const server = app.listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => server.once("listening", () => resolve()));
   try {
     const { port } = server.address() as AddressInfo;
     const res = await fetch(`http://127.0.0.1:${port}/api/auth/google`, { redirect: "manual" });
-    assert.equal(res.status, 503);
-    assert.deepEqual(await res.json(), { error: "Google sign-in is not configured" });
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.get("location"), "https://app.example.test/?error=google_failed");
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
