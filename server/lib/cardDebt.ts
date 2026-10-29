@@ -22,15 +22,15 @@ async function currentPeriod(userId: string) {
 
 /** Creates the debt behind a card account (and its budget line). */
 export async function createCardDebt(
-  ctx: { userId: string; authUserId: string; householdId?: string | null },
-  account: { id: string; name: string; visibility: string },
+  ctx: { userId: string; householdId?: string | null },
+  account: { id: string; name: string; visibility: string; ownerUserId: string },
   settings: CardSettings,
 ): Promise<void> {
   const lastOrder = await prisma.debt.findFirst({ where: { userId: ctx.userId }, orderBy: { sortOrder: "desc" } });
   const debt = await prisma.debt.create({
     data: {
       userId: ctx.userId,
-      ownerUserId: ctx.authUserId,
+      ownerUserId: account.ownerUserId, // the card's owner owns its debt
       householdId: ctx.householdId ?? null,
       visibility: account.visibility,
       name: account.name,
@@ -44,6 +44,22 @@ export async function createCardDebt(
     },
   });
   await ensureDebtLine(ctx.userId, debt, await currentPeriod(ctx.userId));
+}
+
+/** The ownership fields a card's debt mirrors from its account. When the
+ *  account changes owner or visibility the debt must follow in the same write,
+ *  or the old owner keeps editing a debt that is no longer theirs (and the new
+ *  owner can't). Returns null when there's nothing to mirror. */
+export function cardDebtOwnershipChanges(
+  finalAccountType: string,
+  changes: { ownerUserId?: string; visibility?: string },
+): { ownerUserId?: string; visibility?: string } | null {
+  if (finalAccountType !== "card") return null;
+  const data = {
+    ...(changes.ownerUserId !== undefined && { ownerUserId: changes.ownerUserId }),
+    ...(changes.visibility !== undefined && { visibility: changes.visibility }),
+  };
+  return Object.keys(data).length > 0 ? data : null;
 }
 
 /** Applies edits made on the card account to its debt: name, payment

@@ -7,7 +7,7 @@ import { toCents, serializeMoney } from "../lib/money.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { currentPeriodKey, periodBounds } from "../lib/period.js";
 import { loadDebtLedgers, debtState, owedNow, monthlyCommitment } from "../lib/debtBalance.js";
-import { CARD_PAYMENT_MODES, createCardDebt, updateCardDebt, type CardSettings } from "../lib/cardDebt.js";
+import { CARD_PAYMENT_MODES, cardDebtOwnershipChanges, createCardDebt, updateCardDebt, type CardSettings } from "../lib/cardDebt.js";
 
 export const accountsRouter = Router();
 
@@ -116,7 +116,7 @@ accountsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
     });
 
     if (card) {
-      await createCardDebt({ userId: req.userId!, authUserId: req.authUserId!, householdId: req.householdId }, account, card);
+      await createCardDebt({ userId: req.userId!, householdId: req.householdId }, account, card);
     }
 
     return res.json(serializeMoney({ account }));
@@ -167,11 +167,17 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     if (visibility !== undefined && !VISIBILITIES.has(visibility)) {
       return res.status(400).json({ error: "Invalid visibility" });
     }
-    // ownerUserId can only be reassigned to a member of the same household.
-    if (ownerUserId !== undefined && req.householdId) {
-      const member = await prisma.householdMember.findFirst({
-        where: { householdId: req.householdId, userId: ownerUserId }, select: { id: true },
-      });
+    // ownerUserId can only be reassigned to a member of the same household;
+    // without a household the only valid owner is the caller.
+    if (ownerUserId !== undefined && typeof ownerUserId !== "string") {
+      return res.status(400).json({ error: "Owner must be a household member" });
+    }
+    if (ownerUserId !== undefined && ownerUserId !== req.authUserId) {
+      const member = req.householdId
+        ? await prisma.householdMember.findFirst({
+            where: { householdId: req.householdId, userId: ownerUserId }, select: { id: true },
+          })
+        : null;
       if (!member) return res.status(400).json({ error: "Owner must be a household member" });
     }
 
@@ -191,23 +197,29 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
       await prisma.debt.delete({ where: { id: linkedDebt.id } });
     }
 
-    const account = await prisma.account.update({
-      where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(type !== undefined && { type }),
-        ...(currency !== undefined && { currency }),
-        ...(currentBalance !== undefined && { currentBalance: card ? 0 : toCents(currentBalance) }),
-        ...(isArchived !== undefined && { isArchived: Boolean(isArchived) }),
-        ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
-        ...(visibility !== undefined && { visibility }),
-        ...(ownerUserId !== undefined && { ownerUserId }),
-      },
-    });
+    // A card's debt mirrors its account's owner and visibility, written
+    // together so they can't drift apart.
+    const debtOwnership = linkedDebt ? cardDebtOwnershipChanges(finalType, { ownerUserId, visibility }) : null;
+    const [account] = await prisma.$transaction([
+      prisma.account.update({
+        where: { id },
+        data: {
+          ...(name !== undefined && { name }),
+          ...(type !== undefined && { type }),
+          ...(currency !== undefined && { currency }),
+          ...(currentBalance !== undefined && { currentBalance: card ? 0 : toCents(currentBalance) }),
+          ...(isArchived !== undefined && { isArchived: Boolean(isArchived) }),
+          ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
+          ...(visibility !== undefined && { visibility }),
+          ...(ownerUserId !== undefined && { ownerUserId }),
+        },
+      }),
+      ...(linkedDebt && debtOwnership ? [prisma.debt.update({ where: { id: linkedDebt.id }, data: debtOwnership })] : []),
+    ]);
 
     if (card) {
       if (linkedDebt) await updateCardDebt(req.userId!, linkedDebt.id, { ...card, ...(name !== undefined && { name }) });
-      else await createCardDebt({ userId: req.userId!, authUserId: req.authUserId!, householdId: req.householdId }, account, card);
+      else await createCardDebt({ userId: req.userId!, householdId: req.householdId }, account, card);
     }
 
     return res.json(serializeMoney({ account }));
