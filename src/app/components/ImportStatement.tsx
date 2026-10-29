@@ -72,7 +72,8 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     setFile(file);
     const res = await preview(file, accountId, purchasesSign);
     if (res.error) {
-      toast.error(apiErrorMessage(t, res));
+      // Unknown codes and network failures: our own text, never the server's.
+      toast.error(apiErrorMessage(t, { code: res.code, error: t('import.readFailed') }));
       return;
     }
     const p = res.preview!;
@@ -215,7 +216,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
       });
     if (rows.length === 0) { toast.error(t('import.nothingSelected')); return; }
     const res = await confirm(accountId, rows);
-    if (res.error) { toast.error(res.error); return; }
+    if (res.error) { toast.error(apiErrorMessage(t, { code: 'code' in res ? res.code : undefined, error: t('import.confirmFailed') })); return; }
     toast.success(t('import.importedOk', { count: res.inserted ?? rows.length }));
     onImported?.();
     // Offer budget suggestions before closing — the just-imported history now

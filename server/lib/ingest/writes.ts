@@ -97,15 +97,15 @@ export function isImportDay(v: unknown, today: string): v is string {
 const optText = (v: unknown) => v === undefined || v === null || (typeof v === "string" && v.length <= MAX_TEXT);
 
 export function planImportWrites(rows: ConfirmRow[], ctx: WriteContext): WritePlan {
-  if (rows.some(r => !r || typeof r !== "object" || !IMPORT_KINDS.has(r.kind))) return { error: "Invalid row kind", status: 400 };
+  if (rows.some(r => !r || typeof r !== "object" || !IMPORT_KINDS.has(r.kind))) return { error: "Invalid row kind", code: "invalid_rows", status: 400 };
   if (rows.some(r => !Number.isSafeInteger(r.amountCents) || r.amountCents <= 0 || r.amountCents > MAX_AMOUNT_CENTS)) {
-    return { error: "Invalid amount", status: 400 };
+    return { error: "Invalid amount", code: "invalid_rows", status: 400 };
   }
-  if (rows.some(r => !isImportDay(r.date, ctx.today))) return { error: "Invalid date", status: 400 };
+  if (rows.some(r => !isImportDay(r.date, ctx.today))) return { error: "Invalid date", code: "invalid_rows", status: 400 };
   if (rows.some(r => typeof r.externalId !== "string" || !r.externalId || r.externalId.length > MAX_EXTERNAL_ID)) {
-    return { error: "Invalid externalId", status: 400 };
+    return { error: "Invalid externalId", code: "invalid_rows", status: 400 };
   }
-  if (rows.some(r => !optText(r.description) || !optText(r.merchant))) return { error: "Invalid text", status: 400 };
+  if (rows.some(r => !optText(r.description) || !optText(r.merchant))) return { error: "Invalid text", code: "invalid_rows", status: 400 };
 
   const lineById = new Map(ctx.debtLines.map(l => [l.id, l]));
   const lineByDebt = new Map(ctx.debtLines.map(l => [l.debtId, l.id]));
@@ -133,7 +133,7 @@ export function planImportWrites(rows: ConfirmRow[], ctx: WriteContext): WritePl
       }
       case "payment": {
         const debt = r.debtId ? debtById.get(r.debtId) : undefined;
-        if (!debt) return { error: "Debt not found", status: 404 };
+        if (!debt) return { error: "Debt not found", code: "debt_not_found", status: 404 };
         expenses.push({
           ...common(r),
           kind: "expense",

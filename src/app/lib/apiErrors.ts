@@ -20,6 +20,8 @@ const ERROR_KEYS: Record<string, string> = {
   file_too_large: 'import.fileTooLarge',
   empty_file: 'import.emptyFile',
   no_movements: 'import.noMovements',
+  invalid_rows: 'import.invalidRows',
+  debt_not_found: 'import.debtNotFound',
 };
 
 /** The message to show for a failed debt/account request (call it only once

@@ -778,7 +778,7 @@
     "importSelected": "Import {{count}} selected",
     "nothingSelected": "Select at least one row",
     "importedOk": "Imported {{count}} transactions",
-    "payment": "card payment",
+    "payment": "debt payment",
     "refund": "refund",
     "fee": "fee",
     "possibleDuplicate": "possible duplicate",
@@ -800,7 +800,11 @@
     "tooManyRows": "The file has too many movements (at most 5,000). Export a shorter period.",
     "fileTooLarge": "The Excel file is too large (at most 5 MB). Export a shorter period or as CSV.",
     "emptyFile": "The file is empty.",
-    "noMovements": "The file has the expected columns but no movements."
+    "noMovements": "The file has the expected columns but no movements.",
+    "invalidRows": "Some rows aren't valid. Read the file again and retry.",
+    "debtNotFound": "One of the chosen debts no longer exists. Read the file again.",
+    "readFailed": "The file couldn't be read.",
+    "confirmFailed": "The import failed. Try again."
   },
   "budgets": {
     "title": "Suggested budgets",

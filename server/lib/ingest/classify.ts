@@ -150,9 +150,22 @@ const hasPhrase = (text: string, phrases: string[]) => phrases.some(p => text.in
 // tarjeta" (a debit-card purchase) must NOT match.
 const BANK_CARD_PAYMENT = [
   "liquidacion tarjeta", "liquidacion de tarjeta", "liquidacion de la tarjeta", "liq tarjeta",
-  "pago tarjeta", "pago de tarjeta", "pago de la tarjeta", "recibo visa", "recibo mastercard",
+  "recibo visa", "recibo mastercard",
   "recibo tarjeta", "cargo tarjeta credito", "credit card payment", "credit card repayment", "card repayment",
 ];
+// "PAGO TARJETA" also labels debit-card purchases ("PAGO TARJETA MERCADONA"):
+// a card payment only when nothing but card words, numbers or the name of
+// one of the user's cards follows it.
+const PAGO_TARJETA = /(?:^| )pago (?:de (?:la )?)?tarjeta((?: [a-z0-9]+)*) $/;
+const CARD_WORDS = new Set(["credito", "credit", "visa", "mastercard", "amex", "classic", "oro", "gold", "platinum", "n", "num", "no"]);
+
+function isPagoTarjetaPayment(text: string, cardNames: string[]): boolean {
+  const m = PAGO_TARJETA.exec(text);
+  if (!m) return false;
+  let rest = ` ${m[1].trim()} `;
+  for (const name of cardNames) if (name.length >= 3) rest = rest.replace(` ${name} `, " ");
+  return rest.trim().split(" ").filter(Boolean).every(tok => CARD_WORDS.has(tok) || /^\d+$/.test(tok) || /^x+\d*$/.test(tok));
+}
 // Card side: the line that records a payment received.
 const CARD_PAYMENT_RECEIVED = [
   "pago recibido", "su pago", "pago gracias", "abono pago", "abono de pago", "abono por pago",
@@ -174,8 +187,8 @@ export function legacyExternalId(date: string, signedCents: number, merchant: st
 /** The card debt a bank-side card-payment line pays, when it can be told. */
 function detectCardPayment(row: NormalizedRow, account: ClassifyAccount, debts: ClassifyDebt[]): { debtId: string | null } | null {
   const text = textOf(row);
-  if (!hasPhrase(text, BANK_CARD_PAYMENT)) return null;
   const cards = debts.filter(d => d.kind === "credit_card" && d.accountId && d.accountId !== account.id);
+  if (!hasPhrase(text, BANK_CARD_PAYMENT) && !isPagoTarjetaPayment(text, cards.map(d => normalizeText(d.name)))) return null;
   if (cards.length === 1) return { debtId: cards[0].id };
   const named = cards.filter(d => {
     const n = normalizeText(d.name);

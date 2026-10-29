@@ -493,6 +493,11 @@ test("confirm validation: real days in a sane range, bounded ids, Int32 amounts 
   assert.equal(err({ date: "2027-10-29" }), null); // up to a year ahead (scheduled movements)
   for (const externalId of ["", "x".repeat(201), 42, null]) assert.equal(err({ externalId: externalId as string }), "Invalid externalId");
   assert.equal(err({ description: "x".repeat(501) }), "Invalid text");
+  // Codes the client translates (src/app/lib/apiErrors.ts).
+  const bad = planImportWrites([{ ...ok, date: "nope" } as ConfirmRow], ctx);
+  assert.ok("error" in bad && bad.code === "invalid_rows");
+  const noDebt = planImportWrites([{ ...ok, kind: "payment", debtId: "gone" } as ConfirmRow], ctx);
+  assert.ok("error" in noDebt && noDebt.code === "debt_not_found");
 });
 
 test("cost: stored movements are looked up by amount, not scanned per row (reviewer exp3)", () => {
@@ -505,4 +510,15 @@ test("cost: stored movements are looked up by amount, not scanned per row (revie
   const t0 = Date.now();
   classifyRows({ rows, account: bank, debts: [], existing });
   assert.ok(Date.now() - t0 < 2000, `took ${Date.now() - t0} ms`);
+});
+
+test("'pago tarjeta' is a card payment only when no merchant follows it", () => {
+  const kindOf = (description: string, details?: string) =>
+    classifyRows({ rows: [row("2026-10-05", -10000, description, details ? { details } : {})], account: bank, debts: [passDebt], existing: [] }).rows[0].kind;
+  assert.equal(kindOf("PAGO TARJETA"), "payment");
+  assert.equal(kindOf("PAGO DE LA TARJETA 4567"), "payment");
+  assert.equal(kindOf("PAGO TARJETA CREDITO PASS"), "payment"); // the card's own name
+  assert.equal(kindOf("PAGO TARJETA MERCADONA"), "expense");
+  assert.equal(kindOf("PAGO TARJETA", "GASOLINERA DEMO"), "expense");
+  assert.equal(kindOf("PAGO CON TARJETA"), "expense");
 });

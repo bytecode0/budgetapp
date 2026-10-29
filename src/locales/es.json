@@ -778,7 +778,7 @@
     "importSelected": "Importar {{count}} seleccionados",
     "nothingSelected": "Selecciona al menos una fila",
     "importedOk": "Importadas {{count}} transacciones",
-    "payment": "pago de tarjeta",
+    "payment": "pago de deuda",
     "refund": "devolución",
     "fee": "comisión",
     "possibleDuplicate": "posible duplicado",
@@ -800,7 +800,11 @@
     "tooManyRows": "El archivo tiene demasiados movimientos (máximo 5.000). Exporta un periodo más corto.",
     "fileTooLarge": "El archivo Excel es demasiado grande (máximo 5 MB). Exporta un periodo más corto o en CSV.",
     "emptyFile": "El archivo está vacío.",
-    "noMovements": "El archivo tiene las columnas esperadas pero ningún movimiento."
+    "noMovements": "El archivo tiene las columnas esperadas pero ningún movimiento.",
+    "invalidRows": "Algunas filas no son válidas. Vuelve a leer el archivo e inténtalo de nuevo.",
+    "debtNotFound": "Una de las deudas elegidas ya no existe. Vuelve a leer el archivo.",
+    "readFailed": "No se pudo leer el archivo.",
+    "confirmFailed": "No se pudo importar. Inténtalo de nuevo."
   },
   "budgets": {
     "title": "Presupuestos sugeridos",

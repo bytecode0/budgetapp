@@ -121,7 +121,7 @@ export function useImport() {
         body: JSON.stringify({ accountId, rows }),
       });
       const data = await res.json();
-      if (!res.ok) return { error: data.error || 'Failed to import' };
+      if (!res.ok) return { error: data.error || 'Failed to import', code: data.code as string | undefined };
       return { inserted: data.inserted as number, expenses: data.expenses as number, income: data.income as number };
     } catch {
       return { error: 'Network error' };
