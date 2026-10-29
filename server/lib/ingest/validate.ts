@@ -1,0 +1,91 @@
+// Untrusted input → ingest shapes. Used for what a client sends: a column
+// mapping to save on an account (Account.importProfile), and — in stage 2 —
+// rows the browser already read (decision O). Pure.
+import { makeDay } from "./dates.js";
+import type { ColumnMapping, NormalizedRow } from "./types.js";
+
+const MAX_LABEL = 120;
+const MAX_ROWS = 20000;
+
+const label = (v: unknown): string | undefined =>
+  typeof v === "string" && v.trim() && v.length <= MAX_LABEL ? v.trim() : undefined;
+
+/** A valid ColumnMapping, or an error message naming what's wrong. */
+export function parseColumnMapping(input: unknown): { mapping: ColumnMapping } | { error: string } {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return { error: "mapping must be an object" };
+  const o = input as Record<string, unknown>;
+  const date = label(o.date);
+  if (!date) return { error: "mapping.date is required" };
+  const amount = label(o.amount), debit = label(o.debit), credit = label(o.credit);
+  if (!amount && !debit && !credit) return { error: "mapping needs amount, or debit/credit" };
+  if (!Array.isArray(o.description) || o.description.length > 5) return { error: "mapping.description must be a list of up to 5 columns" };
+  const description = o.description.map(label);
+  if (description.some(d => d === undefined)) return { error: "mapping.description has an invalid column" };
+  for (const k of ["balance", "currency", "state", "fee"] as const) {
+    if (o[k] !== undefined && o[k] !== null && !label(o[k])) return { error: `mapping.${k} is invalid` };
+  }
+  if (o.dateOrder !== undefined && !["dmy", "mdy", "ymd"].includes(o.dateOrder as string)) return { error: "mapping.dateOrder is invalid" };
+  if (o.decimal !== undefined && o.decimal !== "," && o.decimal !== ".") return { error: "mapping.decimal is invalid" };
+  if (o.purchasesSign !== undefined && o.purchasesSign !== "negative" && o.purchasesSign !== "positive") {
+    return { error: "mapping.purchasesSign is invalid" };
+  }
+  const mapping: ColumnMapping = {
+    date,
+    ...(amount ? { amount } : {}),
+    ...(!amount && debit ? { debit } : {}),
+    ...(!amount && credit ? { credit } : {}),
+    description: description as string[],
+    ...(label(o.balance) ? { balance: label(o.balance) } : {}),
+    ...(label(o.currency) ? { currency: label(o.currency) } : {}),
+    ...(label(o.state) ? { state: label(o.state) } : {}),
+    ...(label(o.fee) ? { fee: label(o.fee) } : {}),
+    ...(o.dateOrder ? { dateOrder: o.dateOrder as ColumnMapping["dateOrder"] } : {}),
+    ...(o.decimal ? { decimal: o.decimal as ColumnMapping["decimal"] } : {}),
+    ...(o.purchasesSign ? { purchasesSign: o.purchasesSign as ColumnMapping["purchasesSign"] } : {}),
+  };
+  return { mapping };
+}
+
+/** A stored mapping (Json column) read back; null when absent or unusable. */
+export function storedMapping(json: unknown): ColumnMapping | null {
+  if (json === null || json === undefined) return null;
+  const r = parseColumnMapping(json);
+  return "mapping" in r ? r.mapping : null;
+}
+
+const isDay = (v: unknown): v is string =>
+  typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && makeDay(+v.slice(0, 4), +v.slice(5, 7), +v.slice(8, 10)) === v;
+const optInt = (v: unknown) => v === undefined || v === null || Number.isSafeInteger(v);
+const optStr = (v: unknown, max = 500) => v === undefined || v === null || (typeof v === "string" && v.length <= max);
+
+/** Rows read in the browser, checked as strictly as the server's own reader
+ *  would produce them: integer cents, real calendar days, bounded text. */
+export function parseNormalizedRows(input: unknown): { rows: NormalizedRow[] } | { error: string } {
+  if (!Array.isArray(input) || input.length === 0) return { error: "rows must be a non-empty list" };
+  if (input.length > MAX_ROWS) return { error: `at most ${MAX_ROWS} rows per import` };
+  const rows: NormalizedRow[] = [];
+  for (const [i, raw] of input.entries()) {
+    const r = raw as Record<string, unknown> | null;
+    if (!r || typeof r !== "object") return { error: `row ${i}: not an object` };
+    if (!isDay(r.date)) return { error: `row ${i}: date must be yyyy-mm-dd` };
+    if (!Number.isSafeInteger(r.amountCents)) return { error: `row ${i}: amountCents must be an integer` };
+    if (typeof r.description !== "string" || r.description.length > 500) return { error: `row ${i}: invalid description` };
+    if (!optStr(r.details) || !optStr(r.externalRef, 200) || !optStr(r.currency, 3) || !optStr(r.state, 40)) {
+      return { error: `row ${i}: invalid text field` };
+    }
+    if (!optInt(r.balanceCents) || !optInt(r.feeCents)) return { error: `row ${i}: cents must be integers` };
+    rows.push({
+      rowIndex: i,
+      date: r.date,
+      amountCents: r.amountCents as number,
+      description: r.description,
+      details: (r.details as string | undefined) ?? undefined,
+      balanceCents: (r.balanceCents as number | null | undefined) ?? null,
+      externalRef: (r.externalRef as string | null | undefined) ?? null,
+      currency: (r.currency as string | null | undefined) ?? null,
+      state: (r.state as string | null | undefined) ?? null,
+      feeCents: r.feeCents ? -Math.abs(r.feeCents as number) : null,
+    });
+  }
+  return { rows };
+}
