@@ -5,6 +5,7 @@ import { sendPartnerInviteEmail } from "../lib/mailer.js";
 import { resolveLocale } from "../lib/email/locales/index.js";
 import { ensureHousehold } from "../lib/household.js";
 import { mergeMemberIntoPool } from "../lib/partnerMerge.js";
+import { unlinkMemberFromPool } from "../lib/partnerUnlink.js";
 
 export const partnerRouter = Router();
 
@@ -260,37 +261,35 @@ partnerRouter.post("/accept", requireAuth, async (req: AuthRequest, res: Respons
 });
 
 // ── DELETE /api/partner/unlink ───────────────────────────────────────────────
-// Either party can unlink. Secondary clears their linkedUserId; primary finds and clears secondary's.
+// Either party can unlink. The partner linked to the pool (the secondary) is
+// the one who leaves it: in one transaction her link is cleared, her
+// household membership removed, and everything she owns moves back to her own
+// scope so it stays neither in her ex's pool nor hidden from her
+// (server/lib/partnerUnlink.ts).
 partnerRouter.delete("/unlink", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const myId = req.authUserId!;
 
-    // Am I the secondary?
+    // Am I the secondary? Otherwise, am I the primary of someone?
     const mySettings = await prisma.userSettings.findUnique({
       where: { userId: myId }, select: { linkedUserId: true },
     });
+    const link = mySettings?.linkedUserId
+      ? { memberId: myId, poolId: mySettings.linkedUserId }
+      : await prisma.userSettings.findFirst({ where: { linkedUserId: myId }, select: { userId: true } })
+        .then(s => (s ? { memberId: s.userId, poolId: myId } : null));
+    if (!link) return res.status(400).json({ error: "No partner link found" });
 
-    if (mySettings?.linkedUserId) {
-      await prisma.userSettings.update({
-        where: { userId: myId },
-        data: { linkedUserId: null },
-      });
-      return res.json({ success: true });
-    }
+    const unlinked = await prisma.$transaction(async (tx) => {
+      // Re-read inside the transaction: a concurrent unlink must not move twice.
+      const current = await tx.userSettings.findUnique({ where: { userId: link.memberId }, select: { linkedUserId: true } });
+      if (current?.linkedUserId !== link.poolId) return false;
+      await unlinkMemberFromPool(tx, link);
+      return true;
+    }, { timeout: 30_000 });
+    if (!unlinked) return res.status(400).json({ error: "No partner link found" });
 
-    // Am I the primary? Find and clear the secondary.
-    const secondarySettings = await prisma.userSettings.findFirst({
-      where: { linkedUserId: myId },
-    });
-    if (secondarySettings) {
-      await prisma.userSettings.update({
-        where: { userId: secondarySettings.userId },
-        data: { linkedUserId: null },
-      });
-      return res.json({ success: true });
-    }
-
-    return res.status(400).json({ error: "No partner link found" });
+    return res.json({ success: true });
   } catch (err) {
     console.error("[partner/unlink]", err);
     return res.status(500).json({ error: "Internal server error" });
