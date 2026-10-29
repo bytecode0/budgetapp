@@ -22,6 +22,9 @@ export interface Expense {
   // What this counts as spending: less than `amount` only for a card payment
   // that partly pays purchases already counted in their own category.
   budgetAmount?: number;
+  // "expense" | "refund". A refund keeps a positive amount but counts
+  // negative (budgetAmount = −amount): it lowers its category's spending.
+  kind?: string;
   debtId?: string | null;
   description: string;
   merchant: string;

@@ -694,7 +694,8 @@
     "expense": "Expense",
     "shared": "Shared",
     "sharedPaidBy": "Shared · paid by {{name}}",
-    "payCard": "Pay card"
+    "payCard": "Pay card",
+    "refund": "Refund"
   },
   "addIncome": {
     "title": "Add income",

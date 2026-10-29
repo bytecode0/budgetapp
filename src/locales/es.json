@@ -694,7 +694,8 @@
     "expense": "Gasto",
     "shared": "Compartido",
     "sharedPaidBy": "Compartido · pagó {{name}}",
-    "payCard": "Pagar tarjeta"
+    "payCard": "Pagar tarjeta",
+    "refund": "Devolución"
   },
   "addIncome": {
     "title": "Añadir ingreso",

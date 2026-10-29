@@ -340,7 +340,9 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
           className="space-y-6"
         >
           {grouped.map(([day, dayItems], groupIdx) => {
-            const net = dayItems.reduce((s, m) => m.kind === 'income' ? s + m.amount : s - m.amount, 0);
+            // Spending counts as the server says (budgetAmount): a refund
+            // adds back, a card payment only its pre-existing-debt part.
+            const net = dayItems.reduce((s, m) => m.kind === 'income' ? s + m.amount : s - (m.expense.budgetAmount ?? m.amount), 0);
             return (
             <div key={day}>
               <div className="flex items-center justify-between mb-2 px-1">
@@ -380,6 +382,11 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                                     {t('addExpense.unassigned')}
                                   </span>
                                 )}
+                                {m.expense.kind === 'refund' && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                    {t('activity.refund')}
+                                  </span>
+                                )}
                                 {m.expense.account && (
                                   <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                                     {m.expense.account.name}
@@ -396,7 +403,9 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <p className="text-lg font-display">{currency}{m.amount.toFixed(2)}</p>
+                            {m.expense.kind === 'refund'
+                              ? <p className="text-lg font-display text-emerald-600">+{currency}{m.amount.toFixed(2)}</p>
+                              : <p className="text-lg font-display">{currency}{m.amount.toFixed(2)}</p>}
                             <button
                               onClick={() => setEditing(m.expense)}
                               className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
