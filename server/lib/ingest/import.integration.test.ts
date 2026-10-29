@@ -653,16 +653,52 @@ describe("statement import (integration, real Postgres)", { skip: !TEST_DATABASE
       assert.deepEqual(await stored(u.id), before, `${why}: rows were written`);
     }
 
-    // A row that passes validation but fails in the database (a category
-    // that doesn't exist) takes the whole file down with it: the transaction.
+    // A category that doesn't exist: a 404 with its code, nothing written.
     const r = await call(u.id, "POST", "/api/expenses/import/confirm", {
       accountId: main, rows: [...good, bad({ allocationId: "does-not-exist" })],
     });
-    assert.notEqual(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.status, 404, JSON.stringify(r.body));
+    assert.equal(r.body.code, "allocation_not_found");
     assert.deepEqual(await stored(u.id), before, "a failed confirm wrote part of the file");
 
     // And the good rows alone go through.
     const done = await confirm(u.id, main, good);
     assert.deepEqual([done.expenses, done.income], [1, 1]);
+  });
+
+  // ── i ──────────────────────────────────────────────────────────────────
+
+  it("i. a category from another pool is refused everywhere: nothing written, the other plan untouched", async () => {
+    const owner = await signUp("Iker");
+    const intruder = await signUp("Irene");
+    const created = await ok(owner.id, "POST", "/api/plans", { title: "Casa", targetAmount: 1000, monthlyContribution: 100, autoCreateAllocation: true });
+    const planId = created.plan.id as string;
+    const foreignLine = created.allocation.id as string;
+    const planAmount = async () => (await prisma.lifePlan.findUniqueOrThrow({ where: { id: planId } })).currentAmount;
+    const main = await mainAccount(intruder.id);
+    const own = await defaultLine(intruder.id, "flexible");
+    const refused = (r: { status: number; body: any }, what: string) => {
+      assert.equal(r.status, 404, `${what}: ${r.status} ${JSON.stringify(r.body)}`);
+      assert.equal(r.body.code, "allocation_not_found", what);
+    };
+
+    refused(await call(intruder.id, "POST", "/api/expenses", { amount: 50, description: "x", allocationId: foreignLine }), "POST /api/expenses");
+    refused(await call(intruder.id, "POST", "/api/expenses", { amount: 50, description: "x", allocationId: 42 }), "POST /api/expenses (not a string)");
+    const mine = (await ok(intruder.id, "POST", "/api/expenses", { amount: 50, description: "x", allocationId: own })).expense;
+    refused(await call(intruder.id, "PATCH", `/api/expenses/${mine.id}`, { allocationId: foreignLine }), "PATCH /api/expenses/:id");
+    assert.equal((await prisma.expense.findUniqueOrThrow({ where: { id: mine.id } })).allocationId, own);
+
+    const p = await preview(intruder.id, main, "banco.csv", csv(["Fecha;Concepto;Importe", "15/09/2026;TRASPASO;-100,00"]));
+    const before = await stored(intruder.id);
+    refused(await call(intruder.id, "POST", "/api/expenses/import/confirm", {
+      accountId: main, rows: toConfirm(p, preselected(p), { allocation: { [p.rows[0].externalId]: foreignLine } }),
+    }), "import confirm");
+    assert.deepEqual(await stored(intruder.id), before);
+
+    refused(await call(intruder.id, "POST", "/api/rules", { pattern: "traspaso", allocationId: foreignLine }), "POST /api/rules");
+    refused(await call(intruder.id, "POST", "/api/monthly-budgets/save", { month: PERIOD, budgets: [{ allocationId: foreignLine, allocatedAmount: 10 }] }), "monthly budgets");
+
+    assert.equal(await planAmount(), 0, "another user's plan was credited");
+    assert.equal(await prisma.expense.count({ where: { allocationId: foreignLine } }), 0);
   });
 });

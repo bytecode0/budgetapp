@@ -20,6 +20,7 @@ import { periodBounds } from "../lib/period.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { countedAmounts, syncDebtStatus } from "../lib/debtBalance.js";
 import { pickDefaultAccount } from "../lib/defaultAccount.js";
+import { ALLOCATION_NOT_FOUND, allocationsInPool } from "../lib/poolRefs.js";
 
 export const expensesRouter = Router();
 
@@ -146,6 +147,9 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
 
     const amountCents = toCents(amount);
     const merchant = normalizeMerchant(description);
+
+    // A chosen category must be one of the pool's lines.
+    if (!(await allocationsInPool(req.userId!, [allocationId]))) return res.status(404).json(ALLOCATION_NOT_FOUND);
 
     // Auto-categorize: when the user didn't pick an allocation, let the rules decide.
     let resolvedAllocationId: string | null = allocationId || null;
@@ -396,6 +400,10 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ error: "rows are required" });
     }
+    // Every category named must be one of the pool's lines (a payment's line
+    // comes from its debt, not the row).
+    const namedLines = rows.filter(r => r && (r.kind === "expense" || r.kind === "refund")).map(r => r.allocationId);
+    if (!(await allocationsInPool(req.userId!, namedLines))) return res.status(404).json(ALLOCATION_NOT_FOUND);
 
     const resolvedAccountId = await resolveAccountId(req.userId!, req.authUserId!, accountId);
     const [debtLines, debts] = await Promise.all([
@@ -586,10 +594,14 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
       if (owned) accountUpdate = { accountId: owned.id };
     }
 
-    // Resolve the allocation that will apply after the update
+    // Resolve the allocation that will apply after the update: a new one must
+    // be one of the pool's lines.
+    if (allocationId !== undefined && !(await allocationsInPool(req.userId!, [allocationId]))) {
+      return res.status(404).json(ALLOCATION_NOT_FOUND);
+    }
     const newAllocId = allocationId !== undefined ? (allocationId || null) : existing.allocationId;
     const newAlloc = newAllocId ? await prisma.allocation.findFirst({
-      where: { id: newAllocId },
+      where: { id: newAllocId, userId: req.userId! },
       select: { type: true, lifePlanId: true },
     }) : null;
     const newAmount = amount !== undefined ? toCents(amount) : existing.amount;

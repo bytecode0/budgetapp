@@ -2,6 +2,7 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { serializeMoney } from "../lib/money.js";
+import { ALLOCATION_NOT_FOUND, allocationsInPool } from "../lib/poolRefs.js";
 import { detectRecurring } from "../lib/recurring.js";
 
 export const recurringRouter = Router();
@@ -60,10 +61,7 @@ recurringRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respons
     }
 
     // Validate a linked allocation belongs to the user.
-    if (allocationId) {
-      const alloc = await prisma.allocation.findFirst({ where: { id: allocationId, userId: req.userId! } });
-      if (!alloc) return res.status(400).json({ error: "Allocation not found" });
-    }
+    if (!(await allocationsInPool(req.userId!, [allocationId]))) return res.status(404).json(ALLOCATION_NOT_FOUND);
 
     const commitment = await prisma.recurringCommitment.update({
       where: { id },

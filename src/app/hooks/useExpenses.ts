@@ -84,7 +84,7 @@ export function useExpenses(month?: string) {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (!res.ok) return { error: data.error || 'Failed to create expense' };
+    if (!res.ok) return { error: data.error || 'Failed to create expense', code: data.code as string | undefined };
     setExpenses(prev => [data.expense, ...prev]);
     return { expense: data.expense };
   };

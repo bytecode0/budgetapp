@@ -9,6 +9,7 @@ import { useExpenses } from '../hooks/useExpenses';
 import { useLanguage } from '../context/LanguageContext';
 import { useMoney } from '../onboarding/useMoney';
 import { useAuth } from '../context/AuthContext';
+import { apiErrorMessage } from '../lib/apiErrors';
 
 interface AddExpenseProps {
   isOpen: boolean;
@@ -114,7 +115,7 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
     });
     setSaving(false);
     if ('error' in result) {
-      toast.error(result.error as string);
+      toast.error(apiErrorMessage(t, result));
     } else {
       toast.success(t('addExpense.addedOk'));
       onSaved?.();

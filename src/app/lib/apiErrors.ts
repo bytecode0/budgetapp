@@ -1,5 +1,6 @@
 // Translation keys for the `code` the debt, account and expense routes send
-// next to their `{ error }` (server/routes/debts.ts, accounts.ts, expenses.ts). The
+// next to their `{ error }` (server/routes/debts.ts, accounts.ts, expenses.ts,
+// server/lib/poolRefs.ts). The
 // server's `error` text is English and only a fallback for unknown codes.
 const ERROR_KEYS: Record<string, string> = {
   debt_has_payments: 'debts.hasPaymentsError',
@@ -14,6 +15,7 @@ const ERROR_KEYS: Record<string, string> = {
   card_has_movements: 'accounts.cardHasMovementsError',
   paid_from_card: 'debts.paidFromCardError',
   refund_on_debt_line: 'apiErrors.refundOnDebtLine',
+  allocation_not_found: 'apiErrors.allocationNotFound',
   // Statement import (server/lib/ingest/read.ts)
   unrecognized_columns: 'import.unrecognizedColumns',
   too_many_rows: 'import.tooManyRows',

@@ -4,6 +4,7 @@ import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { signToken, verifyToken } from "../lib/jwt.js";
 import { getBankingClient, bankingEnabled } from "../lib/banking/gocardless.js";
 import { buildPreviewFromProviderTxns, writeSyncedRows, syncConnection } from "../lib/banking/sync.js";
+import { ALLOCATION_NOT_FOUND, allocationsInPool } from "../lib/poolRefs.js";
 
 export const bankingRouter = Router();
 
@@ -292,6 +293,7 @@ bankingRouter.post("/connections/:id/confirm", requireAuth, async (req: AuthRequ
     }
     const account = await prisma.account.findFirst({ where: { id: accountId, userId: req.userId!, bankConnectionId: connection.id } });
     if (!account) return res.status(400).json({ error: "Account is not linked to this connection" });
+    if (!(await allocationsInPool(req.userId!, rows.map(r => r?.allocationId)))) return res.status(404).json(ALLOCATION_NOT_FOUND);
 
     const written = await writeSyncedRows(connection.userId, connection.ownerUserId, account.id, rows);
 
