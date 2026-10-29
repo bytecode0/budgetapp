@@ -8,9 +8,10 @@ import { findDuplicateGroups } from "../lib/dedupe.js";
 import { prepareImport } from "../lib/importStatement.js";
 import { MAX_STATEMENT_ROWS, StatementReadError } from "../../shared/ingest/read.js";
 import { parseNormalizedRows, parseSkippedRows, parseSource } from "../../shared/ingest/validate.js";
-import { debtLineError, planImportWrites } from "../lib/ingest/writes.js";
+import { debtLineError } from "../lib/ingest/writes.js";
+import { confirmImport } from "../lib/ingest/confirm.js";
 import { isGenericMerchant } from "../lib/ingest/learnedPayments.js";
-import { planContribution, planContributions } from "../lib/planContribution.js";
+import { planContribution } from "../lib/planContribution.js";
 import type { NormalizedRow, SkippedRow, StatementSource } from "../../shared/ingest/types.js";
 import { aiEnabled, classifyMerchants } from "../lib/ai/classify.js";
 import { suggestCategories } from "../lib/ai/suggestCategories.js";
@@ -431,7 +432,7 @@ expensesRouter.post("/import/suggest-mapping", requireAuth, async (req: AuthRequ
 // POST /api/expenses/import/confirm
 // Body: { accountId?, rows: ImportRow[] } — the preview rows the user kept,
 // with the allocation chosen. What each kind becomes is decided by
-// planImportWrites (server/lib/ingest/writes.ts). All source='import',
+// planImportWrites and written by confirmImport (server/lib/ingest/). All source='import',
 // idempotent via @@unique externalId.
 expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
@@ -449,124 +450,15 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
 
     const resolvedAccount = await resolveAccountId(req.userId!, req.authUserId!, accountId);
     if ("error" in resolvedAccount) return res.status(404).json(resolvedAccount.error);
-    const resolvedAccountId = resolvedAccount.accountId;
-    const [debtLines, debts] = await Promise.all([
-      prisma.allocation.findMany({
-        where: { userId: req.userId!, type: "debt", debtId: { not: null } },
-        select: { id: true, debtId: true, debt: { select: { accountId: true } } },
-      }),
-      prisma.debt.findMany({ where: { userId: req.userId! }, select: { id: true, accountId: true, name: true } }),
-    ]);
-    const plan = planImportWrites(
+    const result = await confirmImport(
+      { userId: req.userId!, authUserId: req.authUserId!, householdId: req.householdId, accountId: resolvedAccount.accountId, source: "import" },
       rows.map(r => ({ ...r, amountCents: toCents(r.amount) })),
-      {
-        today: new Date().toISOString().slice(0, 10),
-        accountId: resolvedAccountId,
-        debtLines: debtLines.map(l => ({ id: l.id, debtId: l.debtId!, debtAccountId: l.debt?.accountId ?? null })),
-        debts: debts.map(d => ({ id: d.id, accountId: d.accountId })),
-      },
     );
-    if ("error" in plan) {
-      const { status, ...body } = plan;
+    if ("error" in result) {
+      const { status, ...body } = result;
       return res.status(status).json(body);
     }
-
-    // One transaction: a file is imported whole or not at all, and a life plan
-    // gets credited only for the rows this request actually inserted (rows
-    // already stored — a re-import, or a concurrent confirm that got there
-    // first — are skipped by the unique externalId and not returned).
-    // Imported rows on a "plan" line contribute to its life plan like manual
-    // ones (refunds take money back out); DELETE/PATCH reverse it.
-    const { exp, inc, inserted } = await prisma.$transaction(async tx => {
-      const inserted = await tx.expense.createManyAndReturn({
-        data: plan.expenses.map(e => ({ ...e, userId: req.userId!, source: "import", createdByUserId: req.authUserId! })),
-        skipDuplicates: true, // re-importing the same file is a no-op
-        select: { kind: true, amount: true, allocationId: true, debtId: true },
-      });
-      const inc = await tx.income.createMany({
-        data: plan.incomes.map(i => ({ ...i, userId: req.userId!, ownerUserId: req.authUserId!, source: "import" })),
-        skipDuplicates: true,
-      });
-      const planLines = await tx.allocation.findMany({
-        where: { userId: req.userId!, type: "plan", lifePlanId: { not: null } },
-        select: { id: true, lifePlanId: true },
-      });
-      const deltas = planContributions(inserted, new Map(planLines.map(l => [l.id, l.lifePlanId!])));
-      for (const [lifePlanId, delta] of deltas) {
-        await tx.lifePlan.update({ where: { id: lifePlanId }, data: { currentAmount: { increment: delta } } });
-      }
-      return { exp: { count: inserted.length }, inc, inserted };
-    }, { timeout: 30_000 }); // an interactive transaction defaults to 5 s; a statement may hold 5,000 rows
-
-    // Learn from the categories assigned during import: every classified merchant
-    // becomes a `learned` rule so the rest of this file — and future imports — get
-    // auto-categorized. Dedupe by merchant (last assignment wins). Best-effort:
-    // a learning failure must not undo the already-committed import. A payment
-    // from a bank account teaches its debt line (the next statement proposes
-    // it as a payment, for the user to confirm) — unless the merchant is a
-    // generic label ("Transferencia realizada"…) that could be anything;
-    // refunds and a card statement's own payment lines don't teach either.
-    try {
-      const merchantToAllocation = new Map<string, string>();
-      for (const e of plan.expenses) {
-        if (!e.allocationId || !e.merchant || e.kind === "refund" || (e.debtId && !e.accountId)) continue;
-        if (e.debtId && isGenericMerchant(e.merchant)) continue;
-        merchantToAllocation.set(e.merchant, e.allocationId);
-      }
-      for (const [merchant, allocationId] of merchantToAllocation) {
-        await learnFromCorrection(req.userId!, merchant, allocationId);
-      }
-    } catch (learnErr) {
-      console.error("[expenses/import/confirm] learn", learnErr);
-    }
-
-    await syncDebtStatus(req.userId!, plan.expenses.map(e => e.debtId));
-
-    // Attribution for imported expenses (Epic H3): payer = account owner; split
-    // across the household when the pool belongs to one. Only touch rows not yet
-    // attributed (payerUserId null), so re-imports don't redo work. Refunds get
-    // the same payer — so they're listed to them at shared_stats and count
-    // (negative) in their per-person spending — but stay personal: household
-    // balances (server/lib/balances.ts) add up what each member fronted and
-    // don't read refunds.
-    if (req.householdId && exp.count > 0) {
-      const account = resolvedAccountId
-        ? await prisma.account.findUnique({ where: { id: resolvedAccountId }, select: { ownerUserId: true } })
-        : null;
-      const payerUserId = account?.ownerUserId ?? req.authUserId!; // a person, never the pool id
-      await prisma.expense.updateMany({
-        where: {
-          userId: req.userId!, source: "import", kind: "refund", payerUserId: null,
-          externalId: { in: plan.expenses.filter(e => e.kind === "refund").map(e => e.externalId) },
-        },
-        data: { payerUserId },
-      });
-      const created = await prisma.expense.findMany({
-        where: {
-          userId: req.userId!, source: "import", kind: "expense", payerUserId: null,
-          externalId: { in: plan.expenses.map(e => e.externalId) },
-        },
-        select: { id: true, amount: true },
-      });
-      for (const e of created) {
-        await prisma.expense.update({ where: { id: e.id }, data: { payerUserId, scope: "shared", scopeSource: "manual" } });
-        await rebuildExpenseShares(e.id, e.amount, req.householdId, payerUserId);
-      }
-    }
-
-    // What this request wrote, for the wizard's summary ("23 expenses, 2
-    // incomes, 1 payment to the PASS card"): payments by the debt they pay.
-    const nameByDebt = new Map(debts.map(d => [d.id, d.name]));
-    const paymentsByDebt = new Map<string, number>();
-    for (const e of inserted) if (e.debtId) paymentsByDebt.set(e.debtId, (paymentsByDebt.get(e.debtId) ?? 0) + 1);
-    const summary = {
-      expenses: inserted.filter(e => e.kind === "expense" && !e.debtId).length,
-      refunds: inserted.filter(e => e.kind === "refund").length,
-      incomes: inc.count,
-      payments: [...paymentsByDebt].map(([debtId, count]) => ({ debtId, name: nameByDebt.get(debtId) ?? null, count })),
-    };
-
-    return res.json({ success: true, expenses: exp.count, income: inc.count, inserted: exp.count + inc.count, summary });
+    return res.json({ success: true, ...result });
   } catch (err) {
     console.error("[expenses/import/confirm]", err);
     return res.status(500).json({ error: "Internal server error" });
