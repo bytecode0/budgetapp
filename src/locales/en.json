@@ -782,7 +782,12 @@
     "fee": "fee",
     "possibleDuplicate": "possible duplicate",
     "otherCurrency": "other currency",
-    "unrecognizedColumns": "We don't recognise this file's columns: we need at least a date and an amount."
+    "unrecognizedColumns": "We don't recognise this file's columns: we need at least a date and an amount.",
+    "reviewCount": "{{count}} to review",
+    "reviewCredit": "credit to review",
+    "reviewCreditHint": "We can't tell whether this credit is a card payment or a refund. Pick one to import it.",
+    "resolvePayment": "It's a payment",
+    "resolveRefund": "It's a refund"
   },
   "budgets": {
     "title": "Suggested budgets",

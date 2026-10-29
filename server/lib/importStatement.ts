@@ -27,7 +27,8 @@ export interface ImportRow {
   status: "new" | "duplicate";
   suggestedAllocationId: string | null;
   suggestedAllocationName: string | null;
-  /** payment rows: the debt it pays. */
+  /** payment rows: the debt it pays; needs_review: the card's debt, if the
+   *  user resolves it as a payment. */
   debtId?: string | null;
   /** A fee charged with the movement above it (Revolut). */
   isFee?: boolean;
@@ -45,6 +46,8 @@ export interface ImportPreview {
   incomeCount: number;
   paymentCount?: number;
   refundCount?: number;
+  /** Card credits the user must call payment or refund before importing. */
+  reviewCount?: number;
   possibleDuplicateCount?: number;
   /** Rows the file lists but that aren't movements yet (pending, declined…). */
   skipped?: SkippedRow[];
@@ -164,7 +167,8 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
   const rows: ImportRow[] = result.rows.map(p => {
     let suggested: string | null = null;
     if (p.kind === "payment") suggested = (p.debtId && lineByDebt.get(p.debtId)) || null;
-    else if ((p.kind === "expense" || p.kind === "refund") && !p.isFee && p.status === "new") {
+    // needs_review: the category it takes if the user calls it a refund.
+    else if ((p.kind === "expense" || p.kind === "refund" || p.kind === "needs_review") && !p.isFee && p.status === "new") {
       const rule = ruleFor(p);
       suggested = rule && !debtByLine.has(rule) ? rule : null; // never a debt line for a purchase
     }
@@ -196,6 +200,7 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
     incomeCount: count(r => r.kind === "income"),
     paymentCount: count(r => r.kind === "payment"),
     refundCount: count(r => r.kind === "refund"),
+    reviewCount: count(r => r.kind === "needs_review" && r.status === "new"),
     possibleDuplicateCount: count(r => r.status === "new" && !!r.possibleDuplicate),
     skipped: read.skipped,
     source: read.source,

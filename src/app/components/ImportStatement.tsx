@@ -39,6 +39,8 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const [data, setData] = useState<ImportPreview | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allocByRow, setAllocByRow] = useState<Record<string, string>>({});
+  // needs_review rows: what the user says the card credit is.
+  const [resolution, setResolution] = useState<Record<string, 'payment' | 'refund'>>({});
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiMerchants, setAiMerchants] = useState<Set<string>>(new Set());
   const [proposedCats, setProposedCats] = useState<AiCategory[] | null>(null);
@@ -47,7 +49,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const [postImportBudgets, setPostImportBudgets] = useState(false);
 
   useEffect(() => {
-    if (!isOpen) { setData(null); setSelected(new Set()); setAllocByRow({}); setAiMerchants(new Set()); setProposedCats(null); setPostImportBudgets(false); }
+    if (!isOpen) { setData(null); setSelected(new Set()); setAllocByRow({}); setResolution({}); setAiMerchants(new Set()); setProposedCats(null); setPostImportBudgets(false); }
     if (isOpen && !accountId && defaultAccount) setAccountId(defaultAccount.id);
     if (isOpen) {
       fetch('/api/ai/status', { credentials: 'include' })
@@ -70,11 +72,12 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     }
     const p = res.preview!;
     setData(p);
-    // Default: select all new rows — except possible duplicates and rows in
-    // another currency, which the user confirms one by one. Pre-fill the
-    // suggested allocation per row.
+    // Default: select all new rows — except possible duplicates, rows in
+    // another currency and card credits to review, which the user confirms
+    // one by one. Pre-fill the suggested allocation per row.
+    setResolution({});
     setSelected(new Set(p.rows
-      .filter(r => r.status === 'new' && !r.possibleDuplicate && !r.warnings?.includes('currency_mismatch'))
+      .filter(r => r.status === 'new' && r.kind !== 'needs_review' && !r.possibleDuplicate && !r.warnings?.includes('currency_mismatch'))
       .map(r => r.externalId)));
     setAllocByRow(Object.fromEntries(p.rows.filter(r => r.suggestedAllocationId).map(r => [r.externalId, r.suggestedAllocationId!])));
   };
@@ -154,6 +157,15 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     }
   };
 
+  const resolve = (id: string, kind: 'payment' | 'refund') => {
+    setResolution(prev => ({ ...prev, [id]: kind }));
+    setSelected(prev => new Set(prev).add(id));
+  };
+
+  // The kind a row is imported as: a review row only once resolved.
+  const confirmKindOf = (r: ImportPreview['rows'][number]): ConfirmRow['kind'] | null =>
+    r.kind === 'needs_review' ? resolution[r.externalId] ?? null : r.kind;
+
   const toggle = (id: string) => setSelected(prev => {
     const next = new Set(prev);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -164,16 +176,20 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     if (!data) return;
     const rows: ConfirmRow[] = data.rows
       .filter(r => r.status === 'new' && selected.has(r.externalId))
-      .map(r => ({
-        kind: r.kind,
-        externalId: r.externalId,
-        date: r.date,
-        description: r.description,
-        merchant: r.merchant,
-        amount: r.amount,
-        allocationId: r.kind === 'expense' || r.kind === 'refund' ? (allocByRow[r.externalId] || null) : undefined,
-        debtId: r.kind === 'payment' ? r.debtId ?? null : undefined,
-      }));
+      .flatMap(r => {
+        const kind = confirmKindOf(r);
+        if (!kind) return [];
+        return [{
+          kind,
+          externalId: r.externalId,
+          date: r.date,
+          description: r.description,
+          merchant: r.merchant,
+          amount: r.amount,
+          allocationId: kind === 'expense' || kind === 'refund' ? (allocByRow[r.externalId] || null) : undefined,
+          debtId: kind === 'payment' ? r.debtId ?? null : undefined,
+        }];
+      });
     if (rows.length === 0) { toast.error(t('import.nothingSelected')); return; }
     const res = await confirm(accountId, rows);
     if (res.error) { toast.error(res.error); return; }
@@ -184,7 +200,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     setPostImportBudgets(true);
   };
 
-  const selectedCount = data ? data.rows.filter(r => r.status === 'new' && selected.has(r.externalId)).length : 0;
+  const selectedCount = data ? data.rows.filter(r => r.status === 'new' && selected.has(r.externalId) && confirmKindOf(r)).length : 0;
 
   return (
     <>
@@ -254,6 +270,9 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                   <span className="px-2.5 py-1 rounded-full bg-muted text-muted-foreground">{t('import.dupCount', { count: data.duplicateCount })}</span>
                   <span className="px-2.5 py-1 rounded-full bg-muted text-muted-foreground">{t('import.expenseCount', { count: data.expenseCount })}</span>
                   <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">{t('import.incomeCount', { count: data.incomeCount })}</span>
+                  {!!data.reviewCount && (
+                    <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">{t('import.reviewCount', { count: data.reviewCount })}</span>
+                  )}
                 </div>
 
                 {/* Bulk assign by merchant — categorize a whole shop in one go */}
@@ -366,13 +385,16 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                 <div className="border border-border rounded-xl divide-y divide-border max-h-[48vh] overflow-y-auto">
                   {data.rows.map(r => {
                     const isDup = r.status === 'duplicate';
+                    const isReview = r.kind === 'needs_review' && !isDup;
+                    const kind = confirmKindOf(r);
                     return (
-                      <div key={r.externalId} className={`flex items-center gap-3 p-3 ${isDup ? 'opacity-50' : ''}`}>
+                      <div key={r.externalId} className={`p-3 space-y-2 ${isDup ? 'opacity-50' : ''}`}>
+                      <div className="flex items-center gap-3">
                         <input
                           type="checkbox"
                           className="accent-primary shrink-0"
-                          checked={!isDup && selected.has(r.externalId)}
-                          disabled={isDup}
+                          checked={!isDup && !!kind && selected.has(r.externalId)}
+                          disabled={isDup || !kind}
                           onChange={() => toggle(r.externalId)}
                         />
                         <div className="min-w-0 flex-1">
@@ -382,12 +404,13 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                             {isDup && <> · {t('import.duplicate')}</>}
                             {r.kind === 'payment' && <> · {t('import.payment')}</>}
                             {r.kind === 'refund' && <> · {t('import.refund')}</>}
+                            {isReview && <> · <span className="text-amber-600">{t('import.reviewCredit')}</span></>}
                             {r.isFee && <> · {t('import.fee')}</>}
                             {!isDup && r.possibleDuplicate && <> · <span className="text-amber-600">{t('import.possibleDuplicate')}</span></>}
                             {r.warnings?.includes('currency_mismatch') && <> · <span className="text-amber-600">{t('import.otherCurrency')}</span></>}
                           </p>
                         </div>
-                        {(r.kind === 'expense' || r.kind === 'refund') && !isDup && allocations.length > 0 && (
+                        {(kind === 'expense' || kind === 'refund') && !isDup && allocations.length > 0 && (
                           <select
                             value={allocByRow[r.externalId] ?? ''}
                             onChange={e => setAllocByRow(prev => ({ ...prev, [r.externalId]: e.target.value }))}
@@ -397,9 +420,26 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                             {allocations.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
                           </select>
                         )}
-                        <p className={`text-sm font-display shrink-0 w-20 text-right ${r.kind === 'income' || r.kind === 'refund' ? 'text-emerald-600' : ''}`}>
+                        <p className={`text-sm font-display shrink-0 w-20 text-right ${r.signedAmount > 0 ? 'text-emerald-600' : ''}`}>
                           {r.signedAmount > 0 ? '+' : '-'}{fmtEuro(r.signedAmount)}
                         </p>
+                      </div>
+                      {isReview && (
+                        <div className="pl-7 flex flex-wrap items-center gap-2">
+                          <p className="text-xs text-amber-700 dark:text-amber-400 flex-1 min-w-[12rem]">{t('import.reviewCreditHint')}</p>
+                          {(['payment', 'refund'] as const).map(k => (
+                            <button
+                              key={k}
+                              type="button"
+                              onClick={() => resolve(r.externalId, k)}
+                              disabled={k === 'payment' && !r.debtId}
+                              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${resolution[r.externalId] === k ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'}`}
+                            >
+                              {t(k === 'payment' ? 'import.resolvePayment' : 'import.resolveRefund')}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       </div>
                     );
                   })}

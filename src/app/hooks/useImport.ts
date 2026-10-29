@@ -2,7 +2,10 @@ import { useState } from 'react';
 
 // payment: pays a debt (a card payment); refund: a card refund — lowers its
 // category's spending and the card debt (server/lib/ingest/classify.ts).
-export type ImportKind = 'expense' | 'income' | 'payment' | 'refund';
+// needs_review: a card credit the importer won't guess — the user calls it a
+// payment or a refund before it can be imported.
+export type ImportKind = 'expense' | 'income' | 'payment' | 'refund' | 'needs_review';
+export type ConfirmKind = Exclude<ImportKind, 'needs_review'>;
 
 export interface ImportRow {
   externalId: string;
@@ -30,11 +33,12 @@ export interface ImportPreview {
   incomeCount: number;
   paymentCount?: number;
   refundCount?: number;
+  reviewCount?: number;
   possibleDuplicateCount?: number;
 }
 
 export interface ConfirmRow {
-  kind: ImportKind;
+  kind: ConfirmKind;
   externalId: string;
   date: string;
   description: string;

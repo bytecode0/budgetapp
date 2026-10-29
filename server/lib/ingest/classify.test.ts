@@ -2,7 +2,7 @@
 // Run with:  node --import tsx --test server/lib/ingest/classify.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { classifyRows, type ClassifyAccount, type ClassifyDebt, type ExistingMovement } from "./classify.js";
+import { classifyRows, type ClassifyAccount, type ClassifyDebt, type ExistingMovement, type PlannedRow } from "./classify.js";
 import { planImportWrites, type ConfirmRow } from "./writes.js";
 import { buildLedgers, countedFrom, debtState, type LedgerDebt, type LedgerExpense } from "../debtBalance.js";
 import type { NormalizedRow } from "./types.js";
@@ -28,7 +28,10 @@ const PASS_LEDGER_DEBT: LedgerDebt & { balanceAsOf: Date } = {
 const LINES = [{ id: "line-pass", debtId: "pass", debtAccountId: "acc-pass" }];
 const SUPER = "line-super";
 
+type Resolution = "payment" | "refund";
+
 class Pool {
+  constructor(private anchorCents = 30000) {}
   expenses: (LedgerExpense & { externalId: string; allocationId: string | null; description: string })[] = [];
   incomes: { id: string; externalId: string; amount: number; date: Date; accountId: string | null; description: string }[] = [];
 
@@ -45,12 +48,22 @@ class Pool {
     ];
   }
 
-  /** Preview + confirm every new row (what the UI does by default). */
-  import(rows: NormalizedRow[], account: ClassifyAccount, opts: { purchasesSign?: "negative" | "positive" } = {}) {
-    const result = classifyRows({ rows, account, debts: [passDebt], existing: this.existing(), ...opts });
-    const confirm: ConfirmRow[] = result.rows.filter(p => p.status === "new").map(p => ({
-      kind: p.kind, externalId: p.externalId, date: p.date, description: p.description, merchant: p.merchant,
-      amountCents: p.amountCents, debtId: p.debtId, allocationId: p.kind === "expense" || p.kind === "refund" ? SUPER : null,
+  /** Preview + confirm what the UI preselects: every new row except possible
+   *  duplicates, and review rows only once `resolve` answers for them. */
+  import(rows: NormalizedRow[], account: ClassifyAccount, opts: {
+    purchasesSign?: "negative" | "positive";
+    resolve?: (p: PlannedRow) => Resolution | undefined;
+    keepPossibleDuplicates?: boolean;
+  } = {}) {
+    const { resolve, keepPossibleDuplicates, ...classifyOpts } = opts;
+    const result = classifyRows({ rows, account, debts: [passDebt], existing: this.existing(), ...classifyOpts });
+    const kept = result.rows
+      .filter(p => p.status === "new" && (keepPossibleDuplicates || !p.possibleDuplicate))
+      .map(p => ({ p, kind: p.kind === "needs_review" ? resolve?.(p) : p.kind }))
+      .filter((x): x is { p: PlannedRow; kind: Exclude<PlannedRow["kind"], "needs_review"> } => !!x.kind);
+    const confirm: ConfirmRow[] = kept.map(({ p, kind }) => ({
+      kind, externalId: p.externalId, date: p.date, description: p.description, merchant: p.merchant,
+      amountCents: p.amountCents, debtId: kind === "payment" ? p.debtId : null, allocationId: kind === "expense" || kind === "refund" ? SUPER : null,
     }));
     const plan = planImportWrites(confirm, { accountId: account.id, debtLines: LINES, debts: [{ id: "pass", accountId: "acc-pass" }] });
     if ("error" in plan) throw new Error(plan.error);
@@ -64,15 +77,17 @@ class Pool {
 
   /** Month spending: Σ counted ?? amount, as dashboard/analytics/monthlyBudgets. */
   spend(from: Date, to: Date, allocationId?: string): number {
-    const ledgers = buildLedgers([PASS_LEDGER_DEBT], this.expenses, []);
+    const ledgers = buildLedgers([this.debt()], this.expenses, []);
     const counted = countedFrom(ledgers, this.expenses.filter(e => e.kind === "refund"));
     return this.expenses
       .filter(e => e.date >= from && e.date < to && (!allocationId || e.allocationId === allocationId))
       .reduce((s, e) => s + (counted.get(e.id) ?? e.amount), 0);
   }
 
+  debt() { return { ...PASS_LEDGER_DEBT, currentBalance: this.anchorCents }; }
+
   passBalance(): number {
-    return debtState(buildLedgers([PASS_LEDGER_DEBT], this.expenses, [])[0]).balance;
+    return debtState(buildLedgers([this.debt()], this.expenses, [])[0]).balance;
   }
 }
 
@@ -200,12 +215,54 @@ test("rules the user taught (merchant → debt line) make a bank row a payment",
   assert.deepEqual([r.rows[0].kind, r.rows[0].debtId], ["payment", "cetelem"]);
 });
 
-test("card: an unlabelled credit is a refund flagged ambiguous; refund wins over payment words", () => {
+test("card: an unlabelled credit needs review (never guessed); refund wins over payment words", () => {
   const r = classifyRows({
     rows: [row("2026-10-05", 1500, "ABONO"), row("2026-10-06", 900, "DEVOLUCION PAGO")],
     account: passCard, debts: [passDebt], existing: [], purchasesSign: "negative",
   });
-  assert.deepEqual(r.rows.map(p => [p.kind, p.warnings]), [["refund", ["ambiguous_credit"]], ["refund", []]]);
+  assert.deepEqual(r.rows.map(p => [p.kind, p.debtId, p.warnings]), [
+    ["needs_review", "pass", ["ambiguous_credit"]],
+    ["refund", null, []],
+  ]);
+  // A review row is never writable as such: the user must pick a side.
+  const plan = planImportWrites([{ kind: "needs_review", externalId: "x", date: "2026-10-05", amountCents: 1500 }],
+    { accountId: "acc-pass", debtLines: LINES, debts: [{ id: "pass", accountId: "acc-pass" }] });
+  assert.ok("error" in plan);
+});
+
+// Reviewer repro (exp1 B): a card payment with a label no phrase knows.
+const reproCardFile = () => [
+  row("2026-10-03", -5000, "SUPER DEMO"),
+  row("2026-10-05", -3000, "GASOLINERA DEMO"),
+  row("2026-10-06", 60000, "TRASPASO CUENTA"),
+];
+const reproBankFile = () => [row("2026-10-06", -60000, "LIQUIDACION TARJETA VISA")];
+
+test("MONEY: an unlabelled card credit resolved as payment + the bank's charge → debt 80, never -520", () => {
+  const pool = new Pool(60000);
+  const card = pool.import(reproCardFile(), passCard, { purchasesSign: "negative" });
+  const review = card.rows.find(p => p.signedCents === 60000)!;
+  assert.equal(review.kind, "needs_review");
+  // Unresolved, nothing about the credit is written.
+  assert.equal(pool.expenses.length, 2);
+  assert.equal(pool.passBalance(), 68000);
+  // The user resolves it as a payment (a re-preview: the purchases are duplicates now).
+  pool.import(reproCardFile(), passCard, { purchasesSign: "negative", resolve: () => "payment" });
+  assert.equal(pool.passBalance(), 8000);
+  const fromBank = pool.import(reproBankFile(), bank);
+  assert.deepEqual([fromBank.rows[0].kind, fromBank.rows[0].status, fromBank.rows[0].duplicateReason], ["payment", "duplicate", "same_payment"]);
+  assert.equal(pool.passBalance(), 8000);
+});
+
+test("MONEY: the same credit wrongly resolved as refund → the bank payment is flagged, not silently added", () => {
+  const pool = new Pool(60000);
+  pool.import(reproCardFile(), passCard, { purchasesSign: "negative", resolve: () => "refund" });
+  const fromBank = pool.import(reproBankFile(), bank);
+  assert.equal(fromBank.rows[0].kind, "payment");
+  assert.equal(fromBank.rows[0].status, "new");
+  assert.equal(fromBank.rows[0].possibleDuplicate?.id, pool.expenses.find(e => e.kind === "refund")!.id);
+  // Not preselected: the debt isn't lowered a second time unless the user says so.
+  assert.equal(pool.passBalance(), 60000 + 8000 - 60000);
 });
 
 test("card: a credit equal to a stored payment of this card is that payment, even unlabelled", () => {

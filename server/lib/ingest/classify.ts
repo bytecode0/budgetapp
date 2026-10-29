@@ -18,7 +18,10 @@
 //      payment: marked duplicate, so it never counts twice;
 //    refund → Expense kind "refund" on the card: lowers the debt and the
 //      spending of its category (debtBalance / countedAmounts read it negative);
-//    a credit that is neither recognisably → refund, flagged "ambiguous_credit".
+//    a credit that is neither recognisably (and matches no stored payment) →
+//      "needs_review", flagged "ambiguous_credit": never guessed, because a
+//      payment taken for a refund (or the reverse) moves the debt by twice
+//      the amount. The user picks payment or refund in the preview.
 //  A fee (Revolut) becomes its own expense row next to its movement.
 //
 // Dedup (§4.1):
@@ -36,7 +39,9 @@ import { normalizeMerchant } from "../normalizeMerchant.js";
 import type { NormalizedRow } from "./types.js";
 
 export type ImportMode = "account" | "card";
-export type PlannedKind = "expense" | "income" | "payment" | "refund";
+/** "needs_review": a card credit that is neither recognisably a payment nor a
+ *  refund. Never written as such: the user resolves it to one or the other. */
+export type PlannedKind = "expense" | "income" | "payment" | "refund" | "needs_review";
 export type RowWarning = "currency_mismatch" | "ambiguous_credit" | "card_payment_unassigned";
 
 export interface ClassifyAccount {
@@ -85,6 +90,8 @@ export interface PlannedRow {
   amountCents: number; // positive
   signedCents: number; // holder's view
   kind: PlannedKind;
+  /** payment: the debt it pays. needs_review: the card's debt, should the
+   *  user call it a payment. */
   debtId: string | null;
   isFee: boolean;
   externalId: string;
@@ -239,7 +246,8 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
         kind = "payment";
         debtId = account.cardDebtId;
       } else {
-        kind = "refund";
+        kind = "needs_review";
+        debtId = account.cardDebtId;
         warnings.push("ambiguous_credit");
       }
     }
@@ -297,24 +305,36 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
   };
 
   // The same card payment seen from the other side (bank file ↔ card file).
+  // If the card side was stored as a REFUND (a credit the user resolved the
+  // wrong way), it's no proof, but recording this payment too would lower the
+  // debt twice: flagged as a possible duplicate for the user to decide.
+  const toPossible = (e: ExistingMovement): PossibleDuplicate =>
+    ({ id: e.id, table: e.table, date: e.date, description: e.description, source: e.source });
   for (const p of planned) {
     if (p.status !== "new" || p.kind !== "payment") continue;
     const same = claim(e => e.table === "expense" && e.debtId === p.debtId && e.amountCents === p.amountCents
       && daysApart(e.date, p.date) <= SAME_PAYMENT_DAYS);
-    if (same) { p.status = "duplicate"; p.duplicateReason = "same_payment"; }
+    if (same) { p.status = "duplicate"; p.duplicateReason = "same_payment"; continue; }
+    const cardAccountId = debts.find(d => d.id === p.debtId)?.accountId ?? null;
+    if (!cardAccountId) continue;
+    const credit = claim(e => e.table === "expense" && e.kind === "refund" && e.accountId === cardAccountId
+      && e.amountCents === p.amountCents && daysApart(e.date, p.date) <= SAME_PAYMENT_DAYS);
+    if (credit) p.possibleDuplicate = toPossible(credit);
   }
 
   // Possible duplicates across sources: flagged, the user decides.
   for (const p of planned) {
-    if (p.status !== "new" || p.isFee) continue;
+    if (p.status !== "new" || p.isFee || p.possibleDuplicate) continue;
     const table = p.kind === "income" ? "income" : "expense";
     const storedKind = p.kind === "refund" ? "refund" : p.kind === "income" ? "income" : "expense";
-    const hit = claim(e => e.table === table && (e.kind || "expense") === storedKind
+    const sameAccount = (e: ExistingMovement) => e.debtId === null && (e.accountId === account.id || e.accountId === null);
+    const hit = claim(e => e.table === table
       && e.amountCents === p.amountCents && daysApart(e.date, p.date) <= POSSIBLE_DUP_DAYS
-      && (p.kind === "payment"
-        ? e.debtId === p.debtId
-        : e.debtId === null && (e.accountId === account.id || e.accountId === null)));
-    if (hit) p.possibleDuplicate = { id: hit.id, table: hit.table, date: hit.date, description: hit.description, source: hit.source };
+      && (p.kind === "needs_review"
+        // Either reading of the credit may already be stored.
+        ? (e.kind === "refund" && sameAccount(e)) || (e.kind === "expense" && !!p.debtId && e.debtId === p.debtId)
+        : (e.kind || "expense") === storedKind && (p.kind === "payment" ? e.debtId === p.debtId : sameAccount(e))));
+    if (hit) p.possibleDuplicate = toPossible(hit);
   }
 
   return { mode, rows: planned, purchasesSign, purchasesSignDetected };

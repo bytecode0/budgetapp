@@ -782,7 +782,12 @@
     "fee": "comisión",
     "possibleDuplicate": "posible duplicado",
     "otherCurrency": "otra divisa",
-    "unrecognizedColumns": "No reconocemos las columnas de este archivo: necesitamos al menos fecha e importe."
+    "unrecognizedColumns": "No reconocemos las columnas de este archivo: necesitamos al menos fecha e importe.",
+    "reviewCount": "{{count}} por revisar",
+    "reviewCredit": "abono por revisar",
+    "reviewCreditHint": "No sabemos si este abono es un pago de la tarjeta o una devolución. Elige uno para importarlo.",
+    "resolvePayment": "Es un pago",
+    "resolveRefund": "Es una devolución"
   },
   "budgets": {
     "title": "Presupuestos sugeridos",
