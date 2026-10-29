@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   debtState, splitPayments, monthlyCommitment, inLedger, owedNow, sumOwed, startingBalanceFor, isPaidOff, paidOffByHand,
+  buildLedgers, countedFrom,
   type DebtLedger, type LedgerDebt,
 } from "./debtBalance.js";
 
@@ -223,4 +224,30 @@ test("paid-off and archived debts owe nothing; sumOwed only counts active ones",
   // Plan 3.3 as entered (PASS 300 € + Klarna with no balance) = 500 €.
   assert.equal(sumOwed([ledger(pass), ledger(klarna)]), 50000);
   assert.equal(sumOwed([ledger(pass), ledger({ ...klarna, status: "paid_off" })]), 30000);
+});
+
+// ── Refunds (Expense.kind "refund", decision L) ─────────────────────────────
+
+test("a refund on the card account enters the ledger negative; a refund is never a payment", () => {
+  const exp = (id: string, amount: number, day: number, extra: { kind?: string; debtId?: string | null; accountId?: string | null } = {}) =>
+    ({ id, amount, date: d(day), createdAt: d(day), debtId: null, accountId: "acc-pass", kind: "expense", ...extra });
+  const [l] = buildLedgers([{ ...pass, balanceAsOf: new Date(2026, 8, 30) }], [
+    exp("buy", 5000, 10),
+    exp("refund", 2000, 12, { kind: "refund" }),
+    exp("odd", 700, 13, { kind: "refund", debtId: "pass", accountId: null }), // never a payment
+  ], []);
+  assert.deepEqual(l.purchases.map(m => [m.id, m.amount]), [["buy", 5000], ["refund", -2000]]);
+  assert.equal(l.payments.length, 0);
+  assert.equal(debtState(l).balance, 30000 + 3000);
+});
+
+test("countedFrom: refunds count negative, partial card payments count their previous-debt part", () => {
+  const l = ledger(pass, {
+    purchases: [{ id: "super", amount: 5000, date: d(22) }],
+    payments: [{ id: "pay", amount: 35000, date: d(30) }],
+  });
+  const counted = countedFrom([l], [{ id: "r1", amount: 1250 }]);
+  assert.equal(counted.get("pay"), 30000);
+  assert.equal(counted.get("r1"), -1250);
+  assert.equal(counted.has("super"), false);
 });

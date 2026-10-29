@@ -153,6 +153,10 @@ model Expense {
   source       String   @default("manual") // "manual" | "import"
   externalId   String? // idempotency key for future bank import; null for manual entries
   date         DateTime @default(now())
+  // "expense" | "refund". A refund (decision L, epic 4) keeps a POSITIVE amount
+  // but counts negative: it lowers its category's spending (countedAmounts)
+  // and, on a card account, the card debt (debtBalance purchases).
+  kind         String   @default("expense")
 
   // Attribution (Epic H3) — who paid, who benefits, how it's split.
   payerUserId       String? // who actually paid (real person); null for legacy rows
@@ -250,6 +254,10 @@ model Account {
   externalAccountId String? // provider's account identifier
   balanceSource      String   @default("manual") // manual | bank_sync
   balanceSyncedAt    DateTime?
+
+  // Column mapping saved for statement imports of this account when its file
+  // isn't recognised (server/lib/ingest/types.ts ColumnMapping). Null = none.
+  importProfile Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

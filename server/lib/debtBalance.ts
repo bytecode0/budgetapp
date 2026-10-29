@@ -4,7 +4,8 @@
 // there on, the ledger is:
 //   - purchases:   expenses on the card's linked account (Debt.accountId) with
 //                  no debtId — normal spending in its category that also grows
-//                  the card debt;
+//                  the card debt. A refund (Expense.kind "refund") is a
+//                  purchase undone: it enters negative;
 //   - payments:    expenses with debtId = the debt — they shrink it;
 //   - adjustments: dated corrections (DebtAdjustment) — interest, a purchase
 //                  never recorded, a bank sync that disagrees.
@@ -229,6 +230,42 @@ export function inLedger(e: { date: Date; createdAt: Date }, anchorAt: Date): bo
   return e.date > anchorAt;
 }
 
+/** An Expense as the ledgers read it. A refund (kind "refund") keeps its
+ *  positive amount in the database but enters the ledger NEGATIVE: on a card
+ *  account it's a purchase undone, lowering the debt. A refund is never a
+ *  payment, even if it carries a debtId. */
+export interface LedgerExpense {
+  id: string;
+  amount: number; // cents, positive as stored
+  date: Date;
+  createdAt: Date;
+  debtId: string | null;
+  accountId: string | null;
+  kind: string; // expense | refund
+}
+
+export interface LedgerAdjustment { id: string; amount: number; date: Date; debtId: string }
+
+/** Builds each debt's ledger from its rows (pure; loadDebtLedgers feeds it). */
+export function buildLedgers(
+  debts: (LedgerDebt & { balanceAsOf: Date })[],
+  expenses: LedgerExpense[],
+  adjustments: LedgerAdjustment[],
+): DebtLedger[] {
+  const signed = (e: LedgerExpense): LedgerMovement =>
+    ({ id: e.id, amount: e.kind === "refund" ? -e.amount : e.amount, date: e.date });
+  return debts.map(({ balanceAsOf, ...debt }) => ({
+    debt,
+    payments: expenses
+      .filter(e => e.debtId === debt.id && e.kind !== "refund" && inLedger(e, balanceAsOf))
+      .map(signed),
+    purchases: debt.accountId
+      ? expenses.filter(e => !e.debtId && e.accountId === debt.accountId && inLedger(e, balanceAsOf)).map(signed)
+      : [],
+    adjustments: adjustments.filter(a => a.debtId === debt.id).map(a => ({ id: a.id, amount: a.amount, date: a.date })),
+  }));
+}
+
 /** Ledgers for the pool's debts (optionally only `debtIds`). */
 export async function loadDebtLedgers(userId: string, debtIds?: string[]): Promise<DebtLedger[]> {
   const debts = await prisma.debt.findMany({
@@ -239,7 +276,7 @@ export async function loadDebtLedgers(userId: string, debtIds?: string[]): Promi
 
   const ids = debts.map(d => d.id);
   const accountIds = debts.map(d => d.accountId).filter((id): id is string => !!id);
-  const movementSelect = { id: true, amount: true, date: true, createdAt: true, debtId: true, accountId: true } as const;
+  const movementSelect = { id: true, amount: true, date: true, createdAt: true, debtId: true, accountId: true, kind: true } as const;
   const [payments, purchases, adjustments] = await Promise.all([
     prisma.expense.findMany({ where: { userId, debtId: { in: ids } }, select: movementSelect }),
     accountIds.length
@@ -247,29 +284,33 @@ export async function loadDebtLedgers(userId: string, debtIds?: string[]): Promi
       : Promise.resolve([]),
     prisma.debtAdjustment.findMany({ where: { userId, debtId: { in: ids } }, select: { id: true, amount: true, date: true, debtId: true } }),
   ]);
-
-  const toMovement = (e: { id: string; amount: number; date: Date }) => ({ id: e.id, amount: e.amount, date: e.date });
-  return debts.map(({ balanceAsOf, ...debt }) => ({
-    debt,
-    payments: payments.filter(e => e.debtId === debt.id && inLedger(e, balanceAsOf)).map(toMovement),
-    purchases: debt.accountId
-      ? purchases.filter(e => e.accountId === debt.accountId && inLedger(e, balanceAsOf)).map(toMovement)
-      : [],
-    adjustments: adjustments.filter(a => a.debtId === debt.id).map(toMovement),
-  }));
+  return buildLedgers(debts, [...payments, ...purchases], adjustments);
 }
 
-/** Budget-counted amount for every debt payment whose amount differs from
- *  what counts (i.e. part of it paid for card purchases). Every place that sums
- *  expenses must use `counted.get(e.id) ?? e.amount` instead of `e.amount`. */
-export async function countedAmounts(userId: string): Promise<Map<string, number>> {
+/** What each expense counts as budget spending, for the expenses where that
+ *  differs from its amount: a debt payment that partly paid card purchases
+ *  counts only its pre-existing-debt part; a refund counts negative (it
+ *  lowers its category's spending). Pure; countedAmounts() feeds it. */
+export function countedFrom(ledgers: DebtLedger[], refunds: { id: string; amount: number }[]): Map<string, number> {
   const out = new Map<string, number>();
-  for (const ledger of await loadDebtLedgers(userId)) {
+  for (const ledger of ledgers) {
     for (const [id, s] of splitPayments(ledger)) {
       if (s.toPurchases > 0) out.set(id, s.toPrevious);
     }
   }
+  for (const r of refunds) out.set(r.id, -r.amount);
   return out;
+}
+
+/** Budget-counted amount for every expense whose amount differs from what
+ *  counts (see countedFrom). Every place that sums expenses must use
+ *  `counted.get(e.id) ?? e.amount` instead of `e.amount`. */
+export async function countedAmounts(userId: string): Promise<Map<string, number>> {
+  const [ledgers, refunds] = await Promise.all([
+    loadDebtLedgers(userId),
+    prisma.expense.findMany({ where: { userId, kind: "refund" }, select: { id: true, amount: true } }),
+  ]);
+  return countedFrom(ledgers, refunds);
 }
 
 /** Budget-line amount per debt for the period [start, end). */
