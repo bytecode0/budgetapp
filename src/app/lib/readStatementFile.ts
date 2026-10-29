@@ -30,3 +30,14 @@ export async function readStatementFile(bytes: Uint8Array, filename: string, map
     return { ok: false, code: 'reader_failed' };
   }
 }
+
+/** The first rows of a tabular file, for the manual mapping; null for OFX,
+ *  Norma 43 or a file the reader can't open. */
+export async function sampleStatementFile(bytes: Uint8Array): Promise<StatementSample[] | null> {
+  try {
+    const mod = await import('../../../shared/ingest/read');
+    return mod.sampleStatement(bytes);
+  } catch {
+    return null;
+  }
+}

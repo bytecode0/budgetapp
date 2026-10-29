@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { StatementSample } from '../../../shared/ingest/read';
 import type { ColumnMapping, ReadResult, SkippedRow, StatementSource } from '../../../shared/ingest/types';
-import { readStatementFile, SERVER_READ_MAX_BYTES } from '../lib/readStatementFile';
+import { readStatementFile, sampleStatementFile, SERVER_READ_MAX_BYTES } from '../lib/readStatementFile';
 
 export type { ColumnMapping, StatementSample };
 
@@ -136,6 +136,15 @@ export function useImport() {
     }
   };
 
+  /** The file's first rows, for the manual mapping (null: nothing to map). */
+  const sample = async (file: File): Promise<StatementSample[] | null> => {
+    try {
+      return await sampleStatementFile(new Uint8Array(await file.arrayBuffer()));
+    } catch {
+      return null;
+    }
+  };
+
   const preview = async (
     source: PreviewSource, accountId: string | null, purchasesSign?: PurchasesSign,
   ): Promise<{ error?: string; code?: string; sample?: StatementSample[]; preview?: ImportPreview }> => {
@@ -256,5 +265,5 @@ export function useImport() {
     }
   };
 
-  return { loading, confirming, classifying, suggestingCats, read, preview, loadProfile, saveProfile, confirm, classify, suggestCategories };
+  return { loading, confirming, classifying, suggestingCats, read, sample, preview, loadProfile, saveProfile, confirm, classify, suggestCategories };
 }

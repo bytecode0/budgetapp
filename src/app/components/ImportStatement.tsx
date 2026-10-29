@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Upload, FileSpreadsheet, Loader2, Check, ArrowLeft, CreditCard, Landmark, AlertTriangle, PieChart } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, Loader2, Check, ArrowLeft, CreditCard, Landmark, AlertTriangle, PieChart, Columns3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useAccounts } from '../hooks/useAccounts';
-import { useImport, type ImportPreview, type PurchasesSign, type PreviewSource, type ImportSummary, type StatementSample } from '../hooks/useImport';
+import { useImport, type ImportPreview, type PurchasesSign, type PreviewSource, type ImportSummary, type StatementSample, type ColumnMapping } from '../hooks/useImport';
 import { BudgetSuggestions } from './BudgetSuggestions';
 import { ImportPreviewStep } from './import/ImportPreviewStep';
+import { ColumnMappingStep } from './import/ColumnMappingStep';
 import { useAuth } from '../context/AuthContext';
 import { apiErrorMessage } from '../lib/apiErrors';
 
@@ -16,21 +17,20 @@ interface ImportStatementProps {
   onImported?: () => void;
 }
 
-type Step = 'account' | 'file' | 'preview' | 'summary';
-const STEPS: Step[] = ['account', 'file', 'preview', 'summary'];
+type Step = 'account' | 'file' | 'mapping' | 'preview' | 'summary';
 
 /** A file the reader didn't understand: its code (shared/ingest/read.ts, or
  *  the server's 422) and, for tabular files, its first rows. */
 interface ReadProblem { code: string; sample?: StatementSample[] }
 
 // The import wizard (docs/plan-deudas-y-onboarding.md §4.6):
-//   account → file → preview → summary.
+//   account → file → (column mapping, only if not recognised) → preview → summary.
 // The file is read in this browser (decision O) and only its rows are sent;
 // the preview says what each row is; the summary what was written.
 export function ImportStatement({ isOpen, onClose, onImported }: ImportStatementProps) {
   const { t } = useTranslation();
   const { accounts } = useAccounts();
-  const { loading, read, preview, loadProfile, saveProfile } = useImport();
+  const { loading, read, sample, preview, loadProfile, saveProfile } = useImport();
   const { user } = useAuth();
 
   const activeAccounts = accounts.filter(a => !a.isArchived);
@@ -43,7 +43,11 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
 
   const [step, setStep] = useState<Step>('account');
   const [accountId, setAccountId] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [source, setSource] = useState<PreviewSource | null>(null);
+  // The manual mapping: the rows it shows, why it opened, what it starts from.
+  const [mappingScreen, setMappingScreen] = useState<{ sample: StatementSample[]; reason: 'unrecognized' | 'manual'; initial: ColumnMapping | null } | null>(null);
+  const [savingMapping, setSavingMapping] = useState(false);
   const [problem, setProblem] = useState<ReadProblem | null>(null);
   const [data, setData] = useState<ImportPreview | null>(null);
   const [previewKey, setPreviewKey] = useState(0);
@@ -54,7 +58,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const [postImportBudgets, setPostImportBudgets] = useState(false);
 
   const reset = () => {
-    setStep('account'); setSource(null); setProblem(null); setData(null);
+    setStep('account'); setFile(null); setSource(null); setMappingScreen(null); setProblem(null); setData(null);
     setChosenSign(null); setSummary(null); setPostImportBudgets(false);
   };
 
@@ -75,7 +79,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const runPreview = async (src: PreviewSource, purchasesSign?: PurchasesSign) => {
     const res = await preview(src, accountId, purchasesSign);
     if (res.error) {
-      if (res.code === 'unrecognized_columns') { setProblem({ code: res.code, sample: res.sample }); setStep('file'); return; }
+      if (res.code === 'unrecognized_columns' && res.sample?.length) { openMapping(res.sample, 'unrecognized', null); return; }
       // Unknown codes and network failures: our own text, never the server's.
       toast.error(apiErrorMessage(t, { code: res.code, error: t('import.readFailed') }));
       return;
@@ -85,15 +89,60 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     setStep('preview');
   };
 
-  const handleFile = async (picked: File | undefined) => {
-    if (!picked) return;
-    setProblem(null);
-    setChosenSign(null);
+  const openMapping = (rows: StatementSample[], reason: 'unrecognized' | 'manual', initial: ColumnMapping | null) => {
+    setMappingScreen({ sample: rows, reason, initial });
+    setStep('mapping');
+  };
+
+  const readAndPreview = async (picked: File, mapping: ColumnMapping | null) => {
     // Read here (decision O): only the rows go to the server.
-    const outcome = await read(picked, accountId ? await loadProfile(accountId) : null);
-    if ('code' in outcome) { setProblem(outcome); return; }
+    const outcome = await read(picked, mapping);
+    if ('code' in outcome) {
+      // Columns not recognised: straight to the manual mapping.
+      if (outcome.code === 'unrecognized_columns' && outcome.sample?.length) { openMapping(outcome.sample, 'unrecognized', mapping); return; }
+      setProblem(outcome);
+      setStep('file');
+      return;
+    }
+    setProblem(null);
     setSource(outcome.source);
     await runPreview(outcome.source);
+  };
+
+  const handleFile = async (picked: File | undefined) => {
+    if (!picked) return;
+    setFile(picked);
+    setMappingScreen(null);
+    setProblem(null);
+    setChosenSign(null);
+    await readAndPreview(picked, accountId ? await loadProfile(accountId) : null);
+  };
+
+  // "Map by hand" from an error or from the preview: the file's first rows.
+  const mapByHand = async (initial: ColumnMapping | null) => {
+    if (!file) return;
+    const rows = problem?.sample?.length ? problem.sample : await sample(file);
+    if (!rows?.length) { toast.error(t('import.mapping.notTabular')); return; }
+    openMapping(rows, 'manual', initial);
+  };
+
+  // Saved on the account so its next file is read without asking; only the
+  // owner may (a household member's mapping is used for this import only).
+  const handleSaveMapping = async (mapping: ColumnMapping) => {
+    if (!file) return;
+    setSavingMapping(true);
+    try {
+      if (accountId) {
+        const saved = await saveProfile(accountId, mapping);
+        if ('ok' in saved) toast.success(t('import.mapping.saved'));
+        else if (saved.status === 403) toast.info(t('import.mapping.notOwner'));
+        else toast.error(t('import.mapping.saveFailed'));
+      }
+      setChosenSign(null);
+      await readAndPreview(file, mapping);
+    } finally {
+      setSavingMapping(false);
+    }
   };
 
   const handleSignChange = (sign: PurchasesSign) => {
@@ -131,9 +180,11 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
 
   const back = () => {
     if (step === 'file') { setProblem(null); setStep('account'); }
-    else if (step === 'preview') setStep('file');
+    else if (step === 'mapping' || step === 'preview') setStep('file');
   };
-  const stepIndex = STEPS.indexOf(step);
+  // The mapping step is shown in the progress only when it's used.
+  const steps: Step[] = mappingScreen ? ['account', 'file', 'mapping', 'preview', 'summary'] : ['account', 'file', 'preview', 'summary'];
+  const stepIndex = steps.indexOf(step);
   const problemMessage = problem && (problem.code === 'reader_failed'
     ? t('import.readFailed')
     : apiErrorMessage(t, { code: problem.code, error: t('import.readFailed') }));
@@ -155,7 +206,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                {(step === 'file' || step === 'preview') && (
+                {(step === 'file' || step === 'mapping' || step === 'preview') && (
                   <button onClick={back} aria-label={t('import.back')} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
                     <ArrowLeft className="w-4 h-4" />
                   </button>
@@ -170,12 +221,12 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
 
             <div className="space-y-1.5">
               <div className="flex gap-1.5">
-                {STEPS.map((s, i) => (
+                {steps.map((s, i) => (
                   <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${i <= stepIndex ? 'bg-primary' : 'bg-muted'}`} />
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                {t('import.stepOf', { n: stepIndex + 1, total: STEPS.length })} · {t(`import.steps.${step}`)}
+                {t('import.stepOf', { n: stepIndex + 1, total: steps.length })} · {t(`import.steps.${step}`)}
                 {account && step !== 'account' && <> · {account.name}</>}
               </p>
             </div>
@@ -243,6 +294,15 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                             <p className="text-xs text-muted-foreground">{t('import.tryAnotherFile')}</p>
                           </div>
                         </div>
+                        {file && (problem.code === 'no_movements' || problem.code === 'unrecognized_columns') && (
+                          <button
+                            type="button"
+                            onClick={() => mapByHand(null)}
+                            className="px-5 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors text-sm inline-flex items-center gap-2"
+                          >
+                            <Columns3 className="w-4 h-4" /> {t('import.mapping.mapByHand')}
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -261,6 +321,18 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                   </div>
                 )}
 
+                {step === 'mapping' && mappingScreen && (
+                  /* ── 2b. Which column is what (only when not recognised, or asked) ── */
+                  <ColumnMappingStep
+                    sample={mappingScreen.sample}
+                    isCard={account?.type === 'card'}
+                    reason={mappingScreen.reason}
+                    initial={mappingScreen.initial}
+                    saving={savingMapping || loading}
+                    onSave={handleSaveMapping}
+                  />
+                )}
+
                 {step === 'preview' && data && (
                   /* ── 3. What each row is ── */
                   <ImportPreviewStep
@@ -271,6 +343,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                     onSignChange={handleSignChange}
                     signLoading={loading}
                     onConfirmed={handleConfirmed}
+                    onMapByHand={source?.kind === 'rows' && source.read.mapping ? () => mapByHand(source.read.mapping ?? null) : undefined}
                   />
                 )}
 
