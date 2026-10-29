@@ -97,7 +97,7 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
 
   const handleSubmit = async () => {
     const parsed = parseFloat(amount);
-    if (isNaN(parsed) || parsed <= 0) { toast.error('Enter a valid amount'); return; }
+    if (isNaN(parsed) || parsed <= 0) { toast.error(t('addExpense.invalidAmount')); return; }
     setSaving(true);
     const result = await createExpense({
       amount: parsed,
@@ -110,7 +110,7 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
     if ('error' in result) {
       toast.error(result.error as string);
     } else {
-      toast.success('Expense added!');
+      toast.success(t('addExpense.addedOk'));
       onSaved?.();
       handleClose();
     }

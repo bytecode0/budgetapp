@@ -589,7 +589,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                   className="bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 rounded-xl p-4"
                 >
                   <p className="text-sm text-muted-foreground mb-1">{t('createPlan.suggestedContribution')}</p>
-                  <p className="text-3xl font-display text-primary">{fmt(parseInt(monthlyContrib))}<span className="text-base text-muted-foreground font-normal">/mo</span></p>
+                  <p className="text-3xl font-display text-primary">{fmt(parseInt(monthlyContrib))}<span className="text-base text-muted-foreground font-normal">{t('currency.perMonthSuffix')}</span></p>
                   <p className="text-xs text-muted-foreground mt-1">{t('createPlan.toReachGoal')}</p>
                 </motion.div>
               )}
@@ -658,7 +658,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                     {monthlyContrib && (
                       <div>
                         <p className="text-sm text-muted-foreground mb-1">{t('createPlan.monthlyContribution')}</p>
-                        <p className="text-2xl font-display text-secondary">{fmt(parseInt(monthlyContrib))}/mo</p>
+                        <p className="text-2xl font-display text-secondary">{fmt(parseInt(monthlyContrib))}{t('currency.perMonthSuffix')}</p>
                       </div>
                     )}
                     <div>
@@ -670,7 +670,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                   <>
                     <div>
                       <p className="text-sm text-muted-foreground mb-1">{t('createPlan.monthlyContribution')}</p>
-                      <p className="text-2xl font-display text-secondary">{fmt(parseFloat(invMonthly))}/mo</p>
+                      <p className="text-2xl font-display text-secondary">{fmt(parseFloat(invMonthly))}{t('currency.perMonthSuffix')}</p>
                     </div>
                     {invCurrent && (
                       <div>
@@ -763,7 +763,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                     initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
                     className="text-xs text-primary mt-2 pl-12"
                   >
-                    ✓ {fmt(effectiveMonthly)}/mo · {t('createPlan.autoAllocationOn')}
+                    ✓ {fmt(effectiveMonthly)}{t('currency.perMonthSuffix')} · {t('createPlan.autoAllocationOn')}
                   </motion.p>
                 )}
               </motion.div>

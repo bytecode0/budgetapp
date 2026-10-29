@@ -225,7 +225,8 @@
     "months_other": "{{count}} meses",
     "noDeadline": "Sin fecha límite",
     "currentLabel": "(actual)",
-    "savedAmount": "€{{amount}} ahorrado"
+    "savedAmount": "€{{amount}} ahorrado",
+    "ofTarget": "de {{amount}}"
   },
   "planDetail": {
     "notFound": "Plan no encontrado",
@@ -339,7 +340,14 @@
     "quotaUpdated": "Cuota mensual actualizada a €{{amount}}/mes",
     "syncAllocationBanner": "Tu asignación mensual ya no está sincronizada (€{{current}}/mes). ¿Sincronizar?",
     "syncAllocationBtn": "Sincronizar asignación",
-    "allocationSynced": "Asignación sincronizada a €{{amount}}/mes"
+    "allocationSynced": "Asignación sincronizada a €{{amount}}/mes",
+    "contributionFailed": "No se pudo registrar la aportación",
+    "syncFailed": "No se pudo sincronizar la asignación",
+    "resetToSaved": "Volver al valor guardado",
+    "goalAmount": "Objetivo {{amount}}",
+    "axisNow": "Hoy",
+    "axisYear": "A{{n}}",
+    "axisMonth": "M{{n}}"
   },
   "createPlan": {
     "title": "Crear Plan de Vida",
@@ -518,7 +526,16 @@
     "iconSearchPlaceholder": "Buscar iconos...",
     "iconSearchEmpty": "No se encontraron iconos",
     "addPlanAllocation": "Añadir Asignación de Plan",
-    "addAllocation": "Añadir Categoría"
+    "addAllocation": "Añadir Categoría",
+    "planSavedAmount": "{{amount}} ahorrado",
+    "planProgressOf": "{{pct}}% de {{target}}",
+    "dragToReorder": "Arrastra para reordenar",
+    "invalidAmount": "Introduce un importe válido",
+    "incomeUpdated": "Ingreso actualizado",
+    "nameRequired": "Escribe un nombre",
+    "lifePlanRequired": "Elige un plan de vida",
+    "addedOk": "Asignación añadida",
+    "removedOk": "Asignación eliminada"
   },
   "addExpense": {
     "title": "Añadir Gasto",
@@ -540,7 +557,9 @@
     "addExpense": "Añadir Gasto",
     "bankAccounts": "Cuentas",
     "cards": "Tarjetas",
-    "paidWithCardHint": "Se suma a la deuda de {{name}}: la pagarás cuando liquides la tarjeta."
+    "paidWithCardHint": "Se suma a la deuda de {{name}}: la pagarás cuando liquides la tarjeta.",
+    "invalidAmount": "Introduce un importe válido",
+    "addedOk": "Gasto añadido"
   },
   "accounts": {
     "title": "Cuentas",
@@ -1050,7 +1069,8 @@
     "owedNow": "Debes {{amount}}",
     "payWhichLabel": "Tarjeta",
     "payPartialHint": "Puedes pagar una parte o el total.",
-    "cardsInAccountsHint": "Las tarjetas de crédito se añaden en Cuentas: su deuda aparece aquí sola."
+    "cardsInAccountsHint": "Las tarjetas de crédito se añaden en Cuentas: su deuda aparece aquí sola.",
+    "aprShort": "{{apr}}% TAE"
   },
   "onboarding": {
     "stepOf": "Paso {{current}} de {{total}}",
@@ -1208,7 +1228,8 @@
     "answerFailed": "No se ha podido guardar. Inténtalo de nuevo."
   },
   "currency": {
-    "symbol": "€"
+    "symbol": "€",
+    "perMonthSuffix": "/mes"
   },
   "legal": {
     "lastUpdated": "Última actualización: 29 de octubre de 2026",

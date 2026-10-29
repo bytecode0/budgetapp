@@ -188,7 +188,7 @@ export function Debts() {
           <p className="font-display truncate">{d.name}</p>
           <p className="text-xs text-muted-foreground">
             {t(`debts.kind.${d.kind}`)} · {t(`debts.paymentMode.${d.paymentMode}`)}
-            {d.apr != null && ` · ${d.apr}% APR`}
+            {d.apr != null && ` · ${t('debts.aprShort', { apr: d.apr })}`}
             {progress && ` · ${progress} ${t('debts.installments')}`}
           </p>
           {d.purchasesTotal > 0 && (

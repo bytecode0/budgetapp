@@ -225,7 +225,8 @@
     "months_other": "{{count}} months",
     "noDeadline": "No deadline",
     "currentLabel": "(current)",
-    "savedAmount": "€{{amount}} saved"
+    "savedAmount": "€{{amount}} saved",
+    "ofTarget": "of {{amount}}"
   },
   "planDetail": {
     "notFound": "Plan not found",
@@ -339,7 +340,14 @@
     "quotaUpdated": "Monthly quota updated to €{{amount}}/mo",
     "syncAllocationBanner": "Your monthly budget allocation is now out of sync (€{{current}}/mo). Sync it?",
     "syncAllocationBtn": "Sync allocation",
-    "allocationSynced": "Allocation synced to €{{amount}}/mo"
+    "allocationSynced": "Allocation synced to €{{amount}}/mo",
+    "contributionFailed": "Failed to register contribution",
+    "syncFailed": "Failed to sync allocation",
+    "resetToSaved": "Reset to saved value",
+    "goalAmount": "Goal {{amount}}",
+    "axisNow": "Now",
+    "axisYear": "Y{{n}}",
+    "axisMonth": "M{{n}}"
   },
   "createPlan": {
     "title": "Create Life Plan",
@@ -518,7 +526,16 @@
     "iconSearchPlaceholder": "Search icons...",
     "iconSearchEmpty": "No icons found",
     "addPlanAllocation": "Add Plan Allocation",
-    "addAllocation": "Add Category"
+    "addAllocation": "Add Category",
+    "planSavedAmount": "{{amount}} saved",
+    "planProgressOf": "{{pct}}% of {{target}}",
+    "dragToReorder": "Drag to reorder",
+    "invalidAmount": "Enter a valid amount",
+    "incomeUpdated": "Income updated",
+    "nameRequired": "Enter a name",
+    "lifePlanRequired": "Select a life plan",
+    "addedOk": "Allocation added",
+    "removedOk": "Allocation removed"
   },
   "addExpense": {
     "title": "Add Expense",
@@ -540,7 +557,9 @@
     "addExpense": "Add Expense",
     "bankAccounts": "Accounts",
     "cards": "Cards",
-    "paidWithCardHint": "It's added to the {{name}} debt: you'll pay it when you settle the card."
+    "paidWithCardHint": "It's added to the {{name}} debt: you'll pay it when you settle the card.",
+    "invalidAmount": "Enter a valid amount",
+    "addedOk": "Expense added"
   },
   "accounts": {
     "title": "Accounts",
@@ -1050,7 +1069,8 @@
     "owedNow": "You owe {{amount}}",
     "payWhichLabel": "Card",
     "payPartialHint": "You can pay part of it or all of it.",
-    "cardsInAccountsHint": "Credit cards are added in Accounts: their debt shows up here on its own."
+    "cardsInAccountsHint": "Credit cards are added in Accounts: their debt shows up here on its own.",
+    "aprShort": "{{apr}}% APR"
   },
   "onboarding": {
     "stepOf": "Step {{current}} of {{total}}",
@@ -1208,7 +1228,8 @@
     "answerFailed": "Couldn't save. Please try again."
   },
   "currency": {
-    "symbol": "€"
+    "symbol": "€",
+    "perMonthSuffix": "/mo"
   },
   "legal": {
     "lastUpdated": "Last updated: 29 October 2026",

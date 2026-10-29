@@ -279,7 +279,7 @@ export function PlanningDashboard({ onNavigate, onViewPlan }: { onNavigate?: (sc
                       <div>
                         <p className="text-sm text-muted-foreground mb-1">{progress.toFixed(0)}{t('dashboard.pctComplete')}</p>
                         <p className="text-2xl font-display" style={{ color: plan.color }}>{fmt(plan.currentAmount)}</p>
-                        <p className="text-xs text-muted-foreground">of {fmt(plan.targetAmount)}</p>
+                        <p className="text-xs text-muted-foreground">{t('dashboard.ofTarget', { amount: fmt(plan.targetAmount) })}</p>
                       </div>
                       <div className="text-right">
                         {monthsLeft !== null ? (
@@ -293,7 +293,7 @@ export function PlanningDashboard({ onNavigate, onViewPlan }: { onNavigate?: (sc
                           </>
                         )}
                         {plan.monthlyContribution > 0 && (
-                          <p className="text-xs text-muted-foreground">{fmt(plan.monthlyContribution)}/mo</p>
+                          <p className="text-xs text-muted-foreground">{fmt(plan.monthlyContribution)}{t('currency.perMonthSuffix')}</p>
                         )}
                       </div>
                     </div>

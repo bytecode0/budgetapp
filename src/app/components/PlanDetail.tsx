@@ -76,7 +76,8 @@ function buildProjectionData(
   target: number,
   isCompound: boolean,
   horizon: HorizonKey,
-  rates: [number, number, number] = [0.01, 0.05, 0.15],
+  rates: [number, number, number],
+  axis: { now: string; year: (n: number) => string; month: (n: number) => string },
 ): ProjectionPoint[] {
   if (monthly <= 0 && current >= target) return [];
 
@@ -98,9 +99,9 @@ function buildProjectionData(
 
   const points: ProjectionPoint[] = [];
   for (let m = 0; m <= endMonth; m += step) {
-    const label = m === 0 ? 'Now'
-      : m % 12 === 0 ? `Y${m / 12}`
-      : `M${m}`;
+    const label = m === 0 ? axis.now
+      : m % 12 === 0 ? axis.year(m / 12)
+      : axis.month(m);
     const pt: ProjectionPoint = { label, month: m };
     if (isCompound) {
       pt.pessimistic = compoundBalance(current, monthly, m, r0);
@@ -324,7 +325,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
       setDepositAmount('');
       toast.success(t('planDetail.contribRegistered'));
     } else {
-      toast.error('Failed to register contribution');
+      toast.error(t('planDetail.contributionFailed'));
     }
   };
 
@@ -342,7 +343,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
       setSyncAllocationId(null);
       toast.success(t('planDetail.allocationSynced', { amount: plan.monthlyContribution.toLocaleString() }));
     } else {
-      toast.error('Failed to sync allocation');
+      toast.error(t('planDetail.syncFailed'));
     }
   };
 
@@ -367,8 +368,9 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
       isInvestmentDerived,
       horizon,
       projRates,
+      { now: t('planDetail.axisNow'), year: n => t('planDetail.axisYear', { n }), month: n => t('planDetail.axisMonth', { n }) },
     );
-  }, [plan?.currentAmount, effectiveMonthly, plan?.targetAmount, plan?.goalClass, horizon]);
+  }, [plan?.currentAmount, effectiveMonthly, plan?.targetAmount, plan?.goalClass, horizon, t]);
 
   if (!plan) {
     return (
@@ -940,7 +942,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                   <p className="font-medium text-sm mb-1">{t('planDetail.optionAdjustQuota')}</p>
                   <p className="text-xs text-muted-foreground mb-1">{t('planDetail.optionAdjustQuotaDesc')}</p>
                   <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
-                    {t('planDetail.newQuotaLabel')}: <strong>{fmt(newQuota)}/mo</strong>
+                    {t('planDetail.newQuotaLabel')}: <strong>{fmt(newQuota)}{t('currency.perMonthSuffix')}</strong>
                   </p>
                   <button
                     onClick={() => handleAdjustQuota(newQuota)}
@@ -980,7 +982,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                 <p className="text-sm text-muted-foreground">
                   {isInvestment
                     ? scenarioConfig.map(s => s.pill).join(' · ')
-                    : `${fmt(effectiveMonthly)}/mo — ${plan.currentAmount < plan.targetAmount && projectedCompletion ? `${format(projectedCompletion, 'MMM yyyy')}` : t('planDetail.goalReached')}`}
+                    : `${fmt(effectiveMonthly)}${t('currency.perMonthSuffix')} — ${plan.currentAmount < plan.targetAmount && projectedCompletion ? `${format(projectedCompletion, 'MMM yyyy')}` : t('planDetail.goalReached')}`}
                 </p>
               </div>
             </div>
@@ -1016,7 +1018,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                           <button
                             onClick={() => setSimMonthly(plan.monthlyContribution)}
                             className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-lg hover:bg-muted transition-colors"
-                            title="Reset to saved value"
+                            title={t('planDetail.resetToSaved')}
                           >
                             ↩
                           </button>
@@ -1116,7 +1118,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                           strokeDasharray="6 3"
                           strokeOpacity={0.6}
                           label={{
-                            value: `Goal ${fmt(plan.targetAmount)}`,
+                            value: t('planDetail.goalAmount', { amount: fmt(plan.targetAmount) }),
                             position: 'insideTopRight',
                             fontSize: 11,
                             fill: plan.color,

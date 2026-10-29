@@ -216,15 +216,15 @@ export function AllocationFlow() {
 
   const handleSaveIncome = async () => {
     const amount = parseFloat(incomeInput.replace(/,/g, ''));
-    if (isNaN(amount) || amount < 0) { toast.error('Enter a valid amount'); return; }
+    if (isNaN(amount) || amount < 0) { toast.error(t('allocation.invalidAmount')); return; }
     const result = await updateIncome(amount);
     if ('error' in result && result.error) toast.error(result.error as string);
-    else { toast.success('Income updated!'); setEditingIncome(false); }
+    else { toast.success(t('allocation.incomeUpdated')); setEditingIncome(false); }
   };
 
   const handleAddAllocation = async () => {
-    if (!newName.trim()) { toast.error('Enter a name'); return; }
-    if (newType === 'plan' && !newLifePlanId) { toast.error('Select a life plan'); return; }
+    if (!newName.trim()) { toast.error(t('allocation.nameRequired')); return; }
+    if (newType === 'plan' && !newLifePlanId) { toast.error(t('allocation.lifePlanRequired')); return; }
     setAdding(true);
     const result = await createAllocation({
       name: newName.trim(), icon: newIcon, type: newType,
@@ -233,7 +233,7 @@ export function AllocationFlow() {
     setAdding(false);
     if ('error' in result && result.error) toast.error(result.error as string);
     else {
-      toast.success('Allocation added!');
+      toast.success(t('allocation.addedOk'));
       setShowAdd(false); setNewName(''); setNewIcon('💰'); setNewType('flexible'); setNewLifePlanId('');
     }
   };
@@ -241,7 +241,7 @@ export function AllocationFlow() {
   const handleDelete = async (id: string) => {
     const result = await deleteAllocation(id);
     if ('error' in result && result.error) toast.error(result.error as string);
-    else toast.success('Removed');
+    else toast.success(t('allocation.removedOk'));
   };
 
   const commitEditName = (id: string) => {
@@ -585,7 +585,7 @@ export function AllocationFlow() {
                       <div
                         ref={handleRef}
                         className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors shrink-0 touch-none select-none"
-                        title="Drag to reorder"
+                        title={t('allocation.dragToReorder')}
                       >
                         <GripVertical className="w-4 h-4" />
                       </div>
@@ -659,8 +659,8 @@ export function AllocationFlow() {
                   {linkedPlan && (
                     <div className="space-y-1 pt-1">
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{fmt(linkedPlan.currentAmount)} saved</span>
-                        <span>{planProgress.toFixed(0)}% of {fmt(linkedPlan.targetAmount)}</span>
+                        <span>{t('allocation.planSavedAmount', { amount: fmt(linkedPlan.currentAmount) })}</span>
+                        <span>{t('allocation.planProgressOf', { pct: planProgress.toFixed(0), target: fmt(linkedPlan.targetAmount) })}</span>
                       </div>
                       <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                         <motion.div
@@ -788,7 +788,7 @@ export function AllocationFlow() {
                           >
                             <div className="text-xl mb-1">{p.icon}</div>
                             <p className="text-xs font-medium truncate">{p.title}</p>
-                            <p className="text-xs text-muted-foreground">{fmt(p.currentAmount)} saved</p>
+                            <p className="text-xs text-muted-foreground">{t('allocation.planSavedAmount', { amount: fmt(p.currentAmount) })}</p>
                           </button>
                         ))}
                       </div>
