@@ -35,18 +35,27 @@ export interface ReadOptions {
   mapping?: ColumnMapping | null;
 }
 
+/** The card sign convention a mapping states: its own, or holder's view when
+ *  money out and money in come in separate columns (a "Cargos" column holds
+ *  the purchases whatever their sign). Otherwise unknown: classify decides. */
+const mappingSign = (m: ColumnMapping): ReadResult["purchasesSign"] =>
+  m.purchasesSign ?? (m.amount ? undefined : "negative");
+
 function readGrid(sheet: Sheet, opts: ReadOptions): ReadResult | null {
   const { grid } = sheet;
   if (opts.mapping) {
     const headerRow = findHeaderRow(grid, opts.mapping);
     if (headerRow >= 0) {
-      return { ...applyMapping(grid, headerRow, opts.mapping), source: "mapping", purchasesSign: opts.mapping.purchasesSign };
+      return { ...applyMapping(grid, headerRow, opts.mapping), source: "mapping", purchasesSign: mappingSign(opts.mapping) };
     }
   }
   const profile = matchProfile(grid);
-  if (profile) return { ...applyMapping(grid, profile.headerRow, profile.profile.mapping), source: profile.profile.id };
+  if (profile) {
+    const { mapping } = profile.profile;
+    return { ...applyMapping(grid, profile.headerRow, mapping), source: profile.profile.id, purchasesSign: mappingSign(mapping) };
+  }
   const detected = detectMapping(grid);
-  if (detected) return { ...applyMapping(grid, detected.headerRow, detected.mapping), source: "generic" };
+  if (detected) return { ...applyMapping(grid, detected.headerRow, detected.mapping), source: "generic", purchasesSign: mappingSign(detected.mapping) };
   return null;
 }
 
@@ -75,15 +84,18 @@ export function readStatement(bytes: Uint8Array, filename: string, opts: ReadOpt
   if (looksLikeWorkbook(bytes)) return readSheets(readWorkbook(bytes), opts);
 
   const { text } = decodeText(bytes);
+  // OFX and Norma 43 sign every amount from the holder's view by spec (OFX
+  // TRNAMT also on credit-card statements; Norma 43 by its debit/credit key):
+  // a purchase is negative, never guessed.
   if (looksLikeOfx(text)) {
     const { rows, skipped, source, currency } = readOfx(text);
     if (rows.length === 0) throw new StatementReadError("no_movements", "The OFX file has no movements");
-    return { rows, skipped, source, currency };
+    return { rows, skipped, source, currency, purchasesSign: "negative" };
   }
   if (looksLikeNorma43(text)) {
     const result = readNorma43(text);
     if (result.rows.length === 0) throw new StatementReadError("no_movements", "The Norma 43 file has no movements");
-    return result;
+    return { ...result, purchasesSign: "negative" };
   }
   return readSheets([{ name: filename, grid: readCsv(text) }], opts);
 }

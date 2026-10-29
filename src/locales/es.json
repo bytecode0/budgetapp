@@ -787,7 +787,11 @@
     "reviewCredit": "abono por revisar",
     "reviewCreditHint": "No sabemos si este abono es un pago de la tarjeta o una devolución. Elige uno para importarlo.",
     "resolvePayment": "Es un pago",
-    "resolveRefund": "Es una devolución"
+    "resolveRefund": "Es una devolución",
+    "signQuestion": "¿Cómo aparecen las compras en este extracto de tarjeta?",
+    "signUnknown": "No podemos saber cómo escribe las compras este extracto de tarjeta. Elige una opción para ver los movimientos bien clasificados; hasta entonces no se importa nada.",
+    "signNegative": "Compras en negativo (−)",
+    "signPositive": "Compras en positivo (+)"
   },
   "budgets": {
     "title": "Presupuestos sugeridos",

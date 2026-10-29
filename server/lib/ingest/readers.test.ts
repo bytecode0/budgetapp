@@ -231,3 +231,14 @@ test("ofx: XML (2.x) bank statement", () => {
     ["2026-09-03", -1500, "X1", "Bizum", "Cena"],
   ]);
 });
+
+test("sign convention: OFX and Norma 43 are holder's view; split debit/credit columns too; one amount column isn't", () => {
+  const enc = (t: string) => new TextEncoder().encode(t);
+  assert.equal(readStatement(enc(OFX_SGML), "x.ofx").purchasesSign, "negative");
+  assert.equal(readStatement(enc(N43), "x.txt").purchasesSign, "negative");
+  const split = readStatement(enc("Fecha;Concepto;Cargos;Abonos\n03/10/2026;SUPER;12,50;\n05/10/2026;PAGO;;100,00\n"), "x.csv");
+  assert.equal(split.purchasesSign, "negative");
+  assert.deepEqual(split.rows.map(r => r.amountCents), [-1250, 10000]);
+  const single = readStatement(enc("Fecha;Concepto;Importe\n03/10/2026;SUPER;12,50\n"), "x.csv");
+  assert.equal(single.purchasesSign, undefined);
+});

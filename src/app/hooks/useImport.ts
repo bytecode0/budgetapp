@@ -35,7 +35,13 @@ export interface ImportPreview {
   refundCount?: number;
   reviewCount?: number;
   possibleDuplicateCount?: number;
+  mode?: 'account' | 'card';
+  /** Card files: how purchases appear; 'unknown' until the user chooses. */
+  purchasesSign?: PurchasesSign | 'unknown';
+  purchasesSignDetected?: boolean;
 }
+
+export type PurchasesSign = 'negative' | 'positive';
 
 export interface ConfirmRow {
   kind: ConfirmKind;
@@ -79,7 +85,9 @@ export function useImport() {
   const [classifying, setClassifying] = useState(false);
   const [suggestingCats, setSuggestingCats] = useState(false);
 
-  const preview = async (file: File, accountId: string | null): Promise<{ error?: string; code?: string; preview?: ImportPreview }> => {
+  const preview = async (
+    file: File, accountId: string | null, purchasesSign?: PurchasesSign,
+  ): Promise<{ error?: string; code?: string; preview?: ImportPreview }> => {
     setLoading(true);
     try {
       const dataBase64 = await fileToBase64(file);
@@ -87,7 +95,7 @@ export function useImport() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, dataBase64, accountId }),
+        body: JSON.stringify({ filename: file.name, dataBase64, accountId, ...(purchasesSign ? { purchasesSign } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) return { error: data.error || 'Failed to read the file', code: data.code };

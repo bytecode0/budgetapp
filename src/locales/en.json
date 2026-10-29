@@ -787,7 +787,11 @@
     "reviewCredit": "credit to review",
     "reviewCreditHint": "We can't tell whether this credit is a card payment or a refund. Pick one to import it.",
     "resolvePayment": "It's a payment",
-    "resolveRefund": "It's a refund"
+    "resolveRefund": "It's a refund",
+    "signQuestion": "How does this card statement show purchases?",
+    "signUnknown": "We can't tell how this card statement writes purchases. Pick one to see the movements classified correctly; nothing is imported until you do.",
+    "signNegative": "Purchases as negative (−)",
+    "signPositive": "Purchases as positive (+)"
   },
   "budgets": {
     "title": "Suggested budgets",

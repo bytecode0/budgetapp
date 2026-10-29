@@ -170,15 +170,60 @@ test("card statements that write purchases as positive are turned to the holder'
   const r = pool.import([
     row("2026-10-03", 1200, "CAFETERIA DEMO"),
     row("2026-10-04", 5000, "SUPERMERCADO DEMO"),
+    row("2026-10-05", 2500, "FARMACIA DEMO"),
+    row("2026-10-06", 900, "COMPRA EN KIOSCO DEMO"),
     row("2026-10-20", -35000, "PAGO RECIBIDO"),
   ], passCard);
   assert.equal(r.purchasesSign, "positive");
   assert.equal(r.purchasesSignDetected, true);
-  assert.deepEqual(r.rows.map(p => [p.kind, p.signedCents]), [["expense", -1200], ["expense", -5000], ["payment", 35000]]);
+  assert.deepEqual(r.rows.map(p => [p.kind, p.signedCents]), [
+    ["expense", -1200], ["expense", -5000], ["expense", -2500], ["expense", -900], ["payment", 35000],
+  ]);
   // Stated by the user (saved mapping / preview toggle): not guessed.
   const stated = classifyRows({ rows: [row("2026-10-03", -1200, "X")], account: passCard, debts: [passDebt], existing: [], purchasesSign: "negative" });
   assert.equal(stated.purchasesSignDetected, false);
   assert.equal(stated.rows[0].kind, "expense");
+});
+
+test("sign: not guessed from a month of only payments, a single payment, or payments + interest", () => {
+  const guess = (rows: NormalizedRow[]) => classifyRows({ rows, account: passCard, debts: [passDebt], existing: [] }).purchasesSign;
+  // Reviewer repro (exp1 A): the bulk is payments, not purchases.
+  assert.equal(guess([
+    row("2026-10-01", 20000, "TRANSFERENCIA A TARJETA"),
+    row("2026-10-15", 20000, "TRANSFERENCIA A TARJETA"),
+    row("2026-10-20", -1500, "INTERESES"),
+  ]), "unknown");
+  assert.equal(guess([row("2026-10-01", 20000, "PAGO RECIBIDO")]), "unknown");
+  // Payments + interest with enough anchored lines: the anchors, not the
+  // (payment) bulk, decide — right in both conventions.
+  const paymentsAndInterest = (s: 1 | -1) => [
+    row("2026-10-01", s * 20000, "PAGO RECIBIDO"), row("2026-10-08", s * 20000, "TRASPASO"), row("2026-10-15", s * 20000, "TRASPASO"),
+    row("2026-10-20", -s * 1500, "INTERESES"), row("2026-10-21", -s * 300, "COMISION"),
+  ];
+  assert.equal(guess(paymentsAndInterest(1)), "negative");
+  assert.equal(guess(paymentsAndInterest(-1)), "positive");
+  // …but with a single anchor the payment bulk would outvote it: ask.
+  assert.equal(guess([
+    row("2026-10-01", 20000, "TRASPASO"), row("2026-10-08", 20000, "TRASPASO"), row("2026-10-15", 20000, "TRASPASO"),
+    row("2026-10-18", 20000, "TRASPASO"), row("2026-10-20", -1500, "INTERESES"),
+  ]), "unknown");
+  // Payments the words vouch for are enough, however few purchases.
+  assert.equal(guess(Array.from({ length: 5 }, (_, i) => row(`2026-10-0${i + 1}`, 10000, "PAGO RECIBIDO GRACIAS"))), "negative");
+  // Anchors that contradict each other: ask.
+  assert.equal(guess([
+    ...Array.from({ length: 6 }, (_, i) => row(`2026-10-0${i + 1}`, -1000, "TIENDA DEMO")),
+    row("2026-10-10", 5000, "PAGO RECIBIDO"), row("2026-10-11", 5000, "COMPRA EN DEMO"),
+  ]), "unknown");
+  // A close vote: ask.
+  assert.equal(guess([
+    row("2026-10-01", -1000, "A"), row("2026-10-02", -1000, "B"), row("2026-10-03", -1000, "C"),
+    row("2026-10-04", 1000, "D"), row("2026-10-05", 1000, "E"),
+  ]), "unknown");
+  // A plain holder's-view statement: guessed.
+  assert.equal(guess([
+    ...Array.from({ length: 8 }, (_, i) => row(`2026-10-0${i + 1}`, -1000 - i, `TIENDA ${i}`)),
+    row("2026-10-20", 8000, "PAGO RECIBIDO"),
+  ]), "negative");
 });
 
 // ── Decisions ──────────────────────────────────────────────────────────────

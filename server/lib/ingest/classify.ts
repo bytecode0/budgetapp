@@ -108,7 +108,7 @@ export interface ClassifyInput {
   debts: ClassifyDebt[];
   existing: ExistingMovement[];
   /** Card files: how purchases appear. Undefined → detected. */
-  purchasesSign?: "negative" | "positive";
+  purchasesSign?: PurchasesSign;
   /** Bank rows (by rowIndex) the user's categorisation rules already put on a
    *  debt's budget line: payments of that debt, as the user taught. */
   learnedPayments?: ReadonlyMap<number, string>;
@@ -117,8 +117,10 @@ export interface ClassifyInput {
 export interface ClassifyResult {
   mode: ImportMode;
   rows: PlannedRow[];
-  /** Card mode: the sign convention applied, and whether it was guessed. */
-  purchasesSign?: "negative" | "positive";
+  /** Card mode: the sign convention applied, and whether it was guessed.
+   *  "unknown": not guessed — rows are read as holder's view (negative) only
+   *  so the preview has something to show; the user must choose. */
+  purchasesSign?: PurchasesSignGuess;
   purchasesSignDetected?: boolean;
 }
 
@@ -173,12 +175,53 @@ function detectCardPayment(row: NormalizedRow, account: ClassifyAccount, debts: 
   return { debtId: named.length === 1 ? named[0].id : null };
 }
 
-/** Purchases are the bulk of a card statement: if most lines are positive,
- *  the file writes purchases as positive. */
-export function guessPurchasesSign(rows: NormalizedRow[]): "negative" | "positive" {
-  let pos = 0, neg = 0;
-  for (const r of rows) { if (r.amountCents > 0) pos++; else if (r.amountCents < 0) neg++; }
-  return pos > neg ? "positive" : "negative";
+// Sign anchors: lines whose words say which way the money went, whatever the
+// file's convention. Stricter than the classification phrases above ("recibo",
+// "ingreso"… also label card charges), because a wrong vote flips every row.
+const SIGN_CREDIT_ANCHORS = [
+  "pago recibido", "su pago", "pago gracias", "abono pago", "abono de pago", "abono por pago",
+  "payment received", "payment thank you", "thank you for your payment", ...CARD_REFUND,
+];
+const SIGN_DEBIT_ANCHORS = [
+  "compra", "compras", "compra en", "compra tarj", "pago en", "purchase", "intereses", "interes", "comision", "interest",
+];
+/** Fewer voting lines than this and the convention isn't guessed. */
+const SIGN_MIN_VOTES = 5;
+/** The losing side may hold at most this share of the (weighted) votes. */
+const SIGN_MAX_MINORITY = 0.25;
+
+export type PurchasesSign = "negative" | "positive";
+export type PurchasesSignGuess = PurchasesSign | "unknown";
+
+/**
+ * How a card statement writes purchases, or "unknown" when the file doesn't
+ * say clearly enough — then the user chooses (a wrong guess turns every
+ * purchase into a payment and the reverse).
+ *
+ * Anchored lines vote twice: a "PAGO RECIBIDO" / refund line is a credit and a
+ * "COMPRA EN…" / interest line a debit, so their sign gives the convention.
+ * Other lines vote once as purchases (the bulk of a statement). No guess with
+ * fewer than SIGN_MIN_VOTES votes, when anchors contradict each other or the
+ * bulk, or when the vote is close.
+ */
+export function guessPurchasesSign(rows: NormalizedRow[]): PurchasesSignGuess {
+  let strongNeg = 0, strongPos = 0, weakNeg = 0, weakPos = 0;
+  for (const r of rows) {
+    if (r.amountCents === 0) continue;
+    const text = textOf(r);
+    const credit = hasPhrase(text, SIGN_CREDIT_ANCHORS);
+    const debit = hasPhrase(text, SIGN_DEBIT_ANCHORS);
+    if (credit && debit) continue; // "abono compra": says nothing about the sign
+    if (credit) { if (r.amountCents > 0) strongNeg++; else strongPos++; }
+    else if (debit) { if (r.amountCents < 0) strongNeg++; else strongPos++; }
+    else if (r.amountCents < 0) weakNeg++;
+    else weakPos++;
+  }
+  if (strongNeg + strongPos + weakNeg + weakPos < SIGN_MIN_VOTES) return "unknown";
+  if (strongNeg > 0 && strongPos > 0) return "unknown";
+  const neg = 2 * strongNeg + weakNeg, pos = 2 * strongPos + weakPos;
+  if (Math.min(neg, pos) > SIGN_MAX_MINORITY * (neg + pos)) return "unknown";
+  return neg > pos ? "negative" : "positive";
 }
 
 export function classifyRows(input: ClassifyInput): ClassifyResult {
@@ -186,7 +229,7 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
   const mode: ImportMode = account.type === "card" ? "card" : "account";
 
   let rows = input.rows.filter(r => r.amountCents !== 0);
-  let purchasesSign: "negative" | "positive" | undefined;
+  let purchasesSign: PurchasesSignGuess | undefined;
   let purchasesSignDetected: boolean | undefined;
   if (mode === "card") {
     purchasesSign = input.purchasesSign ?? guessPurchasesSign(rows);

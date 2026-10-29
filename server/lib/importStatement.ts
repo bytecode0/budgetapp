@@ -9,7 +9,7 @@
 // (the API speaks euros; the confirm route converts back with toCents).
 import { prisma } from "./prisma.js";
 import { pickAllocationId } from "./categorize.js";
-import { classifyRows, type ExistingMovement, type PlannedKind, type PossibleDuplicate, type RowWarning } from "./ingest/classify.js";
+import { classifyRows, type ExistingMovement, type PlannedKind, type PossibleDuplicate, type PurchasesSign, type PurchasesSignGuess, type RowWarning } from "./ingest/classify.js";
 import { readStatement } from "./ingest/read.js";
 import { storedMapping } from "./ingest/validate.js";
 import type { NormalizedRow, SkippedRow, StatementSource } from "./ingest/types.js";
@@ -53,8 +53,9 @@ export interface ImportPreview {
   skipped?: SkippedRow[];
   source?: StatementSource;
   mode?: "account" | "card";
-  /** Card files: how purchases appeared, and whether that was guessed. */
-  purchasesSign?: "negative" | "positive";
+  /** Card files: how purchases appeared, and whether that was guessed.
+   *  "unknown": the file doesn't say — the user must choose before importing. */
+  purchasesSign?: PurchasesSignGuess;
   purchasesSignDetected?: boolean;
 }
 
@@ -65,7 +66,7 @@ export interface PrepareImportInput {
   /** …or rows already read in the browser (decision O; stage 2). */
   rows?: NormalizedRow[];
   /** Overrides the card sign convention (saved mapping, or detected). */
-  purchasesSign?: "negative" | "positive";
+  purchasesSign?: PurchasesSign;
 }
 
 const DAY_MS = 86400000;

@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
 import { useAccounts } from '../hooks/useAccounts';
 import { useAllocations } from '../hooks/useAllocations';
-import { useImport, type ImportPreview, type ConfirmRow, type AiCategory } from '../hooks/useImport';
+import { useImport, type ImportPreview, type ConfirmRow, type AiCategory, type PurchasesSign } from '../hooks/useImport';
 import { BudgetSuggestions } from './BudgetSuggestions';
 import { useMoney } from '../onboarding/useMoney';
 import { useAuth } from '../context/AuthContext';
@@ -37,6 +37,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
 
   const [accountId, setAccountId] = useState<string | null>(null);
   const [data, setData] = useState<ImportPreview | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allocByRow, setAllocByRow] = useState<Record<string, string>>({});
   // needs_review rows: what the user says the card credit is.
@@ -49,7 +50,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const [postImportBudgets, setPostImportBudgets] = useState(false);
 
   useEffect(() => {
-    if (!isOpen) { setData(null); setSelected(new Set()); setAllocByRow({}); setResolution({}); setAiMerchants(new Set()); setProposedCats(null); setPostImportBudgets(false); }
+    if (!isOpen) { setData(null); setFile(null); setSelected(new Set()); setAllocByRow({}); setResolution({}); setAiMerchants(new Set()); setProposedCats(null); setPostImportBudgets(false); }
     if (isOpen && !accountId && defaultAccount) setAccountId(defaultAccount.id);
     if (isOpen) {
       fetch('/api/ai/status', { credentials: 'include' })
@@ -63,9 +64,10 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const fmtEuro = (v: number) => `${currency}${Math.abs(v).toFixed(2)}`;
   const fmtDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 
-  const handleFile = async (file: File | undefined) => {
+  const handleFile = async (file: File | undefined, purchasesSign?: PurchasesSign) => {
     if (!file) return;
-    const res = await preview(file, accountId);
+    setFile(file);
+    const res = await preview(file, accountId, purchasesSign);
     if (res.error) {
       toast.error(res.code === 'unrecognized_columns' ? t('import.unrecognizedColumns') : res.error);
       return;
@@ -74,9 +76,10 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     setData(p);
     // Default: select all new rows — except possible duplicates, rows in
     // another currency and card credits to review, which the user confirms
-    // one by one. Pre-fill the suggested allocation per row.
+    // one by one; and nothing while a card file's sign is unknown. Pre-fill
+    // the suggested allocation per row.
     setResolution({});
-    setSelected(new Set(p.rows
+    setSelected(p.purchasesSign === 'unknown' ? new Set() : new Set(p.rows
       .filter(r => r.status === 'new' && r.kind !== 'needs_review' && !r.possibleDuplicate && !r.warnings?.includes('currency_mismatch'))
       .map(r => r.externalId)));
     setAllocByRow(Object.fromEntries(p.rows.filter(r => r.suggestedAllocationId).map(r => [r.externalId, r.suggestedAllocationId!])));
@@ -173,7 +176,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   });
 
   const handleConfirm = async () => {
-    if (!data) return;
+    if (!data || data.purchasesSign === 'unknown') return;
     const rows: ConfirmRow[] = data.rows
       .filter(r => r.status === 'new' && selected.has(r.externalId))
       .flatMap(r => {
@@ -200,7 +203,8 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     setPostImportBudgets(true);
   };
 
-  const selectedCount = data ? data.rows.filter(r => r.status === 'new' && selected.has(r.externalId) && confirmKindOf(r)).length : 0;
+  const signUnknown = data?.purchasesSign === 'unknown';
+  const selectedCount = data && !signUnknown ? data.rows.filter(r => r.status === 'new' && selected.has(r.externalId) && confirmKindOf(r)).length : 0;
 
   return (
     <>
@@ -274,6 +278,28 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                     <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">{t('import.reviewCount', { count: data.reviewCount })}</span>
                   )}
                 </div>
+
+                {/* Card files: how the statement writes purchases. Asked when it
+                    can't be told; always changeable (a wrong sign turns every
+                    purchase into a payment). */}
+                {data.mode === 'card' && data.purchasesSign && (
+                  <div className={`rounded-xl p-3 space-y-2 ${signUnknown ? 'bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800' : 'border border-border'}`}>
+                    <p className="text-sm">{t(signUnknown ? 'import.signUnknown' : 'import.signQuestion')}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(['negative', 'positive'] as const).map(sign => (
+                        <button
+                          key={sign}
+                          type="button"
+                          disabled={loading}
+                          onClick={() => handleFile(file ?? undefined, sign)}
+                          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${data.purchasesSign === sign ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'}`}
+                        >
+                          {t(sign === 'negative' ? 'import.signNegative' : 'import.signPositive')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Bulk assign by merchant — categorize a whole shop in one go */}
                 {merchantGroups.length > 1 && allocations.length > 0 && (
@@ -393,8 +419,8 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                         <input
                           type="checkbox"
                           className="accent-primary shrink-0"
-                          checked={!isDup && !!kind && selected.has(r.externalId)}
-                          disabled={isDup || !kind}
+                          checked={!isDup && !!kind && !signUnknown && selected.has(r.externalId)}
+                          disabled={isDup || !kind || signUnknown}
                           onChange={() => toggle(r.externalId)}
                         />
                         <div className="min-w-0 flex-1">
