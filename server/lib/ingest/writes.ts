@@ -120,7 +120,13 @@ export function planImportWrites(rows: ConfirmRow[], ctx: WriteContext): WritePl
 
   const expenses: ExpenseWrite[] = [];
   const incomes: IncomeWrite[] = [];
+  // One movement per id: a row sent twice (a repeated OFX FITID, a double
+  // submit) is written once — the database would skip it anyway, but it must
+  // not count twice towards a life plan either.
+  const seen = new Set<string>();
   for (const r of rows) {
+    if (seen.has(r.externalId)) continue;
+    seen.add(r.externalId);
     switch (r.kind) {
       case "income":
         incomes.push({ ...common(r), accountId: ctx.accountId, category: r.category || "other" });

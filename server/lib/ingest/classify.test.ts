@@ -8,6 +8,7 @@ import { buildLedgers, countedFrom, debtState, type LedgerDebt, type LedgerExpen
 import type { NormalizedRow } from "./types.js";
 import { isGenericMerchant, preselectLearnedPayment, suggestLearnedPayments, type LearnedDebt } from "./learnedPayments.js";
 import { normalizeMerchant } from "../normalizeMerchant.js";
+import { planContributions } from "../planContribution.js";
 
 let seq = 0;
 const row = (date: string, amountCents: number, description: string, extra: Partial<NormalizedRow> = {}): NormalizedRow =>
@@ -601,4 +602,13 @@ test("an unlabelled card credit 5–10 days from a stored bank payment of the ca
   assert.deepEqual([late.kind, late.status, late.possibleDuplicate?.id, late.warnings], ["needs_review", "new", "b1", ["ambiguous_credit"]]);
   const far = credit("2026-10-15");
   assert.deepEqual([far.kind, far.possibleDuplicate], ["needs_review", undefined]);
+});
+
+test("confirm: a row sent twice (repeated FITID, double submit) is written — and credits a plan — once", () => {
+  const ctx = { today: TODAY, accountId: "acc-bank", debtLines: LINES, debts: [{ id: "pass", accountId: "acc-pass" }] };
+  const r: ConfirmRow = { kind: "expense", externalId: "fitid-1", date: "2026-10-05", amountCents: 5000, allocationId: "line-plan" };
+  const plan = planImportWrites([r, { ...r }, { ...r, externalId: "fitid-2" }], ctx);
+  assert.ok(!("error" in plan));
+  assert.deepEqual(plan.expenses.map(e => e.externalId), ["fitid-1", "fitid-2"]);
+  assert.deepEqual([...planContributions(plan.expenses, new Map([["line-plan", "plan-1"]]))], [["plan-1", 10000]]);
 });
