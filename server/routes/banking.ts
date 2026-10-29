@@ -17,7 +17,7 @@ import { ALLOCATION_NOT_FOUND, allocationsInPool } from "../lib/poolRefs.js";
 import { parseLocale } from "../lib/email/locales/index.js";
 import { confirmImport } from "../lib/ingest/confirm.js";
 import { bankingAllowedFor, bankingConfig } from "../lib/banking/config.js";
-import { getBankingClient, EnableBankingError } from "../lib/banking/enableBanking.js";
+import { getBankingClient, EnableBankingError, psuHeadersFrom } from "../lib/banking/enableBanking.js";
 import {
   BANKING_STATE_COOKIE, BANKING_STATE_COOKIE_OPTS, BANKING_STATE_MAX_AGE_MS,
   createConnectState, createExchangeToken, newBankingNonce, readConnectState, readExchangeToken,
@@ -47,10 +47,13 @@ async function userEmail(userId: string | undefined): Promise<string | null> {
 
 interface BankingRequest extends AuthRequest { bankingClient?: BankingProviderClient }
 
+/** The user is present on every route but the cron: say so to the bank. */
+const psuOf = (req: Request) => psuHeadersFrom(req.ip, req.headers);
+
 /** Enforced on the SERVER for every banking route (the frontend also hides it). */
 async function requireBanking(req: BankingRequest, res: Response, next: NextFunction) {
   try {
-    const client = getBankingClient();
+    const client = getBankingClient(psuOf(req));
     if (!client) return res.status(503).json(DISABLED);
     if (!bankingAllowedFor(await userEmail(req.authUserId))) return res.status(403).json(NOT_ALLOWED);
     req.bankingClient = client;
@@ -131,7 +134,7 @@ bankingRouter.get("/connections", ...guarded, async (req: AuthRequest, res: Resp
         id: true, institutionName: true, institutionCountry: true, status: true, ownerUserId: true,
         consentGivenAt: true, expiresAt: true, lastSyncedAt: true, lastSyncError: true,
         // A household member never sees the owner's private accounts or debts.
-        accounts: { where: visibleToWhere(req.authUserId!), select: { id: true, name: true, type: true, bankReviewedAt: true, bankPendingReview: true } },
+        accounts: { where: visibleToWhere(req.authUserId!), select: { id: true, name: true, type: true, bankReviewedAt: true, bankPendingReview: true, bankSyncNotice: true } },
         debts: { where: visibleToWhere(req.authUserId!), select: { id: true, name: true } },
       },
     });
@@ -221,7 +224,7 @@ bankingRouter.get("/callback", async (req: Request, res: Response) => {
   const handoff = readConnectState(state, cookieNonce);
   if (!handoff) return fail("invalid_state");
   try {
-    const client = getBankingClient();
+    const client = getBankingClient(psuOf(req));
     if (!client) return fail("disabled");
     const connection = await prisma.bankConnection.findFirst({ where: { id: handoff.connectionId, ownerUserId: handoff.userId } });
     if (!connection) return fail("not_found");
@@ -341,7 +344,7 @@ async function linkedAccount(req: AuthRequest, res: Response, connectionId: stri
   const account = typeof accountId === "string" && accountId
     ? await prisma.account.findFirst({
       where: { id: accountId, userId: req.userId!, ownerUserId: req.authUserId!, bankConnectionId: connectionId, externalAccountId: { not: null } },
-      select: { id: true, type: true, externalAccountId: true, bankReviewedAt: true, bankDismissedIds: true },
+      select: { id: true, type: true, externalAccountId: true, bankReviewedAt: true, bankDismissedIds: true, bankPendingReview: true },
     })
     : null;
   if (!account) res.status(400).json({ error: "Account is not linked to this connection", code: "banking_account_not_linked" });
@@ -367,7 +370,8 @@ bankingRouter.get("/connections/:id/preview", ...guarded, async (req: BankingReq
       throw err;
     }
     // NOTE: amounts in `preview` are already euros — do not run serializeMoney.
-    return res.json({ data: { ...preview, accountId: account.id } });
+    const { cardConvention: _convention, ...shown } = preview;
+    return res.json({ data: { ...shown, accountId: account.id } });
   } catch (err) {
     console.error("[banking/preview]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -413,6 +417,7 @@ bankingRouter.post("/connections/:id/confirm", ...guarded, async (req: BankingRe
       data: {
         bankReviewedAt: advancedCursor(account.bankReviewedAt, new Date()),
         bankPendingReview: 0,
+        bankSyncNotice: null,
         bankDismissedIds: mergeDismissed(account.bankDismissedIds, dismissed),
       },
     });
@@ -465,7 +470,7 @@ bankingRouter.delete("/connections/:id", ...guarded, async (req: BankingRequest,
     await prisma.$transaction([
       prisma.account.updateMany({
         where: { bankConnectionId: connection.id },
-        data: { bankConnectionId: null, externalAccountId: null, externalAccountKey: null, balanceSource: "manual", bankReviewedAt: null, bankPendingReview: 0 },
+        data: { bankConnectionId: null, externalAccountId: null, externalAccountKey: null, balanceSource: "manual", bankReviewedAt: null, bankPendingReview: 0, bankDismissedIds: [], bankSyncNotice: null },
       }),
       prisma.debt.updateMany({
         where: { bankConnectionId: connection.id },
@@ -488,7 +493,7 @@ bankingRouter.delete("/connections/:id", ...guarded, async (req: BankingRequest,
 bankingRouter.get("/cron", async (req: Request, res: Response) => {
   if (!process.env.CRON_SECRET) return res.status(503).json({ error: "CRON_SECRET is not configured" });
   if (!cronAuthorized(req.headers.authorization, process.env.CRON_SECRET)) return res.status(401).json({ error: "Not authorized" });
-  const client = getBankingClient();
+  const client = getBankingClient(); // unattended: no PSU headers
   if (!client) return res.status(503).json(DISABLED);
   try {
     const summary = await runBankingCron(client);

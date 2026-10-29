@@ -224,6 +224,7 @@ model BankConnection {
   expiresAt       DateTime? // when re-consent will be required (provider's access.valid_until)
   expiryWarnedAt  DateTime? // when the "consent expires soon" email went out (once per consent)
   lastSyncedAt    DateTime?
+  lastAttemptAt   DateTime? // every sync attempt, failed ones too: the cron goes oldest attempt first
   lastSyncError   String?
 
   createdAt DateTime @default(now())
@@ -272,6 +273,9 @@ model Account {
   // externalIds of bank movements the user chose not to keep in a review, so
   // the daily sync never writes them (newest kept, capped).
   bankDismissedIds   Json?
+  // A machine code the UI explains, e.g. "held_expired": movements waiting
+  // for review got too old to fetch from the bank. Cleared by a review.
+  bankSyncNotice     String?
 
   // Column mapping saved for statement imports of this account when its file
   // isn't recognised (server/lib/ingest/types.ts ColumnMapping). Null = none.

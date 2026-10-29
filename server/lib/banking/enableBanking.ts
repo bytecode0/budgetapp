@@ -21,7 +21,7 @@ import type {
 
 export const ENABLE_BANKING_API = "https://api.enablebanking.com";
 const JWT_TTL_SECONDS = 3600;
-const REQUEST_TIMEOUT_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 15_000;
 /** Pagination guard: a provider that keeps answering with a continuation key
  *  must not loop forever. */
 export const MAX_TRANSACTION_PAGES = 50;
@@ -106,9 +106,10 @@ export function mapAccount(raw: RawAccount): BankProviderAccount | null {
 }
 
 // Balance types in order of preference (ISO 20022 BalanceStatus). A card's
-// balance is what's owed: only BOOKED balances, which match the booked
-// movements we import — an "available" one is the unused credit limit.
-const CARD_BALANCES = ["ITBD", "CLBD", "OPBD", "PRCD"];
+// balance is what's owed: only current BOOKED balances, which match the
+// booked movements we import — an "available" one is the unused credit
+// limit, and an opening/previously-closed one leaves out what came after.
+const CARD_BALANCES = ["ITBD", "CLBD"];
 const ACCOUNT_BALANCES = ["ITBD", "CLBD", "XPCD", "ITAV", "CLAV", "OPBD", "PRCD", "OTHR"];
 
 interface RawBalance {
@@ -124,7 +125,14 @@ export function pickBalance(balances: RawBalance[], kind: BankAccountKind): Bank
       .filter(b => b?.balance_type === type && decimalToCents(b.balance_amount?.amount) !== null)
       .sort((a, b) => (b.reference_date ?? "").localeCompare(a.reference_date ?? ""));
     const best = candidates[0];
-    if (best) return { amountCents: decimalToCents(best.balance_amount!.amount)!, currency: str(best.balance_amount?.currency) ?? "EUR", type };
+    if (best) {
+      return {
+        amountCents: decimalToCents(best.balance_amount!.amount)!,
+        currency: str(best.balance_amount?.currency) ?? "EUR",
+        type,
+        ...(isDay(best.reference_date) ? { referenceDate: best.reference_date } : {}),
+      };
+    }
   }
   return null;
 }
@@ -181,14 +189,57 @@ export function mapTransaction(raw: RawTxn): BankProviderTxn | null {
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
+/** PSU (user-present) headers: sent on calls the user started, so the bank
+ *  doesn't count them against its few unattended accesses a day. */
+export type PsuHeaders = Record<string, string>;
+
+const PSU_SOURCES: [string, string][] = [
+  ["Psu-User-Agent", "user-agent"],
+  ["Psu-Referer", "referer"],
+  ["Psu-Accept", "accept"],
+  ["Psu-Accept-Charset", "accept-charset"],
+  ["Psu-Accept-Encoding", "accept-encoding"],
+  ["Psu-Accept-language", "accept-language"],
+];
+
+/** The PSU headers of an incoming request (Express headers are lower-case).
+ *  Only clean single-line values; none at all without the user's IP. */
+export function psuHeadersFrom(ip: string | undefined, headers: Record<string, string | string[] | undefined>): PsuHeaders {
+  const clean = (v: unknown) => (typeof v === "string" && v.trim() && v.length <= 500 && !/[\r\n]/.test(v) ? v.trim() : undefined);
+  const userIp = clean(ip);
+  if (!userIp) return {};
+  const out: PsuHeaders = { "Psu-Ip-Address": userIp };
+  for (const [name, source] of PSU_SOURCES) {
+    const v = clean(headers[source]);
+    if (v) out[name] = v;
+  }
+  return out;
+}
+
 export class EnableBankingClient implements BankingProviderClient {
   constructor(
     private readonly config: BankingConfig,
     private readonly fetchImpl: FetchLike = (input, init) => fetch(input, init),
+    private readonly psu: PsuHeaders = {},
   ) {}
 
-  /** `endpoint` is the path TEMPLATE used in errors (no ids in messages). */
-  private async request<T>(method: string, path: string, endpoint: string, opts: { query?: Record<string, string | undefined>; body?: unknown } = {}): Promise<T> {
+  /** `endpoint` is the path TEMPLATE used in errors (no ids in messages).
+   *  PSU headers go with every call about a bank (not the bank list). A bank
+   *  wants all of its required PSU headers or none: if ours aren't enough,
+   *  the call is repeated without them. */
+  private async request<T>(method: string, path: string, endpoint: string, opts: { query?: Record<string, string | undefined>; body?: unknown; noPsu?: boolean } = {}): Promise<T> {
+    const psu = opts.noPsu ? {} : this.psu;
+    try {
+      return await this.send<T>(method, path, endpoint, opts, psu);
+    } catch (err) {
+      if (err instanceof EnableBankingError && err.providerCode === "PSU_HEADER_NOT_PROVIDED" && Object.keys(psu).length > 0) {
+        return this.send<T>(method, path, endpoint, opts, {});
+      }
+      throw err;
+    }
+  }
+
+  private async send<T>(method: string, path: string, endpoint: string, opts: { query?: Record<string, string | undefined>; body?: unknown }, psu: PsuHeaders): Promise<T> {
     const url = new URL(ENABLE_BANKING_API + path);
     for (const [k, v] of Object.entries(opts.query ?? {})) if (v !== undefined) url.searchParams.set(k, v);
     let res: Response;
@@ -196,6 +247,7 @@ export class EnableBankingClient implements BankingProviderClient {
       res = await this.fetchImpl(url.toString(), {
         method,
         headers: {
+          ...psu,
           Authorization: `Bearer ${enableBankingJwt(this.config)}`,
           Accept: "application/json",
           ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
@@ -220,7 +272,7 @@ export class EnableBankingClient implements BankingProviderClient {
 
   async listInstitutions(country: string): Promise<BankInstitution[]> {
     const data = await this.request<{ aspsps?: { name?: string; country?: string; logo?: string; psu_types?: string[]; maximum_consent_validity?: number }[] }>(
-      "GET", "/aspsps", "/aspsps", { query: { country, psu_type: "personal" } },
+      "GET", "/aspsps", "/aspsps", { query: { country, psu_type: "personal" }, noPsu: true },
     );
     return (data.aspsps ?? [])
       .filter(a => typeof a.name === "string" && typeof a.country === "string"
@@ -315,8 +367,9 @@ export class EnableBankingClient implements BankingProviderClient {
   }
 }
 
-/** The client for the current configuration, or null when banking is off. */
-export function getBankingClient(): BankingProviderClient | null {
+/** The client for the current configuration, or null when banking is off.
+ *  `psu`: the user's PSU headers when they started the call (never the cron). */
+export function getBankingClient(psu?: PsuHeaders): BankingProviderClient | null {
   const config = bankingConfig();
-  return config ? new EnableBankingClient(config) : null;
+  return config ? new EnableBankingClient(config, undefined, psu) : null;
 }

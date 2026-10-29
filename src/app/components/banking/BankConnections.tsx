@@ -225,7 +225,8 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
             {c.accounts.length > 0 && (
               <div className="space-y-2">
                 {c.accounts.map(a => (
-                  <div key={a.id} className="flex items-center justify-between gap-3 text-sm">
+                  <div key={a.id} className="space-y-1">
+                  <div className="flex items-center justify-between gap-3 text-sm">
                     <span className="flex items-center gap-2 min-w-0">
                       {a.type === 'card' ? <CreditCard className="w-4 h-4 text-muted-foreground shrink-0" /> : <Landmark className="w-4 h-4 text-muted-foreground shrink-0" />}
                       <span className="truncate">{a.name}</span>
@@ -239,6 +240,13 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
                         {a.bankReviewedAt ? t('banking.toReview', { count: a.bankPendingReview }) : t('banking.reviewFirst')}
                       </button>
                     )}
+                  </div>
+                  {c.isOwner && a.bankSyncNotice === 'held_expired' && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 flex gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      {t('banking.heldExpired')}
+                    </p>
+                  )}
                   </div>
                 ))}
               </div>

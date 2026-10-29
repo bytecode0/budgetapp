@@ -21,6 +21,8 @@ export interface BankLinkedAccount {
   type: string;
   bankReviewedAt: string | null;
   bankPendingReview: number;
+  /** "held_expired": movements that waited for review got too old to fetch. */
+  bankSyncNotice: string | null;
 }
 export interface BankConnection {
   id: string;

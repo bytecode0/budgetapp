@@ -4,7 +4,7 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import {
   EnableBankingClient, EnableBankingError, MAX_TRANSACTION_PAGES, accountKind, decimalToCents, enableBankingJwt,
-  mapTransaction, pickBalance,
+  mapTransaction, pickBalance, psuHeadersFrom,
 } from "./enableBanking.js";
 import { normalizePem } from "./config.js";
 
@@ -218,7 +218,12 @@ test("pickBalance: a card only takes a booked balance, an account prefers booked
     { balance_type: "CLBD", balance_amount: { amount: "-480.20", currency: "EUR" }, reference_date: "2026-10-27" },
     { balance_type: "CLBD", balance_amount: { amount: "-400.00", currency: "EUR" }, reference_date: "2026-10-26" },
   ];
-  assert.deepEqual(pickBalance(balances, "card"), { amountCents: -48020, currency: "EUR", type: "CLBD" });
+  assert.deepEqual(pickBalance(balances, "card"), { amountCents: -48020, currency: "EUR", type: "CLBD", referenceDate: "2026-10-27" });
+  // Opening / previously-closed balances leave out later movements: never a card's.
+  assert.equal(pickBalance([
+    { balance_type: "OPBD", balance_amount: { amount: "-100.00" } },
+    { balance_type: "PRCD", balance_amount: { amount: "-90.00" } },
+  ], "card"), null);
   assert.equal(pickBalance([balances[0]], "card"), null); // available credit is not what's owed
   assert.equal(pickBalance([balances[0]], "checking")!.amountCents, 250000);
 });
@@ -267,4 +272,40 @@ test("getSession reads status, accounts and valid_until; deleteSession sends DEL
   await client.deleteSession("sess-1");
   assert.equal(calls[1].init.method, "DELETE");
   assert.equal(calls[1].url.pathname, "/sessions/sess-1");
+});
+
+test("PSU headers come from the user's request; none without an IP, no multi-line values", () => {
+  const h = psuHeadersFrom("81.0.0.1", {
+    "user-agent": "Mozilla/5.0", "accept-language": "es-ES", referer: "https://budget.luisvespa.com/", accept: "*/*", "x-other": "no",
+  });
+  assert.deepEqual(h, {
+    "Psu-Ip-Address": "81.0.0.1", "Psu-User-Agent": "Mozilla/5.0", "Psu-Referer": "https://budget.luisvespa.com/",
+    "Psu-Accept": "*/*", "Psu-Accept-language": "es-ES",
+  });
+  assert.deepEqual(psuHeadersFrom(undefined, { "user-agent": "x" }), {});
+  assert.equal(psuHeadersFrom("1.1.1.1", { "user-agent": "a\r\nInjected: 1" })["Psu-User-Agent"], undefined);
+});
+
+test("PSU headers go on bank calls, not on the bank list; the cron's client sends none", async () => {
+  const psu = { "Psu-Ip-Address": "81.0.0.1", "Psu-User-Agent": "Mozilla/5.0" };
+  const { calls, impl } = mockFetch(call => (call.url.pathname === "/aspsps" ? { body: { aspsps: [] } } : { body: { balances: [] } }));
+  const client = new EnableBankingClient(CONFIG, impl, psu);
+  await client.listInstitutions("ES");
+  await client.getAccountBalance("u1", "checking");
+  const headersOf = (c: Call) => c.init.headers as Record<string, string>;
+  assert.equal(headersOf(calls[0])["Psu-Ip-Address"], undefined);
+  assert.equal(headersOf(calls[1])["Psu-Ip-Address"], "81.0.0.1");
+  assert.equal(headersOf(calls[1])["Psu-User-Agent"], "Mozilla/5.0");
+  const unattended = mockFetch(() => ({ body: { balances: [] } }));
+  await new EnableBankingClient(CONFIG, unattended.impl).getAccountBalance("u1", "checking");
+  assert.ok(!Object.keys(headersOf(unattended.calls[0])).some(k => k.startsWith("Psu-")));
+});
+
+test("a bank that wants more PSU headers than we have gets none (all or none)", async () => {
+  const { calls, impl } = mockFetch(call => ((call.init.headers as Record<string, string>)["Psu-Ip-Address"]
+    ? { status: 400, body: { message: "missing", error: "PSU_HEADER_NOT_PROVIDED" } }
+    : { body: { balances: [{ balance_type: "ITBD", balance_amount: { amount: "1.00" } }] } }));
+  const balance = await new EnableBankingClient(CONFIG, impl, { "Psu-Ip-Address": "81.0.0.1" }).getAccountBalance("u1", "checking");
+  assert.equal(balance?.amountCents, 100);
+  assert.equal(calls.length, 2);
 });

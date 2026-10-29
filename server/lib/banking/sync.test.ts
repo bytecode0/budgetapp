@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  advancedCursor, autoWritable, bankWindowFrom, dismissedSet, externalRefFor, heldForReview, mergeDismissed, MAX_DISMISSED_IDS,
+  advancedCursor, autoWritable, balanceIsCurrent, bankWindowFrom, cardBalanceConvention, dismissedSet, externalRefFor, heldForReview, mergeDismissed, MAX_DISMISSED_IDS,
   owedFromCardBalance, syncErrorCode, toConfirmRow, toNormalizedRows, withoutDismissed,
 } from "./sync.js";
 import { EnableBankingError } from "./enableBanking.js";
@@ -142,9 +142,39 @@ test("mergeDismissed keeps the newest, ignores junk, caps the list", () => {
   assert.equal(merged[merged.length - 1], "new");
 });
 
-test("a card's owed amount is the magnitude of its balance", () => {
-  assert.equal(owedFromCardBalance(-48020), 48020);
-  assert.equal(owedFromCardBalance(48020), 48020);
+test("a card's balance: owed is never negative, a credit owes 0, an unclear sign touches nothing", () => {
+  assert.equal(owedFromCardBalance(-48020, "negative_owed"), 48020);
+  assert.equal(owedFromCardBalance(15000, "negative_owed"), 0); // in credit
+  assert.equal(owedFromCardBalance(48020, "positive_owed"), 48020);
+  assert.equal(owedFromCardBalance(-15000, "positive_owed"), 0); // in credit
+  assert.equal(owedFromCardBalance(-48020, null), 48020); // ISO 20022: negative = debit
+  assert.equal(owedFromCardBalance(48020, null), null); // owed or credit? don't guess
+  assert.equal(owedFromCardBalance(0, null), 0);
+});
+
+const bal = (id: string, amountCents: number, balanceAfterCents: number | null) => txn({ id, amountCents, balanceAfterCents });
+
+test("the card's sign convention is read from its running balance, in either list order", () => {
+  // Purchases lower the balance: negative = owed.
+  const oldestFirst = [bal("a", -1000, -1000), bal("b", -2000, -3000), bal("c", 3000, 0), bal("d", -500, -500)];
+  assert.equal(cardBalanceConvention(oldestFirst), "negative_owed");
+  assert.equal(cardBalanceConvention([...oldestFirst].reverse()), "negative_owed");
+  // Purchases raise the balance: positive = owed.
+  const positive = [bal("a", -1000, 1000), bal("b", -2000, 3000), bal("c", 3000, 0)];
+  assert.equal(cardBalanceConvention(positive), "positive_owed");
+  assert.equal(cardBalanceConvention([...positive].reverse()), "positive_owed");
+  // No running balance, too little evidence, or contradictions: unknown.
+  assert.equal(cardBalanceConvention([bal("a", -1000, null), bal("b", -2000, null)]), null);
+  assert.equal(cardBalanceConvention([bal("a", -1000, -1000), bal("b", -2000, -3000)]), null);
+  assert.equal(cardBalanceConvention([bal("a", -1000, -1000), bal("b", -2000, -3000), bal("c", -500, -2500), bal("d", -100, -2400)]), null);
+});
+
+test("a bank balance reconciles a card only if it includes the latest recorded movement", () => {
+  assert.equal(balanceIsCurrent({ referenceDate: "2026-10-28" }, "2026-10-28"), true);
+  assert.equal(balanceIsCurrent({ referenceDate: "2026-10-29" }, "2026-10-28"), true);
+  assert.equal(balanceIsCurrent({ referenceDate: "2026-10-27" }, "2026-10-28"), false);
+  assert.equal(balanceIsCurrent({}, "2026-10-28"), true);
+  assert.equal(balanceIsCurrent({ referenceDate: "2026-10-27" }, null), true);
 });
 
 test("lastSyncError is a code, never the provider's text", () => {

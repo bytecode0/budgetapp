@@ -32,6 +32,8 @@ export interface BankProviderBalance {
   amountCents: number; // signed, as the bank reports it
   currency: string;
   type: string; // provider's balance type (ISO 20022: CLBD, ITBD, CLAV…)
+  /** Day the balance is as of, when the bank says (yyyy-mm-dd). */
+  referenceDate?: string;
 }
 
 /** A BOOKED movement. Pending ones are never returned (they change or vanish). */

@@ -1608,6 +1608,7 @@
       "duplicateTarget": "Dos cuentas del banco no pueden ir a la misma cuenta.",
       "notLinked": "Esa cuenta no está vinculada a esta conexión.",
       "previewFailed": "No se pudieron leer los movimientos del banco."
-    }
+    },
+    "heldExpired": "Algunos movimientos pendientes de revisar son ya demasiado antiguos para traerlos del banco (más de 90 días). Si te falta alguno, impórtalo desde un extracto."
   }
 }

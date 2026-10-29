@@ -12,7 +12,7 @@
 import { prisma } from "../prisma.js";
 import { createCardDebt } from "../cardDebt.js";
 import { mutationAccess } from "../ownership.js";
-import { owedFromCardBalance } from "./sync.js";
+import { balanceIsCurrent, latestCardMovementDay, owedFromCardBalance } from "./sync.js";
 import type { BankingProviderClient, BankProviderAccount } from "./types.js";
 
 export interface LinkMapping {
@@ -131,7 +131,7 @@ export async function applyLinks(client: BankingProviderClient, ctx: LinkContext
         where: { id: action.accountId },
         data: {
           ...link,
-          ...(!sameLink && { bankReviewedAt: null, bankPendingReview: 0, bankDismissedIds: [] }),
+          ...(!sameLink && { bankReviewedAt: null, bankPendingReview: 0, bankDismissedIds: [], bankSyncNotice: null }),
           ...(!isCard && { balanceSource: "bank_sync" }),
         },
       });
@@ -163,11 +163,11 @@ export async function applyLinks(client: BankingProviderClient, ctx: LinkContext
       });
       let debt = await prisma.debt.findFirst({ where: { userId: ctx.userId, accountId, kind: "credit_card" }, select: { id: true } });
       if (!debt) {
-        await createCardDebt(
-          { userId: ctx.userId, householdId: ctx.householdId },
-          account,
-          { paymentMode: "full", owed: balance ? owedFromCardBalance(balance.amountCents) : 0 },
-        );
+        // Start from the bank's balance only when it is current and clearly
+        // owed; otherwise 0, and the first sync's reconcile corrects it.
+        const current = balance && balanceIsCurrent(balance, await latestCardMovementDay(ctx.userId, accountId, null));
+        const owed = current ? owedFromCardBalance(balance.amountCents, null) ?? 0 : 0;
+        await createCardDebt({ userId: ctx.userId, householdId: ctx.householdId }, account, { paymentMode: "full", owed });
         debt = await prisma.debt.findFirst({ where: { userId: ctx.userId, accountId, kind: "credit_card" }, select: { id: true } });
       }
       if (debt) {
@@ -209,7 +209,7 @@ export async function unlinkMissing(connectionId: string, keepIds: string[]): Pr
   await prisma.debt.updateMany({ where: stale, data: { bankConnectionId: null, externalAccountId: null, balanceSource: "manual" } });
   const { count } = await prisma.account.updateMany({
     where: stale,
-    data: { bankConnectionId: null, externalAccountId: null, externalAccountKey: null, balanceSource: "manual", bankReviewedAt: null, bankPendingReview: 0, bankDismissedIds: [] },
+    data: { bankConnectionId: null, externalAccountId: null, externalAccountKey: null, balanceSource: "manual", bankReviewedAt: null, bankPendingReview: 0, bankDismissedIds: [], bankSyncNotice: null },
   });
   return count;
 }

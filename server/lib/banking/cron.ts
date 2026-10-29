@@ -2,9 +2,11 @@
 // with "Authorization: Bearer $CRON_SECRET"). Hobby plan: once a day.
 //
 //  1. Consent-expiry emails: one per consent, ~7 days before it lapses.
-//  2. Sync: oldest lastSyncedAt first, one connection at a time, until the
-//     time budget runs out — whatever is left goes first tomorrow. A failing
-//     connection is recorded on itself and never stops the others.
+//  2. Sync: oldest ATTEMPT first (lastAttemptAt, set on failures too, so a
+//     connection that keeps failing slowly can't stay first every day), one
+//     account at a time, until the time budget runs out — whatever is left
+//     goes first tomorrow. A failing connection is recorded on itself and
+//     never stops the others.
 // Only connections whose owner is on BANKING_ALLOWED_EMAILS are touched.
 import crypto from "crypto";
 import { prisma } from "../prisma.js";
@@ -14,8 +16,9 @@ import { bankingAllowedFor } from "./config.js";
 import { SYNCABLE_STATUSES, syncConnection } from "./sync.js";
 import type { BankingProviderClient } from "./types.js";
 
-/** Stop starting new connections after this long (Vercel functions time out
- *  at 60 s on Hobby without Fluid compute; one connection can take seconds). */
+/** Stop starting new accounts after this long: well under the function's
+ *  maxDuration (60 s, vercel.json), since one account's calls can take
+ *  seconds (each request times out at 15 s). */
 export const CRON_BUDGET_MS = 25_000;
 export const EXPIRY_EMAIL_DAYS = 7;
 /** The in-app warning shows from this many days before expiry. */
@@ -83,7 +86,7 @@ export async function runBankingCron(client: BankingProviderClient, opts: { now?
   // 2. Sync, oldest first.
   const connections = await prisma.bankConnection.findMany({
     where: { status: { in: SYNCABLE_STATUSES } },
-    orderBy: [{ lastSyncedAt: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }],
+    orderBy: [{ lastAttemptAt: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }],
     select: { id: true, ownerUserId: true },
   });
   const syncOwners = await allowedOwners(connections.map(c => c.ownerUserId));
@@ -91,8 +94,9 @@ export async function runBankingCron(client: BankingProviderClient, opts: { now?
   for (const [i, c] of todo.entries()) {
     if (clock() - started >= budget) { summary.remaining = todo.length - i; break; }
     try {
-      const result = await syncConnection(client, c.id, now);
+      const result = await syncConnection(client, c.id, now, { at: started + budget, clock });
       if (result.ok) summary.synced++; else summary.failed++;
+      if (result.partial) { summary.remaining = todo.length - i; break; }
     } catch (err) {
       summary.failed++;
       console.error(`[banking/cron] connection ${c.id} crashed:`, err instanceof Error ? err.name : "unknown error");

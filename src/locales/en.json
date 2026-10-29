@@ -1608,6 +1608,7 @@
       "duplicateTarget": "Two bank accounts can't go to the same account.",
       "notLinked": "That account isn't linked to this connection.",
       "previewFailed": "Couldn't read the bank's transactions."
-    }
+    },
+    "heldExpired": "Some transactions waiting for review are now too old to fetch from the bank (over 90 days). If any is missing, import it from a statement."
   }
 }

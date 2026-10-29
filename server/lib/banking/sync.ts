@@ -139,10 +139,59 @@ export function advancedCursor(current: Date | null, now: Date): Date {
   return current && current > next ? current : next;
 }
 
-/** What a card's balance says is owed. Banks report it negative (holder's
- *  view) or positive: the magnitude is what's owed either way. */
-export function owedFromCardBalance(amountCents: number): number {
-  return Math.abs(amountCents);
+/** How a card's bank balance is signed. Enable Banking's balances carry no
+ *  credit/debit indicator, so it's read from the card's own movements: their
+ *  running balance (balance_after_transaction) moves with the holder's view
+ *  (a purchase lowers it → negative = owed) or against it (positive = owed).
+ *  Null when the movements don't say, or contradict each other. */
+export type CardBalanceConvention = "negative_owed" | "positive_owed";
+
+export function cardBalanceConvention(txns: BankProviderTxn[]): CardBalanceConvention | null {
+  let withHolder = 0, against = 0;
+  // Pairs of neighbours in the provider's order, either way round (banks
+  // list oldest or newest first): the later balance minus the earlier one is
+  // ± the later movement.
+  for (let i = 1; i < txns.length; i++) {
+    const a = txns[i - 1], b = txns[i];
+    if (a.balanceAfterCents == null || b.balanceAfterCents == null) continue;
+    for (const [earlier, later] of [[a, b], [b, a]] as const) {
+      const delta = later.balanceAfterCents! - earlier.balanceAfterCents!;
+      if (delta === 0 || later.amountCents === 0) continue;
+      if (delta === later.amountCents) withHolder++;
+      else if (delta === -later.amountCents) against++;
+    }
+  }
+  if (withHolder >= 2 && against === 0) return "negative_owed";
+  if (against >= 2 && withHolder === 0) return "positive_owed";
+  return null;
+}
+
+/** What a card's balance says is owed, never negative: a card in credit owes
+ *  0. With no convention known, a negative balance is a debit (ISO 20022)
+ *  and a positive one is ambiguous — owed or in credit — so null: don't touch
+ *  the debt on a guess. */
+export function owedFromCardBalance(amountCents: number, convention: CardBalanceConvention | null): number | null {
+  if (amountCents === 0) return 0;
+  if (convention === "positive_owed") return Math.max(amountCents, 0);
+  if (convention === "negative_owed") return Math.max(-amountCents, 0);
+  return amountCents < 0 ? -amountCents : null;
+}
+
+/** A bank balance can reconcile a card's debt only when it already includes
+ *  the latest movement recorded for that card (no reference date: current). */
+export function balanceIsCurrent(balance: { referenceDate?: string }, latestMovementDay: string | null): boolean {
+  return !balance.referenceDate || !latestMovementDay || balance.referenceDate >= latestMovementDay;
+}
+
+/** Day of the latest movement recorded for a card: purchases on its account
+ *  or payments of its debt. */
+export async function latestCardMovementDay(userId: string, accountId: string, debtId: string | null): Promise<string | null> {
+  const latest = await prisma.expense.findFirst({
+    where: { userId, OR: [{ accountId }, ...(debtId ? [{ debtId }] : [])] },
+    orderBy: { date: "desc" },
+    select: { date: true },
+  });
+  return latest ? isoDay(latest.date) : null;
 }
 
 export interface LinkedAccount {
@@ -151,6 +200,7 @@ export interface LinkedAccount {
   externalAccountId: string | null;
   bankReviewedAt: Date | null;
   bankDismissedIds?: unknown;
+  bankPendingReview?: number;
 }
 
 interface ConnectionCtx {
@@ -167,7 +217,7 @@ export async function previewBankAccount(
   connection: ConnectionCtx,
   account: LinkedAccount,
   dateFrom: string,
-): Promise<ImportPreview & { pendingCount: number }> {
+): Promise<ImportPreview & { pendingCount: number; cardConvention: CardBalanceConvention | null }> {
   const txns = await client.getAccountTransactions(account.externalAccountId!, dateFrom);
   const preview = await prepareImport(connection.userId, {
     accountId: account.id,
@@ -175,13 +225,22 @@ export async function previewBankAccount(
     purchasesSign: "negative",
   });
   const { purchasesSign: _sign, purchasesSignDetected: _detected, skipped: _skipped, source: _source, ...rest } = preview;
-  return withoutDismissed({ ...rest, pendingCount: txns.pendingCount }, dismissedSet(account.bankDismissedIds));
+  const cardConvention = account.type === "card" ? cardBalanceConvention(txns.booked) : null;
+  return withoutDismissed({ ...rest, pendingCount: txns.pendingCount, cardConvention }, dismissedSet(account.bankDismissedIds));
 }
 
 const kindOf = (account: { type: string }): BankAccountKind => (account.type === "card" ? "card" : account.type === "savings" ? "savings" : "checking");
 
-/** Brings an account's (or card debt's) balance in line with the bank. */
-export async function refreshBalance(client: BankingProviderClient, connection: ConnectionCtx, account: LinkedAccount): Promise<void> {
+/** Brings an account's (or card debt's) balance in line with the bank. A
+ *  card's debt only when the balance is current and its sign is clear; the
+ *  read and the adjustment run under a row lock on the debt, so two syncs at
+ *  once (cron, "sync now", a review) can't both add the same correction. */
+export async function refreshBalance(
+  client: BankingProviderClient,
+  connection: ConnectionCtx,
+  account: LinkedAccount,
+  convention: CardBalanceConvention | null = null,
+): Promise<void> {
   const balance = await client.getAccountBalance(account.externalAccountId!, kindOf(account));
   if (!balance) return;
   const now = new Date();
@@ -197,8 +256,20 @@ export async function refreshBalance(client: BankingProviderClient, connection: 
     select: { id: true },
   });
   if (!debt) return;
-  await setLiveValues(connection.userId, debt.id, { balance: owedFromCardBalance(balance.amountCents) });
-  await prisma.debt.update({ where: { id: debt.id }, data: { balanceSource: "bank_sync", balanceSyncedAt: now } });
+  if (!balanceIsCurrent(balance, await latestCardMovementDay(connection.userId, account.id, debt.id))) {
+    console.warn(`[banking/sync] card ${account.id}: bank balance older than its latest movement, debt left as is`);
+    return;
+  }
+  const owed = owedFromCardBalance(balance.amountCents, convention);
+  if (owed === null) {
+    console.warn(`[banking/sync] card ${account.id}: balance sign unclear, debt left as is`);
+    return;
+  }
+  await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT "id" FROM "Debt" WHERE "id" = ${debt.id} FOR UPDATE`;
+    await setLiveValues(connection.userId, debt.id, { balance: owed }, tx);
+    await tx.debt.update({ where: { id: debt.id }, data: { balanceSource: "bank_sync", balanceSyncedAt: now } });
+  }, { timeout: 20_000 });
 }
 
 /** The active household of a person (attribution of what they import). */
@@ -218,7 +289,11 @@ export async function syncAccount(
   householdId: string | null,
   now: Date,
 ): Promise<AccountSyncResult> {
-  const preview = await previewBankAccount(client, connection, account, bankWindowFrom(account, now));
+  const windowFrom = bankWindowFrom(account, now);
+  // The cursor is pinned (something waits for review) further back than the
+  // bank gives history: what waited before the window can't be fetched again.
+  const heldExpired = isoDay(account.bankReviewedAt) < windowFrom && (account.bankPendingReview ?? 0) > 0;
+  const preview = await previewBankAccount(client, connection, account, windowFrom);
   const clean = preview.rows.filter(autoWritable).map(toConfirmRow);
   let written = 0;
   if (clean.length > 0) {
@@ -230,11 +305,19 @@ export async function syncAccount(
     written = result.inserted;
   }
   const held = heldForReview(preview.rows);
+  if (heldExpired) {
+    // Counts only, no personal data.
+    console.warn(`[banking/sync] account ${account.id}: held movements before ${windowFrom} are too old to fetch (held before: ${account.bankPendingReview ?? 0}, now: ${held})`);
+  }
   await prisma.account.update({
     where: { id: account.id },
-    data: { bankPendingReview: held, ...(held === 0 && { bankReviewedAt: advancedCursor(account.bankReviewedAt, now) }) },
+    data: {
+      bankPendingReview: held,
+      ...(heldExpired && { bankSyncNotice: "held_expired", bankReviewedAt: new Date(`${windowFrom}T00:00:00Z`) }),
+      ...(held === 0 && { bankReviewedAt: advancedCursor(heldExpired ? new Date(`${windowFrom}T00:00:00Z`) : account.bankReviewedAt, now) }),
+    },
   });
-  if (account.type !== "card" || held === 0) await refreshBalance(client, connection, account);
+  if (account.type !== "card" || held === 0) await refreshBalance(client, connection, account, preview.cardConvention);
   return { written, held };
 }
 
@@ -242,6 +325,8 @@ export const SYNCABLE_STATUSES = ["active", "error"];
 
 export interface SyncResult {
   ok: boolean;
+  /** Stopped at the time budget before every account was synced. */
+  partial?: boolean;
   written: number;
   held: number;
   /** Linked accounts whose first sync the user hasn't reviewed yet. */
@@ -259,7 +344,13 @@ export function syncErrorCode(err: unknown): string {
 /** Syncs every linked, reviewed account of a connection. Errors are caught
  *  and recorded on the connection; a consent the bank no longer honours
  *  marks it expired (the fix is reconnecting, not retrying). */
-export async function syncConnection(client: BankingProviderClient, connectionId: string, now = new Date()): Promise<SyncResult> {
+export async function syncConnection(
+  client: BankingProviderClient,
+  connectionId: string,
+  now = new Date(),
+  /** Don't start another account after this (clock ms). */
+  deadline?: { at: number; clock: () => number },
+): Promise<SyncResult> {
   const empty = { written: 0, held: 0, awaitingFirstReview: 0 };
   const connection = await prisma.bankConnection.findUnique({
     where: { id: connectionId },
@@ -272,12 +363,15 @@ export async function syncConnection(client: BankingProviderClient, connectionId
     return { ok: false, ...empty, error: "expired" };
   }
 
+  await prisma.bankConnection.update({ where: { id: connection.id }, data: { lastAttemptAt: now } });
   const householdId = await householdOf(connection.ownerUserId);
   const result = { ...empty };
   // One failing account never stops the others.
   let firstError: unknown = null;
+  let partial = false;
   for (const account of connection.accounts) {
     if (!account.bankReviewedAt) { result.awaitingFirstReview++; continue; }
+    if (deadline && deadline.clock() >= deadline.at) { partial = true; break; }
     try {
       const r = await syncAccount(client, connection, { ...account, bankReviewedAt: account.bankReviewedAt }, householdId, now);
       result.written += r.written;
@@ -288,11 +382,12 @@ export async function syncConnection(client: BankingProviderClient, connectionId
     }
   }
   if (!firstError) {
+    // A partial run isn't a sync: lastSyncedAt stays, the rest goes next time.
     await prisma.bankConnection.update({
       where: { id: connection.id },
-      data: { status: "active", lastSyncedAt: now, lastSyncError: null },
+      data: { status: "active", lastSyncError: null, ...(!partial && { lastSyncedAt: now }) },
     });
-    return { ok: true, ...result };
+    return { ok: true, ...result, ...(partial && { partial }) };
   }
   {
     const err = firstError;

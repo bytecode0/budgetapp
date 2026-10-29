@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 
 process.env.JWT_SECRET ??= "test-secret";
 const { allowedBankingEmails, bankingAllowedFor, bankingConfig } = await import("./config.js");
-const { cronAuthorized, dueExpiryEmail } = await import("./cron.js");
+const { cronAuthorized, dueExpiryEmail, CRON_BUDGET_MS } = await import("./cron.js");
 const { createConnectState, createExchangeToken, readConnectState, readExchangeToken, newBankingNonce } = await import("./handoff.js");
 const { planLinks, LINK_ERRORS } = await import("./link.js");
 const { signToken, verifyToken } = await import("../jwt.js");
@@ -154,4 +154,14 @@ test("link: only accounts of this consent, each once, never two onto one", () =>
   assert.deepEqual(planLinks([], PROVIDER, LOCAL, ctx), LINK_ERRORS.invalid);
   assert.deepEqual(planLinks("nope", PROVIDER, LOCAL, ctx), LINK_ERRORS.invalid);
   assert.deepEqual(planLinks([{ externalAccountId: "u-cur" }], PROVIDER, LOCAL, ctx), LINK_ERRORS.invalid);
+});
+
+test("the cron budget leaves room under the function's maxDuration", async () => {
+  const fs = await import("node:fs");
+  const vercel = JSON.parse(fs.readFileSync(new URL("../../../vercel.json", import.meta.url), "utf8"));
+  const maxDuration = vercel.functions["api/index.ts"].maxDuration;
+  assert.equal(maxDuration, 60);
+  // The budget, plus one account's slowest calls (each request times out at 15 s), fits.
+  assert.ok(CRON_BUDGET_MS + 2 * 15_000 < maxDuration * 1000);
+  assert.deepEqual(vercel.crons, [{ path: "/api/banking/cron", schedule: "0 5 * * *" }]);
 });
