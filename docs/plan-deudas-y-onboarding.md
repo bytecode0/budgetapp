@@ -26,7 +26,7 @@ La épica 1 va primero porque el paso de deudas del onboarding tiene que pregunt
 
 ### Pendientes sueltos (un PR de mantenimiento antes de la épica 4)
 1. **Rotar la contraseña de Neon** (quedó en una conversación) → actualizar `DATABASE_URL` en Vercel y redeploy. Tú.
-2. **Sin valores por defecto silenciosos** en `server/lib/jwt.ts` (`JWT_SECRET`) y `GOOGLE_CALLBACK_URL`: el de Google ocultó el fallo del despliegue; el de JWT permitiría falsificar sesiones si faltara la variable. Auth/OAuth: necesita tu OK explícito.
+2. ~~**Sin valores por defecto silenciosos** en `server/lib/jwt.ts` (`JWT_SECRET`) y `GOOGLE_CALLBACK_URL`~~ → HECHO (`7e468b1`, OK del 29 oct): sin `JWT_SECRET` el servidor no arranca; sin la configuración de Google, el login con Google responde 503. **Antes de desplegarlo:** confirmar que `JWT_SECRET` tiene valor en Vercel.
 3. **Cuentas en un hogar:** `PATCH`/`DELETE /api/accounts/:id` solo comprueban el hogar, no el dueño; un miembro puede editar o borrar las cuentas (incluso privadas) del otro.
 4. Guardar el idioma al registrarse (2.8, abierto menor).
 5. "Completa tu configuración" no se refresca al añadir cosas desde otras pantallas.
@@ -42,6 +42,10 @@ La épica 1 va primero porque el paso de deudas del onboarding tiene que pregunt
       - El ingreso base del hogar (`UserSettings.monthlyIncome` del pool, que se usa cuando el mes no tiene ingresos registrados) tiene que sumar a los dos miembros, no solo a quien invitó.
     - **Solución temporal mientras tanto:** la invitada añade su sueldo desde "Añadir ingreso" con su sesión.
     - **Test:** invitar → registrarse → aceptar → los ingresos de los dos suman en el presupuesto.
+11. **Política de privacidad y términos** (aceptado el 29 oct). El registro y el login dicen "aceptas nuestros Términos de Servicio y Política de Privacidad", pero esas páginas no existen.
+    - Páginas `/privacy` y `/terms` en es/en, enlazadas desde el registro y el login. Son las URLs dadas de alta en Enable Banking.
+    - Contenido ajustado a lo que hace el código: responsable (`contact@luisvespa.com`), datos guardados, encargados (Neon, Vercel, Resend, Anthropic y, con la épica 5, Enable Banking), conservación y derechos RGPD.
+    - Borrador de Claude; **lo revisa Luis** antes de publicarlo, y alguien con criterio legal antes de abrir la beta o firmar con Enable Banking.
 
 ---
 
