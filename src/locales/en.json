@@ -824,7 +824,7 @@
     "sharePlans": "Life plans and savings goals",
     "shareAllocations": "Monthly budget allocations",
     "shareReviews": "Budget reviews and reports",
-    "ownDataMoves": "Anything you've already entered (income, expenses, accounts, debts, plans) moves into the shared finances and stays yours. Your accounts and debts stay private. If you unlink, these come back with you: your accounts, debts, income and savings plans (with their deposits), and the expenses you entered or that are on your accounts. These stay in the shared finances: the shared budget, expenses your partner entered outside your accounts, and anything you recorded on your partner's cards or to pay their debts.",
+    "ownDataMoves": "Anything you've already entered (income, expenses, accounts, debts, plans) moves into the shared finances and stays yours; your accounts and debts join as private. If you unlink, what's yours generally comes back with you: your accounts, debts, income and plans, and the expenses you entered or that are on your accounts. The budget stays in the shared finances, as do expenses tied to your partner's cards or debts.",
     "decline": "Decline",
     "accept": "Accept",
     "linked": "Linked!",
