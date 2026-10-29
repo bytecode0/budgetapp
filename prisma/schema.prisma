@@ -84,6 +84,10 @@ model LifePlan {
   monthlyContribution Int       @default(0) // cents
   deadline            DateTime?
   milestones          String    @default("[]") // JSON array of milestone amounts (investment plans)
+  // Who created it (req.authUserId); null for plans from before this column
+  // that were never merged. Decides who keeps it when a couple unlinks
+  // (server/lib/partnerUnlink.ts).
+  ownerUserId         String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

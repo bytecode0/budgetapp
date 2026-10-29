@@ -20,7 +20,9 @@
 //                       one without createdByUserId gets her as its author
 //                       (only she could enter rows in her own scope)
 //   LifePlan,
-//   PlanDeposit       → moved (ids unchanged, so plan links hold)
+//   PlanDeposit       → moved (ids unchanged, so plan links hold); a plan
+//                       without ownerUserId gets her as owner (it was made in
+//                       her own scope), so unlink can give it back
 //   Allocation        → her untouched defaults merge into the pool's default
 //                       line of the same type (names differ by language and
 //                       by when signup seeded them); everything else is moved
@@ -337,6 +339,7 @@ export async function mergeMemberIntoPool(
   await db.expense.updateMany({ where: { ...mine, createdByUserId: null }, data: { createdByUserId: memberId } });
   await db.expense.updateMany({ where: mine, data: toPool });
   await db.income.updateMany({ where: mine, data: toPool });
+  await db.lifePlan.updateMany({ where: { ...mine, ownerUserId: null }, data: { ownerUserId: memberId } });
   await db.lifePlan.updateMany({ where: mine, data: toPool });
   await db.planDeposit.updateMany({ where: mine, data: toPool });
   await db.monthlyBudget.updateMany({ where: mine, data: toPool });

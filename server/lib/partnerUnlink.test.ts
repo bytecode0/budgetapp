@@ -33,12 +33,13 @@ const base: UnlinkInput = {
     { id: "ex-salary", ownerUserId: EX, accountId: "ex-checking" },
   ],
   expenses: [],
+  plans: [],
   allocations: [
-    { id: "fixed", type: "fixed", debtId: null },
-    { id: "flex", type: "flexible", debtId: null },
-    { id: "plan", type: "plan", debtId: null },
-    { id: "line-her-loan", type: "debt", debtId: "her-loan" },
-    { id: "line-ex-card", type: "debt", debtId: "ex-card-debt" },
+    { id: "fixed", type: "fixed", debtId: null, lifePlanId: null },
+    { id: "flex", type: "flexible", debtId: null, lifePlanId: null },
+    { id: "plan", type: "plan", debtId: null, lifePlanId: null },
+    { id: "line-her-loan", type: "debt", debtId: "her-loan", lifePlanId: null },
+    { id: "line-ex-card", type: "debt", debtId: "ex-card-debt", lifePlanId: null },
   ],
   rules: [{ id: "r-her-loan", allocationId: "line-her-loan" }, { id: "r-fixed", allocationId: "fixed" }],
   recurring: [{ id: "c-her-loan", allocationId: "line-her-loan" }, { id: "c-fixed", allocationId: "fixed" }],
@@ -157,7 +158,7 @@ test("her debt on the ex's account stays in the pool with it, payments and all",
   const plan = planUnlink({
     ...base,
     debts: [...base.debts, { id: "her-loan-on-ex-card", ownerUserId: HER, accountId: "ex-card", bankConnectionId: null }],
-    allocations: [...base.allocations, { id: "line-her-loan-on-ex-card", type: "debt", debtId: "her-loan-on-ex-card" }],
+    allocations: [...base.allocations, { id: "line-her-loan-on-ex-card", type: "debt", debtId: "her-loan-on-ex-card", lifePlanId: null }],
     expenses: [
       expense({ id: "pay-it", debtId: "her-loan-on-ex-card", accountId: "her-checking" }),
       expense({ id: "ex-card-buy", accountId: "ex-card", payerUserId: EX }),
@@ -199,6 +200,34 @@ test("after the move no debt is linked to an account in the other scope", () => 
   for (const d of input.debts) {
     if (d.accountId) assert.equal(debtMoves.has(d.id), accountMoves.has(d.accountId), d.id);
   }
+});
+
+test("her plans come back with their plan lines and the rules on them; unowned and the ex's plans stay", () => {
+  const plan = planUnlink({
+    ...base,
+    plans: [
+      { id: "her-trip", ownerUserId: HER },
+      { id: "ex-car", ownerUserId: EX },
+      { id: "old-pool-plan", ownerUserId: null },
+    ],
+    allocations: [
+      ...base.allocations,
+      { id: "line-her-trip", type: "plan", debtId: null, lifePlanId: "her-trip" },
+      { id: "line-ex-car", type: "plan", debtId: null, lifePlanId: "ex-car" },
+    ],
+    rules: [...base.rules, { id: "r-trip", allocationId: "line-her-trip" }],
+    expenses: [
+      expense({ id: "her-saving", allocationId: "line-her-trip", createdByUserId: HER }),
+      expense({ id: "ex-saving-for-her-trip", allocationId: "line-her-trip", payerUserId: EX, createdByUserId: EX }),
+    ],
+  });
+  assert.deepEqual(plan.move.planIds, ["her-trip"]);
+  assert.ok(plan.move.allocationIds.includes("line-her-trip"));
+  assert.ok(!plan.move.allocationIds.includes("line-ex-car"));
+  assert.ok(plan.move.ruleIds.includes("r-trip"));
+  // Her contribution keeps its line; the ex's loses it (the line leaves).
+  assert.ok(!plan.clear.expenseAllocation.includes("her-saving"));
+  assert.ok(plan.clear.expenseAllocation.includes("ex-saving-for-her-trip"));
 });
 
 test("a member with nothing of her own moves nothing", () => {

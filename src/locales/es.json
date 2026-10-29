@@ -823,7 +823,7 @@
     "sharePlans": "Planes de vida y objetivos de ahorro",
     "shareAllocations": "Asignaciones del presupuesto mensual",
     "shareReviews": "Revisiones e informes del presupuesto",
-    "ownDataMoves": "Lo que ya hayas registrado (ingresos, gastos, cuentas, deudas) pasa a las finanzas compartidas y sigue siendo tuyo. Tus cuentas y deudas quedan privadas. Si os desvinculáis, lo tuyo vuelve contigo: tus cuentas, deudas, ingresos y gastos. Se quedan en las finanzas compartidas los gastos compartidos ya repartidos que no pagaste con tus cuentas, y el presupuesto común.",
+    "ownDataMoves": "Lo que ya hayas registrado (ingresos, gastos, cuentas, deudas, planes) pasa a las finanzas compartidas y sigue siendo tuyo. Tus cuentas y deudas quedan privadas. Si os desvinculáis, vuelve contigo: tus cuentas, deudas, ingresos y planes de ahorro (con sus aportaciones), y los gastos que registraste tú o que están en tus cuentas. Se quedan en las finanzas compartidas: el presupuesto común, los gastos que registró tu pareja fuera de tus cuentas, y lo que registraste con las tarjetas de tu pareja o para pagar sus deudas.",
     "decline": "Rechazar",
     "accept": "Aceptar",
     "linked": "¡Vinculados!",

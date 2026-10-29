@@ -44,16 +44,20 @@
 //                           she paid it and it is not a shared expense with
 //                           shares — one the ex entered is household history
 //                           both have a claim on, so it stays with the pool.
+//   LifePlan          → those she owns (ownerUserId: set on create, and at
+//                       merge for the plans she brought). Plans without an
+//                       owner (made in the pool before the column) stay.
+//   PlanDeposit       → those of her plans (they follow the plan).
 //   Allocation        → there is no owner on a budget line, so lines stay with
-//                       the pool, except the debt lines of her debts (they move,
-//                       with their MonthlyBudgets and the rules pointing at
-//                       them). A fixed/flexible/generosity line her moved
-//                       expenses use is COPIED into her scope (0 € budgeted) so
-//                       they keep their category; plan lines and other debt
-//                       lines are not copied — those expenses become
-//                       uncategorised.
-//   LifePlan, PlanDeposit, MonthlyBudget (other lines), CategorizationRule
-//   (other lines), RecurringCommitment → stay with the pool (no owner).
+//                       the pool, except the debt lines of the debts that move
+//                       and the plan lines of her plans (they move, with their
+//                       MonthlyBudgets and the rules pointing at them). A
+//                       fixed/flexible/generosity line her moved expenses use
+//                       is COPIED into her scope (0 € budgeted) so they keep
+//                       their category; other plan and debt lines are not
+//                       copied — those expenses become uncategorised.
+//   MonthlyBudget (other lines), CategorizationRule (other lines),
+//   RecurringCommitment → stay with the pool (no owner).
 //   HouseholdMember   → her membership in the owner's household is removed.
 //
 // Any other reference that would cross the two scopes after the move (e.g. an
@@ -78,7 +82,8 @@ export interface UnlinkInput {
     id: string; accountId: string | null; debtId: string | null; allocationId: string | null;
     payerUserId: string | null; createdByUserId: string | null; scope: string; hasShares: boolean;
   }[];
-  allocations: { id: string; type: string; debtId: string | null }[];
+  plans: { id: string; ownerUserId: string | null }[];
+  allocations: { id: string; type: string; debtId: string | null; lifePlanId: string | null }[];
   rules: { id: string; allocationId: string }[];
   recurring: { id: string; allocationId: string | null }[];
 }
@@ -90,7 +95,8 @@ export interface UnlinkPlan {
     bankConnectionIds: string[];
     incomeIds: string[];
     expenseIds: string[];
-    allocationIds: string[]; // debt lines of her debts
+    planIds: string[];
+    allocationIds: string[]; // debt lines of moving debts, plan lines of her plans
     ruleIds: string[];       // rules pointing at those lines
   };
   /** Pool lines to copy into her scope → her moved expenses that use each. */
@@ -140,7 +146,10 @@ export function planUnlink(input: UnlinkInput): UnlinkPlan {
   const { accounts, debts } = movableAccountsAndDebts(input);
   const connections = new Set(input.bankConnections.filter(hers).map(c => c.id));
   const incomes = new Set(input.incomes.filter(hers).map(i => i.id));
-  const allocations = new Set(input.allocations.filter(a => a.debtId !== null && debts.has(a.debtId)).map(a => a.id));
+  const plans = new Set(input.plans.filter(p => p.ownerUserId === input.memberId).map(p => p.id));
+  const allocations = new Set(input.allocations
+    .filter(a => (a.debtId !== null && debts.has(a.debtId)) || (a.lifePlanId !== null && plans.has(a.lifePlanId)))
+    .map(a => a.id));
 
   const backsDebt = new Set(input.debts.map(d => d.accountId).filter((id): id is string => id !== null));
   const enteredByHer = (e: UnlinkInput["expenses"][number]) => e.createdByUserId === input.memberId;
@@ -173,6 +182,7 @@ export function planUnlink(input: UnlinkInput): UnlinkPlan {
       bankConnectionIds: [...connections],
       incomeIds: [...incomes],
       expenseIds: [...expenses],
+      planIds: [...plans],
       allocationIds: [...allocations],
       ruleIds: input.rules.filter(r => allocations.has(r.allocationId)).map(r => r.id),
     },
@@ -192,7 +202,7 @@ export function planUnlink(input: UnlinkInput): UnlinkPlan {
 
 export async function loadUnlinkInput(db: Db, memberId: string, poolId: string): Promise<UnlinkInput> {
   const pool = { userId: poolId };
-  const [accounts, debts, bankConnections, incomes, expenses, allocations, rules, recurring] = await Promise.all([
+  const [accounts, debts, bankConnections, incomes, expenses, plans, allocations, rules, recurring] = await Promise.all([
     db.account.findMany({ where: pool, select: { id: true, ownerUserId: true, bankConnectionId: true } }),
     db.debt.findMany({ where: pool, select: { id: true, ownerUserId: true, accountId: true, bankConnectionId: true } }),
     db.bankConnection.findMany({ where: pool, select: { id: true, ownerUserId: true } }),
@@ -204,13 +214,14 @@ export async function loadUnlinkInput(db: Db, memberId: string, poolId: string):
         _count: { select: { shares: true } },
       },
     }),
-    db.allocation.findMany({ where: pool, select: { id: true, type: true, debtId: true } }),
+    db.lifePlan.findMany({ where: pool, select: { id: true, ownerUserId: true } }),
+    db.allocation.findMany({ where: pool, select: { id: true, type: true, debtId: true, lifePlanId: true } }),
     db.categorizationRule.findMany({ where: pool, select: { id: true, allocationId: true } }),
     db.recurringCommitment.findMany({ where: pool, select: { id: true, allocationId: true } }),
   ]);
   return {
     memberId,
-    accounts, debts, bankConnections, incomes, allocations, rules, recurring,
+    accounts, debts, bankConnections, incomes, plans, allocations, rules, recurring,
     expenses: expenses.map(({ _count, ...e }) => ({ ...e, hasShares: _count.shares > 0 })),
   };
 }
@@ -264,6 +275,8 @@ export async function unlinkMemberFromPool(db: Db, ctx: { memberId: string; pool
   await db.debtAdjustment.updateMany({ where: { debtId: { in: move.debtIds } }, data: toHer });
   await inChunks(move.incomeIds, ids => db.income.updateMany({ where: { id: { in: ids } }, data: toHer }));
   await inChunks(move.expenseIds, ids => db.expense.updateMany({ where: { id: { in: ids } }, data: toHer }));
+  await db.lifePlan.updateMany({ where: { id: { in: move.planIds } }, data: toHer });
+  await db.planDeposit.updateMany({ where: { planId: { in: move.planIds } }, data: toHer });
   await db.allocation.updateMany({ where: { id: { in: move.allocationIds } }, data: toHer });
   await db.monthlyBudget.updateMany({ where: { allocationId: { in: move.allocationIds } }, data: toHer });
   await db.categorizationRule.updateMany({ where: { id: { in: move.ruleIds } }, data: toHer });
