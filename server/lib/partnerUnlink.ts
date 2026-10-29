@@ -61,6 +61,12 @@
 //                       re-link merges them like signup's: the copy of the
 //                       pool's default line of that type becomes hers, else a
 //                       fresh one is seeded in her language (0 € budgeted).
+//   Account (default) → she always ends with an open non-card account: merge
+//                       deletes her unused "Main account", and with only a
+//                       card left every expense entered without an account
+//                       would default onto the card (server/lib/defaultAccount.ts)
+//                       and silently grow its debt. When none moves back and
+//                       she has none, a fresh "Main account" is seeded.
 //   MonthlyBudget (other lines), CategorizationRule (other lines),
 //   RecurringCommitment → stay with the pool (no owner).
 //   HouseholdMember   → her membership in the owner's household is removed.
@@ -88,12 +94,13 @@
 import type { Prisma } from "@prisma/client";
 import { namespacedExternalId, originalExternalId } from "./partnerMerge.js";
 import { defaultAllocations } from "./defaults.js";
+import { DEFAULT_ACCOUNT_NAME } from "./onboarding.js";
 
 type Db = Prisma.TransactionClient;
 
 export interface UnlinkInput {
   memberId: string;
-  accounts: { id: string; ownerUserId: string; bankConnectionId: string | null }[];
+  accounts: { id: string; ownerUserId: string; bankConnectionId: string | null; type: string; isArchived: boolean }[];
   debts: { id: string; ownerUserId: string; accountId: string | null; bankConnectionId: string | null }[];
   bankConnections: { id: string; ownerUserId: string }[];
   incomes: { id: string; ownerUserId: string; accountId: string | null; externalId: string | null }[];
@@ -105,6 +112,8 @@ export interface UnlinkInput {
   allocations: { id: string; type: string; isDefault: boolean; debtId: string | null; lifePlanId: string | null }[];
   /** Budget lines already under her own userId. */
   memberAllocations: { type: string; isDefault: boolean }[];
+  /** Accounts already under her own userId. */
+  memberAccounts: { type: string; isArchived: boolean }[];
   rules: { id: string; allocationId: string; matchType: string; pattern: string }[];
   recurring: { id: string; allocationId: string | null }[];
   poolId: string;
@@ -135,6 +144,8 @@ export interface UnlinkPlan {
   copyAsDefault: Set<string>;
   /** Default line types she still lacks: seeded in her scope. */
   seedDefaultTypes: string[];
+  /** She would end with no open non-card account: one is seeded. */
+  seedDefaultAccount: boolean;
   /** Moved rows whose original externalId is free in her scope: set after the move. */
   restoreExternalIds: { expense: ExternalIdChange[]; income: ExternalIdChange[] };
   /** References that would cross scopes after the move: set to null. */
@@ -272,6 +283,9 @@ export function planUnlink(input: UnlinkInput): UnlinkPlan {
     }
   }
   const seedDefaultTypes = SEEDED_TYPES.filter(t => !hasDefault.has(t));
+  const usable = (a: { type: string; isArchived: boolean }) => a.type !== "card" && !a.isArchived;
+  const seedDefaultAccount = !input.memberAccounts.some(usable)
+    && !input.accounts.some(a => accounts.has(a.id) && usable(a));
 
   const movingExpenses = input.expenses.filter(e => expenses.has(e.id));
   const movingIncomes = input.incomes.filter(i => incomes.has(i.id));
@@ -300,6 +314,7 @@ export function planUnlink(input: UnlinkInput): UnlinkPlan {
     copyAllocations,
     copyAsDefault,
     seedDefaultTypes,
+    seedDefaultAccount,
     restoreExternalIds: {
       expense: planRestoreExternalIds(withRenames(movingExpenses, clashExternalIds.expense), input.memberExternalIds.expense),
       income: planRestoreExternalIds(withRenames(movingIncomes, clashExternalIds.income), input.memberExternalIds.income),
@@ -322,9 +337,9 @@ export async function loadUnlinkInput(db: Db, memberId: string, poolId: string):
   const hersWithId = { userId: memberId, externalId: { not: null } };
   const [
     accounts, debts, bankConnections, incomes, expenses, plans, allocations, rules, recurring,
-    memberExpenseIds, memberIncomeIds, memberRules, memberAllocations,
+    memberExpenseIds, memberIncomeIds, memberRules, memberAllocations, memberAccounts,
   ] = await Promise.all([
-    db.account.findMany({ where: pool, select: { id: true, ownerUserId: true, bankConnectionId: true } }),
+    db.account.findMany({ where: pool, select: { id: true, ownerUserId: true, bankConnectionId: true, type: true, isArchived: true } }),
     db.debt.findMany({ where: pool, select: { id: true, ownerUserId: true, accountId: true, bankConnectionId: true } }),
     db.bankConnection.findMany({ where: pool, select: { id: true, ownerUserId: true } }),
     db.income.findMany({ where: pool, select: { id: true, ownerUserId: true, accountId: true, externalId: true } }),
@@ -343,11 +358,13 @@ export async function loadUnlinkInput(db: Db, memberId: string, poolId: string):
     db.income.findMany({ where: hersWithId, select: { externalId: true } }),
     db.categorizationRule.findMany({ where: { userId: memberId }, select: { matchType: true, pattern: true } }),
     db.allocation.findMany({ where: { userId: memberId }, select: { type: true, isDefault: true } }),
+    db.account.findMany({ where: { userId: memberId }, select: { type: true, isArchived: true } }),
   ]);
   return {
     memberId,
     poolId,
     memberAllocations,
+    memberAccounts,
     memberRuleKeys: new Set(memberRules.map(r => `${r.matchType}|${r.pattern}`)),
     accounts, debts, bankConnections, incomes, plans, allocations, rules, recurring,
     expenses: expenses.map(({ _count, ...e }) => ({ ...e, hasShares: _count.shares > 0 })),
@@ -401,6 +418,13 @@ export async function unlinkMemberFromPool(db: Db, ctx: { memberId: string; pool
       data: defaultAllocations(settings?.language).filter(a => plan.seedDefaultTypes.includes(a.type)).map(a => ({
         ...a, userId: memberId, allocatedAmount: 0, actualAmount: 0, isDefault: true,
       })),
+    });
+  }
+
+  // An open non-card account, as signup seeds it, if she would end with none.
+  if (plan.seedDefaultAccount) {
+    await db.account.create({
+      data: { userId: memberId, ownerUserId: memberId, name: DEFAULT_ACCOUNT_NAME, type: "checking", sortOrder: 0 },
     });
   }
 

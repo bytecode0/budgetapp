@@ -17,10 +17,10 @@ const expense = (over: Partial<Expense> & { id: string }): Expense => ({
 const base: UnlinkInput = {
   memberId: HER,
   accounts: [
-    { id: "her-checking", ownerUserId: HER, bankConnectionId: "her-bank" },
-    { id: "her-card", ownerUserId: HER, bankConnectionId: null },
-    { id: "ex-checking", ownerUserId: EX, bankConnectionId: "ex-bank" },
-    { id: "ex-card", ownerUserId: EX, bankConnectionId: null },
+    { id: "her-checking", ownerUserId: HER, bankConnectionId: "her-bank", type: "checking", isArchived: false },
+    { id: "her-card", ownerUserId: HER, bankConnectionId: null, type: "card", isArchived: false },
+    { id: "ex-checking", ownerUserId: EX, bankConnectionId: "ex-bank", type: "checking", isArchived: false },
+    { id: "ex-card", ownerUserId: EX, bankConnectionId: null, type: "card", isArchived: false },
   ],
   debts: [
     { id: "her-card-debt", ownerUserId: HER, accountId: "her-card", bankConnectionId: null },
@@ -48,6 +48,7 @@ const base: UnlinkInput = {
   recurring: [{ id: "c-her-loan", allocationId: "line-her-loan" }, { id: "c-fixed", allocationId: "fixed" }],
   poolId: EX,
   memberAllocations: [],
+  memberAccounts: [],
   memberExternalIds: { expense: new Set(), income: new Set() },
   memberRuleKeys: new Set(),
 };
@@ -134,7 +135,7 @@ test("her moved expenses keep their category via a copied line; plan and other d
 test("incomes and accounts never keep a reference across the two scopes", () => {
   const plan = planUnlink({
     ...base,
-    accounts: [...base.accounts, { id: "her-on-ex-bank", ownerUserId: HER, bankConnectionId: "ex-bank" }],
+    accounts: [...base.accounts, { id: "her-on-ex-bank", ownerUserId: HER, bankConnectionId: "ex-bank", type: "checking", isArchived: false }],
     debts: [...base.debts, { id: "her-loan-on-ex-bank", ownerUserId: HER, accountId: null, bankConnectionId: "ex-bank" }],
     incomes: [...base.incomes, { id: "ex-paid-into-hers", ownerUserId: EX, accountId: "her-checking", externalId: null }],
   });
@@ -327,4 +328,13 @@ test("a member with nothing of her own moves nothing", () => {
   const plan = planUnlink({ ...base, memberId: "someone-else" });
   for (const ids of Object.values(plan.move)) assert.deepEqual(ids, []);
   assert.equal(plan.copyAllocations.size, 0);
+});
+
+test("she keeps a non-card account: seeded only when none moves back and she has none", () => {
+  assert.equal(planUnlink(base).seedDefaultAccount, false); // her checking moves back
+  const cardOnly = { ...base, accounts: base.accounts.filter(a => a.id !== "her-checking") };
+  assert.equal(planUnlink(cardOnly).seedDefaultAccount, true);
+  const archived = { ...base, accounts: base.accounts.map(a => (a.id === "her-checking" ? { ...a, isArchived: true } : a)) };
+  assert.equal(planUnlink(archived).seedDefaultAccount, true);
+  assert.equal(planUnlink({ ...cardOnly, memberAccounts: [{ type: "cash", isArchived: false }] }).seedDefaultAccount, false);
 });
