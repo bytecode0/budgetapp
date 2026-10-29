@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
 import type { DuplicateGroup } from '../hooks/useDuplicates';
+import { useMoney } from '../onboarding/useMoney';
 
 interface DuplicatesProps {
   isOpen: boolean;
@@ -17,13 +18,14 @@ interface DuplicatesProps {
 
 export function Duplicates({ isOpen, onClose, groups, loading, onMerge, onMerged }: DuplicatesProps) {
   const { t } = useTranslation();
+  const { currency } = useMoney();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
 
   const [keepByGroup, setKeepByGroup] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState<number | null>(null);
 
-  const fmtEuro = (v: number) => `€${v.toFixed(2)}`;
+  const fmtEuro = (v: number) => `${currency}${v.toFixed(2)}`;
   const fmtDate = (d: string) => new Date(d).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
 
   const keepId = (groupIdx: number, group: DuplicateGroup) => keepByGroup[groupIdx] ?? group[0].id;

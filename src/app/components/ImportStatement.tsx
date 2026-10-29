@@ -8,6 +8,7 @@ import { useAccounts } from '../hooks/useAccounts';
 import { useAllocations } from '../hooks/useAllocations';
 import { useImport, type ImportPreview, type ConfirmRow, type AiCategory } from '../hooks/useImport';
 import { BudgetSuggestions } from './BudgetSuggestions';
+import { useMoney } from '../onboarding/useMoney';
 
 interface ImportStatementProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ interface ImportStatementProps {
 
 export function ImportStatement({ isOpen, onClose, onImported }: ImportStatementProps) {
   const { t } = useTranslation();
+  const { currency } = useMoney();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
   const { accounts } = useAccounts();
@@ -48,7 +50,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  const fmtEuro = (v: number) => `€${Math.abs(v).toFixed(2)}`;
+  const fmtEuro = (v: number) => `${currency}${Math.abs(v).toFixed(2)}`;
   const fmtDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 
   const handleFile = async (file: File | undefined) => {

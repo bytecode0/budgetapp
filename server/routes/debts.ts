@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
+import { mutationAccess } from "../lib/ownership.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { buildDebtTimeline } from "../lib/debtTimeline.js";
 import { householdBaselineIncome } from "../lib/householdIncome.js";
@@ -311,6 +312,9 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
     const { id } = req.params;
     const existing = await prisma.debt.findFirst({ where: { id, userId: req.userId! } });
     if (!existing) return res.status(404).json({ error: "Debt not found" });
+    const access = mutationAccess(existing, req.authUserId);
+    if (access === "hidden") return res.status(404).json({ error: "Debt not found" });
+    if (access === "forbidden") return res.status(403).json({ error: "Only the owner can change this debt" });
 
     const {
       name, kind, status, accountId, currentBalance, principal, apr,
@@ -427,6 +431,9 @@ debtsRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Response) 
     const { id } = req.params;
     const existing = await prisma.debt.findFirst({ where: { id, userId: req.userId! } });
     if (!existing) return res.status(404).json({ error: "Debt not found" });
+    const access = mutationAccess(existing, req.authUserId);
+    if (access === "hidden") return res.status(404).json({ error: "Debt not found" });
+    if (access === "forbidden") return res.status(403).json({ error: "Only the owner can change this debt" });
 
     // Its payments' budget split (server/lib/debtBalance.ts) needs the debt:
     // deleting it would make past months count those payments in full.

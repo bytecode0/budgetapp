@@ -1,29 +1,42 @@
 import { prisma } from "./prisma.js";
 import { DEFAULT_ACCOUNT_NAME } from "./onboarding.js";
+import { resolveLocale, type EmailLocale } from "./email/locales/index.js";
 
-const DEFAULT_ALLOCATIONS = [
-  { name: "Fixed Expenses",    icon: "🏠", type: "fixed",    sortOrder: 0 },
-  { name: "Flexible Spending", icon: "🎯", type: "flexible", sortOrder: 1 },
-];
+// Created in the user's language; existing rows are never renamed. Same
+// wording as onboarding.lines.{fixed,flexible}.title in src/locales.
+const DEFAULT_ALLOCATION_NAMES: Record<EmailLocale, { fixed: string; flexible: string }> = {
+  es: { fixed: "Gastos fijos", flexible: "Gastos variables" },
+  en: { fixed: "Fixed expenses", flexible: "Variable expenses" },
+};
 
-export async function createDefaultAllocations(userId: string) {
+function defaultAllocations(language: string | null | undefined) {
+  const names = DEFAULT_ALLOCATION_NAMES[resolveLocale(language)];
+  return [
+    { name: names.fixed,    icon: "🏠", type: "fixed",    sortOrder: 0 },
+    { name: names.flexible, icon: "🎯", type: "flexible", sortOrder: 1 },
+  ];
+}
+
+// `language`: the UI language at sign-up, stored only when the settings row is
+// created here (an existing row, e.g. from /register, keeps its language).
+export async function createDefaultAllocations(userId: string, language?: EmailLocale) {
   const existing = await prisma.allocation.count({ where: { userId } });
   if (existing > 0) return; // already seeded
 
+  const settings = await prisma.userSettings.upsert({
+    where: { userId },
+    update: {},
+    create: { userId, monthlyIncome: 0, ...(language && { language }) },
+  });
+
   await prisma.allocation.createMany({
-    data: DEFAULT_ALLOCATIONS.map((a) => ({
+    data: defaultAllocations(settings.language).map((a) => ({
       ...a,
       userId,
       allocatedAmount: 0,
       actualAmount: 0,
       isDefault: true,
     })),
-  });
-
-  await prisma.userSettings.upsert({
-    where: { userId },
-    update: {},
-    create: { userId, monthlyIncome: 0 },
   });
 
   await createDefaultAccount(userId);

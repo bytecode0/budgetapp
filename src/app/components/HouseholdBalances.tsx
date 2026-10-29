@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowRight, Loader2, Scale } from 'lucide-react';
+import { useMoney } from '../onboarding/useMoney';
 
 interface Balance { userId: string; name: string | null; paid: number; owed: number; balance: number; }
 interface Settlement { fromUserId: string; toUserId: string; fromName: string | null; toName: string | null; amount: number; }
@@ -10,6 +11,7 @@ interface Contribution { userId: string; name: string | null; income: number; sh
 // member's income share and the suggested "who owes whom" from shared expenses.
 export function HouseholdBalances() {
   const { t } = useTranslation();
+  const { fmt } = useMoney();
   const [loading, setLoading] = useState(true);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [hasShared, setHasShared] = useState(false);
@@ -64,7 +66,7 @@ export function HouseholdBalances() {
               <span className="font-medium">{s.fromName ?? '—'}</span>
               <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
               <span className="font-medium">{s.toName ?? '—'}</span>
-              <span className="ml-auto font-display">€{s.amount.toLocaleString()}</span>
+              <span className="ml-auto font-display">{fmt(s.amount)}</span>
             </div>
           ))
         )}

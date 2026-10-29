@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { usePlans } from '../hooks/usePlans';
 import { useTranslation } from 'react-i18next';
+import { useMoney } from '../onboarding/useMoney';
 
 // ── Safety categories ─────────────────────────────────────────────────────────
 const SAFETY_CATEGORIES = [
@@ -60,6 +61,7 @@ function compoundBalance(current: number, monthly: number, months: number, annua
 // ── Component ─────────────────────────────────────────────────────────────────
 export function CreatePlan({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation();
+  const { fmt, currency } = useMoney();
   const { createPlan } = usePlans();
   const [step, setStep]   = useState(1);
   const [saving, setSaving] = useState(false);
@@ -411,7 +413,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                   <label className="block text-sm font-display mb-1">{t('createPlan.monthlyContribution')}</label>
                   <p className="text-xs text-muted-foreground mb-2">{t('createPlan.monthlyContributionSubtitle')}</p>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
                     <input
                       type="number" min="0" step="50" autoFocus
                       placeholder="200"
@@ -425,7 +427,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                 <div>
                   <label className="block text-sm font-display mb-1">{t('createPlan.alreadyInvestedOptional')}</label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
                     <input type="number" min="0" placeholder="0"
                       className="w-full pl-8 pr-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
                       value={invCurrent}
@@ -438,7 +440,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                   <label className="block text-sm font-display mb-1">{t('createPlan.firstMilestoneOptional')}</label>
                   <p className="text-xs text-muted-foreground mb-1.5">{t('createPlan.firstMilestonePlaceholder')}</p>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
                     <input type="number" min="0" placeholder="50000"
                       className="w-full pl-8 pr-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
                       value={milestone}
@@ -459,9 +461,9 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                     {invPreview?.map(row => (
                       <div key={row.label} className="text-center">
                         <p className="text-xs text-muted-foreground mb-1">{row.label}</p>
-                        <p className="text-xs text-red-500">€{Math.round(row.pessimistic).toLocaleString()}</p>
-                        <p className="text-sm font-display text-amber-600">€{Math.round(row.base).toLocaleString()}</p>
-                        <p className="text-xs text-secondary">€{Math.round(row.optimistic).toLocaleString()}</p>
+                        <p className="text-xs text-red-500">{fmt(Math.round(row.pessimistic))}</p>
+                        <p className="text-sm font-display text-amber-600">{fmt(Math.round(row.base))}</p>
+                        <p className="text-xs text-secondary">{fmt(Math.round(row.optimistic))}</p>
                       </div>
                     ))}
                   </div>
@@ -549,7 +551,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                 <div>
                   <label className="block text-sm font-display mb-2">{t('createPlan.targetAmount')}</label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
                     <input type="number" min="0" placeholder="10,000"
                       className="w-full pl-8 pr-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
                       value={targetAmount}
@@ -560,7 +562,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                 <div>
                   <label className="block text-sm font-display mb-2">{t('createPlan.alreadySavedOptional')}</label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
                     <input type="number" min="0" placeholder="0"
                       className="w-full pl-8 pr-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
                       value={currentAmount}
@@ -587,7 +589,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                   className="bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 rounded-xl p-4"
                 >
                   <p className="text-sm text-muted-foreground mb-1">{t('createPlan.suggestedContribution')}</p>
-                  <p className="text-3xl font-display text-primary">€{parseInt(monthlyContrib).toLocaleString()}<span className="text-base text-muted-foreground font-normal">/mo</span></p>
+                  <p className="text-3xl font-display text-primary">{fmt(parseInt(monthlyContrib))}<span className="text-base text-muted-foreground font-normal">/mo</span></p>
                   <p className="text-xs text-muted-foreground mt-1">{t('createPlan.toReachGoal')}</p>
                 </motion.div>
               )}
@@ -645,7 +647,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                   <>
                     <div>
                       <p className="text-sm text-muted-foreground mb-1">{t('createPlan.targetAmount')}</p>
-                      <p className="text-2xl font-display text-primary">€{parseFloat(targetAmount).toLocaleString()}</p>
+                      <p className="text-2xl font-display text-primary">{fmt(parseFloat(targetAmount))}</p>
                     </div>
                     {deadline && (
                       <div>
@@ -656,30 +658,30 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                     {monthlyContrib && (
                       <div>
                         <p className="text-sm text-muted-foreground mb-1">{t('createPlan.monthlyContribution')}</p>
-                        <p className="text-2xl font-display text-secondary">€{parseInt(monthlyContrib).toLocaleString()}/mo</p>
+                        <p className="text-2xl font-display text-secondary">{fmt(parseInt(monthlyContrib))}/mo</p>
                       </div>
                     )}
                     <div>
                       <p className="text-sm text-muted-foreground mb-1">{t('createPlan.alreadySaved')}</p>
-                      <p className="text-2xl font-display">€{parseFloat(currentAmount || '0').toLocaleString()}</p>
+                      <p className="text-2xl font-display">{fmt(parseFloat(currentAmount || '0'))}</p>
                     </div>
                   </>
                 ) : (
                   <>
                     <div>
                       <p className="text-sm text-muted-foreground mb-1">{t('createPlan.monthlyContribution')}</p>
-                      <p className="text-2xl font-display text-secondary">€{parseFloat(invMonthly).toLocaleString()}/mo</p>
+                      <p className="text-2xl font-display text-secondary">{fmt(parseFloat(invMonthly))}/mo</p>
                     </div>
                     {invCurrent && (
                       <div>
                         <p className="text-sm text-muted-foreground mb-1">{t('createPlan.alreadyInvested')}</p>
-                        <p className="text-2xl font-display">€{parseFloat(invCurrent).toLocaleString()}</p>
+                        <p className="text-2xl font-display">{fmt(parseFloat(invCurrent))}</p>
                       </div>
                     )}
                     {milestone && (
                       <div>
                         <p className="text-sm text-muted-foreground mb-1">{t('createPlan.firstMilestone')}</p>
-                        <p className="text-2xl font-display text-primary">€{parseFloat(milestone).toLocaleString()}</p>
+                        <p className="text-2xl font-display text-primary">{fmt(parseFloat(milestone))}</p>
                       </div>
                     )}
                   </>
@@ -696,9 +698,9 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                     {invPreview.map(row => (
                       <div key={row.label} className="space-y-1">
                         <p className="text-xs font-medium text-muted-foreground">{row.label}</p>
-                        <p className="text-xs text-red-500">€{Math.round(row.pessimistic).toLocaleString()}</p>
-                        <p className="text-sm font-display text-amber-600">€{Math.round(row.base).toLocaleString()}</p>
-                        <p className="text-xs text-secondary">€{Math.round(row.optimistic).toLocaleString()}</p>
+                        <p className="text-xs text-red-500">{fmt(Math.round(row.pessimistic))}</p>
+                        <p className="text-sm font-display text-amber-600">{fmt(Math.round(row.base))}</p>
+                        <p className="text-xs text-secondary">{fmt(Math.round(row.optimistic))}</p>
                       </div>
                     ))}
                   </div>
@@ -761,7 +763,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                     initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
                     className="text-xs text-primary mt-2 pl-12"
                   >
-                    ✓ €{effectiveMonthly.toLocaleString()}/mo · {t('createPlan.autoAllocationOn')}
+                    ✓ {fmt(effectiveMonthly)}/mo · {t('createPlan.autoAllocationOn')}
                   </motion.p>
                 )}
               </motion.div>

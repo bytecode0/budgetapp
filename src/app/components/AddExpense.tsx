@@ -7,6 +7,7 @@ import { useAllocations } from '../hooks/useAllocations';
 import { useAccounts } from '../hooks/useAccounts';
 import { useExpenses } from '../hooks/useExpenses';
 import { useLanguage } from '../context/LanguageContext';
+import { useMoney } from '../onboarding/useMoney';
 
 interface AddExpenseProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ type Step = 'amount' | 'allocation' | 'details';
 
 export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpenseProps) {
   const { t } = useTranslation();
+  const { currency } = useMoney();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
 
@@ -321,7 +323,7 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
                       <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">{t('addExpense.summary')}</p>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">{t('addExpense.amount')}</span>
-                        <span className="text-2xl font-display text-primary">€{parseFloat(amount).toFixed(2)}</span>
+                        <span className="text-2xl font-display text-primary">{currency}{parseFloat(amount).toFixed(2)}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">{t('addExpense.category')}</span>

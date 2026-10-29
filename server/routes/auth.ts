@@ -73,12 +73,16 @@ function setAuthCookie(res: Response, userId: string) {
 
 // ── Google OAuth ──────────────────────────────────────────────
 
-authRouter.get("/google", (_req: Request, res: Response) => {
+authRouter.get("/google", (req: Request, res: Response) => {
   const googleClient = newGoogleClient();
   if (!googleClient) return res.status(503).json({ error: "Google sign-in is not configured" });
+  // The UI language (?lang=es|en) rides in `state` so a new user's settings are
+  // created in it. It is not a secret and is re-validated on the way back.
+  const lang = parseLocale(req.query.lang);
   const url = googleClient.generateAuthUrl({
     access_type: "offline",
     prompt: "select_account",
+    ...(lang && { state: lang }),
     scope: [
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile",
@@ -89,7 +93,7 @@ authRouter.get("/google", (_req: Request, res: Response) => {
 
 authRouter.get("/google/callback", async (req: Request, res: Response) => {
   const appUrl = process.env.APP_URL ?? "http://localhost:5173";
-  const { code, error } = req.query as Record<string, string>;
+  const { code, error, state } = req.query as Record<string, string>;
 
   if (error || !code) {
     return res.redirect(`${appUrl}/?error=google_denied`);
@@ -132,10 +136,11 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
     });
 
     if (isNewUser) {
-      sendWelcomeGoogleEmail(user.email!, user.name ?? "").catch((e) =>
+      const locale = parseLocale(state) ?? undefined;
+      sendWelcomeGoogleEmail(user.email!, user.name ?? "", locale).catch((e) =>
         console.error("[auth/google/callback] welcome google email failed:", e)
       );
-      createDefaultAllocations(user.id).catch((e) =>
+      createDefaultAllocations(user.id, locale).catch((e) =>
         console.error("[auth/google/callback] createDefaultAllocations failed:", e)
       );
     }
@@ -206,9 +211,8 @@ authRouter.post("/register", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Name, email and password are required" });
     }
 
-    // Optional: the UI language at sign-up, used for the verification email.
-    // UserSettings doesn't exist yet here (createDefaultAllocations creates it on
-    // verify), so it is not persisted.
+    // Optional: the UI language at sign-up, used for the verification email and
+    // saved to UserSettings below (createDefaultAllocations keeps it on verify).
     const locale = language === undefined ? "es" : parseLocale(language);
     if (!locale) {
       return res.status(400).json({ error: "language must be 'es' or 'en'" });
@@ -225,11 +229,14 @@ authRouter.post("/register", async (req: Request, res: Response) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    if (existing) {
-      await prisma.user.update({ where: { email }, data: { name, passwordHash } });
-    } else {
-      await prisma.user.create({ data: { name, email, passwordHash } });
-    }
+    const user = existing
+      ? await prisma.user.update({ where: { email }, data: { name, passwordHash } })
+      : await prisma.user.create({ data: { name, email, passwordHash } });
+    await prisma.userSettings.upsert({
+      where: { userId: user.id },
+      update: { language: locale },
+      create: { userId: user.id, monthlyIncome: 0, language: locale },
+    });
 
     const otp = await createOtp(email, "email_verification");
     await sendVerificationEmail(email, name, otp, locale);
