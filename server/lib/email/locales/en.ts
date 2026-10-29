@@ -116,4 +116,16 @@ export const en: EmailDictionary = {
     cta: "Update payment method",
     help: "If you need help, reply to this email or contact us at {supportEmail}.",
   },
+  bankConsentExpiring: {
+    subject: "Your {bank} connection expires on {date}",
+    preheader: "Renew it in a minute so your transactions keep arriving on their own.",
+    heading: "Renew your {bank} connection",
+    introNamed: "Hi {name}, the permission you gave {product} to read your {bank} accounts is about to expire.",
+    intro: "The permission you gave {product} to read your {bank} accounts is about to expire.",
+    expiresOn: "Expires on {date}",
+    whatHappens: "From that day on we'll stop bringing in {bank}'s transactions and balances. What's already in {product} stays.",
+    howTo: "To renew it, open Accounts and tap \"Reconnect\" on {bank}: your bank will ask you to confirm.",
+    cta: "Go to Accounts",
+    privacy: "By law (PSD2) banks ask for this permission to be renewed from time to time. If you don't want to renew it, do nothing.",
+  },
 };

@@ -122,6 +122,18 @@ export const es = {
     cta: "Actualizar método de pago",
     help: "Si necesitas ayuda, responde a este correo o escríbenos a {supportEmail}.",
   },
+  bankConsentExpiring: {
+    subject: "Tu conexión con {bank} caduca el {date}",
+    preheader: "Renuévala en un minuto para que tus movimientos sigan llegando solos.",
+    heading: "Renueva tu conexión con {bank}",
+    introNamed: "Hola, {name}: el permiso que diste a {product} para leer tus cuentas de {bank} está a punto de caducar.",
+    intro: "El permiso que diste a {product} para leer tus cuentas de {bank} está a punto de caducar.",
+    expiresOn: "Caduca el {date}",
+    whatHappens: "A partir de ese día dejaremos de traer los movimientos y saldos de {bank}. Lo que ya está en {product} se queda.",
+    howTo: "Para renovarla, entra en Cuentas y pulsa «Reconectar» en {bank}: tu banco te pedirá confirmarlo.",
+    cta: "Ir a Cuentas",
+    privacy: "Por ley (PSD2) los bancos piden renovar este permiso cada cierto tiempo. Si no quieres renovarlo, no hagas nada.",
+  },
 };
 
 export type EmailDictionary = typeof es;
