@@ -23,8 +23,8 @@ const base: MergeInput = {
     line({ id: "m-flex", name: "Flexible Spending", type: "flexible" }),
   ],
   poolAllocations: [
-    { id: "p-fixed", name: "Fixed Expenses", type: "fixed" },
-    { id: "p-flex", name: "Flexible Spending", type: "flexible" },
+    { id: "p-fixed", type: "fixed", isDefault: true },
+    { id: "p-flex", type: "flexible", isDefault: true },
   ],
   memberAccounts: [account({ id: "m-main" })],
   memberExpenseExternalIds: [],
@@ -55,11 +55,33 @@ test("a line she configured is kept (moved), not merged", () => {
 });
 
 test("an untouched default with no matching pool line is moved, not dropped", () => {
-  const plan = planPoolMerge({ ...base, poolAllocations: [{ id: "p-fixed", name: "Fixed Expenses", type: "fixed" }] });
+  const plan = planPoolMerge({ ...base, poolAllocations: [{ id: "p-fixed", type: "fixed", isDefault: true }] });
   assert.deepEqual([...plan.allocationRemap], [["m-fixed", "p-fixed"]]);
 });
 
-test("a renamed default does not match by name and is moved", () => {
+test("defaults match on type, whatever their names: older pools and cross-language couples", () => {
+  // Pool seeded long ago in English; she signed up in Spanish.
+  const plan = planPoolMerge({
+    ...base,
+    memberAllocations: [
+      line({ id: "m-fixed", name: "Gastos fijos", type: "fixed" }),
+      line({ id: "m-flex", name: "Gastos variables", type: "flexible" }),
+    ],
+  });
+  assert.deepEqual([...plan.allocationRemap], [["m-fixed", "p-fixed"], ["m-flex", "p-flex"]]);
+});
+
+test("only the pool's default line of that type is a target, not a custom one", () => {
+  const plan = planPoolMerge({
+    ...base,
+    poolAllocations: [{ id: "p-rent", type: "fixed", isDefault: false }, { id: "p-fixed", type: "fixed", isDefault: true }],
+  });
+  assert.equal(plan.allocationRemap.get("m-fixed"), "p-fixed");
+  const noDefault = planPoolMerge({ ...base, poolAllocations: [{ id: "p-rent", type: "fixed", isDefault: false }] });
+  assert.equal(noDefault.allocationRemap.size, 0);
+});
+
+test("a renamed default is hers and is moved, not merged", () => {
   const plan = planPoolMerge({ ...base, memberAllocations: [line({ id: "m-fixed", name: "Casa" })] });
   assert.equal(plan.allocationRemap.size, 0);
 });
@@ -69,6 +91,8 @@ test("isUntouchedDefaultAllocation", () => {
   assert.equal(isUntouchedDefaultAllocation(line({ allocatedAmount: 1 })), false);
   assert.equal(isUntouchedDefaultAllocation(line({ hasBudgetedMonth: true })), false);
   assert.equal(isUntouchedDefaultAllocation(line({ isDefault: false })), false);
+  assert.equal(isUntouchedDefaultAllocation(line({ name: "Gastos variables" })), true);
+  assert.equal(isUntouchedDefaultAllocation(line({ name: "Casa" })), false);
 });
 
 test("her seeded Main account is dropped only while unused; every other account moves", () => {

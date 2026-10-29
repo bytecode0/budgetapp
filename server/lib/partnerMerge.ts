@@ -19,8 +19,9 @@
 //   Expense           → moved; a legacy row without payer gets her as payer
 //   LifePlan,
 //   PlanDeposit       → moved (ids unchanged, so plan links hold)
-//   Allocation        → her untouched defaults merge into the pool's matching
-//                       line; everything else is moved
+//   Allocation        → her untouched defaults merge into the pool's default
+//                       line of the same type (names differ by language and
+//                       by when signup seeded them); everything else is moved
 //   MonthlyBudget     → moved (those of a merged default are dropped with it)
 //   CategorizationRule, RecurringCommitment → moved, pointing at the merged
 //                       line; on a unique clash with the pool, the pool's wins
@@ -31,6 +32,7 @@
 // loadMergeInput() and applyPoolMerge() are the database around it.
 import type { Prisma } from "@prisma/client";
 import { DEFAULT_ACCOUNT_NAME } from "./onboarding.js";
+import { SEEDED_DEFAULT_ALLOCATION_NAMES } from "./defaults.js";
 
 type Db = Prisma.TransactionClient;
 
@@ -54,7 +56,7 @@ export interface MergeAccount {
 
 export interface MergeInput {
   memberAllocations: MergeAllocation[];
-  poolAllocations: { id: string; name: string; type: string }[];
+  poolAllocations: { id: string; type: string; isDefault: boolean }[];
   memberAccounts: MergeAccount[];
   memberExpenseExternalIds: { id: string; externalId: string }[];
   memberIncomeExternalIds: { id: string; externalId: string }[];
@@ -79,9 +81,11 @@ export interface MergePlan {
   sortOffset: { allocation: number; account: number; debt: number };
 }
 
-/** A default budget line exactly as signup seeded it: nothing budgeted, ever. */
+/** A default budget line exactly as signup seeded it: never renamed, nothing
+ *  budgeted, ever. */
 export function isUntouchedDefaultAllocation(a: MergeAllocation): boolean {
-  return a.isDefault && a.allocatedAmount === 0 && !a.hasBudgetedMonth;
+  return a.isDefault && SEEDED_DEFAULT_ALLOCATION_NAMES.has(a.name)
+    && a.allocatedAmount === 0 && !a.hasBudgetedMonth;
 }
 
 /** The seeded checking account, never renamed, funded, linked or used. */
@@ -94,10 +98,18 @@ export function isUnusedDefaultAccount(a: MergeAccount): boolean {
 }
 
 export function planPoolMerge(input: MergeInput): MergePlan {
-  const poolLine = new Map(input.poolAllocations.map(a => [`${a.type}|${a.name}`, a.id]));
+  // Matched on isDefault + type, never the name: the seeded names changed
+  // over time ("Fixed Expenses" → "Gastos fijos") and follow each person's
+  // language, so a name match misses older pools and cross-language couples.
+  // Her line must still be untouched (a renamed one is hers and moves); the
+  // pool's only needs to be its default of that type.
+  const poolDefault = new Map<string, string>();
+  for (const a of input.poolAllocations) {
+    if (a.isDefault && !poolDefault.has(a.type)) poolDefault.set(a.type, a.id);
+  }
   const allocationRemap = new Map<string, string>();
   for (const a of input.memberAllocations) {
-    const target = poolLine.get(`${a.type}|${a.name}`);
+    const target = poolDefault.get(a.type);
     if (target && isUntouchedDefaultAllocation(a)) allocationRemap.set(a.id, target);
   }
 
@@ -129,7 +141,7 @@ export async function loadMergeInput(db: Db, memberId: string, poolId: string): 
     maxAllocation, maxAccount, maxDebt,
   ] = await Promise.all([
     db.allocation.findMany({ where: { userId: memberId }, select: { id: true, name: true, type: true, isDefault: true, allocatedAmount: true } }),
-    db.allocation.findMany({ where: { userId: poolId }, select: { id: true, name: true, type: true } }),
+    db.allocation.findMany({ where: { userId: poolId }, select: { id: true, type: true, isDefault: true }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }),
     db.monthlyBudget.findMany({ where: { userId: memberId, allocatedAmount: { not: 0 } }, select: { allocationId: true }, distinct: ["allocationId"] }),
     db.account.findMany({ where: { userId: memberId }, select: { id: true, name: true, type: true, currentBalance: true, bankConnectionId: true } }),
     db.expense.findMany({ where: { userId: memberId, accountId: { not: null } }, select: { accountId: true }, distinct: ["accountId"] }),

@@ -9,6 +9,14 @@ const DEFAULT_ALLOCATION_NAMES: Record<EmailLocale, { fixed: string; flexible: s
   en: { fixed: "Fixed expenses", flexible: "Variable expenses" },
 };
 
+/** Every name signup ever seeded a default line with — today's, in both
+ *  languages, and the original English ones. A default line still carrying one
+ *  was never renamed (server/lib/partnerMerge.ts). */
+export const SEEDED_DEFAULT_ALLOCATION_NAMES: ReadonlySet<string> = new Set([
+  ...Object.values(DEFAULT_ALLOCATION_NAMES).flatMap(n => [n.fixed, n.flexible]),
+  "Fixed Expenses", "Flexible Spending", // seeded before the names were localized
+]);
+
 function defaultAllocations(language: string | null | undefined) {
   const names = DEFAULT_ALLOCATION_NAMES[resolveLocale(language)];
   return [
