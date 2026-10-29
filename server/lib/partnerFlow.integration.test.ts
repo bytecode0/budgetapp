@@ -387,9 +387,10 @@ describe("partner flow (integration, real Postgres)", { skip: !TEST_DATABASE_URL
     assert.equal(dry.pending, 1);       // only C/D has data to move (A/B already merged)
     assert.equal(dry.doubleCounts, 1);
     assert.equal(dry.baselinesSet, 0);
+    assert.equal(dry.failed, 0);
 
     const applied = await repairPartnerData({ apply: true, setBaselines: true });
-    assert.deepEqual([applied.pending, applied.skipped, applied.baselinesSet], [1, 0, 1]);
+    assert.deepEqual([applied.pending, applied.skipped, applied.baselinesSet, applied.failed], [1, 0, 1, 0]);
     assert.equal((await prisma.expense.findUniqueOrThrow({ where: { id: dExpense } })).userId, C);
     assert.equal(await prisma.income.count({ where: { userId: D } }), 0);
     assert.deepEqual(await defaultLinesByType(C), { fixed: 1, flexible: 1 });
@@ -403,7 +404,7 @@ describe("partner flow (integration, real Postgres)", { skip: !TEST_DATABASE_URL
 
     const settled = await dbFingerprint();
     const again = await repairPartnerData({ apply: true, setBaselines: true });
-    assert.deepEqual([again.pending, again.doubleCounts, again.baselinesSet], [0, 0, 0]);
+    assert.deepEqual([again.pending, again.doubleCounts, again.baselinesSet, again.failed], [0, 0, 0, 0]);
     assert.equal(await dbFingerprint(), settled, "re-run wrote to the database");
   });
 
