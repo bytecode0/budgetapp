@@ -305,8 +305,8 @@ export function planUnlink(input: UnlinkInput): UnlinkPlan {
       income: planRestoreExternalIds(withRenames(movingIncomes, clashExternalIds.income), input.memberExternalIds.income),
     },
     clear: {
-      // A moving expense's debt is always hers and a staying one's never is,
-      // so Expense.debtId can't cross.
+      // A payment moves iff its debt moves, so Expense.debtId can't cross;
+      // nor can Debt.accountId (movableAccountsAndDebts).
       expenseAccount: input.expenses.filter(e => crosses(expenses.has(e.id), e.accountId, accounts)).map(e => e.id),
       expenseAllocation,
       incomeAccount: input.incomes.filter(i => crosses(incomes.has(i.id), i.accountId, accounts)).map(i => i.id),
