@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { StatementSample } from '../../../shared/ingest/read';
 import type { ColumnMapping, ReadResult, SkippedRow, StatementSource } from '../../../shared/ingest/types';
+import type { ShapeInput } from '../../../shared/ingest/shapes';
 import { readStatementFile, sampleStatementFile, SERVER_READ_MAX_BYTES } from '../lib/readStatementFile';
 
 export type { ColumnMapping, StatementSample };
@@ -199,6 +200,24 @@ export function useImport() {
     }
   };
 
+  /** An AI suggestion for the manual mapping, from column titles and cell
+   *  formats only (shared/ingest/shapes.ts) — never the file's values. */
+  const suggestMapping = async (input: ShapeInput): Promise<{ mapping: ColumnMapping } | { code: string }> => {
+    try {
+      const res = await fetch('/api/expenses/import/suggest-mapping', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      const data = await res.json();
+      if (!res.ok) return { code: (data?.code as string | undefined) ?? 'ai_failed' };
+      return { mapping: data.data.mapping as ColumnMapping };
+    } catch {
+      return { code: 'ai_failed' };
+    }
+  };
+
   const confirm = async (
     accountId: string | null, rows: ConfirmRow[],
   ): Promise<{ error: string; code?: string } | { inserted: number; summary: ImportSummary }> => {
@@ -265,5 +284,5 @@ export function useImport() {
     }
   };
 
-  return { loading, confirming, classifying, suggestingCats, read, sample, preview, loadProfile, saveProfile, confirm, classify, suggestCategories };
+  return { loading, confirming, classifying, suggestingCats, read, sample, preview, loadProfile, saveProfile, suggestMapping, confirm, classify, suggestCategories };
 }

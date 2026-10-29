@@ -30,7 +30,7 @@ interface ReadProblem { code: string; sample?: StatementSample[] }
 export function ImportStatement({ isOpen, onClose, onImported }: ImportStatementProps) {
   const { t } = useTranslation();
   const { accounts } = useAccounts();
-  const { loading, read, sample, preview, loadProfile, saveProfile } = useImport();
+  const { loading, read, sample, preview, loadProfile, saveProfile, suggestMapping } = useImport();
   const { user } = useAuth();
 
   const activeAccounts = accounts.filter(a => !a.isArchived);
@@ -55,6 +55,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
   const [chosenSign, setChosenSign] = useState<PurchasesSign | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
   const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiMapping, setAiMapping] = useState(false);
   const [postImportBudgets, setPostImportBudgets] = useState(false);
 
   const reset = () => {
@@ -68,8 +69,8 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     if (isOpen) {
       fetch('/api/ai/status', { credentials: 'include' })
         .then(r => r.ok ? r.json() : { enabled: false })
-        .then(d => setAiEnabled(!!d.enabled))
-        .catch(() => setAiEnabled(false));
+        .then(d => { setAiEnabled(!!d.enabled); setAiMapping(!!d.importMapping); })
+        .catch(() => { setAiEnabled(false); setAiMapping(false); });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -330,6 +331,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
                     initial={mappingScreen.initial}
                     saving={savingMapping || loading}
                     onSave={handleSaveMapping}
+                    onSuggest={aiMapping ? suggestMapping : undefined}
                   />
                 )}
 

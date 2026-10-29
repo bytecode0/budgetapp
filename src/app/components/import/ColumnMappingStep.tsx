@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react';
-import { Loader2, Check, AlertTriangle } from 'lucide-react';
+import { Loader2, Check, AlertTriangle, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { applyMapping, columnIndex, normHeader } from '../../../../shared/ingest/columns';
 import type { ColumnMapping, DateOrder } from '../../../../shared/ingest/types';
+import { shapesFromSample, type ShapeInput } from '../../../../shared/ingest/shapes';
 import type { StatementSample } from '../../hooks/useImport';
 import { useMoney } from '../../onboarding/useMoney';
 
@@ -16,6 +18,9 @@ interface ColumnMappingStepProps {
   initial?: ColumnMapping | null;
   saving: boolean;
   onSave: (mapping: ColumnMapping) => void;
+  /** Present when the AI mapping is configured: asks for a suggestion from
+   *  titles and formats only. Absent, the screen is fully manual. */
+  onSuggest?: (input: ShapeInput) => Promise<{ mapping: ColumnMapping } | { code: string }>;
 }
 
 type AmountMode = 'single' | 'split';
@@ -40,7 +45,7 @@ function guessHeaderRow(rows: string[][]): number {
 // and — for cards — how purchases appear. A live preview reads the first rows
 // with the same code that will read the whole file (shared/ingest/columns.ts).
 // Saved on the account, the next file is read without asking.
-export function ColumnMappingStep({ sample, isCard, reason, initial, saving, onSave }: ColumnMappingStepProps) {
+export function ColumnMappingStep({ sample, isCard, reason, initial, saving, onSave, onSuggest }: ColumnMappingStepProps) {
   const { t } = useTranslation();
   const { currency, locale } = useMoney();
 
@@ -74,7 +79,36 @@ export function ColumnMappingStep({ sample, isCard, reason, initial, saving, onS
 
   // Choosing another sheet or header row: columns are named by header text,
   // so choices that row doesn't have are dropped.
-  const resetColumns = () => { setDate(''); setAmount(''); setDebit(''); setCredit(''); setDescription([]); };
+  const resetColumns = () => { setDate(''); setAmount(''); setDebit(''); setCredit(''); setDescription([]); setSuggested(false); };
+
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggested, setSuggested] = useState(false);
+  // The AI's suggestion fills the form; the user still checks it and saves.
+  // Only titles and cell formats are sent (shared/ingest/shapes.ts).
+  const handleSuggest = async () => {
+    if (!onSuggest) return;
+    setSuggesting(true);
+    try {
+      const res = await onSuggest(shapesFromSample(rows, headerRow));
+      if ('code' in res) {
+        toast.error(t(res.code === 'rate_limited' ? 'import.mapping.aiRateLimited' : res.code === 'no_suggestion' ? 'import.mapping.aiNoSuggestion' : 'import.mapping.aiFailed'));
+        return;
+      }
+      const m = res.mapping;
+      const real = (label?: string) => {
+        const i = label ? columnIndex(header, label) : -1;
+        return i >= 0 ? String(header[i]) : '';
+      };
+      setDate(real(m.date));
+      if (m.amount) { setAmountMode('single'); setAmount(real(m.amount)); setDebit(''); setCredit(''); }
+      else { setAmountMode('split'); setAmount(''); setDebit(real(m.debit)); setCredit(real(m.credit)); }
+      setDescription(m.description.map(real).filter(Boolean).slice(0, MAX_DESCRIPTION_COLUMNS));
+      if (m.dateOrder) setDateOrder(m.dateOrder);
+      setSuggested(true);
+    } finally {
+      setSuggesting(false);
+    }
+  };
 
   // The sign question only applies to one signed amount column: with money
   // out / money in columns the reader already knows which is which.
@@ -121,6 +155,21 @@ export function ColumnMappingStep({ sample, isCard, reason, initial, saving, onS
         {reason === 'unrecognized' && <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />}
         <p className="text-sm">{t(reason === 'unrecognized' ? 'import.mapping.unrecognizedIntro' : 'import.mapping.manualIntro')}</p>
       </div>
+
+      {onSuggest && (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={handleSuggest}
+            disabled={suggesting}
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/5 transition-colors disabled:opacity-50"
+          >
+            {suggesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {t('import.mapping.aiSuggest')}
+          </button>
+          <p className="text-xs text-muted-foreground">{t(suggested ? 'import.mapping.aiSuggested' : 'import.mapping.aiPrivacy')}</p>
+        </div>
+      )}
 
       {sample.length > 1 && (
         <div className="space-y-2">

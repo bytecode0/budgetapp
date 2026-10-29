@@ -882,7 +882,13 @@
       "saved": "Columnas guardadas en la cuenta.",
       "notOwner": "Solo quien creó la cuenta puede guardar sus columnas: se usan para esta importación.",
       "saveFailed": "No se pudieron guardar las columnas; se usan para esta importación.",
-      "mapByHand": "Indicar las columnas a mano"
+      "mapByHand": "Indicar las columnas a mano",
+      "aiSuggest": "Sugerir columnas con IA",
+      "aiPrivacy": "Para sugerirlas, enviamos a un proveedor de IA solo los títulos de las columnas y el formato de los valores (por ejemplo «dd/mm/aaaa» o «-#,##»), nunca importes, conceptos ni nombres.",
+      "aiSuggested": "Sugerencia de la IA: revisa cada columna en la vista previa antes de guardar.",
+      "aiRateLimited": "Has pedido muchas sugerencias seguidas. Inténtalo en un rato o elige las columnas a mano.",
+      "aiNoSuggestion": "La IA no ha encontrado una correspondencia clara. Elige las columnas a mano.",
+      "aiFailed": "No se pudo obtener la sugerencia. Elige las columnas a mano."
     }
   },
   "budgets": {

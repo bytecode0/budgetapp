@@ -21,7 +21,8 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import * as XLSX from "xlsx";
 import { buildBbva } from "./fixtures/makeFixtures.js";
-import { readStatement } from "../../../shared/ingest/read.js";
+import { readStatement, sampleStatement } from "../../../shared/ingest/read.js";
+import { shapesFromSample } from "../../../shared/ingest/shapes.js";
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 
@@ -783,6 +784,61 @@ describe("statement import (integration, real Postgres)", { skip: !TEST_DATABASE
       const r = await call(u.id, "POST", "/api/expenses/import/preview", bad);
       assert.equal(r.status, 400, JSON.stringify(r.body));
       assert.equal(r.body.code, "invalid_rows");
+    }
+  });
+  // ── l ──────────────────────────────────────────────────────────────────
+
+  it("l. AI column mapping: titles and formats only reach the provider; off, invalid or over the limit it answers without calling", async () => {
+    const u = await signUp("Lola");
+    const file = csv([
+      "Día;Qué;Cuánto",
+      "15/09/2026;BIZUM DE JUAN PEREZ;-12,50",
+      "16/09/2026;NOMINA ACME SL;1500,00",
+    ]);
+    const input = shapesFromSample(sampleStatement(file)![0].rows, 0);
+    const AI_ENV = ["AI_PROVIDER", "OPENROUTER_API_KEY", "AI_MODEL_IMPORT_MAPPING"] as const;
+    const savedEnv = Object.fromEntries(AI_ENV.map(k => [k, process.env[k]]));
+    const realFetch = globalThis.fetch;
+    const toProvider: string[] = [];
+    try {
+      for (const k of AI_ENV) delete process.env[k];
+      assert.equal((await ok(u.id, "GET", "/api/ai/status")).importMapping, false);
+      const off = await call(u.id, "POST", "/api/expenses/import/suggest-mapping", input);
+      assert.deepEqual([off.status, off.body.code], [503, "ai_unavailable"]);
+
+      process.env.AI_PROVIDER = "openrouter";
+      process.env.OPENROUTER_API_KEY = "sk-or-v1-integration-test";
+      process.env.AI_MODEL_IMPORT_MAPPING = "test/model";
+      // The provider is stubbed; calls to this test's own server go through.
+      globalThis.fetch = (async (target: string | URL | Request, init?: RequestInit) => {
+        const url = target instanceof Request ? target.url : String(target);
+        if (!url.startsWith("https://openrouter.ai/")) return realFetch(target, init);
+        toProvider.push(String(init?.body ?? ""));
+        const answer = { date: "Día", amount: "Cuánto", description: ["Qué"], dateOrder: "dmy" };
+        return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(answer) } }] }), { status: 200 });
+      }) as typeof fetch;
+      assert.equal((await ok(u.id, "GET", "/api/ai/status")).importMapping, true);
+
+      const suggested = await ok(u.id, "POST", "/api/expenses/import/suggest-mapping", input);
+      assert.deepEqual(suggested.data.mapping, { date: "Día", amount: "Cuánto", description: ["Qué"], dateOrder: "dmy" });
+      assert.equal(toProvider.length, 1);
+      for (const v of ["15/09/2026", "BIZUM", "JUAN", "PEREZ", "-12,50", "NOMINA", "ACME", "1500,00"]) {
+        assert.ok(!toProvider[0].includes(v), `raw value reached the provider: ${v}`);
+      }
+
+      // Raw values instead of formats: refused, nothing sent.
+      const raw = await call(u.id, "POST", "/api/expenses/import/suggest-mapping", { headers: input.headers, shapes: [["15/09/2026", "BIZUM DE JUAN PEREZ", "-12,50"]] });
+      assert.deepEqual([raw.status, raw.body.code], [400, "invalid_shapes"]);
+      assert.equal(toProvider.length, 1);
+
+      // 10 per hour per user (this instance's memory): the 11th is refused unsent.
+      for (let i = 1; i < 10; i++) await ok(u.id, "POST", "/api/expenses/import/suggest-mapping", input);
+      const limited = await call(u.id, "POST", "/api/expenses/import/suggest-mapping", input);
+      assert.deepEqual([limited.status, limited.body.code], [429, "rate_limited"]);
+      assert.equal(toProvider.length, 10);
+    } finally {
+      globalThis.fetch = realFetch;
+      for (const k of AI_ENV) { if (savedEnv[k] === undefined) delete process.env[k]; else process.env[k] = savedEnv[k]; }
     }
   });
 });

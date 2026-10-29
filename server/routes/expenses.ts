@@ -14,6 +14,8 @@ import { planContribution, planContributions } from "../lib/planContribution.js"
 import type { NormalizedRow, SkippedRow, StatementSource } from "../../shared/ingest/types.js";
 import { aiEnabled, classifyMerchants } from "../lib/ai/classify.js";
 import { suggestCategories } from "../lib/ai/suggestCategories.js";
+import { suggestImportMapping } from "../lib/ai/importMapping.js";
+import { createRateLimiter } from "../lib/rateLimit.js";
 import { rebuildExpenseShares } from "../lib/expenseShares.js";
 import { expenseListingFilter } from "../lib/visibility.js";
 import { periodBounds } from "../lib/period.js";
@@ -398,6 +400,30 @@ expensesRouter.post("/import/suggest-categories", requireAuth, async (req: AuthR
   } catch (err) {
     console.error("[expenses/import/suggest-categories]", err);
     return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/expenses/import/suggest-mapping
+// Body: { headers: string[], shapes: string[][] } — the column titles of an
+// unrecognised statement and the FORMAT of its first cells, computed in the
+// browser (shared/ingest/shapes.ts) and re-validated here: no value ever
+// reaches the AI. → { data: { mapping } }, a suggestion the manual mapping
+// screen pre-fills for the user to confirm. 503 ai_unavailable when the
+// feature isn't configured (the screen stays fully manual), 429 per user.
+const mappingSuggestions = createRateLimiter({ limit: 10, windowMs: 60 * 60 * 1000 });
+expensesRouter.post("/import/suggest-mapping", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await suggestImportMapping(req.body, () => mappingSuggestions.take(req.authUserId ?? req.userId!));
+    if ("mapping" in result) return res.json({ data: { mapping: result.mapping } });
+    switch (result.error) {
+      case "unavailable": return res.status(503).json({ error: "AI mapping is not configured", code: "ai_unavailable" });
+      case "invalid_input": return res.status(400).json({ error: result.message, code: "invalid_shapes" });
+      case "rate_limited": return res.status(429).json({ error: "Too many mapping suggestions, try again later", code: "rate_limited" });
+      case "no_suggestion": return res.status(422).json({ error: "No usable mapping suggested", code: "no_suggestion" });
+    }
+  } catch (err) {
+    console.error("[expenses/import/suggest-mapping]", err instanceof Error ? err.message : "unknown error");
+    return res.status(502).json({ error: "The AI provider failed", code: "ai_failed" });
   }
 });
 

@@ -882,7 +882,13 @@
       "saved": "Columns saved on the account.",
       "notOwner": "Only the account's creator can save its columns: they are used for this import.",
       "saveFailed": "The columns could not be saved; they are used for this import.",
-      "mapByHand": "Pick the columns by hand"
+      "mapByHand": "Pick the columns by hand",
+      "aiSuggest": "Suggest columns with AI",
+      "aiPrivacy": "To suggest them, we send an AI provider only the column titles and the format of the values (for example \"dd/mm/yyyy\" or \"-#,##\"), never amounts, descriptions or names.",
+      "aiSuggested": "AI suggestion: check every column in the preview before saving.",
+      "aiRateLimited": "You've asked for many suggestions in a row. Try again later or pick the columns by hand.",
+      "aiNoSuggestion": "The AI found no clear match. Pick the columns by hand.",
+      "aiFailed": "The suggestion could not be fetched. Pick the columns by hand."
     }
   },
   "budgets": {
