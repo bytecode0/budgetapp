@@ -19,7 +19,7 @@ La épica 1 va primero porque el paso de deudas del onboarding tiene que pregunt
 | 2. Limpieza y despliegue | **Desplegada el 23 oct** en https://budget.luisvespa.com (PR #2, `cd4cf8b`) |
 | 3. Onboarding desde cero | Hecha, en producción |
 | **4. Importación de ficheros** (cuentas y tarjetas) | **Siguiente** |
-| **5. Conexión con bancos (PSD2)** | Después de la 4; bloqueada para usuarios reales hasta firmar con un proveedor |
+| **5. Conexión con bancos (PSD2)** | **Construida en `feature/banca` (29 oct)** con Enable Banking; falta probarla con tus cuentas (5.9). Bloqueada para usuarios reales hasta firmar con el proveedor |
 | Ciclo de facturación de la tarjeta (1.9) | Pendiente; se apoya en el modo tarjeta de la épica 4 |
 
 **La app es gratuita.** Stripe queda para un futuro lejano (decisión I): el código sigue ahí, sin variables `STRIPE_*` responde 503 y el frontend oculta Premium.
@@ -430,6 +430,16 @@ Activo solo con las variables de Enable Banking. Mientras estemos en modo restri
 
 ### 5.8 Privacidad
 Borrar una conexión revoca el consentimiento en el proveedor y deja de sincronizar; los movimientos ya importados se quedan (son del usuario). Añadir a la política de privacidad qué datos se leen y quién es el proveedor con licencia.
+
+### Implementación (rama `feature/banca`, 29 oct)
+- **Cliente** `server/lib/banking/enableBanking.ts` (GoCardless y los scripts de Tink, fuera). Configuración en `config.ts`: sin cualquiera de `ENABLE_BANKING_APP_ID`, `ENABLE_BANKING_PRIVATE_KEY`, `BANKING_CALLBACK_URL`, `ENCRYPTION_KEY`, `CRON_SECRET`, la banca está apagada (503). `BANKING_ALLOWED_EMAILS` decide quién la ve mientras sea modo restringido.
+- **Ida y vuelta del consentimiento** sin memoria: `state` firmado y atado a una cookie de un solo uso; token de traspaso firmado que `/exchange` comprueba contra el usuario con sesión. El id de sesión del proveedor se guarda cifrado en `BankConnection.requisitionId`.
+- **Movimientos** por `prepareImport` + `confirmImport` (`source: "bank_sync"`): primera sincronización con revisión en el paso de vista previa del importador; después, el cron solo escribe lo "limpio" y deja lo dudoso para revisar (`Account.bankPendingReview`). Sin IA para los conceptos del banco.
+- **Tarjetas:** cuenta tarjeta + su deuda (`cardDebt.ts`); el saldo del banco ajusta la deuda con `setLiveValues`, nunca la cuenta, y solo cuando no hay movimientos de esa tarjeta pendientes de revisar.
+- **Cron:** `GET /api/banking/cron` a diario (`vercel.json`), con `Authorization: Bearer CRON_SECRET`: avisos de caducidad por email (7 días antes, una vez) y sincronización de la más antigua a la más nueva con presupuesto de tiempo.
+- **Schema (aditivo):** `BankConnection.institutionCountry`, `expiryWarnedAt`, default de `provider` → `enablebanking`; `Account.externalAccountKey`, `bankReviewedAt`, `bankPendingReview`.
+
+**Para desplegar:** `npx prisma db push` (local y producción) → variables en Vercel → probar 5.9 en local primero (`BANKING_CALLBACK_URL=http://localhost:3002/api/banking/callback`).
 
 ### 5.9 Verificación
 En modo restringido, con tus cuentas reales: conectar banco → revisar y confirmar la primera sincronización → la cuenta y (si el banco la expone) la tarjeta aparecen con su deuda; al día siguiente el cron trae lo nuevo sin duplicar lo importado por fichero; desconectar revoca el acceso. Usuarios beta solo después del contrato.

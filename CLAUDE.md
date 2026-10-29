@@ -77,7 +77,7 @@ Documented in `.env.example`. Relevant ones:
 | Var | Note |
 |---|---|
 | `DATABASE_URL` | PostgreSQL |
-| `JWT_SECRET`, `ENCRYPTION_KEY` | Auth sessions / encrypted bank tokens |
+| `JWT_SECRET`, `ENCRYPTION_KEY` | Auth sessions / the bank session id, stored encrypted |
 | `EMAIL_PROVIDER` | Which transport sends email (see Emails below): `resend` for the beta, `cloudflare`, or `console` for local dev (prints instead of sending; allowed only with `NODE_ENV` exactly `development` or `test` and no `VERCEL`/`VERCEL_ENV`). Read at send time; missing or unknown makes every send fail with a clear error, never a silent fallback |
 | `EMAIL_FROM` | Sender for every provider: `"LifePlan <contact@luisvespa.com>"` or a bare address. Its domain must be verified with the provider. No fallback sender |
 | `RESEND_API_KEY` | Only with `EMAIL_PROVIDER=resend`. Free plan: 3,000/month, 100/day, any recipient once the domain is verified |
@@ -86,9 +86,13 @@ Documented in `.env.example`. Relevant ones:
 | `APP_URL` | The production URL (CORS origin and links in emails), not localhost |
 | `GOOGLE_CLIENT_ID/SECRET`, `GOOGLE_CALLBACK_URL` | Google sign-in; the callback URL must also be registered in Google Cloud Console |
 | `STRIPE_SECRET_KEY`, `STRIPE_PREMIUM_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` | Premium subscription; webhook points at `/api/stripe/webhook`. **Test mode** during the beta. If any is missing, the Stripe routes answer 503; the rest of the app runs |
-| `GOCARDLESS_*`, `TINK_*` | Open Banking (optional) |
+| `ENABLE_BANKING_APP_ID`, `ENABLE_BANKING_PRIVATE_KEY` | Bank connection via Enable Banking (`server/lib/banking/`): the application id (JWT `kid`) and its RS256 private key, the full PEM (one-line values with literal `\n` are accepted). The `.pem` never goes in the repo |
+| `BANKING_CALLBACK_URL` | Must equal a redirect URL registered at Enable Banking: `https://budget.luisvespa.com/api/banking/callback` (prod), `http://localhost:3002/api/banking/callback` (local) |
+| `BANKING_ALLOWED_EMAILS` | Comma-separated. While the Enable Banking app is in restricted mode, only these users see or use bank connection (enforced on the server and hidden in the UI). Unset = nobody |
 | `ANTHROPIC_API_KEY` | AI expense classification — see cost note below |
-| `CRON_SECRET` | Authenticates scheduled jobs |
+| `CRON_SECRET` | Authenticates scheduled jobs: Vercel Cron calls `GET /api/banking/cron` (daily, `vercel.json`) with `Authorization: Bearer $CRON_SECRET` |
+
+Bank connection is on only when `ENABLE_BANKING_APP_ID`, `ENABLE_BANKING_PRIVATE_KEY`, `BANKING_CALLBACK_URL`, `ENCRYPTION_KEY` and `CRON_SECRET` are all set (read at call time); any missing one turns it off: `/api/banking/status` says `enabled: false` and every other banking route answers 503.
 
 The frontend calls the API with relative `/api/...` paths: frontend and backend are served from the same origin.
 
