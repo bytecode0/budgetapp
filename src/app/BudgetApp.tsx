@@ -92,6 +92,18 @@ function AppInner() {
     }
   }, []);
 
+  // "Completa tu configuración" lives on Home, but what fills it (accounts,
+  // cards, debts, budget lines) is added from other screens: re-read the
+  // status each time Home is shown, and when the tab regains focus.
+  useEffect(() => {
+    if (currentScreen === 'home') refreshOnboardingStatus();
+  }, [currentScreen, refreshOnboardingStatus]);
+  useEffect(() => {
+    const onFocus = () => { refreshOnboardingStatus(); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refreshOnboardingStatus]);
+
   // Sync DB language to LanguageContext on load
   useEffect(() => {
     if (dbLanguage) setLanguage(dbLanguage as 'en' | 'es');
