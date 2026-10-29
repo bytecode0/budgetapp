@@ -1,4 +1,5 @@
 import { Router, Response, Request } from "express";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { sendPartnerInviteEmail } from "../lib/mailer.js";
@@ -10,6 +11,16 @@ import { unlinkMemberFromPool } from "../lib/partnerUnlink.js";
 export const partnerRouter = Router();
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/**
+ * Locks both people's UserSettings rows until the transaction ends, always in
+ * the same order (so two transactions can't deadlock). Every accept and unlink
+ * touching either person then runs one after the other, so the link checks
+ * re-read after this can't be raced into a chain or a cycle.
+ */
+async function lockSettings(tx: Prisma.TransactionClient, userIds: string[]): Promise<void> {
+  await tx.$queryRaw`SELECT "id" FROM "UserSettings" WHERE "userId" IN (${Prisma.join(userIds)}) ORDER BY "userId" FOR UPDATE`;
+}
 const APP_URL = process.env.APP_URL ?? "http://localhost:5173";
 
 // ── GET /api/partner/status ──────────────────────────────────────────────────
@@ -227,28 +238,40 @@ partnerRouter.post("/accept", requireAuth, async (req: AuthRequest, res: Respons
       return res.status(400).json({ error: "The sender is already linked to another account" });
     }
 
+    // Both settings rows must exist to be locked below.
+    await Promise.all([myId, invite.senderId].map(userId =>
+      prisma.userSettings.upsert({ where: { userId }, update: {}, create: { userId } })));
+
     // Accept, all or nothing: link my account to the sender, mirror the link
     // into the Household model (sender = owner, me = member), and move what I
     // created on my own (e.g. my onboarding) into the sender's pool — once
     // linked my data scope is that pool, so anything left under my own userId
     // would be hidden (server/lib/partnerMerge.ts).
-    const accepted = await prisma.$transaction(async (tx) => {
+    const outcome = await prisma.$transaction(async (tx) => {
+      // The checks above ran outside the transaction; a concurrent accept could
+      // have linked either of us since. Re-check under the locks.
+      await lockSettings(tx, [myId, invite.senderId]);
+      const [me, sender, linkedToMe] = await Promise.all([
+        tx.userSettings.findUnique({ where: { userId: myId }, select: { linkedUserId: true } }),
+        tx.userSettings.findUnique({ where: { userId: invite.senderId }, select: { linkedUserId: true } }),
+        tx.userSettings.findFirst({ where: { linkedUserId: myId }, select: { id: true } }),
+      ]);
+      if (me?.linkedUserId) return "You are already linked to a partner account";
+      if (linkedToMe) return "Someone is already linked to your account";
+      if (sender?.linkedUserId) return "The sender is already linked to another account";
+
       // Claim the invite first, so a double submit can't merge twice.
       const claimed = await tx.partnerInvite.updateMany({
         where: { token, status: "pending" },
         data: { status: "accepted" },
       });
-      if (claimed.count === 0) return false;
-      await tx.userSettings.upsert({
-        where: { userId: myId },
-        update: { linkedUserId: invite.senderId },
-        create: { userId: myId, linkedUserId: invite.senderId },
-      });
+      if (claimed.count === 0) return "Invite not found or expired";
+      await tx.userSettings.update({ where: { userId: myId }, data: { linkedUserId: invite.senderId } });
       const householdId = await ensureHousehold(invite.senderId, myId, "transparent", tx);
       await mergeMemberIntoPool(tx, { memberId: myId, poolId: invite.senderId, householdId });
-      return true;
+      return "accepted";
     }, { timeout: 30_000 });
-    if (!accepted) return res.status(400).json({ error: "Invite not found or expired" });
+    if (outcome !== "accepted") return res.status(400).json({ error: outcome });
 
     return res.json({
       success: true,
@@ -281,7 +304,8 @@ partnerRouter.delete("/unlink", requireAuth, async (req: AuthRequest, res: Respo
     if (!link) return res.status(400).json({ error: "No partner link found" });
 
     const unlinked = await prisma.$transaction(async (tx) => {
-      // Re-read inside the transaction: a concurrent unlink must not move twice.
+      // Re-read under the locks: a concurrent unlink must not move twice.
+      await lockSettings(tx, [link.memberId, link.poolId]);
       const current = await tx.userSettings.findUnique({ where: { userId: link.memberId }, select: { linkedUserId: true } });
       if (current?.linkedUserId !== link.poolId) return false;
       await unlinkMemberFromPool(tx, link);
