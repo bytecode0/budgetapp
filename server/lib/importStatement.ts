@@ -9,8 +9,9 @@
 // (the API speaks euros; the confirm route converts back with toCents).
 import { prisma } from "./prisma.js";
 import { pickAllocationId } from "./categorize.js";
-import { classifyRows, LATE_PAYMENT_DAYS, type ExistingMovement, type PlannedKind, type PossibleDuplicate, type PurchasesSign, type PurchasesSignGuess, type RowWarning } from "./ingest/classify.js";
-import { readStatement } from "./ingest/read.js";
+import { normalizeMerchant } from "./normalizeMerchant.js";
+import { classifyRows, LATE_PAYMENT_DAYS, statementIds, type ExistingMovement, type PlannedKind, type PossibleDuplicate, type PurchasesSign, type PurchasesSignGuess, type RowWarning } from "./ingest/classify.js";
+import { assertRowCount, readStatement } from "./ingest/read.js";
 import { suggestLearnedPayments } from "./ingest/learnedPayments.js";
 import { storedMapping } from "./ingest/validate.js";
 import type { NormalizedRow, SkippedRow, StatementSource } from "./ingest/types.js";
@@ -110,6 +111,7 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
   const read = input.rows
     ? { rows: input.rows, skipped: [] as SkippedRow[], source: "rows" as const, purchasesSign: undefined }
     : readStatement(input.file!.bytes, input.file!.filename, { mapping });
+  assertRowCount(read.rows.length);
 
   const [debts, debtLines, rules, allocations] = await Promise.all([
     prisma.debt.findMany({
@@ -144,27 +146,31 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
   };
 
   // Stored movements around the file's dates (all accounts: a card payment is
-  // stored against the bank account or none), then any stored under the
-  // batch's ids even if their date was edited since.
+  // stored against the bank account or none), plus any stored under the
+  // batch's ids even if their date was edited since — one query, one
+  // classification.
   const days = read.rows.map(r => r.date).sort();
-  let existing = days.length
+  const ids = statementIds({ ...context, rows: read.rows });
+  const existing = days.length
     ? await loadExisting(userId, {
-      date: {
-        gte: new Date(Date.parse(days[0]) - WINDOW_DAYS * DAY_MS),
-        lt: new Date(Date.parse(days[days.length - 1]) + (WINDOW_DAYS + 1) * DAY_MS),
-      },
+      OR: [
+        {
+          date: {
+            gte: new Date(Date.parse(days[0]) - WINDOW_DAYS * DAY_MS),
+            lt: new Date(Date.parse(days[days.length - 1]) + (WINDOW_DAYS + 1) * DAY_MS),
+          },
+        },
+        { externalId: { in: ids } },
+      ],
     })
     : [];
-  const firstPass = classifyRows({ ...context, rows: read.rows, existing });
-  const known = new Set(existing.map(e => e.externalId));
-  const missingIds = firstPass.rows
-    .flatMap(p => [p.externalId, p.legacyExternalId])
-    .filter((id): id is string => !!id && !known.has(id));
-  if (missingIds.length) existing = [...existing, ...await loadExisting(userId, { externalId: { in: missingIds } })];
 
-  // Rule-learned payments (bank accounts only: a card can't pay itself).
+  // Rule-learned payments (bank accounts only: a card can't pay itself): the
+  // money-out rows, by the merchant key classify gives them.
   const learnedPayments = isCard ? undefined : suggestLearnedPayments(
-    firstPass.rows.filter(p => p.kind === "expense" && !p.isFee),
+    read.rows
+      .filter(r => r.amountCents < 0)
+      .map(r => ({ rowIndex: r.rowIndex, description: r.description, merchant: normalizeMerchant(r.description), amountCents: -r.amountCents })),
     { accountId: account?.id ?? null, ruleFor, debtByLine, debts: new Map(context.debts.map(d => [d.id, d])) },
   );
   const result = classifyRows({ ...context, rows: read.rows, existing, learnedPayments });

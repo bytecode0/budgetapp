@@ -6,7 +6,7 @@ import { toCents, serializeMoney } from "../lib/money.js";
 import { categorize, learnFromCorrection } from "../lib/categorize.js";
 import { findDuplicateGroups } from "../lib/dedupe.js";
 import { prepareImport } from "../lib/importStatement.js";
-import { StatementReadError } from "../lib/ingest/read.js";
+import { MAX_STATEMENT_ROWS, StatementReadError } from "../lib/ingest/read.js";
 import { parseNormalizedRows } from "../lib/ingest/validate.js";
 import { debtLineError, planImportWrites } from "../lib/ingest/writes.js";
 import { isGenericMerchant } from "../lib/ingest/learnedPayments.js";
@@ -299,6 +299,9 @@ expensesRouter.post("/import/preview", requireAuth, async (req: AuthRequest, res
     }
     if (purchasesSign !== undefined && purchasesSign !== "negative" && purchasesSign !== "positive") {
       return res.status(400).json({ error: "purchasesSign must be negative or positive" });
+    }
+    if (Array.isArray(rows) && rows.length > MAX_STATEMENT_ROWS) {
+      return res.status(422).json({ error: `At most ${MAX_STATEMENT_ROWS} movements per import`, code: "too_many_rows" });
     }
     let parsedRows: NormalizedRow[] | undefined;
     if (rows !== undefined) {

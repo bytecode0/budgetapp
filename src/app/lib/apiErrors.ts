@@ -14,6 +14,12 @@ const ERROR_KEYS: Record<string, string> = {
   card_has_movements: 'accounts.cardHasMovementsError',
   paid_from_card: 'debts.paidFromCardError',
   refund_on_debt_line: 'apiErrors.refundOnDebtLine',
+  // Statement import (server/lib/ingest/read.ts)
+  unrecognized_columns: 'import.unrecognizedColumns',
+  too_many_rows: 'import.tooManyRows',
+  file_too_large: 'import.fileTooLarge',
+  empty_file: 'import.emptyFile',
+  no_movements: 'import.noMovements',
 };
 
 /** The message to show for a failed debt/account request (call it only once

@@ -494,3 +494,15 @@ test("confirm validation: real days in a sane range, bounded ids, Int32 amounts 
   for (const externalId of ["", "x".repeat(201), 42, null]) assert.equal(err({ externalId: externalId as string }), "Invalid externalId");
   assert.equal(err({ description: "x".repeat(501) }), "Invalid text");
 });
+
+test("cost: stored movements are looked up by amount, not scanned per row (reviewer exp3)", () => {
+  const day = (i: number) => new Date(Date.UTC(2026, 0, 1) + (i % 300) * 86400000).toISOString().slice(0, 10);
+  const rows = Array.from({ length: 5000 }, (_, i) => row(day(i), -(100 + (i % 50)), `shop ${i % 97}`));
+  const existing: ExistingMovement[] = Array.from({ length: 20000 }, (_, i) => ({
+    id: `e${i}`, table: "expense", externalId: `x${i}`, accountId: "acc-bank", debtId: null, kind: "expense",
+    amountCents: 100000 + i, date: day(i), description: "", source: "manual",
+  }));
+  const t0 = Date.now();
+  classifyRows({ rows, account: bank, debts: [], existing });
+  assert.ok(Date.now() - t0 < 2000, `took ${Date.now() - t0} ms`);
+});

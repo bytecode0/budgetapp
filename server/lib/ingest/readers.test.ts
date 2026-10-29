@@ -9,7 +9,7 @@ import { detectDelimiter, parseCsv, readCsv } from "./readers/csv.js";
 import { readWorkbook } from "./readers/xlsx.js";
 import { looksLikeNorma43, readNorma43 } from "./readers/norma43.js";
 import { looksLikeOfx, readOfx } from "./readers/ofx.js";
-import { readStatement, StatementReadError } from "./read.js";
+import { MAX_STATEMENT_ROWS, MAX_WORKBOOK_BYTES, readStatement, StatementReadError } from "./read.js";
 
 // ── Numbers ────────────────────────────────────────────────────────────────
 
@@ -241,4 +241,15 @@ test("sign convention: OFX and Norma 43 are holder's view; split debit/credit co
   assert.deepEqual(split.rows.map(r => r.amountCents), [-1250, 10000]);
   const single = readStatement(enc("Fecha;Concepto;Importe\n03/10/2026;SUPER;12,50\n"), "x.csv");
   assert.equal(single.purchasesSign, undefined);
+});
+
+test("limits: more than MAX_STATEMENT_ROWS movements, or a huge workbook, is refused with a code", () => {
+  const lines = ["Fecha;Concepto;Importe", ...Array.from({ length: MAX_STATEMENT_ROWS + 1 }, (_, i) => `03/10/2026;SHOP ${i};-1,00`)];
+  assert.throws(() => readStatement(new TextEncoder().encode(lines.join("\n")), "x.csv"),
+    (e: unknown) => e instanceof StatementReadError && e.code === "too_many_rows");
+  const ok = ["Fecha;Concepto;Importe", ...Array.from({ length: MAX_STATEMENT_ROWS }, (_, i) => `03/10/2026;SHOP ${i};-1,00`)];
+  assert.equal(readStatement(new TextEncoder().encode(ok.join("\n")), "x.csv").rows.length, MAX_STATEMENT_ROWS);
+  const zip = new Uint8Array(MAX_WORKBOOK_BYTES + 1);
+  zip[0] = 0x50; zip[1] = 0x4b;
+  assert.throws(() => readStatement(zip, "x.xlsx"), (e: unknown) => e instanceof StatementReadError && e.code === "file_too_large");
 });

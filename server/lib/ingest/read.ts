@@ -16,7 +16,21 @@ import { looksLikeWorkbook, readWorkbook, type Sheet } from "./readers/xlsx.js";
 import { decodeText } from "./text.js";
 import type { ColumnMapping, ReadResult } from "./types.js";
 
-export type StatementErrorCode = "empty_file" | "unrecognized_columns" | "no_movements";
+export type StatementErrorCode = "empty_file" | "unrecognized_columns" | "no_movements" | "too_many_rows" | "file_too_large";
+
+/** Movements per import. A monthly statement has tens to hundreds; this caps
+ *  what one request may make the server classify and compare. */
+export const MAX_STATEMENT_ROWS = 5000;
+/** XLSX is a zip and the reader can't bound what it inflates, so the file
+ *  itself is capped (a statement workbook is tens of KB). */
+export const MAX_WORKBOOK_BYTES = 5 * 1024 * 1024;
+
+/** Throws "too_many_rows" past MAX_STATEMENT_ROWS. */
+export function assertRowCount(n: number): void {
+  if (n > MAX_STATEMENT_ROWS) {
+    throw new StatementReadError("too_many_rows", `At most ${MAX_STATEMENT_ROWS} movements per import`);
+  }
+}
 
 export class StatementReadError extends Error {
   constructor(
@@ -80,8 +94,17 @@ function readSheets(sheets: Sheet[], opts: ReadOptions): ReadResult {
 }
 
 export function readStatement(bytes: Uint8Array, filename: string, opts: ReadOptions = {}): ReadResult {
+  const result = readAny(bytes, filename, opts);
+  assertRowCount(result.rows.length + result.skipped.length);
+  return result;
+}
+
+function readAny(bytes: Uint8Array, filename: string, opts: ReadOptions): ReadResult {
   if (bytes.length === 0) throw new StatementReadError("empty_file", "The file is empty");
-  if (looksLikeWorkbook(bytes)) return readSheets(readWorkbook(bytes), opts);
+  if (looksLikeWorkbook(bytes)) {
+    if (bytes.length > MAX_WORKBOOK_BYTES) throw new StatementReadError("file_too_large", "The workbook is too large");
+    return readSheets(readWorkbook(bytes), opts);
+  }
 
   const { text } = decodeText(bytes);
   // OFX and Norma 43 sign every amount from the holder's view by spec (OFX

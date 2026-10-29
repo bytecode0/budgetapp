@@ -10,6 +10,7 @@ import { useImport, type ImportPreview, type ConfirmRow, type AiCategory, type P
 import { BudgetSuggestions } from './BudgetSuggestions';
 import { useMoney } from '../onboarding/useMoney';
 import { useAuth } from '../context/AuthContext';
+import { apiErrorMessage } from '../lib/apiErrors';
 
 interface ImportStatementProps {
   isOpen: boolean;
@@ -71,7 +72,7 @@ export function ImportStatement({ isOpen, onClose, onImported }: ImportStatement
     setFile(file);
     const res = await preview(file, accountId, purchasesSign);
     if (res.error) {
-      toast.error(res.code === 'unrecognized_columns' ? t('import.unrecognizedColumns') : res.error);
+      toast.error(apiErrorMessage(t, res));
       return;
     }
     const p = res.preview!;

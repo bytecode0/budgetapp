@@ -233,10 +233,10 @@ export function guessPurchasesSign(rows: NormalizedRow[]): PurchasesSignGuess {
   return neg > pos ? "negative" : "positive";
 }
 
-export function classifyRows(input: ClassifyInput): ClassifyResult {
-  const { account, debts, existing } = input;
-  const mode: ImportMode = account.type === "card" ? "card" : "account";
-
+/** The rows as classified: zero lines dropped, card amounts turned to the
+ *  holder's view by the sign convention (stated or guessed). */
+function prepareRows(input: Pick<ClassifyInput, "rows" | "account" | "purchasesSign">) {
+  const mode: ImportMode = input.account.type === "card" ? "card" : "account";
   let rows = input.rows.filter(r => r.amountCents !== 0);
   let purchasesSign: PurchasesSignGuess | undefined;
   let purchasesSignDetected: boolean | undefined;
@@ -247,26 +247,62 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
       rows = rows.map(r => ({ ...r, amountCents: -r.amountCents, feeCents: r.feeCents ? -Math.abs(r.feeCents) : r.feeCents }));
     }
   }
+  return { mode, rows, purchasesSign, purchasesSignDetected };
+}
+
+/** Each row's fingerprint key and merchant (dedup, see the header). */
+function keyRows(rows: NormalizedRow[], accountId: string | null): { key: string; merchant: string }[] {
+  const accountKey = accountId ?? "none";
+  const occurrences = new Map<string, number>();
+  return rows.map(row => {
+    const merchant = normalizeMerchant(row.description);
+    if (row.externalRef) return { key: `v2|${accountKey}|ref|${row.externalRef}`, merchant };
+    if (row.balanceCents !== null && row.balanceCents !== undefined) {
+      return { key: `v2|${accountKey}|${row.date}|${row.amountCents}|${merchant}|bal:${row.balanceCents}`, merchant };
+    }
+    const same = `${row.date}|${row.amountCents}|${merchant}`;
+    const n = occurrences.get(same) ?? 0;
+    occurrences.set(same, n + 1);
+    return { key: `v2|${accountKey}|${same}|#${n}`, merchant };
+  });
+}
+
+/** Every id (both generations, and fees') classifyRows will give these rows —
+ *  so the caller can load the stored movements under them in one query
+ *  before classifying once. */
+export function statementIds(input: Pick<ClassifyInput, "rows" | "account" | "purchasesSign">): string[] {
+  const { rows } = prepareRows(input);
+  return keyRows(rows, input.account.id).flatMap(({ key, merchant }, i) => {
+    const r = rows[i];
+    return [hash(key), legacyExternalId(r.date, r.amountCents, merchant, r.balanceCents), ...(r.feeCents ? [hash(`${key}|fee`)] : [])];
+  });
+}
+
+/** Stored movements bucketed by amount (every match below needs the same
+ *  amount), each bucket in date then id order: a lookup costs one bucket,
+ *  not the whole history. */
+function indexByAmount(existing: ExistingMovement[]): Map<number, ExistingMovement[]> {
+  const out = new Map<number, ExistingMovement[]>();
+  for (const e of existing) {
+    const list = out.get(e.amountCents);
+    if (list) list.push(e); else out.set(e.amountCents, [e]);
+  }
+  for (const list of out.values()) list.sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  return out;
+}
+
+export function classifyRows(input: ClassifyInput): ClassifyResult {
+  const { account, debts, existing } = input;
+  const { mode, rows, purchasesSign, purchasesSignDetected } = prepareRows(input);
 
   // Existing movements by id: both id generations, so an old import is found.
   const existingIds = new Set(existing.map(e => e.externalId).filter((id): id is string => !!id));
-  const accountKey = account.id ?? "none";
-  const occurrences = new Map<string, number>();
+  const byAmount = indexByAmount(existing);
+  const keys = keyRows(rows, account.id);
   const planned: PlannedRow[] = [];
 
-  for (const row of rows) {
-    const merchant = normalizeMerchant(row.description);
-    let key: string;
-    if (row.externalRef) {
-      key = `v2|${accountKey}|ref|${row.externalRef}`;
-    } else if (row.balanceCents !== null && row.balanceCents !== undefined) {
-      key = `v2|${accountKey}|${row.date}|${row.amountCents}|${merchant}|bal:${row.balanceCents}`;
-    } else {
-      const same = `${row.date}|${row.amountCents}|${merchant}`;
-      const n = occurrences.get(same) ?? 0;
-      occurrences.set(same, n + 1);
-      key = `v2|${accountKey}|${same}|#${n}`;
-    }
+  for (const [i, row] of rows.entries()) {
+    const { key, merchant } = keys[i];
 
     const warnings: RowWarning[] = [];
     if (row.currency && account.currency && row.currency.toUpperCase() !== account.currency.toUpperCase()) {
@@ -297,9 +333,8 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
       kind = "expense";
     } else {
       const text = textOf(row);
-      const matchesStoredPayment = !!account.cardDebtId && existing.some(e =>
-        e.table === "expense" && e.debtId === account.cardDebtId && e.amountCents === row.amountCents
-        && daysApart(e.date, row.date) <= SAME_PAYMENT_DAYS);
+      const matchesStoredPayment = !!account.cardDebtId && (byAmount.get(row.amountCents) ?? []).some(e =>
+        e.table === "expense" && e.debtId === account.cardDebtId && daysApart(e.date, row.date) <= SAME_PAYMENT_DAYS);
       if (hasPhrase(text, CARD_REFUND)) kind = "refund";
       else if (account.cardDebtId && (matchesStoredPayment || hasPhrase(text, CARD_PAYMENT_RECEIVED))) {
         kind = "payment";
@@ -356,10 +391,9 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
   // payment" or a "possible duplicate" of another row.
   const batchIds = new Set(planned.flatMap(p => [p.externalId, p.legacyExternalId].filter((id): id is string => !!id)));
   const claimed = new Set(existing.filter(e => e.externalId && batchIds.has(e.externalId)).map(e => e.id));
-  const claim = (pred: (e: ExistingMovement) => boolean) => {
-    const hit = existing
-      .filter(e => !claimed.has(e.id) && pred(e))
-      .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))[0];
+  /** The earliest unclaimed stored movement of `amountCents` matching `pred`. */
+  const claim = (amountCents: number, pred: (e: ExistingMovement) => boolean) => {
+    const hit = (byAmount.get(amountCents) ?? []).find(e => !claimed.has(e.id) && pred(e));
     if (hit) claimed.add(hit.id);
     return hit;
   };
@@ -372,16 +406,16 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
     ({ id: e.id, table: e.table, date: e.date, description: e.description, source: e.source });
   for (const p of planned) {
     if (p.status !== "new" || p.kind !== "payment") continue;
-    const same = claim(e => e.table === "expense" && e.debtId === p.debtId && e.amountCents === p.amountCents
+    const same = claim(p.amountCents, e => e.table === "expense" && e.debtId === p.debtId
       && daysApart(e.date, p.date) <= SAME_PAYMENT_DAYS);
     if (same) { p.status = "duplicate"; p.duplicateReason = "same_payment"; continue; }
-    const late = claim(e => e.table === "expense" && e.debtId === p.debtId && e.amountCents === p.amountCents
+    const late = claim(p.amountCents, e => e.table === "expense" && e.debtId === p.debtId
       && daysApart(e.date, p.date) <= LATE_PAYMENT_DAYS);
     if (late) { p.possibleDuplicate = toPossible(late); continue; }
     const cardAccountId = debts.find(d => d.id === p.debtId)?.accountId ?? null;
     if (!cardAccountId) continue;
-    const credit = claim(e => e.table === "expense" && e.kind === "refund" && e.accountId === cardAccountId
-      && e.amountCents === p.amountCents && daysApart(e.date, p.date) <= SAME_PAYMENT_DAYS);
+    const credit = claim(p.amountCents, e => e.table === "expense" && e.kind === "refund" && e.accountId === cardAccountId
+      && daysApart(e.date, p.date) <= SAME_PAYMENT_DAYS);
     if (credit) p.possibleDuplicate = toPossible(credit);
   }
 
@@ -391,8 +425,8 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
   const cardDebtIds = new Set(debts.filter(d => d.kind === "credit_card").map(d => d.id));
   for (const p of planned) {
     if (p.status !== "new" || !p.warnings.includes("card_payment_unassigned")) continue;
-    const hit = claim(e => e.table === "expense" && !!e.debtId && cardDebtIds.has(e.debtId) && e.kind !== "refund"
-      && e.amountCents === p.amountCents && daysApart(e.date, p.date) <= LATE_PAYMENT_DAYS);
+    const hit = claim(p.amountCents, e => e.table === "expense" && !!e.debtId && cardDebtIds.has(e.debtId) && e.kind !== "refund"
+      && daysApart(e.date, p.date) <= LATE_PAYMENT_DAYS);
     if (hit) p.possibleDuplicate = toPossible(hit);
   }
 
@@ -402,8 +436,8 @@ export function classifyRows(input: ClassifyInput): ClassifyResult {
     const table = p.kind === "income" ? "income" : "expense";
     const storedKind = p.kind === "refund" ? "refund" : p.kind === "income" ? "income" : "expense";
     const sameAccount = (e: ExistingMovement) => e.debtId === null && (e.accountId === account.id || e.accountId === null);
-    const hit = claim(e => e.table === table
-      && e.amountCents === p.amountCents && daysApart(e.date, p.date) <= POSSIBLE_DUP_DAYS
+    const hit = claim(p.amountCents, e => e.table === table
+      && daysApart(e.date, p.date) <= POSSIBLE_DUP_DAYS
       && (p.kind === "needs_review"
         // Either reading of the credit may already be stored.
         ? (e.kind === "refund" && sameAccount(e)) || (e.kind === "expense" && !!p.debtId && e.debtId === p.debtId)

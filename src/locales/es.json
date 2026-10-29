@@ -796,7 +796,11 @@
     "learnedPayment": "pago sugerido por una regla: confírmalo",
     "paysDebt": "Paga",
     "notAPayment": "No es un pago de deuda (gasto)",
-    "cardPaymentUnassigned": "pago de tarjeta: elige qué tarjeta"
+    "cardPaymentUnassigned": "pago de tarjeta: elige qué tarjeta",
+    "tooManyRows": "El archivo tiene demasiados movimientos (máximo 5.000). Exporta un periodo más corto.",
+    "fileTooLarge": "El archivo Excel es demasiado grande (máximo 5 MB). Exporta un periodo más corto o en CSV.",
+    "emptyFile": "El archivo está vacío.",
+    "noMovements": "El archivo tiene las columnas esperadas pero ningún movimiento."
   },
   "budgets": {
     "title": "Presupuestos sugeridos",

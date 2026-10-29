@@ -796,7 +796,11 @@
     "learnedPayment": "payment suggested by a rule: confirm it",
     "paysDebt": "Pays",
     "notAPayment": "Not a debt payment (expense)",
-    "cardPaymentUnassigned": "card payment: pick which card"
+    "cardPaymentUnassigned": "card payment: pick which card",
+    "tooManyRows": "The file has too many movements (at most 5,000). Export a shorter period.",
+    "fileTooLarge": "The Excel file is too large (at most 5 MB). Export a shorter period or as CSV.",
+    "emptyFile": "The file is empty.",
+    "noMovements": "The file has the expected columns but no movements."
   },
   "budgets": {
     "title": "Suggested budgets",
