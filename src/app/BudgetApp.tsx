@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LayoutDashboard, Sparkles, Wallet, Target, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight, Landmark, Users, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 import { Home } from './components/Home';
 import { PlanningDashboard } from './components/PlanningDashboard';
 import { CreatePlan } from './components/CreatePlan';
@@ -28,6 +28,7 @@ import { useHousehold } from './hooks/useHousehold';
 import { useOnboardingNeeded, type OnboardingStep } from './hooks/useOnboardingNeeded';
 import { useBillingEnabled } from './hooks/useBillingEnabled';
 import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/usePartner';
+import { apiErrorMessage } from './lib/apiErrors';
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
 
@@ -115,12 +116,19 @@ function AppInner() {
       window.history.replaceState({}, '', url.toString());
     }
 
+    // Bank connection: back from the bank (?bankToken=… or ?error=banking_…),
+    // or the "renew your connection" email (?open=accounts).
     const bankToken = params.get('bankToken');
-    if (bankToken) {
-      setPendingBankToken(bankToken);
+    const bankError = params.get('error');
+    const isBankError = !!bankError && bankError.startsWith('banking_');
+    if (bankToken) setPendingBankToken(bankToken);
+    if (isBankError) toast.error(apiErrorMessage(t, { code: bankError ?? undefined, error: t('banking.errors.failed') }));
+    if (bankToken || isBankError || params.get('open') === 'accounts') {
       setCurrentScreen('accounts');
       const url = new URL(window.location.href);
       url.searchParams.delete('bankToken');
+      url.searchParams.delete('open');
+      if (isBankError) url.searchParams.delete('error');
       window.history.replaceState({}, '', url.toString());
     }
   }, []);

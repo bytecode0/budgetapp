@@ -1,104 +1,122 @@
 import { useState, useEffect, useCallback } from 'react';
+import type { ImportPreview, ImportSummary, ConfirmRow } from './useImport';
 
-export interface BankInstitution { id: string; name: string; logo?: string }
-export interface BankProviderAccount { id: string; iban?: string; name?: string; currency: string }
+// Bank connection (Enable Banking, server/routes/banking.ts). Every response
+// is { data } or { error, code }; the codes are translated by apiErrors.ts.
+
+export interface BankInstitution { name: string; country: string; logo: string | null }
+export type BankAccountKind = 'checking' | 'savings' | 'card';
+export interface BankAccount {
+  id: string;
+  name?: string;
+  ibanLast4?: string;
+  currency: string;
+  kind: BankAccountKind;
+  /** The local account already linked to it, if any. */
+  linkedAccountId: string | null;
+}
+export interface BankLinkedAccount {
+  id: string;
+  name: string;
+  type: string;
+  bankReviewedAt: string | null;
+  bankPendingReview: number;
+}
 export interface BankConnection {
   id: string;
-  institutionId: string;
   institutionName: string;
+  institutionCountry: string | null;
   status: 'pending' | 'active' | 'expired' | 'error';
+  isOwner: boolean;
   consentGivenAt: string | null;
   expiresAt: string | null;
   lastSyncedAt: string | null;
   lastSyncError: string | null;
-  accounts: { id: string; name: string }[];
+  accounts: BankLinkedAccount[];
   debts: { id: string; name: string }[];
 }
+export interface BankAccountsResult { connectionId: string; institutionName: string; accounts: BankAccount[] }
+export type LinkMapping = { externalAccountId: string; accountId?: string; create?: { name: string; type: string } };
+export type BankResult<T> = { ok: false; error: string; code?: string } | ({ ok: true } & T);
+
+async function call<T>(url: string, init?: RequestInit): Promise<BankResult<T>> {
+  try {
+    const res = await fetch(url, {
+      credentials: 'include',
+      ...init,
+      headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: body.error ?? 'Request failed', code: body.code };
+    return { ok: true, ...(body.data as T) };
+  } catch {
+    return { ok: false, error: 'Network error' };
+  }
+}
+
+const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) });
 
 export function useBanking() {
   const [enabled, setEnabled] = useState(false);
   const [connections, setConnections] = useState<BankConnection[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchStatus = useCallback(async () => {
-    try {
-      const res = await fetch('/api/banking/status', { credentials: 'include' });
-      if (res.ok) setEnabled((await res.json()).enabled);
-    } catch { /* best-effort */ }
-  }, []);
-
   const fetchConnections = useCallback(async () => {
-    try {
-      const res = await fetch('/api/banking/connections', { credentials: 'include' });
-      if (!res.ok) return;
-      const data = await res.json();
-      setConnections(data.connections ?? []);
-    } catch { /* best-effort */ } finally {
-      setLoading(false);
-    }
+    const res = await call<{ connections: BankConnection[] }>('/api/banking/connections');
+    if (res.ok) setConnections(res.connections);
+    setLoading(false);
   }, []);
 
-  useEffect(() => { fetchStatus(); fetchConnections(); }, [fetchStatus, fetchConnections]);
+  useEffect(() => {
+    // Hidden entirely unless the server says this user may use it.
+    call<{ enabled: boolean }>('/api/banking/status').then(res => {
+      const on = res.ok && res.enabled;
+      setEnabled(on);
+      if (on) fetchConnections(); else setLoading(false);
+    });
+  }, [fetchConnections]);
 
-  const fetchInstitutions = async (country = 'ES'): Promise<BankInstitution[]> => {
-    const res = await fetch(`/api/banking/institutions?country=${country}`, { credentials: 'include' });
-    if (!res.ok) return [];
-    return (await res.json()).institutions ?? [];
+  const fetchInstitutions = (country = 'ES') =>
+    call<{ institutions: BankInstitution[] }>(`/api/banking/institutions?country=${country}`);
+
+  /** Starts (or renews) consent and sends the browser to the bank. */
+  const connect = async (target: { name: string; country: string } | { connectionId: string }, lang: string) => {
+    const res = await call<{ url: string }>('/api/banking/connect', post({ ...target, lang }));
+    if (res.ok) window.location.href = res.url;
+    return res;
   };
 
-  /** Kicks off the consent flow — navigates the browser to the bank's redirect URL. */
-  const connect = async (institutionId: string, institutionName: string): Promise<{ error?: string }> => {
-    const res = await fetch('/api/banking/connect', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ institutionId, institutionName }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { error: data.error || 'Failed to start bank connection' };
-    window.location.href = data.redirectUrl;
-    return {};
+  const exchange = (token: string) => call<BankAccountsResult>('/api/banking/exchange', post({ token }));
+
+  const bankAccounts = (connectionId: string) => call<BankAccountsResult>(`/api/banking/connections/${connectionId}/bank-accounts`);
+
+  const linkAccounts = async (connectionId: string, mappings: LinkMapping[]) => {
+    const res = await call<{ linked: number; accountIds: string[] }>(`/api/banking/connections/${connectionId}/link-accounts`, post({ mappings }));
+    if (res.ok) await fetchConnections();
+    return res;
   };
 
-  /** Resolves the opaque token from the post-consent redirect (?bankToken=...). */
-  const exchange = async (token: string): Promise<{ error?: string; connectionId?: string; institutionName?: string; accounts?: BankProviderAccount[] }> => {
-    const res = await fetch('/api/banking/exchange', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { error: data.error || 'Failed to complete bank connection' };
-    return data;
-  };
+  const preview = (connectionId: string, accountId: string) =>
+    call<ImportPreview & { accountId: string; pendingCount: number }>(`/api/banking/connections/${connectionId}/preview?accountId=${encodeURIComponent(accountId)}`);
 
-  const linkAccounts = async (
-    connectionId: string,
-    mappings: { externalAccountId: string; accountId?: string; create?: { name: string; type?: string } }[],
-  ) => {
-    const res = await fetch(`/api/banking/connections/${connectionId}/link-accounts`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mappings }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { error: data.error || 'Failed to link accounts' };
-    await fetchConnections();
-    return { linked: data.linked as number };
+  /** Same contract as useImport().confirm, so the import preview step can use it. */
+  const confirm = async (connectionId: string, accountId: string, rows: ConfirmRow[]) => {
+    const res = await call<{ inserted: number; summary: ImportSummary }>(`/api/banking/connections/${connectionId}/confirm`, post({ accountId, rows }));
+    if (res.ok) await fetchConnections();
+    return res;
   };
 
   const syncNow = async (connectionId: string) => {
-    const res = await fetch(`/api/banking/connections/${connectionId}/sync`, { method: 'POST', credentials: 'include' });
-    const data = await res.json();
-    if (!res.ok || !data.ok) return { error: data.error || 'Sync failed' };
+    const res = await call<{ written: number; held: number; awaitingFirstReview: number }>(`/api/banking/connections/${connectionId}/sync`, { method: 'POST' });
     await fetchConnections();
-    return { expenses: data.expenses as number, income: data.income as number };
+    return res;
   };
 
-  /** Reconnects a lapsed connection — reuses the same row (Phase 5), so this
-   *  is just connect() called with the connection's own institution again. */
-  const reconnect = (c: BankConnection) => connect(c.institutionId, c.institutionName);
+  const disconnect = async (connectionId: string) => {
+    const res = await call<{ revoked: boolean }>(`/api/banking/connections/${connectionId}`, { method: 'DELETE' });
+    if (res.ok) await fetchConnections();
+    return res;
+  };
 
-  return { enabled, connections, loading, fetchInstitutions, connect, exchange, linkAccounts, fetchConnections, syncNow, reconnect };
+  return { enabled, connections, loading, fetchConnections, fetchInstitutions, connect, exchange, bankAccounts, linkAccounts, preview, confirm, syncNow, disconnect };
 }

@@ -25,6 +25,25 @@ const ERROR_KEYS: Record<string, string> = {
   no_movements: 'import.noMovements',
   invalid_rows: 'import.invalidRows',
   debt_not_found: 'import.debtNotFound',
+  // Bank connection (server/routes/banking.ts), also as ?error=banking_… after the bank
+  banking_disabled: 'banking.errors.disabled',
+  banking_not_allowed: 'banking.errors.notAllowed',
+  banking_not_found: 'banking.errors.notFound',
+  banking_not_owner: 'banking.errors.notOwner',
+  banking_expired: 'banking.errors.expired',
+  banking_provider_failed: 'banking.errors.providerFailed',
+  banking_sync_failed: 'banking.errors.syncFailed',
+  banking_unknown_bank: 'banking.errors.unknownBank',
+  banking_invalid_token: 'banking.errors.failed',
+  banking_invalid_state: 'banking.errors.invalidState',
+  banking_denied: 'banking.errors.denied',
+  banking_failed: 'banking.errors.failed',
+  banking_invalid_mappings: 'banking.errors.linkFailed',
+  banking_unknown_account: 'banking.errors.linkFailed',
+  banking_account_not_owned: 'banking.errors.accountNotOwned',
+  banking_type_mismatch: 'banking.errors.typeMismatch',
+  banking_duplicate_target: 'banking.errors.duplicateTarget',
+  banking_account_not_linked: 'banking.errors.notLinked',
 };
 
 /** The message to show for a failed debt/account request (call it only once

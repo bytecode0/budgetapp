@@ -19,6 +19,9 @@ interface ImportPreviewStepProps {
   /** Tabular files: open the manual mapping when the columns came out wrong. */
   onMapByHand?: () => void;
   onConfirmed: (summary: ImportSummary) => void;
+  /** Writes the kept rows somewhere else than a file import (the bank review,
+   *  /api/banking/connections/:id/confirm). Default: useImport().confirm. */
+  onConfirm?: (rows: ConfirmRow[]) => Promise<{ error: string; code?: string } | { inserted: number; summary: ImportSummary }>;
 }
 
 /** Skipped-row reason codes (shared/ingest/columns.ts: "state:PENDING"…) → text. */
@@ -34,11 +37,13 @@ function useSkippedReason() {
 // payments, rows to review, the card sign choice, warnings and the rows the
 // file lists but aren't movements yet. Mounted once per preview response, so
 // its selection starts from what the server suggested.
-export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, signLoading, onMapByHand, onConfirmed }: ImportPreviewStepProps) {
+export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, signLoading, onMapByHand, onConfirmed, onConfirm }: ImportPreviewStepProps) {
   const { t } = useTranslation();
   const { currency, locale } = useMoney();
   const { allocations, createAllocation } = useAllocations();
-  const { confirming, classifying, suggestingCats, confirm, classify, suggestCategories } = useImport();
+  const { confirming: importConfirming, classifying, suggestingCats, confirm, classify, suggestCategories } = useImport();
+  const [overrideConfirming, setOverrideConfirming] = useState(false);
+  const confirming = importConfirming || overrideConfirming;
   const skippedReason = useSkippedReason();
 
   // Default: every new row selected — except possible duplicates, rows in
@@ -208,7 +213,13 @@ export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, si
         }];
       });
     if (rows.length === 0) { toast.error(t('import.nothingSelected')); return; }
-    const res = await confirm(accountId, rows);
+    let res;
+    if (onConfirm) {
+      setOverrideConfirming(true);
+      try { res = await onConfirm(rows); } finally { setOverrideConfirming(false); }
+    } else {
+      res = await confirm(accountId, rows);
+    }
     if ('error' in res) { toast.error(apiErrorMessage(t, { code: res.code, error: t('import.confirmFailed') })); return; }
     onConfirmed(res.summary);
   };
