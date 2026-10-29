@@ -1406,7 +1406,7 @@
           "paragraphs": [
             "When you import a statement, the app may offer buttons to classify expenses or suggest categories with AI. Only if you press one of those buttons do we send Anthropic (the provider of the Claude model) the uncategorised merchant descriptions from that statement, up to 40 at a time, and, to classify them, the names of your budget categories.",
             "We do not send amounts, dates, your name, your email or account numbers. Bear in mind that the description is the text your bank writes and sometimes includes other data, such as the name of the person you sent a transfer to. What the AI returns are only suggestions, which you review before anything is saved.",
-            "If we don't recognise a statement's columns, you can ask the AI to suggest which is which. First we show you the titles that will be sent, and only if you press \"Suggest columns with AI\" do we send an AI provider, through OpenRouter, the column titles you see and the format of the values in the first rows (for example \"dd/mm/yyyy\", \"-#,##\" or \"12-character text\"), computed in your browser. We never send the amounts or the transactions. The titles are text from your file: if the chosen row doesn't look like titles we send nothing, but check them before sending. The suggestion only fills in the columns screen; you review and confirm it."
+            "If we don't recognise a statement's columns, you can ask the AI to suggest which is which. First we show you the titles that will be sent, and only if you press \"Suggest columns with AI\" do we send an AI provider (depending on our configuration, through OpenRouter or directly to Anthropic) the column titles you see and the format of the values in the first rows (for example \"dd/mm/yyyy\", \"-#,##\" or \"12-character text\"), computed in your browser. We never send the amounts or the transactions. The titles are text from your file: if the chosen row doesn't look like titles we send nothing, but check them before sending. The suggestion only fills in the columns screen; you review and confirm it."
           ]
         },
         {
@@ -1419,8 +1419,8 @@
             "Vercel: hosting for the website and the app's server, which runs in Frankfurt.",
             "Resend: sending the app's emails (your email address and the message content).",
             "Google: sign-in with Google, only if you choose to use it. The website also loads its fonts from Google Fonts, so your browser sends your IP address to Google when you open it.",
-            "Anthropic: the AI classification described above, only when you ask for it.",
-            "OpenRouter: the AI column suggestion described above (column titles and formats only), when you ask for it. OpenRouter passes it to the configured model provider."
+            "Anthropic: the AI classification described above and, if it is the configured provider, the AI column suggestion, only when you ask for them.",
+            "OpenRouter: the AI column suggestion described above (the column titles you see and the formats), when you ask for it and if it is the configured provider. OpenRouter passes it to the chosen model's provider."
           ],
           "after": "Some of these providers are US companies and may process data outside the European Economic Area. They do so with the safeguards set out in their data processing terms, such as the standard contractual clauses approved by the European Commission."
         },

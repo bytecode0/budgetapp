@@ -1406,7 +1406,7 @@
           "paragraphs": [
             "Al importar un extracto, la aplicación puede ofrecerte botones para clasificar gastos o sugerir categorías con IA. Solo si pulsas uno de esos botones, enviamos a Anthropic (el proveedor del modelo Claude) los conceptos de comercio sin categoría de ese extracto, hasta 40 a la vez, y, para clasificarlos, los nombres de tus categorías de presupuesto.",
             "No enviamos importes, fechas, tu nombre, tu email ni números de cuenta. Ten en cuenta que el concepto es el texto que pone tu banco y a veces incluye otros datos, como el nombre de la persona a la que hiciste una transferencia. Lo que devuelve la IA son solo sugerencias, que revisas antes de guardar nada.",
-            "Si no reconocemos las columnas de un extracto, puedes pedir que la IA sugiera cuál es cada una. Antes te mostramos los títulos que se enviarán, y solo si pulsas «Sugerir columnas con IA» enviamos a un proveedor de IA, a través de OpenRouter, los títulos de columna que ves y el formato de los valores de las primeras filas (por ejemplo «dd/mm/aaaa», «-#,##» o «texto de 12 caracteres»), calculado en tu navegador. Nunca enviamos los importes ni los movimientos. Los títulos son texto de tu archivo: si la fila elegida no parece de títulos no enviamos nada, pero revísalos antes de enviarlos. La sugerencia solo rellena la pantalla de columnas; la revisas y la confirmas tú."
+            "Si no reconocemos las columnas de un extracto, puedes pedir que la IA sugiera cuál es cada una. Antes te mostramos los títulos que se enviarán, y solo si pulsas «Sugerir columnas con IA» enviamos a un proveedor de IA (según nuestra configuración, a través de OpenRouter o directamente a Anthropic) los títulos de columna que ves y el formato de los valores de las primeras filas (por ejemplo «dd/mm/aaaa», «-#,##» o «texto de 12 caracteres»), calculado en tu navegador. Nunca enviamos los importes ni los movimientos. Los títulos son texto de tu archivo: si la fila elegida no parece de títulos no enviamos nada, pero revísalos antes de enviarlos. La sugerencia solo rellena la pantalla de columnas; la revisas y la confirmas tú."
           ]
         },
         {
@@ -1419,8 +1419,8 @@
             "Vercel: alojamiento de la web y del servidor de la aplicación, que se ejecuta en Fráncfort.",
             "Resend: envío de los emails de la aplicación (tu email y el contenido del mensaje).",
             "Google: el inicio de sesión con Google, solo si eliges usarlo. Además, la web carga sus tipografías desde Google Fonts, por lo que tu navegador envía a Google tu dirección IP al abrirla.",
-            "Anthropic: la clasificación con IA descrita arriba, solo cuando la pides.",
-            "OpenRouter: la sugerencia de columnas con IA descrita arriba (solo títulos de columnas y formatos), cuando la pides. OpenRouter la pasa al proveedor del modelo configurado."
+            "Anthropic: la clasificación con IA descrita arriba y, si es el proveedor configurado, la sugerencia de columnas con IA, solo cuando las pides.",
+            "OpenRouter: la sugerencia de columnas con IA descrita arriba (los títulos de columna que ves y los formatos), cuando la pides y si es el proveedor configurado. OpenRouter la pasa al proveedor del modelo elegido."
           ],
           "after": "Algunos de estos proveedores son empresas de Estados Unidos y pueden tratar datos fuera del Espacio Económico Europeo. Lo hacen con las garantías previstas en sus condiciones de tratamiento de datos, como las cláusulas contractuales tipo aprobadas por la Comisión Europea."
         },
