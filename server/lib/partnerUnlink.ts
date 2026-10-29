@@ -44,6 +44,13 @@
 //                           she paid it and it is not a shared expense with
 //                           shares — one the ex entered is household history
 //                           both have a claim on, so it stays with the pool.
+//                       A moved expense leaves the household: a shared one
+//                       becomes her personal expense (scope "personal", its
+//                       ExpenseShare rows deleted — a personal expense has
+//                       none, as PATCH /api/expenses/:id/attribution leaves
+//                       it), so no share of the ex is left on it in her
+//                       scope. Totals sum the full amount either way
+//                       (dashboard.ts, countedAmounts), so none changes.
 //   LifePlan          → those she owns (ownerUserId: set on create, and at
 //                       merge for the plans she brought). Plans without an
 //                       owner (made in the pool before the column) stay.
@@ -61,12 +68,14 @@
 //                       re-link merges them like signup's: the copy of the
 //                       pool's default line of that type becomes hers, else a
 //                       fresh one is seeded in her language (0 € budgeted).
-//   Account (default) → she always ends with an open non-card account: merge
-//                       deletes her unused "Main account", and with only a
-//                       card left every expense entered without an account
+//   Account (default) → she always ends with an open non-card account: with
+//                       only a card, every expense entered without an account
 //                       would default onto the card (server/lib/defaultAccount.ts)
-//                       and silently grow its debt. When none moves back and
-//                       she has none, a fresh "Main account" is seeded.
+//                       and silently grow its debt. Merge keeps her unused
+//                       "Main account" when it is her only open non-card one,
+//                       so normally one moves back; when none does (e.g. a
+//                       link merged before that rule) and she has none in her
+//                       scope, a fresh "Main account" is seeded.
 //   MonthlyBudget (other lines), CategorizationRule (other lines),
 //   RecurringCommitment → stay with the pool (no owner).
 //   HouseholdMember   → her membership in the owner's household is removed.
@@ -134,6 +143,8 @@ export interface UnlinkPlan {
     allocationIds: string[]; // debt lines of moving debts, plan lines of her plans
     ruleIds: string[];       // rules pointing at those lines
   };
+  /** Moving shared expenses (or with shares): become personal, shares deleted. */
+  personalExpenseIds: string[];
   /** Rules on moving lines that she already has (same matchType + pattern): deleted, hers win. */
   dropRuleIds: string[];
   /** Moving rows whose externalId she already has: namespaced in the pool before the move. */
@@ -309,6 +320,7 @@ export function planUnlink(input: UnlinkInput): UnlinkPlan {
       allocationIds: [...allocations],
       ruleIds: movingRules.filter(r => !dropRule(r)).map(r => r.id),
     },
+    personalExpenseIds: movingExpenses.filter(e => e.scope === "shared" || e.hasShares).map(e => e.id),
     dropRuleIds: movingRules.filter(dropRule).map(r => r.id),
     clashExternalIds,
     copyAllocations,
@@ -450,6 +462,11 @@ export async function unlinkMemberFromPool(db: Db, ctx: { memberId: string; pool
   await db.debtAdjustment.updateMany({ where: { debtId: { in: move.debtIds } }, data: toHer });
   await inChunks(move.incomeIds, ids => db.income.updateMany({ where: { id: { in: ids } }, data: toHer }));
   await inChunks(move.expenseIds, ids => db.expense.updateMany({ where: { id: { in: ids } }, data: toHer }));
+  // Out of the household: shared → her personal expense, no shares left.
+  await inChunks(plan.personalExpenseIds, async ids => {
+    await db.expenseShare.deleteMany({ where: { expenseId: { in: ids } } });
+    await db.expense.updateMany({ where: { id: { in: ids } }, data: { scope: "personal" } });
+  });
   await db.lifePlan.updateMany({ where: { id: { in: move.planIds } }, data: toHer });
   await db.planDeposit.updateMany({ where: { planId: { in: move.planIds } }, data: toHer });
   await db.allocation.updateMany({ where: { id: { in: move.allocationIds } }, data: toHer });

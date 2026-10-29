@@ -14,7 +14,12 @@
 //                                                scoped by the pool userId)
 //   Income            → moved; ownerUserId stays hers
 //   Account, Debt,
-//   BankConnection    → moved; visibility "private", owned by her, household set
+//   BankConnection    → moved; visibility "private", owned by her, household set.
+//                       Her seeded "Main account", never used, is deleted only
+//                       when she keeps another open non-card account of her
+//                       own; otherwise it moves too, so her expenses entered
+//                       without an account default to her own money
+//                       (server/lib/defaultAccount.ts), not her partner's
 //   DebtAdjustment    → moved (follows its debt)
 //   Expense           → moved; a legacy row without payer gets her as payer,
 //                       one without createdByUserId gets her as its author
@@ -65,6 +70,7 @@ export interface MergeAccount {
   type: string;
   currentBalance: number; // cents
   bankConnectionId: string | null;
+  isArchived: boolean;
   referenced: boolean; // any expense, income or debt points at it
 }
 
@@ -86,7 +92,8 @@ export interface MergeInput {
 export interface MergePlan {
   /** Her untouched default line → the pool line it merges into (hers is deleted). */
   allocationRemap: Map<string, string>;
-  /** Her seeded "Main account", never used: deleted instead of cluttering the pool. */
+  /** Her seeded "Main account", never used, when she keeps another open
+   *  non-card account of her own: deleted instead of cluttering the pool. */
   deleteAccountIds: string[];
   /** Her rows whose externalId the pool already has → their new, namespaced id. */
   renameExpenseExternalIds: { id: string; externalId: string }[];
@@ -111,6 +118,18 @@ export function isUnusedDefaultAccount(a: MergeAccount): boolean {
     && a.currentBalance === 0
     && a.bankConnectionId === null
     && !a.referenced;
+}
+
+/**
+ * Her unused seeded "Main" accounts to delete: all of them when another open
+ * non-card account of hers moves, else all but the first. Without an open
+ * non-card account of her own, every expense she enters without one would
+ * default to her partner's account (or onto her card) — pickDefaultAccount.
+ */
+function planDeleteAccounts(accounts: MergeAccount[]): string[] {
+  const unused = accounts.filter(isUnusedDefaultAccount);
+  const keepsAnother = accounts.some(a => !unused.includes(a) && a.type !== "card" && !a.isArchived);
+  return (keepsAnother ? unused : unused.slice(1)).map(a => a.id);
 }
 
 // `merged:<id>:` or `merged:<id>#<n>:` — ids are cuids (no ':' or '#').
@@ -173,7 +192,7 @@ export function planPoolMerge(input: MergeInput): MergePlan {
 
   return {
     allocationRemap,
-    deleteAccountIds: input.memberAccounts.filter(isUnusedDefaultAccount).map(a => a.id),
+    deleteAccountIds: planDeleteAccounts(input.memberAccounts),
     renameExpenseExternalIds: planRenames(input.memberId, input.memberExpenseExternalIds, input.poolExternalIds.expense),
     renameIncomeExternalIds: planRenames(input.memberId, input.memberIncomeExternalIds, input.poolExternalIds.income),
     dropRuleIds: input.memberRules
@@ -199,7 +218,7 @@ export async function loadMergeInput(db: Db, memberId: string, poolId: string): 
     db.allocation.findMany({ where: { userId: memberId }, select: { id: true, name: true, type: true, isDefault: true, allocatedAmount: true } }),
     db.allocation.findMany({ where: { userId: poolId }, select: { id: true, type: true, isDefault: true }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }),
     db.monthlyBudget.findMany({ where: { userId: memberId, allocatedAmount: { not: 0 } }, select: { allocationId: true }, distinct: ["allocationId"] }),
-    db.account.findMany({ where: { userId: memberId }, select: { id: true, name: true, type: true, currentBalance: true, bankConnectionId: true } }),
+    db.account.findMany({ where: { userId: memberId }, select: { id: true, name: true, type: true, currentBalance: true, bankConnectionId: true, isArchived: true } }),
     db.expense.findMany({ where: { userId: memberId, accountId: { not: null } }, select: { accountId: true }, distinct: ["accountId"] }),
     db.income.findMany({ where: { userId: memberId, accountId: { not: null } }, select: { accountId: true }, distinct: ["accountId"] }),
     db.debt.findMany({ where: { userId: memberId, accountId: { not: null } }, select: { accountId: true }, distinct: ["accountId"] }),

@@ -218,8 +218,11 @@ describe("partner flow (integration, real Postgres)", { skip: !TEST_DATABASE_URL
     assert.equal(rule.userId, A);
     assert.equal(rule.allocationId, (await prisma.allocation.findFirstOrThrow({ where: { userId: A, isDefault: true, type: "fixed" } })).id);
 
-    // Her untouched Main is deleted; her card, debt, plan, deposit moved, still hers.
-    assert.equal(await prisma.account.count({ where: { id: bMain } }), 0);
+    // Her untouched Main is her only open non-card account (besides it she
+    // has only a card), so it is kept and moved like the rest: private, hers.
+    // Her card, debt, plan, deposit moved, still hers.
+    const main = await prisma.account.findUniqueOrThrow({ where: { id: bMain } });
+    assert.deepEqual([main.userId, main.ownerUserId, main.visibility], [A, B, "private"]);
     const card = await prisma.account.findUniqueOrThrow({ where: { id: bCard } });
     assert.deepEqual([card.userId, card.ownerUserId, card.visibility], [A, B, "private"]);
     const debt = await prisma.debt.findUniqueOrThrow({ where: { id: bCardDebt } });
@@ -259,12 +262,14 @@ describe("partner flow (integration, real Postgres)", { skip: !TEST_DATABASE_URL
     assert.ok(e.accountId, "an account is defaulted");
   });
 
-  it("b. while linked, B's expense without accountId defaults to HER account", {
-    todo: "ambiguous: after the merge B's only own account is her card (her untouched Main was deleted), and pickDefaultAccount ranks a partner's checking above an own card, so it defaults to A's Main (payer = A)",
-  }, async () => {
-    const e = await prisma.expense.findUniqueOrThrow({ where: { id: bLinkedExpense }, include: { account: true } });
-    assert.equal(e.account?.ownerUserId, B);
+  it("b. while linked, B's expense without accountId defaults to HER account", async () => {
+    const e = await prisma.expense.findUniqueOrThrow({ where: { id: bLinkedExpense }, include: { shares: true } });
+    assert.equal(e.accountId, ids.bMain);
     assert.equal(e.payerUserId, B);
+    assert.equal(e.createdByUserId, B);
+    // The household model makes it shared, split between both.
+    assert.equal(e.scope, "shared");
+    assert.deepEqual(e.shares.map(s => s.userId).sort(), [A, B].sort());
   });
 
   it("c. B unlinks: her data goes back to her scope, A's untouched", async () => {
@@ -292,9 +297,14 @@ describe("partner flow (integration, real Postgres)", { skip: !TEST_DATABASE_URL
     for (const id of [ids.bPurchase, ids.bImported, bLinkedExpense]) {
       assert.equal((await prisma.expense.findUniqueOrThrow({ where: { id } })).userId, B, `expense ${id} not back with B`);
     }
-    // A cross-scope account reference is cleared, never kept pointing at A.
-    const linked = await prisma.expense.findUniqueOrThrow({ where: { id: bLinkedExpense }, include: { account: true } });
-    assert.ok(linked.account === null || linked.account.userId === B);
+    // Her kept Main came back with her, with the expense she entered on it;
+    // out of the household, that shared expense is now her personal one.
+    const main = await prisma.account.findUniqueOrThrow({ where: { id: ids.bMain } });
+    assert.deepEqual([main.userId, main.ownerUserId, main.householdId, main.visibility], [B, B, null, "household"]);
+    const linked = await prisma.expense.findUniqueOrThrow({ where: { id: bLinkedExpense }, include: { shares: true } });
+    assert.equal(linked.accountId, ids.bMain);
+    assert.equal(linked.scope, "personal");
+    assert.deepEqual(linked.shares, []);
 
     // externalId restored to the original (free in her scope).
     assert.equal((await prisma.expense.findUniqueOrThrow({ where: { id: ids.bImported } })).externalId, IMPORT_HASH);
@@ -317,8 +327,11 @@ describe("partner flow (integration, real Postgres)", { skip: !TEST_DATABASE_URL
     assert.deepEqual([asB.monthlyIncome, asB.ownMonthlyIncome, asB.isCouple], [925, 925, false]);
 
     // Back on her own, an expense without accountId must not land on her card
-    // (that would silently turn it into card debt): she gets a non-card account.
+    // (that would silently turn it into card debt): it goes to her Main, and
+    // none is seeded since hers came back.
     const solo = (await ok(B, "POST", "/api/expenses", { amount: 8, description: "Pan" })).expense;
+    assert.equal(solo.accountId, ids.bMain);
+    assert.equal(await prisma.account.count({ where: { userId: B, type: { not: "card" } } }), 1);
     const soloAccount = await prisma.account.findUniqueOrThrow({ where: { id: solo.accountId } });
     assert.deepEqual([soloAccount.userId, soloAccount.ownerUserId], [B, B]);
     assert.notEqual(soloAccount.type, "card");

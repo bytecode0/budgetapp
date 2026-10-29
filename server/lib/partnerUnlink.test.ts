@@ -114,6 +114,20 @@ test("what she entered while linked comes back, unless it would change a debt ba
   assert.deepEqual(plan.clear.expenseAccount, ["groceries-on-ex-main"]);
 });
 
+test("a moved shared expense becomes her personal one; what stays in the pool is untouched", () => {
+  const plan = planUnlink({
+    ...base,
+    expenses: [
+      expense({ id: "shared-on-her-checking", accountId: "her-checking", scope: "shared", hasShares: true }),
+      expense({ id: "shared-dinner-she-entered", payerUserId: EX, createdByUserId: HER, scope: "shared", hasShares: true }),
+      expense({ id: "shared-unsplit", scope: "shared", hasShares: false }),
+      expense({ id: "her-personal", accountId: "her-checking" }),
+      expense({ id: "ex-shared", accountId: "ex-checking", payerUserId: EX, createdByUserId: EX, scope: "shared", hasShares: true }),
+    ],
+  });
+  assert.deepEqual(plan.personalExpenseIds.sort(), ["shared-dinner-she-entered", "shared-on-her-checking", "shared-unsplit"]);
+});
+
 test("her moved expenses keep their category via a copied line; plan and other debt lines don't copy", () => {
   const plan = planUnlink({
     ...base,

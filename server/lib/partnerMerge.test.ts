@@ -13,7 +13,7 @@ const line = (over: Partial<MergeAllocation>): MergeAllocation => ({
   id: "x", name: "Fixed Expenses", type: "fixed", isDefault: true, allocatedAmount: 0, hasBudgetedMonth: false, ...over,
 });
 const account = (over: Partial<MergeAccount>): MergeAccount => ({
-  id: "acc", name: DEFAULT_ACCOUNT_NAME, type: "checking", currentBalance: 0, bankConnectionId: null, referenced: false, ...over,
+  id: "acc", name: DEFAULT_ACCOUNT_NAME, type: "checking", currentBalance: 0, bankConnectionId: null, isArchived: false, referenced: false, ...over,
 });
 
 // The partner right after her onboarding: seeded defaults, her own data.
@@ -112,6 +112,22 @@ test("her seeded Main account is dropped only while unused; every other account 
   assert.equal(isUnusedDefaultAccount(account({ referenced: true })), false);
 });
 
+// Her own open non-card account is what her expenses default to while linked
+// (defaultAccount.ts); without one they'd go to her partner's account.
+test("her unused Main is kept when it would be her only open non-card account", () => {
+  const keep = (memberAccounts: MergeAccount[]) => planPoolMerge({ ...base, memberAccounts }).deleteAccountIds;
+  // Only a card besides Main → Main kept.
+  assert.deepEqual(keep([account({ id: "main" }), account({ id: "card", type: "card", name: "Visa" })]), []);
+  // No other account → kept.
+  assert.deepEqual(keep([account({ id: "main" })]), []);
+  // An archived checking doesn't count → kept.
+  assert.deepEqual(keep([account({ id: "main" }), account({ id: "old", name: "BBVA", isArchived: true })]), []);
+  // Another open checking account of hers → Main deleted.
+  assert.deepEqual(keep([account({ id: "main" }), account({ id: "bbva", name: "BBVA" })]), ["main"]);
+  // Two unused Mains and nothing else: one is kept.
+  assert.deepEqual(keep([account({ id: "main1" }), account({ id: "main2" })]), ["main2"]);
+});
+
 test("transactions whose externalId the pool has are kept under a namespaced id; duplicate rules/recurring drop", () => {
   const plan = planPoolMerge({
     ...base,
@@ -172,8 +188,8 @@ test("summary counts what moves; nothing left means nothing to do (idempotent re
   const counts = { incomes: 1, expenses: 3, accounts: 1, debts: 2, debtAdjustments: 0, bankConnections: 0, allocations: 2, monthlyBudgets: 0, lifePlans: 0, planDeposits: 0, rules: 0, recurring: 0 };
   const s = summarizeMerge(counts, plan);
   assert.equal(s.incomes, 1);
-  assert.equal(s.accounts, 0);
-  assert.equal(s.defaultAccountsDropped, 1);
+  assert.equal(s.accounts, 1); // her only Main is kept
+  assert.equal(s.defaultAccountsDropped, 0);
   assert.equal(s.allocations, 0);
   assert.equal(s.allocationsMerged, 2);
   assert.equal(s.debts, 2);
