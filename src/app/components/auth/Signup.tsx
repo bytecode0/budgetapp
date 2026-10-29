@@ -11,7 +11,7 @@ interface SignupProps {
 }
 
 export function Signup({ onSignupSuccess, onSwitchToLogin }: SignupProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { register } = useAuth();
   const [formData, setFormData] = useState({ name: '', email: '', password: '', confirmPassword: '' });
   const [showPassword, setShowPassword] = useState(false);
@@ -36,7 +36,8 @@ export function Signup({ onSignupSuccess, onSwitchToLogin }: SignupProps) {
   };
 
   const handleGoogleSignup = () => {
-    window.location.href = '/api/auth/google';
+    // The server accepts only "es" | "en" and creates a new user's settings in it.
+    window.location.href = `/api/auth/google?lang=${i18n.language === 'en' ? 'en' : 'es'}`;
   };
 
   return (

@@ -14,7 +14,7 @@ interface LoginProps {
 }
 
 export function Login({ onLogin, onSwitchToSignup, onForgotPassword, onNeedVerification, googleError }: LoginProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,7 +45,8 @@ export function Login({ onLogin, onSwitchToSignup, onForgotPassword, onNeedVerif
   };
 
   const handleGoogleLogin = () => {
-    window.location.href = '/api/auth/google';
+    // The server accepts only "es" | "en" and creates a new user's settings in it.
+    window.location.href = `/api/auth/google?lang=${i18n.language === 'en' ? 'en' : 'es'}`;
   };
 
   return (

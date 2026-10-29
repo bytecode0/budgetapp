@@ -1,14 +1,23 @@
 import { prisma } from "./prisma.js";
 import { DEFAULT_ACCOUNT_NAME } from "./onboarding.js";
+import type { EmailLocale } from "./email/locales/index.js";
 
 const DEFAULT_ALLOCATIONS = [
   { name: "Fixed Expenses",    icon: "🏠", type: "fixed",    sortOrder: 0 },
   { name: "Flexible Spending", icon: "🎯", type: "flexible", sortOrder: 1 },
 ];
 
-export async function createDefaultAllocations(userId: string) {
+// `language`: the UI language at sign-up, stored only when the settings row is
+// created here (an existing row, e.g. from /register, keeps its language).
+export async function createDefaultAllocations(userId: string, language?: EmailLocale) {
   const existing = await prisma.allocation.count({ where: { userId } });
   if (existing > 0) return; // already seeded
+
+  await prisma.userSettings.upsert({
+    where: { userId },
+    update: {},
+    create: { userId, monthlyIncome: 0, ...(language && { language }) },
+  });
 
   await prisma.allocation.createMany({
     data: DEFAULT_ALLOCATIONS.map((a) => ({
@@ -18,12 +27,6 @@ export async function createDefaultAllocations(userId: string) {
       actualAmount: 0,
       isDefault: true,
     })),
-  });
-
-  await prisma.userSettings.upsert({
-    where: { userId },
-    update: {},
-    create: { userId, monthlyIncome: 0 },
   });
 
   await createDefaultAccount(userId);
