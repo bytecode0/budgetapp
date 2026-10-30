@@ -604,22 +604,6 @@
       "investment": "Investment",
       "card": "Credit card"
     },
-    "connectBank": "Connect your bank",
-    "bankStatusActive": "Connected — syncing automatically",
-    "bankStatusPending": "Connecting...",
-    "bankStatusNeedsAttention": "Needs reconnection",
-    "chooseBankTitle": "Choose your bank",
-    "noInstitutions": "No banks found for your country.",
-    "mapAccountsTitle": "Link your accounts",
-    "mapAccountsSubtitle": "Choose where each account from {{bank}} should go.",
-    "mapAsNew": "Create as a new account",
-    "mapToExisting": "Link to \"{{name}}\"",
-    "confirmLink": "Confirm",
-    "bankAccountFallback": "Bank account",
-    "bankLinkedOk": "{{count}} account(s) linked",
-    "syncNow": "Sync now",
-    "syncedOk": "Synced — {{expenses}} new expense(s), {{income}} new income",
-    "reconnect": "Reconnect",
     "backsDebtError": "This account belongs to a card in Debts: archive it instead of deleting it.",
     "cardOwed": "owed",
     "cardOwedLabel": "What you owe today",
@@ -1384,6 +1368,7 @@
             "One-time verification codes we email you to confirm your account or reset your password. They expire after 15 minutes.",
             "Your financial data: income, expenses (amount, date, description and category), budget and categories, accounts and balances, cards, loans, installment plans and debts with their payments, savings goals, rules for categorising expenses and your preferences (language, theme, payday).",
             "Bank statements you import: the file (CSV, Excel, Norma 43 or OFX) is read in your browser and only the transactions it contains reach the server (date, amount, description and, if present, balance and status). If your browser can't read it and the file is small, it is sent to the server to be read there, without storing it. We store the transactions you confirm, not the file. If you tell us which column is which, we store that mapping (the column titles) on the account for the next statement.",
+            "If you connect your bank (optional): through Enable Banking we read, with the read-only permission you give on your bank's website, the name and type of the accounts and cards you share, their currency, the last four characters of the IBAN, balances and booked transactions (date, amount, description and, when provided, the merchant's or other party's name and the balance after the transaction). Transactions are classified with your own rules; the bank's descriptions are not sent to any AI. We store the transactions you confirm, the balances, the date the permission expires and an identifier of the session with the bank, encrypted. We do not store the full IBAN or your bank credentials: we never see them.",
             "Your household: if you invite someone to share finances, we store their email and the invitation, and send them an email with the link. People in the same household see the shared data according to the household's privacy level.",
             "Technical data: the logs the server produces while running (for example, errors), which include data such as the request's IP address."
           ]
@@ -1391,7 +1376,7 @@
         {
           "title": "What LifePlan does not do",
           "paragraphs": [
-            "LifePlan does not connect to your bank today: data only gets in because you type it or import a file. It does not move money or make payments. It shows no ads, does not sell your data or hand it to third parties for their own purposes, and uses no analytics or advertising cookies. Nor does it make automated decisions that legally affect you."
+            "LifePlan only connects to your bank if you ask it to, and only to read: it cannot move money or make payments. If you don't connect it, data only gets in because you type it or import a file. It shows no ads, does not sell your data or hand it to third parties for their own purposes, and uses no analytics or advertising cookies. Nor does it make automated decisions that legally affect you."
           ]
         },
         {
@@ -1418,6 +1403,7 @@
             "Neon: the PostgreSQL database where your data is stored, hosted in the European Union (Frankfurt).",
             "Vercel: hosting for the website and the app's server, which runs in Frankfurt.",
             "Resend: sending the app's emails (your email address and the message content).",
+            "Enable Banking (Enable Banking Oy, Finland): a registered account information service provider (AISP, PSD2 directive) supervised by the Finnish Financial Supervisory Authority (FIN-FSA). Only if you connect your bank: it makes the connection with your bank using the permission you give there and hands us your accounts, balances and transactions. The permission lasts at most 180 days (your bank sets it); we warn you before it expires. You can withdraw it at any time by disconnecting the bank in Accounts or from your bank.",
             "Google: sign-in with Google, only if you choose to use it. The website also loads its fonts from Google Fonts, so your browser sends your IP address to Google when you open it.",
             "Anthropic: the AI classification described above and, if it is the configured provider, the AI column suggestion, only when you ask for them.",
             "OpenRouter: the AI column suggestion described above (the column titles you see and the formats), when you ask for it and if it is the configured provider. OpenRouter passes it to the chosen model's provider."
@@ -1427,13 +1413,14 @@
         {
           "title": "Cookies and local storage",
           "paragraphs": [
-            "LifePlan uses a single cookie, called \"token\", which keeps you signed in. It is technical and strictly necessary: it cannot be read by JavaScript, it expires after 7 days and it is deleted when you sign out. Your browser also keeps in its local storage the language you choose and whether you have hidden the \"Finish your setup\" notice. We use no analytics, advertising or third-party cookies, which is why we don't ask for your consent to them."
+            "LifePlan uses a cookie, called \"token\", which keeps you signed in. It is technical and strictly necessary: it cannot be read by JavaScript, it expires after 7 days and it is deleted when you sign out. When you sign in with Google or connect your bank, a temporary technical cookie (at most 10 and 30 minutes) checks that the return was started by your browser. Your browser also keeps in its local storage the language you choose and whether you have hidden the \"Finish your setup\" notice. We use no analytics, advertising or third-party cookies, which is why we don't ask for your consent to them."
           ]
         },
         {
           "title": "How long we keep data",
           "paragraphs": [
             "We keep your data while you have an account. You can delete the transactions, accounts, debts and other items you created at any time from within the app. Verification codes expire after 15 minutes and household invitations after 7 days.",
+            "If you disconnect a bank, we withdraw the permission at the provider and stop reading it; the transactions you already imported stay until you delete them.",
             "The app does not yet have a button to delete your account. To do so, write to contact@luisvespa.com from your account's email address and we will delete it together with all its data. The database provider's backups may keep it for a limited period before it is erased."
           ]
         },
@@ -1540,5 +1527,88 @@
     "refundOnDebtLine": "A refund can't go on a debt line: it undoes a purchase, it doesn't pay the debt.",
     "allocationNotFound": "That category no longer exists. Reload and pick another one.",
     "accountNotFound": "That account isn't available. Reload and pick another one."
+  },
+  "banking": {
+    "connectBank": "Connect your bank",
+    "close": "Close",
+    "cancel": "Cancel",
+    "chooseBankTitle": "Choose your bank",
+    "chooseBankHint": "We'll take you to your bank's website to give read-only permission. Enable Banking, a regulated provider, makes the connection.",
+    "searchBank": "Search bank",
+    "noInstitutions": "No banks match.",
+    "statusPending": "Waiting for your permission at the bank",
+    "statusExpired": "Permission expired",
+    "statusError": "The last sync failed",
+    "statusSynced": "Last synced: {{date}}",
+    "statusNotSynced": "Not synced yet",
+    "consentUntil": "Permission until {{date}}",
+    "sharedReadOnly": "Another household member's connection: read-only",
+    "expiredWarning": "The permission for this bank has expired: we no longer bring in transactions. Reconnect to continue.",
+    "expiringWarning_one": "The permission expires tomorrow ({{date}}). Reconnect so it doesn't stop.",
+    "expiringWarning_other": "The permission expires in {{count}} days ({{date}}). Reconnect so it doesn't stop.",
+    "reconnect": "Reconnect",
+    "syncNow": "Sync now",
+    "syncedOk_one": "Synced: {{count}} new transaction",
+    "syncedOk_other": "Synced: {{count}} new transactions",
+    "heldForReview_one": "{{count}} transaction is waiting for your review",
+    "heldForReview_other": "{{count}} transactions are waiting for your review",
+    "disconnect": "Disconnect",
+    "disconnectTitle": "Disconnect {{bank}}?",
+    "disconnectDesc": "We withdraw the permission at the provider and stop syncing. Transactions you already imported stay, and your accounts remain as manual accounts.",
+    "disconnectedOk": "{{bank}} disconnected",
+    "renewedOk": "{{bank}} connection renewed",
+    "linkAccounts": "Link accounts",
+    "changeLinks": "Change linked accounts",
+    "reviewFirst": "Review first sync",
+    "toReview_one": "{{count}} to review",
+    "toReview_other": "{{count}} to review",
+    "mapTitle": "Link your accounts",
+    "mapSubtitle": "Choose what to do with each {{bank}} account. Nothing is imported until you review it.",
+    "mapNone": "The bank didn't share any account.",
+    "mapNewAccount": "Create a new account",
+    "mapNewCard": "Create a new card (with its debt)",
+    "mapExisting": "Link to \"{{name}}\"",
+    "mapSkip": "Don't link",
+    "mapCardHint": "A card links to a card in Accounts and its debt: what you owe comes from the bank.",
+    "mapConfirm": "Link",
+    "linkedOk_one": "{{count}} account linked",
+    "linkedOk_other": "{{count}} accounts linked",
+    "kind": {
+      "checking": "Current account",
+      "savings": "Savings account",
+      "card": "Card"
+    },
+    "reviewTitle": "Review {{name}}",
+    "reviewLoading": "Reading the bank's transactions…",
+    "reviewIntroFirst": "These are the last 90 days of transactions. Choose which to keep and their category: nothing is imported until you confirm. After that, new ones arrive on their own every day.",
+    "reviewIntro": "These transactions need your decision (no category, possible duplicates, card payments or unclear credits). What you leave unticked won't be imported.",
+    "reviewPendingNote_one": "{{count}} pending transaction isn't imported until the bank books it.",
+    "reviewPendingNote_other": "{{count}} pending transactions aren't imported until the bank books them.",
+    "reviewNothingNew": "No new transactions",
+    "reviewNothingNewDesc": "Everything the bank has is already in LifePlan.",
+    "reviewStart": "Start syncing",
+    "reviewDoneHint": "From now on, this account's new transactions arrive on their own every day.",
+    "errors": {
+      "disabled": "Bank connection is not enabled.",
+      "notAllowed": "Bank connection isn't available for your account yet.",
+      "notFound": "We couldn't find that connection.",
+      "notOwner": "Only the person who connected the bank can do this.",
+      "expired": "The bank permission has expired: reconnect.",
+      "providerFailed": "The banking provider isn't responding. Try again later.",
+      "syncFailed": "Couldn't sync. Try again later.",
+      "unknownBank": "We couldn't find that bank.",
+      "invalidState": "The return from the bank doesn't match a connection started in this browser. Please try again.",
+      "denied": "Permission wasn't given at the bank.",
+      "failed": "Couldn't complete the bank connection.",
+      "connectFailed": "Couldn't start the bank connection.",
+      "institutionsFailed": "Couldn't load the list of banks.",
+      "linkFailed": "Couldn't link the accounts.",
+      "accountNotOwned": "You can only link your own accounts.",
+      "typeMismatch": "A bank card goes with a card, and an account with an account.",
+      "duplicateTarget": "Two bank accounts can't go to the same account.",
+      "notLinked": "That account isn't linked to this connection.",
+      "previewFailed": "Couldn't read the bank's transactions."
+    },
+    "heldExpired": "Some transactions waiting for review are now too old to fetch from the bank (over 90 days). If any is missing, import it from a statement."
   }
 }

@@ -19,7 +19,11 @@
 // count the groceries twice. That split is what countedAmounts() exposes to
 // every place that sums expenses. Events are replayed in date order, so an
 // adjustment only affects payments made after it — never a closed month.
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
+
+/** The client, or a transaction (to read and write under one lock). */
+type Db = Prisma.TransactionClient;
 
 export interface LedgerDebt {
   id: string;
@@ -267,8 +271,8 @@ export function buildLedgers(
 }
 
 /** Ledgers for the pool's debts (optionally only `debtIds`). */
-export async function loadDebtLedgers(userId: string, debtIds?: string[]): Promise<DebtLedger[]> {
-  const debts = await prisma.debt.findMany({
+export async function loadDebtLedgers(userId: string, debtIds?: string[], db: Db = prisma): Promise<DebtLedger[]> {
+  const debts = await db.debt.findMany({
     where: { userId, ...(debtIds && { id: { in: debtIds } }) },
     select: LEDGER_DEBT_SELECT,
   });
@@ -278,11 +282,11 @@ export async function loadDebtLedgers(userId: string, debtIds?: string[]): Promi
   const accountIds = debts.map(d => d.accountId).filter((id): id is string => !!id);
   const movementSelect = { id: true, amount: true, date: true, createdAt: true, debtId: true, accountId: true, kind: true } as const;
   const [payments, purchases, adjustments] = await Promise.all([
-    prisma.expense.findMany({ where: { userId, debtId: { in: ids } }, select: movementSelect }),
+    db.expense.findMany({ where: { userId, debtId: { in: ids } }, select: movementSelect }),
     accountIds.length
-      ? prisma.expense.findMany({ where: { userId, debtId: null, accountId: { in: accountIds } }, select: movementSelect })
+      ? db.expense.findMany({ where: { userId, debtId: null, accountId: { in: accountIds } }, select: movementSelect })
       : Promise.resolve([]),
-    prisma.debtAdjustment.findMany({ where: { userId, debtId: { in: ids } }, select: { id: true, amount: true, date: true, debtId: true } }),
+    db.debtAdjustment.findMany({ where: { userId, debtId: { in: ids } }, select: { id: true, amount: true, date: true, debtId: true } }),
   ]);
   return buildLedgers(debts, [...payments, ...purchases], adjustments);
 }
@@ -364,8 +368,9 @@ export async function setLiveValues(
   userId: string,
   debtId: string,
   live: { balance?: number; installmentsPaid?: number },
+  db: Db = prisma,
 ): Promise<void> {
-  const [ledger] = await loadDebtLedgers(userId, [debtId]);
+  const [ledger] = await loadDebtLedgers(userId, [debtId], db);
   if (!ledger) return;
   const state = debtState(ledger);
   const hasMovements = ledger.payments.length + ledger.purchases.length + ledger.adjustments.length > 0;
@@ -373,7 +378,7 @@ export async function setLiveValues(
   const data: { currentBalance?: number; balanceAsOf?: Date; installmentsPaid?: number } = {};
   if (live.balance !== undefined && live.balance !== state.balance) {
     if (hasMovements) {
-      await prisma.debtAdjustment.create({ data: { userId, debtId, amount: live.balance - state.balance } });
+      await db.debtAdjustment.create({ data: { userId, debtId, amount: live.balance - state.balance } });
     } else {
       // "I owe X now" — true as of now, so a statement imported later doesn't
       // re-add purchases this figure already includes.
@@ -384,7 +389,7 @@ export async function setLiveValues(
   if (live.installmentsPaid !== undefined && live.installmentsPaid !== state.installmentsPaid) {
     data.installmentsPaid = (ledger.debt.installmentsPaid ?? 0) + (live.installmentsPaid - state.installmentsPaid);
   }
-  if (Object.keys(data).length > 0) await prisma.debt.update({ where: { id: debtId }, data });
+  if (Object.keys(data).length > 0) await db.debt.update({ where: { id: debtId }, data });
 }
 
 /** A debt that reaches zero is paid off (and reopens if a payment is

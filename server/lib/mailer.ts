@@ -4,6 +4,7 @@
 import { sendEmail } from "./email/index.js";
 import type { EmailLocale } from "./email/locales/index.js";
 import {
+  bankConsentExpiringEmail,
   partnerInviteEmail,
   passwordResetEmail,
   verificationEmail,
@@ -34,4 +35,14 @@ export async function sendPartnerInviteEmail(
   locale: EmailLocale = "es",
 ) {
   await sendEmail({ to: invitedEmail, ...partnerInviteEmail({ senderName, acceptUrl }, locale) });
+}
+
+export async function sendBankConsentExpiringEmail(
+  email: string,
+  name: string,
+  bankName: string,
+  expiresAt: Date,
+  locale: EmailLocale = "es",
+) {
+  await sendEmail({ to: email, ...bankConsentExpiringEmail({ name, bankName, expiresAt }, locale) });
 }

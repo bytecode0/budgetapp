@@ -604,22 +604,6 @@
       "investment": "Inversión",
       "card": "Tarjeta de crédito"
     },
-    "connectBank": "Conecta tu banco",
-    "bankStatusActive": "Conectado — sincronizando automáticamente",
-    "bankStatusPending": "Conectando...",
-    "bankStatusNeedsAttention": "Necesita reconexión",
-    "chooseBankTitle": "Elige tu banco",
-    "noInstitutions": "No se encontraron bancos para tu país.",
-    "mapAccountsTitle": "Vincula tus cuentas",
-    "mapAccountsSubtitle": "Elige a dónde debe ir cada cuenta de {{bank}}.",
-    "mapAsNew": "Crear como cuenta nueva",
-    "mapToExisting": "Vincular con \"{{name}}\"",
-    "confirmLink": "Confirmar",
-    "bankAccountFallback": "Cuenta bancaria",
-    "bankLinkedOk": "{{count}} cuenta(s) vinculada(s)",
-    "syncNow": "Sincronizar ahora",
-    "syncedOk": "Sincronizado — {{expenses}} gasto(s) nuevo(s), {{income}} ingreso(s) nuevo(s)",
-    "reconnect": "Reconectar",
     "backsDebtError": "Esta cuenta es la de una tarjeta registrada en Deudas: archívala en vez de borrarla.",
     "cardOwed": "debes",
     "cardOwedLabel": "Lo que debes hoy",
@@ -1384,6 +1368,7 @@
             "Códigos de verificación de un solo uso que te enviamos por email para confirmar tu cuenta o recuperar la contraseña. Caducan a los 15 minutos.",
             "Tus datos financieros: ingresos, gastos (importe, fecha, concepto y categoría), presupuesto y categorías, cuentas y saldos, tarjetas, préstamos, cuotas y deudas con sus pagos, metas de ahorro, reglas para categorizar gastos y tus preferencias (idioma, tema, día de cobro).",
             "Extractos bancarios que importas: el archivo (CSV, Excel, Norma 43 u OFX) se lee en tu navegador y al servidor solo llegan los movimientos que contiene (fecha, importe, concepto y, si los trae, saldo y estado). Si tu navegador no consigue leerlo y el archivo es pequeño, se envía al servidor para leerlo allí, sin guardarlo. Guardamos los movimientos que confirmas, no el archivo. Si indicas qué columna es cada una, guardamos esa correspondencia (los títulos de las columnas) en la cuenta para el próximo extracto.",
+            "Si conectas tu banco (opcional): a través de Enable Banking leemos, con tu permiso de solo lectura dado en la web de tu banco, el nombre y tipo de las cuentas y tarjetas que compartas, su moneda, los cuatro últimos caracteres del IBAN, los saldos y los movimientos contabilizados (fecha, importe, concepto y, si los trae, el nombre del comercio o de la otra parte y el saldo tras el movimiento). Los movimientos se clasifican con tus propias reglas; los conceptos del banco no se envían a ninguna IA. Guardamos los movimientos que confirmas, los saldos, la fecha en que caduca el permiso y un identificador de la sesión con el banco, cifrado. No guardamos el IBAN completo ni tus credenciales del banco: nunca las vemos.",
             "Tu hogar: si invitas a otra persona a compartir las finanzas, guardamos su email y la invitación, y le enviamos un email con el enlace. Las personas de un mismo hogar ven los datos compartidos según el nivel de privacidad que tenga el hogar.",
             "Datos técnicos: los registros que genera el servidor al funcionar (por ejemplo, errores), que incluyen datos como la dirección IP de la petición."
           ]
@@ -1391,7 +1376,7 @@
         {
           "title": "Lo que LifePlan no hace",
           "paragraphs": [
-            "LifePlan no se conecta hoy a tu banco: los datos solo entran porque tú los escribes o importas un archivo. No mueve dinero ni hace pagos. No muestra publicidad, no vende tus datos ni los cede a terceros para sus propios fines, y no usa cookies de analítica ni de publicidad. Tampoco toma decisiones automatizadas que te afecten jurídicamente."
+            "LifePlan solo se conecta a tu banco si tú lo pides, y solo para leer: no puede mover dinero ni hacer pagos. Si no lo conectas, los datos solo entran porque tú los escribes o importas un archivo. No muestra publicidad, no vende tus datos ni los cede a terceros para sus propios fines, y no usa cookies de analítica ni de publicidad. Tampoco toma decisiones automatizadas que te afecten jurídicamente."
           ]
         },
         {
@@ -1418,6 +1403,7 @@
             "Neon: base de datos PostgreSQL donde se guardan tus datos, alojada en la Unión Europea (Fráncfort).",
             "Vercel: alojamiento de la web y del servidor de la aplicación, que se ejecuta en Fráncfort.",
             "Resend: envío de los emails de la aplicación (tu email y el contenido del mensaje).",
+            "Enable Banking (Enable Banking Oy, Finlandia): proveedor de servicios de información sobre cuentas (AISP, directiva PSD2) registrado y supervisado por la autoridad financiera de Finlandia (FIN-FSA). Solo si conectas tu banco: hace la conexión con tu banco con el permiso que das allí y nos entrega tus cuentas, saldos y movimientos. El permiso dura como mucho 180 días (lo fija tu banco); te avisamos antes de que caduque. Puedes retirarlo cuando quieras desconectando el banco en Cuentas o desde tu banco.",
             "Google: el inicio de sesión con Google, solo si eliges usarlo. Además, la web carga sus tipografías desde Google Fonts, por lo que tu navegador envía a Google tu dirección IP al abrirla.",
             "Anthropic: la clasificación con IA descrita arriba y, si es el proveedor configurado, la sugerencia de columnas con IA, solo cuando las pides.",
             "OpenRouter: la sugerencia de columnas con IA descrita arriba (los títulos de columna que ves y los formatos), cuando la pides y si es el proveedor configurado. OpenRouter la pasa al proveedor del modelo elegido."
@@ -1427,13 +1413,14 @@
         {
           "title": "Cookies y almacenamiento local",
           "paragraphs": [
-            "LifePlan usa una sola cookie, llamada «token», que mantiene tu sesión iniciada. Es técnica e imprescindible: no es accesible desde JavaScript, caduca a los 7 días y se borra al cerrar sesión. Además, tu navegador guarda en su almacenamiento local el idioma que eliges y si has ocultado el aviso «Completa tu configuración». No usamos cookies de analítica, de publicidad ni de terceros, por eso no te pedimos consentimiento para ellas."
+            "LifePlan usa una cookie, llamada «token», que mantiene tu sesión iniciada. Es técnica e imprescindible: no es accesible desde JavaScript, caduca a los 7 días y se borra al cerrar sesión. Cuando entras con Google o conectas tu banco, una cookie técnica temporal (como mucho 10 y 30 minutos) comprueba que la vuelta la inició tu navegador. Además, tu navegador guarda en su almacenamiento local el idioma que eliges y si has ocultado el aviso «Completa tu configuración». No usamos cookies de analítica, de publicidad ni de terceros, por eso no te pedimos consentimiento para ellas."
           ]
         },
         {
           "title": "Cuánto tiempo guardamos los datos",
           "paragraphs": [
             "Guardamos tus datos mientras tengas la cuenta. Puedes borrar en cualquier momento, desde la propia aplicación, los movimientos, cuentas, deudas y demás elementos que hayas creado. Los códigos de verificación caducan a los 15 minutos y las invitaciones al hogar, a los 7 días.",
+            "Si desconectas un banco, retiramos el permiso en el proveedor y dejamos de leerlo; los movimientos que ya importaste se quedan hasta que los borres.",
             "La aplicación todavía no tiene un botón para eliminar la cuenta. Para hacerlo, escribe a contact@luisvespa.com desde el email de tu cuenta y la eliminaremos junto con todos sus datos. Las copias de seguridad del proveedor de base de datos pueden conservarlos durante un periodo limitado antes de borrarse."
           ]
         },
@@ -1540,5 +1527,88 @@
     "refundOnDebtLine": "Una devolución no puede ir en la partida de una deuda: deshace una compra, no paga la deuda.",
     "allocationNotFound": "Esa categoría ya no existe. Recarga la página y elige otra.",
     "accountNotFound": "Esa cuenta no está disponible. Recarga la página y elige otra."
+  },
+  "banking": {
+    "connectBank": "Conecta tu banco",
+    "close": "Cerrar",
+    "cancel": "Cancelar",
+    "chooseBankTitle": "Elige tu banco",
+    "chooseBankHint": "Te llevaremos a la web de tu banco para que des permiso de solo lectura. Enable Banking, entidad regulada, hace la conexión.",
+    "searchBank": "Buscar banco",
+    "noInstitutions": "No hay bancos que coincidan.",
+    "statusPending": "Pendiente de tu permiso en el banco",
+    "statusExpired": "Permiso caducado",
+    "statusError": "No se pudo sincronizar la última vez",
+    "statusSynced": "Última sincronización: {{date}}",
+    "statusNotSynced": "Aún sin sincronizar",
+    "consentUntil": "Permiso hasta el {{date}}",
+    "sharedReadOnly": "Conexión de otra persona del hogar: solo lectura",
+    "expiredWarning": "El permiso con este banco ha caducado: ya no traemos movimientos. Reconecta para seguir.",
+    "expiringWarning_one": "El permiso caduca mañana ({{date}}). Reconecta para que no se corte.",
+    "expiringWarning_other": "El permiso caduca en {{count}} días ({{date}}). Reconecta para que no se corte.",
+    "reconnect": "Reconectar",
+    "syncNow": "Sincronizar ahora",
+    "syncedOk_one": "Sincronizado: {{count}} movimiento nuevo",
+    "syncedOk_other": "Sincronizado: {{count}} movimientos nuevos",
+    "heldForReview_one": "{{count}} movimiento espera tu revisión",
+    "heldForReview_other": "{{count}} movimientos esperan tu revisión",
+    "disconnect": "Desconectar",
+    "disconnectTitle": "¿Desconectar {{bank}}?",
+    "disconnectDesc": "Retiramos el permiso en el proveedor y dejamos de sincronizar. Los movimientos que ya importaste se quedan, y tus cuentas siguen ahí como cuentas manuales.",
+    "disconnectedOk": "{{bank}} desconectado",
+    "renewedOk": "Conexión con {{bank}} renovada",
+    "linkAccounts": "Vincular cuentas",
+    "changeLinks": "Cambiar cuentas vinculadas",
+    "reviewFirst": "Revisar primera sincronización",
+    "toReview_one": "{{count}} por revisar",
+    "toReview_other": "{{count}} por revisar",
+    "mapTitle": "Vincula tus cuentas",
+    "mapSubtitle": "Elige qué hacer con cada cuenta de {{bank}}. No se importa nada hasta que lo revises.",
+    "mapNone": "El banco no ha compartido ninguna cuenta.",
+    "mapNewAccount": "Crear una cuenta nueva",
+    "mapNewCard": "Crear una tarjeta nueva (con su deuda)",
+    "mapExisting": "Vincular con «{{name}}»",
+    "mapSkip": "No vincular",
+    "mapCardHint": "Una tarjeta se vincula con una tarjeta de Cuentas y su deuda: lo que debes lo trae el banco.",
+    "mapConfirm": "Vincular",
+    "linkedOk_one": "{{count}} cuenta vinculada",
+    "linkedOk_other": "{{count}} cuentas vinculadas",
+    "kind": {
+      "checking": "Cuenta corriente",
+      "savings": "Cuenta de ahorro",
+      "card": "Tarjeta"
+    },
+    "reviewTitle": "Revisar {{name}}",
+    "reviewLoading": "Leyendo los movimientos del banco…",
+    "reviewIntroFirst": "Estos son los movimientos de los últimos 90 días. Elige cuáles guardar y su categoría: nada se importa hasta que confirmes. Después, los nuevos llegarán solos cada día.",
+    "reviewIntro": "Estos movimientos necesitan que decidas tú (sin categoría, posibles duplicados, pagos de tarjeta o abonos dudosos). Lo que no marques no se importará.",
+    "reviewPendingNote_one": "{{count}} movimiento pendiente no se importa hasta que el banco lo contabilice.",
+    "reviewPendingNote_other": "{{count}} movimientos pendientes no se importan hasta que el banco los contabilice.",
+    "reviewNothingNew": "No hay movimientos nuevos",
+    "reviewNothingNewDesc": "Todo lo que trae el banco ya está en LifePlan.",
+    "reviewStart": "Empezar a sincronizar",
+    "reviewDoneHint": "A partir de ahora, los movimientos nuevos de esta cuenta llegarán solos cada día.",
+    "errors": {
+      "disabled": "La conexión con bancos no está activada.",
+      "notAllowed": "La conexión con bancos aún no está disponible para tu cuenta.",
+      "notFound": "No encontramos esa conexión.",
+      "notOwner": "Solo quien conectó el banco puede hacer esto.",
+      "expired": "El permiso con el banco ha caducado: reconecta.",
+      "providerFailed": "El proveedor bancario no responde. Inténtalo más tarde.",
+      "syncFailed": "No se pudo sincronizar. Inténtalo más tarde.",
+      "unknownBank": "No encontramos ese banco.",
+      "invalidState": "La vuelta del banco no coincide con una conexión iniciada en este navegador. Vuelve a intentarlo.",
+      "denied": "No se dio el permiso en el banco.",
+      "failed": "No se pudo completar la conexión con el banco.",
+      "connectFailed": "No se pudo iniciar la conexión con el banco.",
+      "institutionsFailed": "No se pudo cargar la lista de bancos.",
+      "linkFailed": "No se pudieron vincular las cuentas.",
+      "accountNotOwned": "Solo puedes vincular tus propias cuentas.",
+      "typeMismatch": "Una tarjeta del banco va con una tarjeta, y una cuenta con una cuenta.",
+      "duplicateTarget": "Dos cuentas del banco no pueden ir a la misma cuenta.",
+      "notLinked": "Esa cuenta no está vinculada a esta conexión.",
+      "previewFailed": "No se pudieron leer los movimientos del banco."
+    },
+    "heldExpired": "Algunos movimientos pendientes de revisar son ya demasiado antiguos para traerlos del banco (más de 90 días). Si te falta alguno, impórtalo desde un extracto."
   }
 }

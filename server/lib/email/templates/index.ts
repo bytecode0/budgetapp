@@ -9,3 +9,4 @@ export { partnerInviteEmail, type PartnerInviteData } from "./partnerInvite.js";
 export { subscriptionActivatedEmail, type SubscriptionActivatedData } from "./subscriptionActivated.js";
 export { subscriptionCancelledEmail, type SubscriptionCancelledData } from "./subscriptionCancelled.js";
 export { paymentFailedEmail, type PaymentFailedData } from "./paymentFailed.js";
+export { bankConsentExpiringEmail, type BankConsentExpiringData } from "./bankConsentExpiring.js";

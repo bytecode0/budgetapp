@@ -211,15 +211,20 @@ model BankConnection {
   householdId     String?
   visibility      String    @default("household") // private | household
 
-  provider        String    @default("gocardless")
-  institutionId   String    // provider's bank identifier
+  provider        String    @default("enablebanking")
+  institutionId   String    // provider's bank identifier (Enable Banking: the ASPSP name)
   institutionName String
-  requisitionId   String    // provider's consent/session identifier
-  status          String    @default("pending") // pending | active | expired | error
+  institutionCountry String? // ISO 3166 alpha-2; Enable Banking names a bank by name + country
+  // Provider's consent/session identifier. Enable Banking: the session id,
+  // ENCRYPTED with server/lib/crypto/secretBox ("" while consent is pending).
+  requisitionId   String
+  status          String    @default("pending") // pending | active | expired | error | revoked
 
   consentGivenAt  DateTime?
-  expiresAt       DateTime? // when re-consent will be required
+  expiresAt       DateTime? // when re-consent will be required (provider's access.valid_until)
+  expiryWarnedAt  DateTime? // when the "consent expires soon" email went out (once per consent)
   lastSyncedAt    DateTime?
+  lastAttemptAt   DateTime? // every sync attempt, failed ones too: the cron goes oldest attempt first
   lastSyncError   String?
 
   createdAt DateTime @default(now())
@@ -252,8 +257,25 @@ model Account {
   // bank connection instead of being purely manual.
   bankConnectionId String?
   externalAccountId String? // provider's account identifier
+  // Provider's STABLE fingerprint of the account (Enable Banking
+  // identification_hash). Account ids change with every consent; this one
+  // doesn't, so a reconnect re-links the same accounts on its own.
+  externalAccountKey String?
   balanceSource      String   @default("manual") // manual | bank_sync
   balanceSyncedAt    DateTime?
+  // Bank sync review cursor (server/lib/banking/sync.ts): movements booked
+  // before this day are settled (written, or dismissed by the user). Null =
+  // first sync not reviewed yet, so the daily sync writes nothing for it.
+  // It only moves forward when nothing waits for review.
+  bankReviewedAt     DateTime?
+  // Movements the last sync held back for the user (flagged by the ingest core).
+  bankPendingReview  Int      @default(0)
+  // externalIds of bank movements the user chose not to keep in a review, so
+  // the daily sync never writes them (newest kept, capped).
+  bankDismissedIds   Json?
+  // A machine code the UI explains, e.g. "held_expired": movements waiting
+  // for review got too old to fetch from the bank. Cleared by a review.
+  bankSyncNotice     String?
 
   // Column mapping saved for statement imports of this account when its file
   // isn't recognised (server/lib/ingest/types.ts ColumnMapping). Null = none.

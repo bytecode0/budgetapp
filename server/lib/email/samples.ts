@@ -3,6 +3,7 @@
 import type { RenderedEmail } from "./components.js";
 import type { EmailLocale } from "./locales/index.js";
 import {
+  bankConsentExpiringEmail,
   partnerInviteEmail,
   passwordResetEmail,
   paymentFailedEmail,
@@ -64,5 +65,13 @@ export const EMAIL_SAMPLES: EmailSample[] = [
     name: "payment-failed",
     render: (l) => paymentFailedEmail({ name: "Ana García" }, l),
     mustContain: both("http://localhost:5173/settings", "contact@luisvespa.com", "Ana"),
+  },
+  {
+    name: "bank-consent-expiring",
+    render: (l) => bankConsentExpiringEmail({ name: "Ana García", bankName: "BBVA", expiresAt: RENEWAL }, l),
+    mustContain: {
+      es: ["BBVA", "23 de noviembre de 2026", "http://localhost:5173/?open=accounts", "Ana"],
+      en: ["BBVA", "23 November 2026", "http://localhost:5173/?open=accounts", "Ana"],
+    },
   },
 ];
