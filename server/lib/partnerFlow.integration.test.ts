@@ -448,4 +448,47 @@ describe("partner flow (integration, real Postgres)", { skip: !TEST_DATABASE_URL
       assert.equal(members.length, 1);
     }
   });
+
+  it("g. possible duplicates: dismissals hold per pair, and a partner's hidden rows are never shown, merged or deleted", async () => {
+    const H = await signUp("Hugo", "hugo@test.local");
+    const I = await signUp("Irene", "irene@test.local");
+    await ok(I, "POST", "/api/partner/accept", { token: await invite(H, "irene@test.local") });
+    const dupIds = async (userId: string) =>
+      ((await ok(userId, "GET", "/api/expenses/duplicates")).groups as any[]).map(g => g.map((e: any) => e.id).sort());
+
+    // Two manual 12,34 € rows the same day: one group. "Not duplicates" clears it.
+    const h1 = (await ok(H, "POST", "/api/expenses", { amount: 12.34, description: "Café" })).expense.id;
+    const h2 = (await ok(H, "POST", "/api/expenses", { amount: 12.34, description: "Café" })).expense.id;
+    assert.deepEqual(await dupIds(H), [[h1, h2].sort()]);
+    await ok(H, "POST", "/api/expenses/duplicates/dismiss", { ids: [h1, h2] });
+    assert.deepEqual(await dupIds(H), []);
+    assert.deepEqual(await dupIds(I), [], "a dismissal applies to the whole pool");
+
+    // A third one forms a group with ONE of them (h1 and h2 stay apart);
+    // deleting it drops its dismissals.
+    const h3 = (await ok(H, "POST", "/api/expenses", { amount: 12.34, description: "Café" })).expense.id;
+    const regrouped = await dupIds(H);
+    assert.equal(regrouped.length, 1);
+    assert.equal(regrouped[0].length, 2);
+    assert.ok(regrouped[0].includes(h3) && (regrouped[0].includes(h1) !== regrouped[0].includes(h2)), JSON.stringify(regrouped));
+    await ok(H, "POST", "/api/expenses/duplicates/dismiss", { ids: [h1, h2, h3] });
+    assert.deepEqual(await dupIds(H), []);
+    await ok(H, "DELETE", `/api/expenses/${h3}`);
+    assert.equal(await prisma.duplicateDismissal.count({ where: { OR: [{ expenseAId: h3 }, { expenseBId: h3 }] } }), 0);
+    assert.equal(await prisma.duplicateDismissal.count({ where: { expenseAId: [h1, h2].sort()[0], expenseBId: [h1, h2].sort()[1] } }), 1);
+
+    // shared_stats: Irene's own transactions are hidden from Hugo's lists.
+    const owner = await prisma.householdMember.findFirstOrThrow({ where: { userId: H, role: "owner" } });
+    await prisma.household.update({ where: { id: owner.householdId }, data: { visibilityTier: "shared_stats" } });
+    const i1 = (await ok(I, "POST", "/api/expenses", { amount: 50, description: "Farmacia" })).expense.id;
+    const h4 = (await ok(H, "POST", "/api/expenses", { amount: 50, description: "Farmacia" })).expense.id;
+    assert.deepEqual(await dupIds(H), [], "Hugo can't be shown Irene's hidden row");
+    assert.equal((await call(H, "POST", "/api/expenses/merge", { keepId: h4, removeIds: [i1] })).status, 404);
+    assert.equal((await call(H, "POST", "/api/expenses/duplicates/dismiss", { ids: [h4, i1] })).status, 404);
+    assert.equal((await call(H, "DELETE", `/api/expenses/${i1}`)).status, 404);
+    assert.equal((await call(H, "PATCH", `/api/expenses/${i1}`, { amount: 1 })).status, 404);
+    assert.equal((await call(H, "PATCH", `/api/expenses/${i1}/attribution`, { scope: "personal" })).status, 404);
+    const survivor = await prisma.expense.findUnique({ where: { id: i1 } });
+    assert.equal(survivor?.amount, 5000, "Irene's row survives untouched");
+  });
 });
