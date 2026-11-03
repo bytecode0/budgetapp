@@ -464,9 +464,13 @@ describe("partner flow (integration, real Postgres)", { skip: !TEST_DATABASE_URL
     assert.deepEqual(await dupIds(H), []);
     assert.deepEqual(await dupIds(I), [], "a dismissal applies to the whole pool");
 
-    // A third one re-forms a group with them; deleting it drops its dismissals.
+    // A third one forms a group with ONE of them (h1 and h2 stay apart);
+    // deleting it drops its dismissals.
     const h3 = (await ok(H, "POST", "/api/expenses", { amount: 12.34, description: "Café" })).expense.id;
-    assert.deepEqual(await dupIds(H), [[h1, h2, h3].sort()]);
+    const regrouped = await dupIds(H);
+    assert.equal(regrouped.length, 1);
+    assert.equal(regrouped[0].length, 2);
+    assert.ok(regrouped[0].includes(h3) && (regrouped[0].includes(h1) !== regrouped[0].includes(h2)), JSON.stringify(regrouped));
     await ok(H, "POST", "/api/expenses/duplicates/dismiss", { ids: [h1, h2, h3] });
     assert.deepEqual(await dupIds(H), []);
     await ok(H, "DELETE", `/api/expenses/${h3}`);
@@ -482,6 +486,9 @@ describe("partner flow (integration, real Postgres)", { skip: !TEST_DATABASE_URL
     assert.equal((await call(H, "POST", "/api/expenses/merge", { keepId: h4, removeIds: [i1] })).status, 404);
     assert.equal((await call(H, "POST", "/api/expenses/duplicates/dismiss", { ids: [h4, i1] })).status, 404);
     assert.equal((await call(H, "DELETE", `/api/expenses/${i1}`)).status, 404);
-    assert.ok(await prisma.expense.findUnique({ where: { id: i1 } }), "Irene's row survives");
+    assert.equal((await call(H, "PATCH", `/api/expenses/${i1}`, { amount: 1 })).status, 404);
+    assert.equal((await call(H, "PATCH", `/api/expenses/${i1}/attribution`, { scope: "personal" })).status, 404);
+    const survivor = await prisma.expense.findUnique({ where: { id: i1 } });
+    assert.equal(survivor?.amount, 5000, "Irene's row survives untouched");
   });
 });
