@@ -30,6 +30,7 @@ model User {
   recurringCommitments RecurringCommitment[]
   sentInvites    PartnerInvite[] @relation("SentInvites")
   householdMemberships HouseholdMember[]
+  duplicateDismissals DuplicateDismissal[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -181,12 +182,37 @@ model Expense {
   account    Account?    @relation(fields: [accountId], references: [id], onDelete: SetNull)
   debt       Debt?       @relation(fields: [debtId], references: [id], onDelete: SetNull)
   shares     ExpenseShare[]
+  // "Not duplicates" marks this expense is part of (either side of the pair)
+  dismissedAsA DuplicateDismissal[] @relation("DismissalA")
+  dismissedAsB DuplicateDismissal[] @relation("DismissalB")
 
   @@unique([userId, externalId]) // dedupe imported rows; multiple NULLs allowed in Postgres
   @@index([userId, merchant])
   @@index([userId, accountId])
   @@index([userId, date])
   @@index([userId, debtId])
+}
+
+// "These two are not duplicates" (Activity → Posibles duplicados). One row
+// per PAIR of expenses, ids sorted (expenseAId < expenseBId), so a dismissed
+// pair never links again while a new expense can still match either one
+// (server/lib/dedupe.ts). Matched by the two expense ids, not by the pool, so
+// it survives a partner merge/unlink moving the rows; deleting either expense
+// deletes the dismissal (cascade). userId is the pool it was made in.
+model DuplicateDismissal {
+  id         String   @id @default(cuid())
+  userId     String
+  expenseAId String
+  expenseBId String
+  createdAt  DateTime @default(now())
+
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expenseA Expense @relation("DismissalA", fields: [expenseAId], references: [id], onDelete: Cascade)
+  expenseB Expense @relation("DismissalB", fields: [expenseBId], references: [id], onDelete: Cascade)
+
+  @@unique([expenseAId, expenseBId])
+  @@index([userId])
+  @@index([expenseBId])
 }
 
 // The distribution of a shared expense across household members (Epic H3).
