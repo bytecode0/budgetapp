@@ -40,6 +40,7 @@ const MONEY_KEYS = new Set([
   "actual",
   "diff",
   "totalBudgeted",
+  "householdIncome",
   "totalActual",
   "unassigned",
   "total",

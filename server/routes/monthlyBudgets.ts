@@ -6,6 +6,7 @@ import { periodBounds } from "../lib/period.js";
 import { ALLOCATION_NOT_FOUND, allocationsInPool } from "../lib/poolRefs.js";
 import { countedAmounts, debtCommitments } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
+import { householdBaselineIncome, householdMonthIncome } from "../lib/householdIncome.js";
 
 export const monthlyBudgetsRouter = Router();
 
@@ -165,6 +166,14 @@ monthlyBudgetsRouter.get("/review", requireAuth, async (req: AuthRequest, res: R
       };
     });
 
+    // The household's income for the month, over the whole pool (not the
+    // viewer-filtered /api/income list): what Home compares the budget with.
+    const [recorded, baseline] = await Promise.all([
+      prisma.income.findMany({ where: { userId: req.userId!, date: { gte: monthStart, lt: monthEnd } }, select: { amount: true } }),
+      householdBaselineIncome(req.userId!),
+    ]);
+    const income = householdMonthIncome(recorded.map(i => i.amount), baseline);
+
     const unassigned    = actualByAllocation["__unassigned__"] ?? 0;
     const totalBudgeted = review.reduce((s, r) => s + r.budgeted, 0);
     // Include uncategorized spending in the total so it reconciles with the
@@ -173,7 +182,7 @@ monthlyBudgetsRouter.get("/review", requireAuth, async (req: AuthRequest, res: R
     // the user to categorize it.
     const totalActual   = review.reduce((s, r) => s + r.actual, 0) + unassigned;
 
-    return res.json(serializeMoney({ review, totalBudgeted, totalActual, unassigned, month }));
+    return res.json(serializeMoney({ review, totalBudgeted, totalActual, unassigned, month, householdIncome: income.cents, householdIncomeSource: income.source }));
   } catch (err) {
     console.error("[monthly-budgets/review]", err);
     return res.status(500).json({ error: "Internal server error" });
