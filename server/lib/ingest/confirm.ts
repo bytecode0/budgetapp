@@ -10,7 +10,7 @@ import { planContributions } from "../planContribution.js";
 import { rebuildExpenseShares } from "../expenseShares.js";
 import { syncDebtStatus } from "../debtBalance.js";
 import { isGenericMerchant } from "./learnedPayments.js";
-import { planImportWrites, type ConfirmRow } from "./writes.js";
+import { planImportWrites, type ConfirmRow, type ExpenseWrite } from "./writes.js";
 
 export interface ConfirmImportContext {
   /** The pool (req.userId). */
@@ -31,9 +31,27 @@ export interface ImportSummary {
   payments: { debtId: string; name: string | null; count: number }[];
 }
 
+/** A rule this confirm created or re-pointed: future movements of `merchant`
+ *  (the normalized key the rule matches) go to that budget line on their own. */
+export interface LearnedRule { merchant: string; allocationId: string; allocationName: string | null }
+
 export type ConfirmImportResult =
   | { error: string; code?: string; status: number }
-  | { expenses: number; income: number; inserted: number; summary: ImportSummary };
+  | { expenses: number; income: number; inserted: number; summary: ImportSummary; learned: LearnedRule[] };
+
+/** The merchant → budget line pairs a confirm teaches (last assignment wins).
+ *  Refunds and a card statement's own payment lines don't teach; a payment
+ *  from a bank account teaches its debt line unless the merchant is a generic
+ *  label ("Transferencia realizada"…) that could be anything. Pure. */
+export function learnablePairs(expenses: Pick<ExpenseWrite, "kind" | "merchant" | "allocationId" | "debtId" | "accountId">[]): Map<string, string> {
+  const pairs = new Map<string, string>();
+  for (const e of expenses) {
+    if (!e.allocationId || !e.merchant || e.kind === "refund" || (e.debtId && !e.accountId)) continue;
+    if (e.debtId && isGenericMerchant(e.merchant)) continue;
+    pairs.set(e.merchant, e.allocationId);
+  }
+  return pairs;
+}
 
 export async function confirmImport(ctx: ConfirmImportContext, rows: ConfirmRow[]): Promise<ConfirmImportResult> {
   const { userId, authUserId, accountId, source } = ctx;
@@ -87,15 +105,20 @@ export async function confirmImport(ctx: ConfirmImportContext, rows: ConfirmRow[
   // confirm) — unless the merchant is a generic label ("Transferencia
   // realizada"…) that could be anything; refunds and a card statement's own
   // payment lines don't teach either.
+  // Only the rules that changed are reported back (the bank review's toast:
+  // "next time, 'mercadona' goes to 'Groceries' on its own").
+  const learned: LearnedRule[] = [];
   try {
-    const merchantToAllocation = new Map<string, string>();
-    for (const e of plan.expenses) {
-      if (!e.allocationId || !e.merchant || e.kind === "refund" || (e.debtId && !e.accountId)) continue;
-      if (e.debtId && isGenericMerchant(e.merchant)) continue;
-      merchantToAllocation.set(e.merchant, e.allocationId);
+    for (const [merchant, allocationId] of learnablePairs(plan.expenses)) {
+      if (await learnFromCorrection(userId, merchant, allocationId)) learned.push({ merchant, allocationId, allocationName: null });
     }
-    for (const [merchant, allocationId] of merchantToAllocation) {
-      await learnFromCorrection(userId, merchant, allocationId);
+    if (learned.length > 0) {
+      const names = await prisma.allocation.findMany({
+        where: { userId, id: { in: [...new Set(learned.map(l => l.allocationId))] } },
+        select: { id: true, name: true },
+      });
+      const nameById = new Map(names.map(a => [a.id, a.name]));
+      for (const l of learned) l.allocationName = nameById.get(l.allocationId) ?? null;
     }
   } catch (learnErr) {
     console.error(`[ingest/confirm:${source}] learn`, learnErr);
@@ -145,5 +168,5 @@ export async function confirmImport(ctx: ConfirmImportContext, rows: ConfirmRow[
     incomes: inc.count,
     payments: [...paymentsByDebt].map(([debtId, count]) => ({ debtId, name: nameByDebt.get(debtId) ?? null, count })),
   };
-  return { expenses: exp.count, income: inc.count, inserted: exp.count + inc.count, summary };
+  return { expenses: exp.count, income: inc.count, inserted: exp.count + inc.count, summary, learned };
 }
