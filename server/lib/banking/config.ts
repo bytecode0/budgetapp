@@ -55,3 +55,17 @@ export function allowedBankingEmails(): Set<string> {
 export function bankingAllowedFor(email: string | null | undefined): boolean {
   return !!email && allowedBankingEmails().has(email.trim().toLowerCase());
 }
+
+/** Why a user can't use banking. Premium later: add "premium_required" here
+ *  (decided below from the user's plan) and one strip state in the app (an
+ *  upsell); /status passes the reason through and the UI branches on it. */
+export type BankingAccessReason = "not_configured" | "not_allowed";
+export type BankingAccess = { enabled: true } | { enabled: false; reason: BankingAccessReason };
+
+/** THE access decision for banking, used by GET /api/banking/status and by
+ *  every guarded route (requireBanking): configured, and the user allowed. */
+export function bankingAccess(user: { email: string | null | undefined }): BankingAccess {
+  if (!bankingConfigured()) return { enabled: false, reason: "not_configured" };
+  if (!bankingAllowedFor(user.email)) return { enabled: false, reason: "not_allowed" };
+  return { enabled: true };
+}

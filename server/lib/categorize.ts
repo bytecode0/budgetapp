@@ -67,13 +67,14 @@ export async function categorize(
  * Record that `merchant` should map to `allocationId`, as an exact-match learned
  * rule. Idempotent: updates the existing (userId, equals, merchant) rule if present
  * (without downgrading a manual rule's source), otherwise creates a learned one.
+ * True when the rule is new or now points elsewhere: something was learned.
  */
 export async function learnFromCorrection(
   userId: string,
   merchant: string,
   allocationId: string,
-): Promise<void> {
-  if (!merchant) return; // nothing to key a rule on
+): Promise<boolean> {
+  if (!merchant) return false; // nothing to key a rule on
 
   const where = {
     userId_matchType_pattern: { userId, matchType: "equals", pattern: merchant },
@@ -83,11 +84,13 @@ export async function learnFromCorrection(
   if (existing) {
     if (existing.allocationId !== allocationId) {
       await prisma.categorizationRule.update({ where, data: { allocationId } });
+      return true;
     }
-    return;
+    return false;
   }
 
   await prisma.categorizationRule.create({
     data: { userId, matchType: "equals", pattern: merchant, allocationId, source: "learned" },
   });
+  return true;
 }

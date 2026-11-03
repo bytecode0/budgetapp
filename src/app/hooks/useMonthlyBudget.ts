@@ -31,6 +31,9 @@ export interface BudgetReview {
   totalActual: number;
   unassigned: number;
   month: string;
+  /** The household's income this month (euros): recorded, else its baseline. */
+  householdIncome: number;
+  householdIncomeSource: 'recorded' | 'baseline';
 }
 
 export function useMonthlyBudget(month: string) {

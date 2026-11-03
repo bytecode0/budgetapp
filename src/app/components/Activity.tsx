@@ -19,6 +19,7 @@ import { ImportStatement } from './ImportStatement';
 import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSheet';
 import { useAccounts } from '../hooks/useAccounts';
 import { useMoney } from '../onboarding/useMoney';
+import { BankStrip } from './banking/BankStrip';
 
 type Movement =
   | { kind: 'expense'; id: string; date: string; amount: number; expense: Expense }
@@ -163,6 +164,9 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
           </button>
         </div>
       </motion.div>
+
+      {/* Bank: connect, review what's held, reconnect — or just when it last synced */}
+      <BankStrip onChanged={() => { fetchExpenses(currentMonth); fetchIncomes(currentMonth); fetchAccounts(); fetchDuplicates(); }} />
 
       {/* Month display */}
       <motion.div

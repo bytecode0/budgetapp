@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { ImportPreview, ImportSummary, ConfirmRow } from './useImport';
+import { statusAvailability, type BankAvailability } from '../../../shared/bankStrip';
+import { useAuth } from '../context/AuthContext';
+
+export type { BankAvailability };
 
 // Bank connection (Enable Banking, server/routes/banking.ts). Every response
 // is { data } or { error, code }; the codes are translated by apiErrors.ts.
@@ -39,7 +43,13 @@ export interface BankConnection {
 }
 export interface BankAccountsResult { connectionId: string; institutionName: string; accounts: BankAccount[] }
 export type LinkMapping = { externalAccountId: string; accountId?: string; create?: { name: string; type: string } };
-export type BankResult<T> = { ok: false; error: string; code?: string } | ({ ok: true } & T);
+/** A merchant rule a review taught: its next movements go to that line alone. */
+export interface LearnedRule { merchant: string; label: string; allocationId: string; allocationName: string | null }
+/** Why banking isn't available (GET /api/banking/status). A future
+ *  'premium_required' gets its own strip state (an upsell). */
+export type BankUnavailableReason = 'not_configured' | 'not_allowed';
+/** status: the HTTP status, absent on a network failure. */
+export type BankResult<T> = { ok: false; error: string; code?: string; status?: number } | ({ ok: true } & T);
 
 async function call<T>(url: string, init?: RequestInit): Promise<BankResult<T>> {
   try {
@@ -49,7 +59,7 @@ async function call<T>(url: string, init?: RequestInit): Promise<BankResult<T>> 
       headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
     });
     const body = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: body.error ?? 'Request failed', code: body.code };
+    if (!res.ok) return { ok: false, error: body.error ?? 'Request failed', code: body.code, status: res.status };
     return { ok: true, ...(body.data as T) };
   } catch {
     return { ok: false, error: 'Network error' };
@@ -58,25 +68,67 @@ async function call<T>(url: string, init?: RequestInit): Promise<BankResult<T>> 
 
 const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) });
 
+// The last status this browser got per person: whether a later failure may
+// show "couldn't check" (only to someone known to be eligible). A per-viewer
+// convenience: when storage is unavailable, failures just show nothing.
+const eligibleKey = (userId: string) => `lifeplan.bankingEligible.${userId}`;
+function readEligible(userId: string | undefined): boolean {
+  if (!userId) return false;
+  try { return window.localStorage.getItem(eligibleKey(userId)) === '1'; } catch { return false; }
+}
+function writeEligible(userId: string | undefined, eligible: boolean) {
+  if (!userId) return;
+  try {
+    if (eligible) window.localStorage.setItem(eligibleKey(userId), '1');
+    else window.localStorage.removeItem(eligibleKey(userId));
+  } catch { /* not remembered */ }
+}
+
 export function useBanking() {
-  const [enabled, setEnabled] = useState(false);
+  const { user } = useAuth();
+  const userId = user?.id;
+  // 'unavailable': the server said no (reason). 'check_failed': it couldn't
+  // be asked (network, 5xx) — the UI offers a retry instead of vanishing.
+  const [availability, setAvailability] = useState<BankAvailability>('loading');
+  const [reason, setReason] = useState<BankUnavailableReason | null>(null);
+  const [promptDismissed, setPromptDismissed] = useState(false);
   const [connections, setConnections] = useState<BankConnection[]>([]);
   const [loading, setLoading] = useState(true);
+  const enabled = availability === 'available';
 
+  // A failed list is "couldn't check", never "no bank connected": the UI
+  // shows the retry instead of the connect strip or a missing notice.
   const fetchConnections = useCallback(async () => {
     const res = await call<{ connections: BankConnection[] }>('/api/banking/connections');
     if (res.ok) setConnections(res.connections);
+    else setAvailability('check_failed');
     setLoading(false);
   }, []);
 
-  useEffect(() => {
+  const checkStatus = useCallback(async () => {
+    setAvailability('loading');
+    setLoading(true);
+    const res = await call<{ enabled: boolean; reason: BankUnavailableReason | null; promptDismissed: boolean }>('/api/banking/status');
+    const next = statusAvailability(res, readEligible(userId));
+    if (res.ok) {
+      writeEligible(userId, res.enabled);
+      setReason(res.enabled ? null : res.reason);
+      setPromptDismissed(res.promptDismissed);
+    }
     // Hidden entirely unless the server says this user may use it.
-    call<{ enabled: boolean }>('/api/banking/status').then(res => {
-      const on = res.ok && res.enabled;
-      setEnabled(on);
-      if (on) fetchConnections(); else setLoading(false);
-    });
-  }, [fetchConnections]);
+    setAvailability(next);
+    if (next === 'available') await fetchConnections(); else setLoading(false);
+  }, [fetchConnections, userId]);
+
+  useEffect(() => { checkStatus(); }, [checkStatus]);
+
+  /** Closes Activity's "connect your bank" strip for good (every device). */
+  const dismissPrompt = async () => {
+    setPromptDismissed(true);
+    const res = await call<{ promptDismissed: boolean }>('/api/banking/prompt', { method: 'PATCH', body: JSON.stringify({ dismissed: true }) });
+    if (!res.ok) setPromptDismissed(false);
+    return res;
+  };
 
   const fetchInstitutions = (country = 'ES') =>
     call<{ institutions: BankInstitution[] }>(`/api/banking/institutions?country=${country}`);
@@ -103,7 +155,7 @@ export function useBanking() {
 
   /** Same contract as useImport().confirm, so the import preview step can use it. */
   const confirm = async (connectionId: string, accountId: string, rows: ConfirmRow[], dismissed: string[]) => {
-    const res = await call<{ inserted: number; summary: ImportSummary }>(`/api/banking/connections/${connectionId}/confirm`, post({ accountId, rows, dismissed }));
+    const res = await call<{ inserted: number; summary: ImportSummary; learned: LearnedRule[] }>(`/api/banking/connections/${connectionId}/confirm`, post({ accountId, rows, dismissed }));
     if (res.ok) await fetchConnections();
     return res;
   };
@@ -120,5 +172,5 @@ export function useBanking() {
     return res;
   };
 
-  return { enabled, connections, loading, fetchConnections, fetchInstitutions, connect, exchange, bankAccounts, linkAccounts, preview, confirm, syncNow, disconnect };
+  return { enabled, availability, reason, promptDismissed, checkStatus, dismissPrompt, connections, loading, fetchConnections, fetchInstitutions, connect, exchange, bankAccounts, linkAccounts, preview, confirm, syncNow, disconnect };
 }

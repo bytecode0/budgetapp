@@ -63,6 +63,10 @@ model UserSettings {
   // those setup steps done. Null = not answered (or undone). server/lib/onboarding.ts
   noCardsAt     DateTime?
   noLoansAt     DateTime?
+  // The person closed the "connect your bank" strip in Activity: it never
+  // shows again, on any device (Accounts still offers connecting). Per real
+  // person (authUserId), not per pool. server/lib/banking/prompt.ts
+  bankPromptDismissedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

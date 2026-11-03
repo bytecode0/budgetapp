@@ -36,3 +36,12 @@ test("a single user: own figure is the household's; nobody configured is 0", () 
   assert.deepEqual(splitBaselines([{ userId: OWNER, monthlyIncome: 323000 }], OWNER), { monthlyIncome: 323000, ownMonthlyIncome: 323000, isCouple: false });
   assert.deepEqual(splitBaselines([], OWNER), { monthlyIncome: 0, ownMonthlyIncome: 0, isCouple: false });
 });
+
+test("month income: what the household recorded, else its baseline", async () => {
+  const { householdMonthIncome } = await import("./householdIncome.js");
+  // Both members recorded income this month: the pool's total, whoever views it.
+  assert.deepEqual(householdMonthIncome([toCents(3230), toCents(925)], toCents(4000)), { cents: toCents(4155), source: "recorded" });
+  // Nothing recorded yet: the household's planned baseline.
+  assert.deepEqual(householdMonthIncome([], toCents(4155)), { cents: toCents(4155), source: "baseline" });
+  assert.deepEqual(householdMonthIncome([], 0), { cents: 0, source: "baseline" });
+});

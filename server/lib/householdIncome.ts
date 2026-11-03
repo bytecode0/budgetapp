@@ -48,6 +48,15 @@ export async function householdBaselineIncome(poolUserId: string): Promise<numbe
   return sumBaselines((await poolBaselineRows(poolUserId)).map(r => r.monthlyIncome));
 }
 
+/** The household's income for one month, in cents: what every member recorded
+ *  in it when anyone recorded something, else the household's baseline. Only
+ *  the total leaves the server — never a member's own amounts. Pure. */
+export function householdMonthIncome(recordedCents: number[], baselineCents: number): { cents: number; source: "recorded" | "baseline" } {
+  return recordedCents.length > 0
+    ? { cents: recordedCents.reduce((s, n) => s + n, 0), source: "recorded" }
+    : { cents: baselineCents, source: "baseline" };
+}
+
 /** The household's baseline and the caller's own (req.userId, req.authUserId). */
 export async function incomeBaselines(poolUserId: string, authUserId: string): Promise<IncomeBaselines> {
   return splitBaselines(await poolBaselineRows(poolUserId), authUserId);

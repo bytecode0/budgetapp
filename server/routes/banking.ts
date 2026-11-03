@@ -1,9 +1,10 @@
 // Bank connection via Enable Banking (docs/plan-deudas-y-onboarding.md, epic 5).
 //
 // Every route but /status, /callback and /cron goes through requireAuth +
-// requireBanking: 503 banking_disabled when the provider isn't configured,
-// 403 banking_not_allowed when the user isn't on BANKING_ALLOWED_EMAILS
-// (restricted mode). Connections follow the per-person ownership rules
+// requireBanking. Who may use banking is ONE decision, bankingAccess()
+// (server/lib/banking/config.ts): 503 banking_disabled when the provider isn't
+// configured, 403 banking_not_allowed when the user isn't on
+// BANKING_ALLOWED_EMAILS (restricted mode). Connections follow the per-person ownership rules
 // (server/lib/ownership.ts): req.userId is the pool, req.authUserId the real
 // person; only a connection's owner links, reviews, syncs, reconnects or
 // deletes it; a household member only sees the household-visible ones.
@@ -16,7 +17,8 @@ import { mutationAccess, visibleToWhere } from "../lib/ownership.js";
 import { ALLOCATION_NOT_FOUND, allocationsInPool } from "../lib/poolRefs.js";
 import { parseLocale } from "../lib/email/locales/index.js";
 import { confirmImport } from "../lib/ingest/confirm.js";
-import { bankingAllowedFor, bankingConfig } from "../lib/banking/config.js";
+import { bankingAccess, bankingConfig } from "../lib/banking/config.js";
+import { connectionForViewer, dismissBankPrompt } from "../lib/banking/prompt.js";
 import { getBankingClient, EnableBankingError, psuHeadersFrom } from "../lib/banking/enableBanking.js";
 import {
   BANKING_STATE_COOKIE, BANKING_STATE_COOKIE_OPTS, BANKING_STATE_MAX_AGE_MS,
@@ -53,9 +55,10 @@ const psuOf = (req: Request) => psuHeadersFrom(req.ip, req.headers);
 /** Enforced on the SERVER for every banking route (the frontend also hides it). */
 async function requireBanking(req: BankingRequest, res: Response, next: NextFunction) {
   try {
+    const access = bankingAccess({ email: await userEmail(req.authUserId) });
+    if (!access.enabled) return access.reason === "not_configured" ? res.status(503).json(DISABLED) : res.status(403).json(NOT_ALLOWED);
     const client = getBankingClient(psuOf(req));
     if (!client) return res.status(503).json(DISABLED);
-    if (!bankingAllowedFor(await userEmail(req.authUserId))) return res.status(403).json(NOT_ALLOWED);
     req.bankingClient = client;
     next();
   } catch (err) {
@@ -100,14 +103,35 @@ async function bankAccountsOf(client: BankingProviderClient, connection: { id: s
   });
 }
 
-// GET /api/banking/status → { data: { enabled } }: whether THIS user can use
-// bank connection (configured and, in restricted mode, on the allow-list).
+// GET /api/banking/status → { data: { enabled, reason, promptDismissed } }:
+// whether THIS user can use bank connection and, when not, why
+// ("not_configured" | "not_allowed"; the app shows nothing for either). A
+// future "premium_required" comes from bankingAccess() and the app answers it
+// with its own strip state. promptDismissed: the person closed Activity's
+// "connect your bank" strip.
 bankingRouter.get("/status", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const enabled = bankingConfig() !== null && bankingAllowedFor(await userEmail(req.authUserId));
-    return res.json({ data: { enabled } });
+    const access = bankingAccess({ email: await userEmail(req.authUserId) });
+    if (!access.enabled) return res.json({ data: { enabled: false, reason: access.reason, promptDismissed: false } });
+    // Only someone who may use banking has a prompt to have dismissed.
+    const settings = await prisma.userSettings.findUnique({ where: { userId: req.authUserId! }, select: { bankPromptDismissedAt: true } });
+    return res.json({ data: { enabled: true, reason: null, promptDismissed: settings?.bankPromptDismissedAt != null } });
   } catch (err) {
     console.error("[banking/status]", err instanceof Error ? err.message : "unknown error");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/banking/prompt { dismissed: true } → { data: { promptDismissed: true } }
+// Closes Activity's "connect your bank" strip for the signed-in person, on
+// every device. There is no undo: Accounts always offers connecting.
+bankingRouter.patch("/prompt", ...guarded, async (req: AuthRequest, res: Response) => {
+  if ((req.body as { dismissed?: unknown })?.dismissed !== true) return res.status(400).json({ error: "dismissed must be true" });
+  try {
+    await dismissBankPrompt(prisma, req.authUserId!, new Date());
+    return res.json({ data: { promptDismissed: true } });
+  } catch (err) {
+    console.error("[banking/prompt]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -138,7 +162,7 @@ bankingRouter.get("/connections", ...guarded, async (req: AuthRequest, res: Resp
         debts: { where: visibleToWhere(req.authUserId!), select: { id: true, name: true } },
       },
     });
-    return res.json({ data: { connections: connections.map(c => ({ ...c, isOwner: c.ownerUserId === req.authUserId })) } });
+    return res.json({ data: { connections: connections.map(c => connectionForViewer(c, req.authUserId!)) } });
   } catch (err) {
     console.error("[banking/connections]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -228,7 +252,7 @@ bankingRouter.get("/callback", async (req: Request, res: Response) => {
     if (!client) return fail("disabled");
     const connection = await prisma.bankConnection.findFirst({ where: { id: handoff.connectionId, ownerUserId: handoff.userId } });
     if (!connection) return fail("not_found");
-    if (!bankingAllowedFor(await userEmail(handoff.userId))) return fail("not_allowed");
+    if (!bankingAccess({ email: await userEmail(handoff.userId) }).enabled) return fail("not_allowed");
 
     if (error !== undefined || typeof code !== "string" || !code) {
       // Never consented before: nothing to keep.
@@ -378,7 +402,7 @@ bankingRouter.get("/connections/:id/preview", ...guarded, async (req: BankingReq
   }
 });
 
-// POST /api/banking/connections/:id/confirm { accountId, rows, dismissed? } → { data: { inserted, summary } }
+// POST /api/banking/connections/:id/confirm { accountId, rows, dismissed? } → { data: { inserted, summary, learned } }
 // The rows the user kept in the review, written exactly like a file import
 // (confirmImport) with source "bank_sync"; `dismissed` = the new rows they
 // didn't keep, never written by the daily sync. From now on the daily sync
@@ -400,7 +424,7 @@ bankingRouter.post("/connections/:id/confirm", ...guarded, async (req: BankingRe
     const namedLines = rows.filter(r => r && (r.kind === "expense" || r.kind === "refund")).map(r => r.allocationId);
     if (!(await allocationsInPool(req.userId!, namedLines))) return res.status(404).json(ALLOCATION_NOT_FOUND);
 
-    let result: Awaited<ReturnType<typeof confirmImport>> = { expenses: 0, income: 0, inserted: 0, summary: { expenses: 0, refunds: 0, incomes: 0, payments: [] } };
+    let result: Awaited<ReturnType<typeof confirmImport>> = { expenses: 0, income: 0, inserted: 0, summary: { expenses: 0, refunds: 0, incomes: 0, payments: [] }, learned: [] };
     if (rows.length > 0) {
       result = await confirmImport(
         { userId: req.userId!, authUserId: req.authUserId!, householdId: req.householdId, accountId: account.id, source: "bank_sync" },
@@ -427,7 +451,8 @@ bankingRouter.post("/connections/:id/confirm", ...guarded, async (req: BankingRe
     } catch (err) {
       console.error(`[banking/confirm] balance not refreshed: ${syncErrorCode(err)}`);
     }
-    return res.json({ data: { inserted: result.inserted, summary: result.summary } });
+    // learned: the merchant rules this review taught (rule keys and line names, no money).
+    return res.json({ data: { inserted: result.inserted, summary: result.summary, learned: result.learned } });
   } catch (err) {
     console.error("[banking/confirm]", err);
     return res.status(500).json({ error: "Internal server error" });
