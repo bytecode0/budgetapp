@@ -6,21 +6,23 @@
 // re-imported from the bank. An expense and a refund (Expense.kind) of the
 // same amount are never duplicates: the refund undoes the purchase.
 //
-// Two rules keep false positives out (canPair):
-//   - Two rows of the same account that came through the same pipeline
-//     (file import, or bank sync) with different externalIds are two movements
-//     according to the bank itself — two coffees of the same price. Pairs stay
-//     possible when one is manual, when the sources differ (a file import and a
-//     bank sync of the same account: the real duplicate case) or the accounts
-//     differ.
+// Two rules keep false positives out:
+//   - canPair: two bank-sync rows of the same account with different
+//     externalIds are two movements according to the bank itself (provider ids
+//     are stable) — two coffees of the same price. File imports are NOT covered:
+//     their externalIds are content hashes that change with the export format,
+//     so the same file pipeline can import one movement twice. Pairs stay
+//     possible when one is manual, when the sources differ or the accounts do.
 //   - A pair the user marked as "not duplicates" (DuplicateDismissal) never
 //     links again. A new expense can still match either one of them.
+//
+// A group is a set in which EVERY pair is a candidate (a clique), never a
+// chain: otherwise a manual row would glue two real bank movements into one
+// group, a merge would delete one of them, and a dismissed pair would come
+// back together through a third row.
 
 const WINDOW_DAYS = 2;
 const DAY_MS = 86400000;
-
-/** Expense.source values written by the import/bank pipeline (server/lib/ingest/confirm.ts). */
-const PIPELINE_SOURCES = new Set(["import", "bank_sync"]);
 
 export interface DedupeItem {
   id: string;
@@ -48,97 +50,96 @@ export function pairsOf(ids: readonly string[]): [string, string][] {
   return pairs;
 }
 
-/** Whether two same-amount, same-kind expenses close in time may be duplicates. */
+/** False for two bank-sync rows of the same account with different provider ids. */
 export function canPair(a: DedupeItem, b: DedupeItem): boolean {
   const sameAccount = !!a.accountId && a.accountId === b.accountId;
-  const samePipeline = !!a.source && a.source === b.source && PIPELINE_SOURCES.has(a.source);
+  const bothBankSync = a.source === "bank_sync" && b.source === "bank_sync";
   const distinctBankIds = !!a.externalId && !!b.externalId && a.externalId !== b.externalId;
-  return !(sameAccount && samePipeline && distinctBankIds);
+  return !(sameAccount && bothBankSync && distinctBankIds);
+}
+
+/** Whether two expenses may be duplicates of each other (ignoring dismissals):
+ *  same kind and amount, within WINDOW_DAYS, and canPair. */
+export function candidates(a: DedupeItem, b: DedupeItem): boolean {
+  if ((a.kind || "expense") !== (b.kind || "expense") || a.amount !== b.amount) return false;
+  if (Math.abs(+new Date(a.date) - +new Date(b.date)) / DAY_MS > WINDOW_DAYS) return false;
+  return canPair(a, b);
 }
 
 /**
- * Cluster items into groups of likely duplicates. Items are bucketed by kind and amount;
- * within a bucket, two items within WINDOW_DAYS that canPair and whose pair is not in
- * `dismissed` (pairKey values) are linked, and each connected set of 2+ is a group,
- * sorted by date.
+ * Groups of likely duplicates. Items are taken in date order (ties by id) and
+ * each joins the first group whose every member is a candidate with it and
+ * isn't dismissed with it (`dismissed`: pairKey values); otherwise it starts a
+ * new group. Each item is in at most one group; only groups of 2+ are returned.
  */
 export function findDuplicateGroups<T extends DedupeItem>(items: T[], dismissed: ReadonlySet<string> = new Set()): T[][] {
-  const byAmount = new Map<string, T[]>();
-  for (const it of items) {
-    const key = `${it.kind || "expense"}|${it.amount}`;
-    const arr = byAmount.get(key) ?? [];
-    arr.push(it);
-    byAmount.set(key, arr);
-  }
-
+  const sorted = [...items].sort((a, b) => +new Date(a.date) - +new Date(b.date) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const groups: T[][] = [];
-  for (const bucket of byAmount.values()) {
-    if (bucket.length < 2) continue;
-    const sorted = [...bucket].sort((a, b) => +new Date(a.date) - +new Date(b.date));
-
-    // Union-find over the bucket's indices.
-    const parent = sorted.map((_, i) => i);
-    const root = (i: number): number => (parent[i] === i ? i : (parent[i] = root(parent[i])));
-
-    for (let i = 0; i < sorted.length; i++) {
-      for (let j = i + 1; j < sorted.length; j++) {
-        const gapDays = (+new Date(sorted[j].date) - +new Date(sorted[i].date)) / DAY_MS;
-        if (gapDays > WINDOW_DAYS) break; // sorted: every later j is further away
-        if (!canPair(sorted[i], sorted[j])) continue;
-        if (dismissed.has(pairKey(sorted[i].id, sorted[j].id))) continue;
-        parent[root(j)] = root(i);
-      }
-    }
-
-    const clusters = new Map<number, T[]>();
-    sorted.forEach((it, i) => {
-      const r = root(i);
-      const arr = clusters.get(r) ?? [];
-      arr.push(it);
-      clusters.set(r, arr);
-    });
-    for (const cluster of clusters.values()) if (cluster.length >= 2) groups.push(cluster);
+  // Only groups of the same kind and amount can take an item: bucket them.
+  const byAmount = new Map<string, T[][]>();
+  for (const it of sorted) {
+    const key = `${it.kind || "expense"}|${it.amount}`;
+    const bucket = byAmount.get(key) ?? [];
+    byAmount.set(key, bucket);
+    const home = bucket.find(g => g.every(m => candidates(m, it) && !dismissed.has(pairKey(m.id, it.id))));
+    if (home) { home.push(it); continue; }
+    const group = [it];
+    bucket.push(group);
+    groups.push(group);
   }
-
-  return groups;
+  return groups.filter(g => g.length >= 2);
 }
 
-// n ids store n·(n−1)/2 pairs; a real group is a handful of rows.
-const MAX_DISMISS_IDS = 50;
+// Both requests are bounded: n ids mean n·(n−1)/2 pairs; a real group is a handful of rows.
+export const MAX_GROUP_IDS = 50;
 
 type Rejection = { error: string; status: number };
 
-/**
- * Validates a merge (keep one, delete the rest) against the expenses the caller
- * may delete — the ones they can see (expenseListingFilter, as DELETE
- * /api/expenses/:id). Any id outside that set answers 404, as if it didn't
- * exist, so nothing the caller can't see is deleted or confirmed to exist.
- */
-export function mergeTargets(
-  keepId: unknown, removeIds: unknown, deletable: ReadonlySet<string>,
-): Rejection | { keepId: string; removeIds: string[] } {
-  if (typeof keepId !== "string" || !keepId || !Array.isArray(removeIds) || removeIds.length === 0
-    || !removeIds.every(id => typeof id === "string" && id)) {
+const isIdList = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.every(id => typeof id === "string" && id.length > 0);
+
+/** Shape of a merge request, checked before any query. */
+export function parseMerge(keepId: unknown, removeIds: unknown): Rejection | { keepId: string; removeIds: string[] } {
+  if (typeof keepId !== "string" || !keepId || !isIdList(removeIds) || removeIds.length === 0) {
     return { error: "keepId and removeIds are required", status: 400 };
   }
-  const ids = [...new Set(removeIds as string[])];
+  const ids = [...new Set(removeIds)];
+  if (ids.length > MAX_GROUP_IDS) return { error: "Too many expenses", status: 400 };
   if (ids.includes(keepId)) return { error: "keepId cannot be in removeIds", status: 400 };
-  if (!deletable.has(keepId)) return { error: "Expense to keep not found", status: 404 };
-  if (!ids.every(id => deletable.has(id))) return { error: "Expense not found", status: 404 };
   return { keepId, removeIds: ids };
 }
 
 /**
- * Validates a "not duplicates" request: 2+ distinct expense ids, all visible to
- * the caller. Returns every pair among them, to store as dismissals.
+ * Checks a parsed merge against the rows the caller may delete — the ones they
+ * can see (expenseListingFilter, as DELETE /api/expenses/:id). Any id outside
+ * them answers 404, as if it didn't exist. Every removed row must be a
+ * candidate duplicate of the kept one, so a merge never deletes a distinct
+ * movement (e.g. another bank-sync coffee).
  */
-export function dismissalPairs(ids: unknown, visible: ReadonlySet<string>): Rejection | { pairs: [string, string][] } {
-  if (!Array.isArray(ids) || !ids.every(id => typeof id === "string" && id)) {
-    return { error: "ids are required", status: 400 };
-  }
-  const unique = [...new Set(ids as string[])];
+export function checkMerge<T extends DedupeItem>(
+  req: { keepId: string; removeIds: string[] }, deletable: readonly T[],
+): Rejection | { toRemove: T[] } {
+  const byId = new Map(deletable.map(e => [e.id, e]));
+  const keep = byId.get(req.keepId);
+  if (!keep) return { error: "Expense to keep not found", status: 404 };
+  const toRemove = req.removeIds.map(id => byId.get(id));
+  if (toRemove.some(e => !e)) return { error: "Expense not found", status: 404 };
+  const rows = toRemove as T[];
+  if (!rows.every(e => candidates(keep, e))) return { error: "Not a duplicate of the expense to keep", status: 400 };
+  return { toRemove: rows };
+}
+
+/** Shape of a "not duplicates" request (2+ distinct ids, capped), before any query. */
+export function parseDismiss(ids: unknown): Rejection | { ids: string[] } {
+  if (!isIdList(ids)) return { error: "ids are required", status: 400 };
+  const unique = [...new Set(ids)];
   if (unique.length < 2) return { error: "At least two expenses are required", status: 400 };
-  if (unique.length > MAX_DISMISS_IDS) return { error: "Too many expenses", status: 400 };
-  if (!unique.every(id => visible.has(id))) return { error: "Expense not found", status: 404 };
-  return { pairs: pairsOf(unique) };
+  if (unique.length > MAX_GROUP_IDS) return { error: "Too many expenses", status: 400 };
+  return { ids: unique };
+}
+
+/** Every pair among the ids, once all of them are visible to the caller. */
+export function dismissalPairs(ids: string[], visible: ReadonlySet<string>): Rejection | { pairs: [string, string][] } {
+  if (!ids.every(id => visible.has(id))) return { error: "Expense not found", status: 404 };
+  return { pairs: pairsOf(ids) };
 }

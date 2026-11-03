@@ -4,7 +4,7 @@ import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { normalizeMerchant } from "../lib/normalizeMerchant.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { categorize, learnFromCorrection } from "../lib/categorize.js";
-import { dismissalPairs, findDuplicateGroups, mergeTargets, pairKey } from "../lib/dedupe.js";
+import { checkMerge, dismissalPairs, findDuplicateGroups, pairKey, parseDismiss, parseMerge } from "../lib/dedupe.js";
 import { prepareImport } from "../lib/importStatement.js";
 import { MAX_STATEMENT_ROWS, StatementReadError } from "../../shared/ingest/read.js";
 import { parseNormalizedRows, parseSkippedRows, parseSource } from "../../shared/ingest/validate.js";
@@ -269,13 +269,13 @@ expensesRouter.get("/duplicates", requireAuth, async (req: AuthRequest, res: Res
 // Anyone who can see the expenses may do it.
 expensesRouter.post("/duplicates/dismiss", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { ids } = req.body as { ids?: unknown };
-    const requested = Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [];
+    const parsed = parseDismiss((req.body as { ids?: unknown }).ids);
+    if ("error" in parsed) return res.status(parsed.status).json({ error: parsed.error });
     const visible = await prisma.expense.findMany({
-      where: { id: { in: requested }, userId: req.userId!, ...(await expenseListingFilter(req)) },
+      where: { id: { in: parsed.ids }, userId: req.userId!, ...(await expenseListingFilter(req)) },
       select: { id: true },
     });
-    const check = dismissalPairs(ids, new Set(visible.map(e => e.id)));
+    const check = dismissalPairs(parsed.ids, new Set(visible.map(e => e.id)));
     if ("error" in check) return res.status(check.status).json({ error: check.error });
 
     await prisma.duplicateDismissal.createMany({
@@ -291,20 +291,20 @@ expensesRouter.post("/duplicates/dismiss", requireAuth, async (req: AuthRequest,
 
 // POST /api/expenses/merge  — keep one expense, delete the duplicates
 // Body: { keepId, removeIds: string[] }. Every id must be one the caller may
-// delete (as DELETE /:id: in the pool and visible to them), or nothing is.
+// delete (as DELETE /:id: in the pool and visible to them), and every removed
+// row a candidate duplicate of the kept one (server/lib/dedupe.ts), or nothing is.
 expensesRouter.post("/merge", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { keepId, removeIds } = req.body as { keepId?: unknown; removeIds?: unknown };
-    const requested = [keepId, ...(Array.isArray(removeIds) ? removeIds : [])]
-      .filter((id): id is string => typeof id === "string");
+    const parsed = parseMerge(keepId, removeIds);
+    if ("error" in parsed) return res.status(parsed.status).json({ error: parsed.error });
     const deletable = await prisma.expense.findMany({
-      where: { id: { in: requested }, userId: req.userId!, ...(await expenseListingFilter(req)) },
+      where: { id: { in: [parsed.keepId, ...parsed.removeIds] }, userId: req.userId!, ...(await expenseListingFilter(req)) },
       include: { allocation: { select: { type: true, lifePlanId: true } } },
     });
-    const check = mergeTargets(keepId, removeIds, new Set(deletable.map(e => e.id)));
+    const check = checkMerge(parsed, deletable);
     if ("error" in check) return res.status(check.status).json({ error: check.error });
-    const removeSet = new Set(check.removeIds);
-    const toRemove = deletable.filter(e => removeSet.has(e.id));
+    const { toRemove } = check;
 
     // Reverse any plan contributions before deleting, mirroring DELETE /:id.
     for (const e of toRemove) {
@@ -502,8 +502,9 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
 expensesRouter.patch("/:id/attribution", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    // Only a row the caller can see (as DELETE /:id).
     const existing = await prisma.expense.findFirst({
-      where: { id, userId: req.userId! },
+      where: { id, userId: req.userId!, ...(await expenseListingFilter(req)) },
       select: { id: true, amount: true, payerUserId: true, scope: true },
     });
     if (!existing) return res.status(404).json({ error: "Expense not found" });
@@ -554,8 +555,9 @@ expensesRouter.patch("/:id/attribution", requireAuth, async (req: AuthRequest, r
 expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    // Only a row the caller can see (as DELETE /:id).
     const existing = await prisma.expense.findFirst({
-      where: { id, userId: req.userId! },
+      where: { id, userId: req.userId!, ...(await expenseListingFilter(req)) },
       include: { allocation: { select: { type: true, lifePlanId: true } } },
     });
     if (!existing) return res.status(404).json({ error: "Expense not found" });
