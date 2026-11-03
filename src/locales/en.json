@@ -731,17 +731,21 @@
   },
   "duplicates": {
     "title": "Possible duplicates",
-    "subtitle": "Same amount within 2 days. Keep one and merge the rest.",
+    "subtitle": "They have the same amount less than 2 days apart, so we suspect they might be repeated. If they are, keep one and merge the rest; if not, mark them as “Not duplicates” and they won't show up together again.",
     "bannerTitle": "{{count}} possible duplicate group(s)",
-    "bannerDesc": "Review and merge to clean up your activity",
+    "bannerDesc": "Same amount within a few days. Review them: merge the repeated ones or mark the ones that aren't.",
     "review": "Review",
     "copies": "{{count}} entries",
     "merge": "Merge",
-    "keepHint": "Choose which entry to keep:",
+    "keepHint": "If they are repeated, choose which entry to keep:",
     "keptLabel": "kept",
     "mergedOk": "Merged — {{count}} removed",
     "emptyTitle": "No duplicates found",
-    "emptyDesc": "Your activity looks clean."
+    "emptyDesc": "Your activity looks clean.",
+    "notDuplicates": "Not duplicates",
+    "dismissedOk": "Marked as not duplicates",
+    "dismissFailed": "Couldn't mark them. Please try again.",
+    "mergeFailed": "Couldn't merge. Please try again."
   },
   "import": {
     "button": "Import",

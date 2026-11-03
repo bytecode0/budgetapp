@@ -731,17 +731,21 @@
   },
   "duplicates": {
     "title": "Posibles duplicados",
-    "subtitle": "Mismo importe en 2 días. Conserva uno y fusiona el resto.",
+    "subtitle": "Tienen el mismo importe con menos de 2 días de diferencia, así que sospechamos que podrían estar repetidos. Si lo están, conserva uno y fusiona el resto; si no, márcalos como «No son duplicados» y no volverán a aparecer juntos.",
     "bannerTitle": "{{count}} grupo(s) de posibles duplicados",
-    "bannerDesc": "Revisa y fusiona para limpiar tu actividad",
+    "bannerDesc": "Mismo importe en pocos días. Revísalos: fusiona los repetidos o marca los que no lo son.",
     "review": "Revisar",
     "copies": "{{count}} registros",
     "merge": "Fusionar",
-    "keepHint": "Elige qué registro conservar:",
+    "keepHint": "Si están repetidos, elige qué registro conservar:",
     "keptLabel": "conservado",
     "mergedOk": "Fusionado — {{count}} eliminados",
     "emptyTitle": "Sin duplicados",
-    "emptyDesc": "Tu actividad está limpia."
+    "emptyDesc": "Tu actividad está limpia.",
+    "notDuplicates": "No son duplicados",
+    "dismissedOk": "Marcados como no duplicados",
+    "dismissFailed": "No se pudieron marcar. Inténtalo de nuevo.",
+    "mergeFailed": "No se pudo fusionar. Inténtalo de nuevo."
   },
   "import": {
     "button": "Importar",

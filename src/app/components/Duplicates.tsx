@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Copy, Merge, Loader2, CheckCircle2 } from 'lucide-react';
+import { X, Copy, Merge, Loader2, CheckCircle2, Ban } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
@@ -12,34 +12,49 @@ interface DuplicatesProps {
   onClose: () => void;
   groups: DuplicateGroup[];
   loading: boolean;
-  onMerge: (keepId: string, removeIds: string[]) => Promise<{ error?: string; removed?: number }>;
+  onMerge: (keepId: string, removeIds: string[]) => Promise<{ ok: boolean; removed?: number }>;
+  onDismiss: (ids: string[]) => Promise<{ ok: boolean }>;
   onMerged?: () => void;
 }
 
-export function Duplicates({ isOpen, onClose, groups, loading, onMerge, onMerged }: DuplicatesProps) {
+export function Duplicates({ isOpen, onClose, groups, loading, onMerge, onDismiss, onMerged }: DuplicatesProps) {
   const { t } = useTranslation();
   const { currency } = useMoney();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
 
-  const [keepByGroup, setKeepByGroup] = useState<Record<number, string>>({});
-  const [busy, setBusy] = useState<number | null>(null);
+  // Keyed by the group's ids, not its position: after a merge or a dismissal
+  // the list shifts, and a stale index would point a choice at another group.
+  const [keepByGroup, setKeepByGroup] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
 
   const fmtEuro = (v: number) => `${currency}${v.toFixed(2)}`;
   const fmtDate = (d: string) => new Date(d).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
 
-  const keepId = (groupIdx: number, group: DuplicateGroup) => keepByGroup[groupIdx] ?? group[0].id;
+  const groupKey = (group: DuplicateGroup) => group.map(e => e.id).join('-');
+  const keepId = (group: DuplicateGroup) => {
+    const chosen = keepByGroup[groupKey(group)];
+    return chosen && group.some(e => e.id === chosen) ? chosen : group[0].id;
+  };
 
-  const handleMerge = async (groupIdx: number, group: DuplicateGroup) => {
-    const keep = keepId(groupIdx, group);
+  const handleMerge = async (group: DuplicateGroup) => {
+    const keep = keepId(group);
     const removeIds = group.filter(e => e.id !== keep).map(e => e.id);
     if (removeIds.length === 0) return;
-    setBusy(groupIdx);
+    setBusy(groupKey(group));
     const res = await onMerge(keep, removeIds);
     setBusy(null);
-    if (res.error) { toast.error(res.error); return; }
+    if (!res.ok) { toast.error(t('duplicates.mergeFailed')); return; }
     toast.success(t('duplicates.mergedOk', { count: res.removed ?? removeIds.length }));
     onMerged?.();
+  };
+
+  const handleDismiss = async (group: DuplicateGroup) => {
+    setBusy(groupKey(group));
+    const res = await onDismiss(group.map(e => e.id));
+    setBusy(null);
+    if (!res.ok) { toast.error(t('duplicates.dismissFailed')); return; }
+    toast.success(t('duplicates.dismissedOk'));
   };
 
   return (
@@ -81,20 +96,31 @@ export function Duplicates({ isOpen, onClose, groups, loading, onMerge, onMerged
               </div>
             ) : (
               <div className="space-y-4">
-                {groups.map((group, gi) => {
-                  const keep = keepId(gi, group);
+                {groups.map(group => {
+                  const gk = groupKey(group);
+                  const keep = keepId(group);
                   return (
-                    <div key={group.map(e => e.id).join('-')} className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 rounded-xl p-4 space-y-3">
-                      <div className="flex items-center justify-between">
+                    <div key={gk} className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 rounded-xl p-4 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-display">{fmtEuro(group[0].amount)} · {t('duplicates.copies', { count: group.length })}</p>
-                        <button
-                          onClick={() => handleMerge(gi, group)}
-                          disabled={busy === gi}
-                          className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-xs disabled:opacity-50"
-                        >
-                          {busy === gi ? <Loader2 className="w-3 h-3 animate-spin" /> : <Merge className="w-3 h-3" />}
-                          {t('duplicates.merge')}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleDismiss(group)}
+                            disabled={busy === gk}
+                            className="flex items-center gap-1 px-3 py-1.5 border border-border bg-background rounded-lg hover:bg-muted transition-colors text-xs disabled:opacity-50"
+                          >
+                            <Ban className="w-3 h-3" />
+                            {t('duplicates.notDuplicates')}
+                          </button>
+                          <button
+                            onClick={() => handleMerge(group)}
+                            disabled={busy === gk}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-xs disabled:opacity-50"
+                          >
+                            {busy === gk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Merge className="w-3 h-3" />}
+                            {t('duplicates.merge')}
+                          </button>
+                        </div>
                       </div>
                       <p className="text-xs text-muted-foreground">{t('duplicates.keepHint')}</p>
                       <div className="space-y-2">
@@ -105,9 +131,9 @@ export function Duplicates({ isOpen, onClose, groups, loading, onMerge, onMerged
                           >
                             <input
                               type="radio"
-                              name={`keep-${gi}`}
+                              name={`keep-${gk}`}
                               checked={keep === e.id}
-                              onChange={() => setKeepByGroup(prev => ({ ...prev, [gi]: e.id }))}
+                              onChange={() => setKeepByGroup(prev => ({ ...prev, [gk]: e.id }))}
                               className="accent-primary"
                             />
                             <div className="min-w-0 flex-1">

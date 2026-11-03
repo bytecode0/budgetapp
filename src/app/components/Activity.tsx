@@ -63,7 +63,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
     useExpenses(currentMonth);
   const { incomes, totalIncome, deleteIncome, fetchIncomes } = useIncome(currentMonth);
   const { user } = useAuth();
-  const { groups: duplicateGroups, loading: duplicatesLoading, merge: mergeDuplicates, fetchDuplicates } = useDuplicates();
+  const { groups: duplicateGroups, loading: duplicatesLoading, merge: mergeDuplicates, dismiss: dismissDuplicates, fetchDuplicates } = useDuplicates();
   const { allocations, monthlyIncome } = useAllocations();
 
   const formatDateLabel = (dateStr: string) => {
@@ -562,6 +562,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
         groups={duplicateGroups}
         loading={duplicatesLoading}
         onMerge={mergeDuplicates}
+        onDismiss={dismissDuplicates}
         onMerged={() => { fetchExpenses(currentMonth); fetchDuplicates(); }}
       />
 
