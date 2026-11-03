@@ -15,6 +15,11 @@ import { SetupChecklist } from './SetupChecklist';
 import type { OnboardingStep } from '../hooks/useOnboardingNeeded';
 import { useMoney } from '../onboarding/useMoney';
 import { BankPendingNotice } from './banking/BankPendingNotice';
+import { budgetedShareTone, sharePct, spentShareTone, toCents, type Tone } from '../../../shared/budgetStatus';
+
+// Tones on the hero's dark gradient (shared/budgetStatus.ts decides the tone).
+const HERO_TEXT: Record<Tone, string> = { good: 'text-emerald-300', warning: 'text-amber-300', over: 'text-red-300', neutral: '' };
+const HERO_BAR: Record<Tone, string> = { good: 'bg-emerald-300', warning: 'bg-amber-300', over: 'bg-red-300', neutral: 'bg-white/40' };
 
 function greeting(t: (key: string) => string) {
   const h = new Date().getHours();
@@ -85,13 +90,21 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
   // Budget comparison uses categorized spending only — uncategorized money has no
   // budget to compare against (it's surfaced separately by the amber nudge below).
   // The "spent so far" stat still shows the inclusive total (review.totalActual).
-  const categorizedActual = review ? review.totalActual - review.unassigned : 0;
-  const isOverBudget    = review && categorizedActual > review.totalBudgeted;
+  // All compared in integer cents (shared/budgetStatus.ts).
+  const budgetedCents   = review ? toCents(review.totalBudgeted) : 0;
+  const categorizedCents = review ? toCents(review.totalActual) - toCents(review.unassigned) : 0;
+  const isOverBudget    = !!review && categorizedCents > budgetedCents;
   const overBudgetCount = review?.review.filter(r => r.diff > 0.5).length ?? 0;
-  const budgetDiff      = review ? Math.abs(categorizedActual - review.totalBudgeted) : 0;
-  const budgetUsedPct   = review && review.totalBudgeted > 0
-    ? Math.round((categorizedActual / review.totalBudgeted) * 100)
-    : 0;
+  const budgetDiff      = Math.abs(categorizedCents - budgetedCents) / 100;
+  const budgetUsedPct   = sharePct(categorizedCents, budgetedCents);
+  const usedTone        = spentShareTone(categorizedCents, budgetedCents);
+
+  // Income vs what's budgeted: the same income the hero shows (the
+  // household's for a couple) and the monthly review's "total budgeted".
+  const incomeCents   = toCents(displayIncome);
+  const budgetedTone  = budgetedShareTone(incomeCents, budgetedCents);
+  const budgetedPct   = sharePct(budgetedCents, incomeCents);
+  const budgetGap     = Math.abs(incomeCents - budgetedCents) / 100;
 
   return (
     <div className="space-y-6 pb-8">
@@ -112,6 +125,31 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
             {isCurrentMonth ? t('home.hereBudgetDoing') : t('home.historicalSummary')}
           </p>
 
+          {/* Income vs total budgeted: how much of what comes in is already assigned */}
+          {review && <div className="mt-6 bg-white/10 rounded-2xl p-4 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs opacity-80">{t('home.incomeVsBudgeted')}</p>
+              {budgetedTone !== 'neutral' && (
+                <p className={`text-sm font-display ${HERO_TEXT[budgetedTone]}`}>{t('home.budgetedPct', { pct: budgetedPct })}</p>
+              )}
+            </div>
+            {budgetedTone === 'neutral' ? (
+              <p className="text-sm opacity-80">{t('home.budgetedNeutral')}</p>
+            ) : (
+              <>
+                <p className="text-2xl font-display">
+                  {t('home.budgetedOfIncome', { budgeted: fmt(budgetedCents / 100), income: fmt(incomeCents / 100) })}
+                </p>
+                <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${HERO_BAR[budgetedTone]}`} style={{ width: `${Math.min(budgetedPct, 100)}%` }} />
+                </div>
+                <p className={`text-xs ${budgetedTone === 'over' ? HERO_TEXT.over : 'opacity-80'}`}>
+                  {t(`home.budgetedTone.${budgetedTone}`, { amount: fmt(budgetGap) })}
+                </p>
+              </>
+            )}
+          </div>}
+
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-6 pt-6 border-t border-white/20">
             <div>
               <p className="text-xs opacity-70 mb-1">{t('home.monthlyIncome')}</p>
@@ -126,7 +164,7 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
             </div>
             <div>
               <p className="text-xs opacity-70 mb-1">{t('home.budgetUsed')}</p>
-              <p className={`text-2xl font-display ${budgetUsedPct > 100 ? 'text-red-300' : budgetUsedPct > 80 ? 'text-amber-300' : ''}`}>
+              <p className={`text-2xl font-display ${usedTone === 'good' ? '' : HERO_TEXT[usedTone]}`}>
                 {budgetUsedPct}%
               </p>
             </div>
@@ -195,7 +233,7 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
               <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="font-medium text-red-700 dark:text-red-400">
-                  {t('home.overBudgetBy', { amount: budgetDiff.toLocaleString() })}
+                  {t('home.overBudgetBy', { amount: fmt(budgetDiff) })}
                 </p>
                 <p className="text-sm text-red-600/70 dark:text-red-400/70 mt-0.5">
                   {t('home.categoriesExceeded', { count: overBudgetCount })}
@@ -216,8 +254,8 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
               <div>
                 <p className="font-medium text-emerald-700 dark:text-emerald-400">
                   {isCurrentMonth
-                    ? t('home.onTrack', { amount: budgetDiff.toLocaleString() })
-                    : t('home.finishedUnder', { amount: budgetDiff.toLocaleString() })}
+                    ? t('home.onTrack', { amount: fmt(budgetDiff) })
+                    : t('home.finishedUnder', { amount: fmt(budgetDiff) })}
                 </p>
                 <p className="text-sm text-emerald-600/70 dark:text-emerald-400/70 mt-0.5">
                   {t('home.usedPct', { pct: budgetUsedPct })}
@@ -255,7 +293,7 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
           <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="font-medium text-amber-700 dark:text-amber-400">
-              {t('home.unassignedTitle', { amount: review.unassigned.toLocaleString() })}
+              {t('home.unassignedTitle', { amount: fmt(review.unassigned) })}
             </p>
             <p className="text-sm text-amber-600/70 dark:text-amber-400/70 mt-0.5">
               {t('home.unassignedDesc')}

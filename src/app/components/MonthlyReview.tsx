@@ -1,10 +1,14 @@
-import { TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, Loader2, Info } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Loader2, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { useMonthlyReview } from '../hooks/useMonthlyBudget';
 import { useLanguage } from '../context/LanguageContext';
 import { useMonth, monthLabel } from '../context/MonthContext';
 import { useMoney } from '../onboarding/useMoney';
+import { sharePct, spentShareTone, toCents, type Tone } from '../../../shared/budgetStatus';
+
+const TONE_TEXT: Record<Tone, string> = { good: 'text-emerald-600 dark:text-emerald-400', warning: 'text-amber-600 dark:text-amber-400', over: 'text-red-500', neutral: 'text-muted-foreground' };
+const TONE_BAR: Record<Tone, string> = { good: 'bg-emerald-500', warning: 'bg-amber-500', over: 'bg-red-500', neutral: 'bg-muted-foreground/40' };
 
 function normalizeType(type: string): string {
   if (type === 'essential') return 'fixed';
@@ -38,12 +42,13 @@ export function MonthlyReview() {
   const { selectedMonth, isCurrentMonth, isFutureMonth } = useMonth();
   const { review, loading } = useMonthlyReview(selectedMonth);
 
-  // Budget comparison uses categorized spending only: uncategorized money has no
-  // budget to compare against (it's surfaced separately as an "unassigned" nudge).
-  // The "Total Spent" headline still shows the inclusive total.
-  const categorizedActual = review ? review.totalActual - review.unassigned : 0;
-  const isOver = !!review && categorizedActual > review.totalBudgeted;
-  const budgetDelta = review ? Math.abs(categorizedActual - review.totalBudgeted) : 0;
+  // Spent of budgeted, in integer cents: categorized spending only, the same
+  // figure as Home's "% used" (uncategorized money has no budget to compare
+  // against; it's surfaced separately as an "unassigned" nudge).
+  const budgetedCents = review ? toCents(review.totalBudgeted) : 0;
+  const spentCents = review ? toCents(review.totalActual) - toCents(review.unassigned) : 0;
+  const spentPct = sharePct(spentCents, budgetedCents);
+  const spentTone = spentShareTone(spentCents, budgetedCents);
 
   return (
     <div className="space-y-6 pb-8">
@@ -81,62 +86,31 @@ export function MonthlyReview() {
             transition={{ duration: 0.2 }}
             className="space-y-5"
           >
-            {/* Summary cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* Total budgeted */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-                className="bg-card border border-border rounded-2xl p-5"
-              >
-                <p className="text-sm text-muted-foreground mb-2">{t('monthlyReview.totalBudgeted')}</p>
-                <p className="text-3xl font-display">{fmt(review.totalBudgeted)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{t('monthlyReview.acrossCategories')}</p>
-              </motion.div>
-
-              {/* Total spent */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-                className={`rounded-2xl p-5 border-2 ${
-                  isOver
-                    ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
-                    : 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800'
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  {isOver
-                    ? <TrendingUp className="w-4 h-4 text-red-500" />
-                    : <TrendingDown className="w-4 h-4 text-emerald-500" />
-                  }
-                  <p className="text-sm text-muted-foreground">{t('monthlyReview.totalSpent')}</p>
-                </div>
-                <p className={`text-3xl font-display ${
-                  isOver ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
-                }`}>
-                  {fmt(review.totalActual)}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {isOver ? t('monthlyReview.overBudget') : t('monthlyReview.underBudget')}
-                </p>
-              </motion.div>
-
-              {/* Surplus / Deficit */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-                className="bg-card border border-border rounded-2xl p-5"
-              >
-                <p className="text-sm text-muted-foreground mb-2">
-                  {isOver ? t('monthlyReview.overBudgetBy') : t('monthlyReview.savedVsBudget')}
-                </p>
-                <p className={`text-3xl font-display ${
-                  isOver ? 'text-red-500' : 'text-emerald-500'
-                }`}>
-                  {isOver ? '-' : '+'}{fmt(budgetDelta)}
-                </p>
-                {review.unassigned > 0 && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3" />
-                    {t('monthlyReview.unassignedAmount', { amount: review.unassigned.toLocaleString() })}
-                  </p>
+            {/* Spent of budgeted: one bar, coloured like Home's "% used" */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+              className="bg-card border border-border rounded-2xl p-6 space-y-3"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-display text-lg">{t('monthlyReview.spentOfBudgeted')}</h3>
+                {spentTone !== 'neutral' && <p className={`text-sm font-display ${TONE_TEXT[spentTone]}`}>{spentPct}%</p>}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {spentTone === 'neutral'
+                  ? t('monthlyReview.noBudgetYet')
+                  : t('monthlyReview.spentOfBudgetedValue', { spent: fmt(spentCents / 100), budgeted: fmt(budgetedCents / 100) })}
+              </p>
+              <div className="h-2 bg-muted rounded-full overflow-hidden relative">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(spentPct, 100)}%` }}
+                  transition={{ duration: 0.8, delay: 0.15, ease: 'easeOut' }}
+                  className={`absolute top-0 left-0 h-full rounded-full ${TONE_BAR[spentTone]}`}
+                />
+                {spentTone === 'over' && (
+                  <div className="absolute top-0 right-0 h-full w-1 bg-red-300 dark:bg-red-700 rounded-r-full" />
                 )}
-              </motion.div>
-            </div>
+              </div>
+            </motion.div>
 
             {/* Per-allocation breakdown */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
@@ -222,12 +196,12 @@ export function MonthlyReview() {
                       ) : isOver ? (
                         <p className="text-xs text-red-500 flex items-center gap-1">
                           <AlertTriangle className="w-3 h-3" />
-                          {t('monthlyReview.overBy', { amount: row.diff.toLocaleString(), pct: (pct - 100).toFixed(0) })}
+                          {t('monthlyReview.overBy', { amount: fmt(row.diff), pct: (pct - 100).toFixed(0) })}
                         </p>
                       ) : isUnder ? (
                         <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                           <CheckCircle2 className="w-3 h-3" />
-                          {t('monthlyReview.underBy', { amount: Math.abs(row.diff).toLocaleString(), pct: (100 - pct).toFixed(0) })}
+                          {t('monthlyReview.underBy', { amount: fmt(Math.abs(row.diff)), pct: (100 - pct).toFixed(0) })}
                         </p>
                       ) : (
                         <p className="text-xs text-muted-foreground">{t('monthlyReview.exactlyOnBudget')}</p>
@@ -242,7 +216,7 @@ export function MonthlyReview() {
                 <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   <span>
-                    {t('monthlyReview.unassignedNote', { amount: review.unassigned.toLocaleString() })}
+                    {t('monthlyReview.unassignedNote', { amount: fmt(review.unassigned) })}
                   </span>
                 </div>
               )}
