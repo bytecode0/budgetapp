@@ -194,12 +194,13 @@
     "incomeVsBudgeted": "Ingresos mensuales vs total presupuestado",
     "budgetedPct": "{{pct}}% presupuestado",
     "budgetedOfIncome": "{{budgeted}} de {{income}}",
-    "budgetedNeutral": "Cuando tengas ingresos y presupuesto, verás aquí qué parte de lo que entra ya tiene destino.",
+    "budgetedNeutral": "Añade un presupuesto para ver qué parte de lo que entra ya tiene destino.",
     "budgetedTone": {
       "good": "Te quedan {{amount}} sin asignar.",
       "warning": "Casi todo lo que entra ya tiene destino: te quedan {{amount}}.",
       "over": "Presupuestas {{amount}} más de lo que ingresas."
-    }
+    },
+    "budgetedNoIncome": "Tienes presupuestado {{amount}} pero no hay ingresos registrados."
   },
   "dashboard": {
     "title": "Tu Plan Financiero de Vida",
@@ -1550,6 +1551,7 @@
     "consentUntil": "Permiso hasta el {{date}}",
     "sharedReadOnly": "Conexión de otra persona del hogar: solo lectura",
     "expiredWarning": "El permiso con este banco ha caducado: ya no traemos movimientos. Reconecta para seguir.",
+    "expiringWarning_zero": "El permiso caduca hoy ({{date}}). Reconecta para que no se corte.",
     "expiringWarning_one": "El permiso caduca mañana ({{date}}). Reconecta para que no se corte.",
     "expiringWarning_other": "El permiso caduca en {{count}} días ({{date}}). Reconecta para que no se corte.",
     "reconnect": "Reconectar",

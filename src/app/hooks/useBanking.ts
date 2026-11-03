@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { ImportPreview, ImportSummary, ConfirmRow } from './useImport';
-import type { BankAvailability } from '../../../shared/bankStrip';
+import { statusAvailability, type BankAvailability } from '../../../shared/bankStrip';
+import { useAuth } from '../context/AuthContext';
 
 export type { BankAvailability };
 
@@ -43,7 +44,7 @@ export interface BankConnection {
 export interface BankAccountsResult { connectionId: string; institutionName: string; accounts: BankAccount[] }
 export type LinkMapping = { externalAccountId: string; accountId?: string; create?: { name: string; type: string } };
 /** A merchant rule a review taught: its next movements go to that line alone. */
-export interface LearnedRule { merchant: string; allocationId: string; allocationName: string | null }
+export interface LearnedRule { merchant: string; label: string; allocationId: string; allocationName: string | null }
 /** Why banking isn't available (GET /api/banking/status). A future
  *  'premium_required' gets its own strip state (an upsell). */
 export type BankUnavailableReason = 'not_configured' | 'not_allowed';
@@ -67,7 +68,25 @@ async function call<T>(url: string, init?: RequestInit): Promise<BankResult<T>> 
 
 const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) });
 
+// The last status this browser got per person: whether a later failure may
+// show "couldn't check" (only to someone known to be eligible). A per-viewer
+// convenience: when storage is unavailable, failures just show nothing.
+const eligibleKey = (userId: string) => `lifeplan.bankingEligible.${userId}`;
+function readEligible(userId: string | undefined): boolean {
+  if (!userId) return false;
+  try { return window.localStorage.getItem(eligibleKey(userId)) === '1'; } catch { return false; }
+}
+function writeEligible(userId: string | undefined, eligible: boolean) {
+  if (!userId) return;
+  try {
+    if (eligible) window.localStorage.setItem(eligibleKey(userId), '1');
+    else window.localStorage.removeItem(eligibleKey(userId));
+  } catch { /* not remembered */ }
+}
+
 export function useBanking() {
+  const { user } = useAuth();
+  const userId = user?.id;
   // 'unavailable': the server said no (reason). 'check_failed': it couldn't
   // be asked (network, 5xx) — the UI offers a retry instead of vanishing.
   const [availability, setAvailability] = useState<BankAvailability>('loading');
@@ -77,9 +96,12 @@ export function useBanking() {
   const [loading, setLoading] = useState(true);
   const enabled = availability === 'available';
 
+  // A failed list is "couldn't check", never "no bank connected": the UI
+  // shows the retry instead of the connect strip or a missing notice.
   const fetchConnections = useCallback(async () => {
     const res = await call<{ connections: BankConnection[] }>('/api/banking/connections');
     if (res.ok) setConnections(res.connections);
+    else setAvailability('check_failed');
     setLoading(false);
   }, []);
 
@@ -87,18 +109,16 @@ export function useBanking() {
     setAvailability('loading');
     setLoading(true);
     const res = await call<{ enabled: boolean; reason: BankUnavailableReason | null; promptDismissed: boolean }>('/api/banking/status');
-    if (!res.ok) {
-      // A 4xx is an answer (e.g. signed out): not available. No answer is not.
-      setAvailability(res.status !== undefined && res.status < 500 ? 'unavailable' : 'check_failed');
-      setLoading(false);
-      return;
+    const next = statusAvailability(res, readEligible(userId));
+    if (res.ok) {
+      writeEligible(userId, res.enabled);
+      setReason(res.enabled ? null : res.reason);
+      setPromptDismissed(res.promptDismissed);
     }
-    setReason(res.enabled ? null : res.reason);
-    setPromptDismissed(res.promptDismissed);
     // Hidden entirely unless the server says this user may use it.
-    setAvailability(res.enabled ? 'available' : 'unavailable');
-    if (res.enabled) await fetchConnections(); else setLoading(false);
-  }, [fetchConnections]);
+    setAvailability(next);
+    if (next === 'available') await fetchConnections(); else setLoading(false);
+  }, [fetchConnections, userId]);
 
   useEffect(() => { checkStatus(); }, [checkStatus]);
 

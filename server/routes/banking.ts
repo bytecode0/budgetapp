@@ -111,12 +111,11 @@ async function bankAccountsOf(client: BankingProviderClient, connection: { id: s
 // "connect your bank" strip.
 bankingRouter.get("/status", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const [email, settings] = await Promise.all([
-      userEmail(req.authUserId),
-      prisma.userSettings.findUnique({ where: { userId: req.authUserId! }, select: { bankPromptDismissedAt: true } }),
-    ]);
-    const access = bankingAccess({ email });
-    return res.json({ data: { enabled: access.enabled, reason: access.enabled ? null : access.reason, promptDismissed: settings?.bankPromptDismissedAt != null } });
+    const access = bankingAccess({ email: await userEmail(req.authUserId) });
+    if (!access.enabled) return res.json({ data: { enabled: false, reason: access.reason, promptDismissed: false } });
+    // Only someone who may use banking has a prompt to have dismissed.
+    const settings = await prisma.userSettings.findUnique({ where: { userId: req.authUserId! }, select: { bankPromptDismissedAt: true } });
+    return res.json({ data: { enabled: true, reason: null, promptDismissed: settings?.bankPromptDismissedAt != null } });
   } catch (err) {
     console.error("[banking/status]", err instanceof Error ? err.message : "unknown error");
     return res.status(500).json({ error: "Internal server error" });

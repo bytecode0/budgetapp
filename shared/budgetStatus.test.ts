@@ -11,10 +11,11 @@ test("budgeted share of income: green to 90 %, amber to 100 %, red above", () =>
   assert.equal(budgetedShareTone(income, 1), "good");
 });
 
-test("budgeted share: no income or no budget is neutral, not a colour", () => {
-  assert.equal(budgetedShareTone(0, 100_000), "neutral");
+test("budgeted share: a budget with no income is red; no budget is neutral", () => {
+  assert.equal(budgetedShareTone(0, 100_000), "over");
+  assert.equal(budgetedShareTone(-5, 100), "over");
   assert.equal(budgetedShareTone(200_000, 0), "neutral");
-  assert.equal(budgetedShareTone(-5, 100), "neutral");
+  assert.equal(budgetedShareTone(0, 0), "neutral");
 });
 
 test("spent of budgeted: green to 80 %, amber to 100 %, red above", () => {
@@ -31,7 +32,24 @@ test("spent of budgeted: green to 80 %, amber to 100 %, red above", () => {
 test("euros to cents and display percentages", () => {
   assert.equal(toCents(0.1 + 0.2), 30);
   assert.equal(toCents(1234.56), 123456);
-  assert.equal(sharePct(100_401, 100_000), 100);
-  assert.equal(sharePct(1, 3), 33);
+  assert.equal(sharePct(100_000, 100_000), 100);
+  assert.equal(sharePct(100_001, 100_000), 101);
+  assert.equal(sharePct(80_300, 100_000), 81);
+  assert.equal(sharePct(1, 3), 34);
   assert.equal(sharePct(5, 0), 0);
+});
+
+test("the % label never contradicts the colour, around every threshold", () => {
+  const whole = 123_457; // an awkward total, so most shares aren't whole percentages
+  for (let part = 0; part <= whole * 1.2; part += 7) {
+    const pct = sharePct(part, whole);
+    const spent = spentShareTone(part, whole);
+    assert.equal(spent === "good", pct <= 80, `spent ${part}: ${pct}% ${spent}`);
+    assert.equal(spent === "over", pct > 100, `spent ${part}: ${pct}% ${spent}`);
+    const budgeted = budgetedShareTone(whole, part);
+    if (part === 0) continue; // no budget: neutral
+    const share = sharePct(part, whole);
+    assert.equal(budgeted === "good", share <= 90, `budgeted ${part}: ${share}% ${budgeted}`);
+    assert.equal(budgeted === "over", share > 100, `budgeted ${part}: ${share}% ${budgeted}`);
+  }
 });

@@ -7,7 +7,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useBanking, type BankAccount, type BankConnection, type LinkMapping } from '../../hooks/useBanking';
 import type { Account } from '../../hooks/useAccounts';
-import { daysLeft as daysLeftAt, needsReconnect } from '../../../../shared/bankStrip';
+import { consentExpired, daysLeft as daysLeftAt, needsReconnect } from '../../../../shared/bankStrip';
 import { BankReview, type BankReviewTarget } from './BankReview';
 import { BankPicker } from './BankPicker';
 import { BankStatusRetry } from './BankStatusRetry';
@@ -121,7 +121,7 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
 
   const statusLine = (c: BankConnection) => {
     if (c.status === 'pending') return t('banking.statusPending');
-    if (c.status === 'expired') return t('banking.statusExpired');
+    if (consentExpired(c, new Date())) return t('banking.statusExpired');
     if (c.status === 'error') return t('banking.statusError');
     return c.lastSyncedAt ? t('banking.statusSynced', { date: fmtDate(c.lastSyncedAt) }) : t('banking.statusNotSynced');
   };
@@ -136,8 +136,8 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.07 }} className="space-y-3">
       {visible.map(c => {
         const left = c.expiresAt ? daysLeft(c.expiresAt) : null;
+        const expired = consentExpired(c, new Date());
         const reconnect = needsReconnect(c, new Date());
-        const expiringSoon = reconnect && c.status === 'active';
         const busy = busyId === c.id || syncingId === c.id;
         return (
           <div key={c.id} className="bg-card border border-border rounded-2xl p-4 space-y-3">
@@ -148,8 +148,8 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
                 </div>
                 <div className="min-w-0">
                   <p className="font-display truncate">{c.institutionName}</p>
-                  <p className={`text-xs ${c.status === 'active' ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}>{statusLine(c)}</p>
-                  {c.expiresAt && c.status === 'active' && !expiringSoon && (
+                  <p className={`text-xs ${c.status === 'active' && !expired ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}>{statusLine(c)}</p>
+                  {c.expiresAt && c.status === 'active' && !reconnect && (
                     <p className="text-xs text-muted-foreground">{t('banking.consentUntil', { date: fmtDate(c.expiresAt) })}</p>
                   )}
                   {!c.isOwner && <p className="text-xs text-muted-foreground">{t('banking.sharedReadOnly')}</p>}
@@ -174,7 +174,7 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
                 <div className="flex gap-2 min-w-0">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <p className="text-sm">
-                    {c.status === 'expired' ? t('banking.expiredWarning') : t('banking.expiringWarning', { count: Math.max(left ?? 0, 0), date: fmtDate(c.expiresAt!) })}
+                    {expired ? t('banking.expiredWarning') : t('banking.expiringWarning', { count: Math.max(left ?? 0, 0), date: fmtDate(c.expiresAt!) })}
                   </p>
                 </div>
                 {c.isOwner && (
@@ -199,7 +199,7 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
                       {a.type === 'card' ? <CreditCard className="w-4 h-4 text-muted-foreground shrink-0" /> : <Landmark className="w-4 h-4 text-muted-foreground shrink-0" />}
                       <span className="truncate">{a.name}</span>
                     </span>
-                    {c.isOwner && c.status !== 'expired' && (!a.bankReviewedAt || a.bankPendingReview > 0) && (
+                    {c.isOwner && !expired && (!a.bankReviewedAt || a.bankPendingReview > 0) && (
                       <button
                         onClick={() => setReview([{ connectionId: c.id, accountId: a.id, accountName: a.name, firstTime: !a.bankReviewedAt }])}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-display hover:bg-primary/20 transition-colors shrink-0"

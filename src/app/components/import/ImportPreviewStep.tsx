@@ -257,7 +257,9 @@ export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, si
   });
   const isUncategorized = (r: Row, kind: ConfirmRow['kind'] | null) =>
     variant === 'bank' && r.status === 'new' && (kind === 'expense' || kind === 'refund') && !allocByRow[r.externalId];
-  const planFirstFor = (text: string) => TRANSFER_RE.test(text);
+  // Bank movements and account statements alike; a card statement has no
+  // transfers, so its pickers keep the usual order.
+  const planFirstFor = (text: string) => data.mode !== 'card' && TRANSFER_RE.test(text);
 
   const selectedCount = !signUnknown ? data.rows.filter(r => r.status === 'new' && selected.has(r.externalId) && confirmKindOf(r)).length : 0;
   const skipped = data.skipped ?? [];

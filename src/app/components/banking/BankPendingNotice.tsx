@@ -4,6 +4,7 @@ import { ListChecks } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useBanking } from '../../hooks/useBanking';
 import { pendingReviews, type BankReviewTarget } from '../../../../shared/bankStrip';
+import { BankStatusRetry } from './BankStatusRetry';
 import { BankReview } from './BankReview';
 import { PendingText } from './BankStrip';
 
@@ -14,7 +15,9 @@ export function BankPendingNotice({ onChanged }: { onChanged: () => void }) {
   const banking = useBanking();
   const [queue, setQueue] = useState<BankReviewTarget[] | null>(null);
 
-  const { targets, count, bank } = pendingReviews(banking.enabled ? banking.connections : []);
+  const { targets, count, bank } = pendingReviews(banking.enabled ? banking.connections : [], new Date());
+  // The list couldn't be read: say so (with a retry) rather than drop the notice.
+  if (banking.availability === 'check_failed') return <BankStatusRetry onRetry={banking.checkStatus} />;
 
   return (
     <>

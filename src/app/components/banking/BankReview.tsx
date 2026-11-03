@@ -70,7 +70,7 @@ export function BankReview({ queue, onClose, onDone, preview, confirm }: BankRev
     const learned = learnedRef.current;
     learnedRef.current = [];
     if (learned.length === 1 && learned[0].allocationName) {
-      toast.success(t('banking.learnedOne', { merchant: learned[0].merchant, line: learned[0].allocationName }));
+      toast.success(t('banking.learnedOne', { merchant: learned[0].label, line: learned[0].allocationName }));
     } else if (learned.length > 0) {
       toast.success(t('banking.learnedMany', { count: learned.length }));
     }

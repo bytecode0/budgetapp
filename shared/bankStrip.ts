@@ -21,6 +21,19 @@ export interface StripConnection {
  *  status couldn't be read (network, 5xx) — not the same as "not available". */
 export type BankAvailability = "loading" | "available" | "unavailable" | "check_failed";
 
+/** How the app reads a /api/banking/status answer. `status`: the HTTP status
+ *  of a failed call, absent on a network failure. A failure is "couldn't
+ *  check" (a retry) only for someone this browser saw eligible before: a
+ *  transient 5xx must not show banking to someone off the allow-list. */
+export function statusAvailability(
+  res: { ok: true; enabled: boolean } | { ok: false; status?: number },
+  knownEligible: boolean,
+): Exclude<BankAvailability, "loading"> {
+  if (res.ok) return res.enabled ? "available" : "unavailable";
+  if (res.status !== undefined && res.status < 500) return "unavailable"; // an answer (e.g. signed out)
+  return knownEligible ? "check_failed" : "unavailable";
+}
+
 export interface BankReviewTarget { connectionId: string; accountId: string; accountName: string; firstTime: boolean }
 
 export type BankStrip =
@@ -31,21 +44,31 @@ export type BankStrip =
   | { kind: "pending"; count: number; bank: string | null; targets: BankReviewTarget[] }
   | { kind: "status"; connections: StripConnection[] };
 
+/** Calendar days from today to the expiry day, in the user's local time:
+ *  0 = it lapses today, 1 = tomorrow. (Rounded: a DST day is 23 or 25 h.) */
 export function daysLeft(expiresAt: string, now: Date): number {
-  return Math.ceil((new Date(expiresAt).getTime() - now.getTime()) / DAY_MS);
+  const localDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  return Math.round((localDay(new Date(expiresAt)) - localDay(now)) / DAY_MS);
+}
+
+/** The consent no longer works: marked expired, or still "active" but past its
+ *  expiry (the daily job hasn't caught up yet). */
+export function consentExpired(c: Pick<StripConnection, "status" | "expiresAt">, now: Date): boolean {
+  if (c.status === "expired") return true;
+  return c.status === "active" && c.expiresAt !== null && new Date(c.expiresAt).getTime() <= now.getTime();
 }
 
 /** Consent lapsed, or lapsing within EXPIRY_WARNING_DAYS. */
 export function needsReconnect(c: Pick<StripConnection, "status" | "expiresAt">, now: Date): boolean {
-  if (c.status === "expired") return true;
+  if (consentExpired(c, now)) return true;
   return c.status === "active" && c.expiresAt !== null && daysLeft(c.expiresAt, now) <= EXPIRY_WARNING_DAYS;
 }
 
 /** The caller's reviews, in the order the flow walks them: first-time reviews
  *  first, then accounts with movements held back. Only the owner reviews, and
  *  never on an expired consent (the preview needs it). */
-export function reviewQueue(connections: StripConnection[]): BankReviewTarget[] {
-  const reviewable = connections.filter(c => c.isOwner && (c.status === "active" || c.status === "error"));
+export function reviewQueue(connections: StripConnection[], now: Date): BankReviewTarget[] {
+  const reviewable = connections.filter(c => c.isOwner && (c.status === "active" || c.status === "error") && !consentExpired(c, now));
   const target = (c: StripConnection, a: StripAccount): BankReviewTarget =>
     ({ connectionId: c.id, accountId: a.id, accountName: a.name, firstTime: !a.bankReviewedAt });
   return [
@@ -57,11 +80,14 @@ export function reviewQueue(connections: StripConnection[]): BankReviewTarget[] 
 /** What waits for the caller's review: the flow's queue, the movements held
  *  back, and the bank's name when they're all from one. Owner-only (a
  *  partner's view has no pending counts: server/lib/banking/prompt.ts). */
-export function pendingReviews(connections: StripConnection[]): { targets: BankReviewTarget[]; count: number; bank: string | null } {
+export function pendingReviews(connections: StripConnection[], now: Date): { targets: BankReviewTarget[]; count: number; bank: string | null } {
   const owned = connections.filter(c => c.isOwner);
-  const targets = reviewQueue(owned);
+  const targets = reviewQueue(owned, now);
+  // Counted over the same accounts the flow will open: an expired consent's
+  // held rows can't be reviewed, so they aren't announced.
+  const accountOf = (t: BankReviewTarget) => owned.find(c => c.id === t.connectionId)!.accounts.find(a => a.id === t.accountId)!;
   const banks = new Set(targets.map(t => owned.find(c => c.id === t.connectionId)!.institutionName));
-  const count = owned.flatMap(c => c.accounts).reduce((s, a) => s + a.bankPendingReview, 0);
+  const count = targets.reduce((s, t) => s + accountOf(t).bankPendingReview, 0);
   return { targets, count, bank: banks.size === 1 ? [...banks][0] : null };
 }
 
@@ -85,10 +111,10 @@ export function bankStrip(input: {
 
   const renew = owned.find(c => needsReconnect(c, now));
   if (renew) {
-    return { kind: "reconnect", connection: renew, expired: renew.status === "expired", daysLeft: renew.expiresAt ? Math.max(daysLeft(renew.expiresAt, now), 0) : 0 };
+    return { kind: "reconnect", connection: renew, expired: consentExpired(renew, now), daysLeft: renew.expiresAt ? Math.max(daysLeft(renew.expiresAt, now), 0) : 0 };
   }
 
-  const pending = pendingReviews(owned);
+  const pending = pendingReviews(owned, now);
   if (pending.targets.length > 0) return { kind: "pending", ...pending };
 
   if (owned.length === 0 && !promptDismissed) return { kind: "connect" };

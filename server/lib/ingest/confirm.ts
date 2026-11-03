@@ -32,23 +32,28 @@ export interface ImportSummary {
 }
 
 /** A rule this confirm created or re-pointed: future movements of `merchant`
- *  (the normalized key the rule matches) go to that budget line on their own. */
-export interface LearnedRule { merchant: string; allocationId: string; allocationName: string | null }
+ *  (the normalized key the rule matches) go to that budget line on their own.
+ *  `label`: the movement as the user saw it in the review (its description),
+ *  for the message; the stored rule keeps the key. */
+export interface LearnedRule { merchant: string; label: string; allocationId: string; allocationName: string | null }
 
 export type ConfirmImportResult =
   | { error: string; code?: string; status: number }
   | { expenses: number; income: number; inserted: number; summary: ImportSummary; learned: LearnedRule[] };
 
-/** The merchant → budget line pairs a confirm teaches (last assignment wins).
+/** The merchant → budget line pairs a confirm teaches (last assignment wins),
+ *  each with the description of the row that taught it.
  *  Refunds and a card statement's own payment lines don't teach; a payment
  *  from a bank account teaches its debt line unless the merchant is a generic
  *  label ("Transferencia realizada"…) that could be anything. Pure. */
-export function learnablePairs(expenses: Pick<ExpenseWrite, "kind" | "merchant" | "allocationId" | "debtId" | "accountId">[]): Map<string, string> {
-  const pairs = new Map<string, string>();
+export function learnablePairs(
+  expenses: Pick<ExpenseWrite, "kind" | "merchant" | "description" | "allocationId" | "debtId" | "accountId">[],
+): Map<string, { allocationId: string; label: string }> {
+  const pairs = new Map<string, { allocationId: string; label: string }>();
   for (const e of expenses) {
     if (!e.allocationId || !e.merchant || e.kind === "refund" || (e.debtId && !e.accountId)) continue;
     if (e.debtId && isGenericMerchant(e.merchant)) continue;
-    pairs.set(e.merchant, e.allocationId);
+    pairs.set(e.merchant, { allocationId: e.allocationId, label: e.description.trim() || e.merchant });
   }
   return pairs;
 }
@@ -109,8 +114,8 @@ export async function confirmImport(ctx: ConfirmImportContext, rows: ConfirmRow[
   // "next time, 'mercadona' goes to 'Groceries' on its own").
   const learned: LearnedRule[] = [];
   try {
-    for (const [merchant, allocationId] of learnablePairs(plan.expenses)) {
-      if (await learnFromCorrection(userId, merchant, allocationId)) learned.push({ merchant, allocationId, allocationName: null });
+    for (const [merchant, { allocationId, label }] of learnablePairs(plan.expenses)) {
+      if (await learnFromCorrection(userId, merchant, allocationId)) learned.push({ merchant, label, allocationId, allocationName: null });
     }
     if (learned.length > 0) {
       const names = await prisma.allocation.findMany({

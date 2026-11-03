@@ -10,9 +10,11 @@ export const toCents = (euros: number): number => Math.round(euros * 100);
 const atMost = (part: number, whole: number, pct: number) => part * 100 <= whole * pct;
 
 /** Share of the income already budgeted: ≤ 90 % good, ≤ 100 % warning, more
- *  than the income over. No income or no budget: nothing to judge. */
+ *  than the income over. A budget with no income is over (all of it is
+ *  unfunded); only no budget at all is nothing to judge. */
 export function budgetedShareTone(incomeCents: number, budgetedCents: number): Tone {
-  if (incomeCents <= 0 || budgetedCents <= 0) return "neutral";
+  if (budgetedCents <= 0) return "neutral";
+  if (incomeCents <= 0) return "over";
   if (atMost(budgetedCents, incomeCents, 90)) return "good";
   if (atMost(budgetedCents, incomeCents, 100)) return "warning";
   return "over";
@@ -27,7 +29,11 @@ export function spentShareTone(spentCents: number, budgetedCents: number): Tone 
   return "over";
 }
 
-/** part as a whole-number percentage of whole (display only); 0 without a whole. */
+/** part as a whole-number percentage of whole, for a label next to a tone;
+ *  0 without a whole. Rounded UP: the thresholds are whole percentages and a
+ *  tone changes only once the share goes past one, and ceil(x) > T exactly
+ *  when x > T, so the label never contradicts the colour (80.3 % shows "81 %"
+ *  amber, never "80 %" amber; exactly 80 % shows "80 %" green). */
 export function sharePct(partCents: number, wholeCents: number): number {
-  return wholeCents > 0 ? Math.round((partCents * 100) / wholeCents) : 0;
+  return wholeCents > 0 ? Math.ceil((partCents * 100) / wholeCents) : 0;
 }

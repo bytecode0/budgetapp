@@ -75,16 +75,20 @@ test("a connection's owner sees its pending reviews; a partner never does", () =
 
 test("learned pairs: last assignment wins; refunds, card payment lines and generic payments don't teach", () => {
   const e = (over: Partial<Parameters<typeof learnablePairs>[0][number]>) =>
-    ({ kind: "expense" as const, merchant: "mercadona", allocationId: "groceries", debtId: null, accountId: "acc", ...over });
+    ({ kind: "expense" as const, merchant: "mercadona", description: "MERCADONA SA 1234", allocationId: "groceries", debtId: null, accountId: "acc", ...over });
   const pairs = learnablePairs([
     e({}),
-    e({ allocationId: "home" }),                                          // last wins
+    e({ allocationId: "home", description: "Mercadona Valencia" }),       // last wins
     e({ merchant: "zara", kind: "refund", allocationId: "clothes" }),     // refund
     e({ merchant: "", allocationId: "x" }),                               // no merchant
     e({ merchant: "lidl", allocationId: null }),                          // uncategorised
     e({ merchant: "pago tarjeta", debtId: "d1", accountId: null, allocationId: "card" }), // card statement's own payment
     e({ merchant: "transferencia realizada", debtId: "d1", allocationId: "loan" }),       // generic bank payment
-    e({ merchant: "cofidis prestamo", debtId: "d1", allocationId: "loan" }),              // specific bank payment
+    e({ merchant: "cofidis prestamo", description: "  ", debtId: "d1", allocationId: "loan" }), // specific bank payment, no description
   ]);
-  assert.deepEqual([...pairs], [["mercadona", "home"], ["cofidis prestamo", "loan"]]);
+  // The stored key stays the normalized merchant; the label is the row as shown.
+  assert.deepEqual([...pairs], [
+    ["mercadona", { allocationId: "home", label: "Mercadona Valencia" }],
+    ["cofidis prestamo", { allocationId: "loan", label: "cofidis prestamo" }],
+  ]);
 });

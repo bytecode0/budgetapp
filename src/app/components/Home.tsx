@@ -7,7 +7,6 @@ import { MonthlyReview } from './MonthlyReview';
 import { Analytics } from './Analytics';
 import { usePlans } from '../hooks/usePlans';
 import { useAllocations } from '../hooks/useAllocations';
-import { useIncome } from '../hooks/useIncome';
 import { useMonthlyReview } from '../hooks/useMonthlyBudget';
 import { useDebts } from '../hooks/useDebts';
 import { useLanguage } from '../context/LanguageContext';
@@ -54,21 +53,24 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
   const { selectedMonth, isCurrentMonth } = useMonth();
   const { plans, fetchPlans } = usePlans();
   const { monthlyIncome } = useAllocations();
-  const { incomes, totalIncome, fetchIncomes } = useIncome(selectedMonth);
   const { review, fetchReview } = useMonthlyReview(selectedMonth);
   const { totalOwed, timeline, fetchTimeline, fetchDebts } = useDebts();
   const month = selectedMonth;
   // Bumped after a bank review: the sections with their own data re-read it.
   const [refreshKey, setRefreshKey] = useState(0);
   const refreshAfterBankReview = () => {
-    fetchReview(); fetchIncomes(selectedMonth); fetchPlans(); fetchDebts(); fetchTimeline(6);
+    fetchReview(); fetchPlans(); fetchDebts(); fetchTimeline(6);
     setRefreshKey(k => k + 1);
   };
 
   useEffect(() => { fetchTimeline(6); }, [fetchTimeline]);
 
   // Actual income for the month when recorded; otherwise the planned baseline.
-  const displayIncome = incomes.length > 0 ? totalIncome : monthlyIncome;
+  // One household figure, computed by the server over the whole pool (the
+  // viewer-filtered income list would show only the viewer's own at
+  // shared_stats). monthlyIncome only until the review arrives.
+  const displayIncome = review ? review.householdIncome : monthlyIncome;
+  const incomeRecorded = review?.householdIncomeSource === 'recorded';
 
   const totalPlans    = plans.length;
   const completedPlans = plans.filter(p => p.currentAmount >= p.targetAmount).length;
@@ -105,6 +107,8 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
   const budgetedTone  = budgetedShareTone(incomeCents, budgetedCents);
   const budgetedPct   = sharePct(budgetedCents, incomeCents);
   const budgetGap     = Math.abs(incomeCents - budgetedCents) / 100;
+  // A budget with nothing coming in: red, and said plainly (no "% of 0").
+  const noIncome      = budgetedTone !== 'neutral' && incomeCents <= 0;
 
   return (
     <div className="space-y-6 pb-8">
@@ -129,7 +133,7 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
           {review && <div className="mt-6 bg-white/10 rounded-2xl p-4 space-y-2">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs opacity-80">{t('home.incomeVsBudgeted')}</p>
-              {budgetedTone !== 'neutral' && (
+              {budgetedTone !== 'neutral' && !noIncome && (
                 <p className={`text-sm font-display ${HERO_TEXT[budgetedTone]}`}>{t('home.budgetedPct', { pct: budgetedPct })}</p>
               )}
             </div>
@@ -141,10 +145,12 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
                   {t('home.budgetedOfIncome', { budgeted: fmt(budgetedCents / 100), income: fmt(incomeCents / 100) })}
                 </p>
                 <div className="h-2 bg-white/20 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full transition-all ${HERO_BAR[budgetedTone]}`} style={{ width: `${Math.min(budgetedPct, 100)}%` }} />
+                  <div className={`h-full rounded-full transition-all ${HERO_BAR[budgetedTone]}`} style={{ width: `${noIncome ? 100 : Math.min(budgetedPct, 100)}%` }} />
                 </div>
                 <p className={`text-xs ${budgetedTone === 'over' ? HERO_TEXT.over : 'opacity-80'}`}>
-                  {t(`home.budgetedTone.${budgetedTone}`, { amount: fmt(budgetGap) })}
+                  {noIncome
+                    ? t('home.budgetedNoIncome', { amount: fmt(budgetedCents / 100) })
+                    : t(`home.budgetedTone.${budgetedTone}`, { amount: fmt(budgetGap) })}
                 </p>
               </>
             )}
@@ -154,7 +160,7 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
             <div>
               <p className="text-xs opacity-70 mb-1">{t('home.monthlyIncome')}</p>
               <p className="text-2xl font-display">{fmt(displayIncome)}</p>
-              {incomes.length > 0 && <p className="text-xs opacity-60">{t('home.actualIncome')}</p>}
+              {incomeRecorded && <p className="text-xs opacity-60">{t('home.actualIncome')}</p>}
             </div>
             <div>
               <p className="text-xs opacity-70 mb-1">{t('home.spentSoFar')}</p>

@@ -194,12 +194,13 @@
     "incomeVsBudgeted": "Monthly income vs total budgeted",
     "budgetedPct": "{{pct}}% budgeted",
     "budgetedOfIncome": "{{budgeted}} of {{income}}",
-    "budgetedNeutral": "Once you have income and a budget, you'll see here how much of what comes in already has a job.",
+    "budgetedNeutral": "Add a budget to see how much of what comes in already has a job.",
     "budgetedTone": {
       "good": "{{amount}} left unassigned.",
       "warning": "Almost everything coming in already has a job: {{amount}} left.",
       "over": "You're budgeting {{amount}} more than you earn."
-    }
+    },
+    "budgetedNoIncome": "You have {{amount}} budgeted but no income recorded."
   },
   "dashboard": {
     "title": "Your Financial Life Plan",
@@ -1550,6 +1551,7 @@
     "consentUntil": "Permission until {{date}}",
     "sharedReadOnly": "Another household member's connection: read-only",
     "expiredWarning": "The permission for this bank has expired: we no longer bring in transactions. Reconnect to continue.",
+    "expiringWarning_zero": "The permission expires today ({{date}}). Reconnect so it doesn't stop.",
     "expiringWarning_one": "The permission expires tomorrow ({{date}}). Reconnect so it doesn't stop.",
     "expiringWarning_other": "The permission expires in {{count}} days ({{date}}). Reconnect so it doesn't stop.",
     "reconnect": "Reconnect",
