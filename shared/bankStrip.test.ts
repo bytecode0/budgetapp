@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bankStrip, needsReconnect, reviewQueue, sinceParts, type StripConnection } from "./bankStrip.js";
+import { bankStrip, needsReconnect, pendingReviews, reviewQueue, sinceParts, type StripConnection } from "./bankStrip.js";
 
 const NOW = new Date("2026-11-03T10:00:00Z");
 const inDays = (d: number) => new Date(NOW.getTime() + d * 86_400_000).toISOString();
@@ -79,4 +79,12 @@ test("time since the last sync", () => {
   assert.deepEqual(sinceParts(new Date(NOW.getTime() - 3 * 3_600_000).toISOString(), NOW), { value: -3, unit: "hour" });
   assert.deepEqual(sinceParts(new Date(NOW.getTime() - 3 * 86_400_000).toISOString(), NOW), { value: -3, unit: "day" });
   assert.deepEqual(sinceParts(new Date(NOW.getTime() + 60_000).toISOString(), NOW), { value: -0, unit: "minute" });
+});
+
+test("pending reviews (Home's notice) ignore other members' connections", () => {
+  const mine = conn({ accounts: [{ id: "a", name: "A", bankReviewedAt: inDays(-1), bankPendingReview: 2 }] });
+  const theirs = conn({ id: "c2", isOwner: false, institutionName: "ING", accounts: [{ id: "b", name: "B", bankReviewedAt: null, bankPendingReview: 7 }] });
+  const p = pendingReviews([mine, theirs]);
+  assert.deepEqual([p.count, p.bank, p.targets.map(t => t.accountId)], [2, "BBVA", ["a"]]);
+  assert.deepEqual(pendingReviews([theirs]), { targets: [], count: 0, bank: null });
 });

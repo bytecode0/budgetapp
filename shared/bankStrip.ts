@@ -54,6 +54,17 @@ export function reviewQueue(connections: StripConnection[]): BankReviewTarget[] 
   ];
 }
 
+/** What waits for the caller's review: the flow's queue, the movements held
+ *  back, and the bank's name when they're all from one. Owner-only (a
+ *  partner's view has no pending counts: server/lib/banking/prompt.ts). */
+export function pendingReviews(connections: StripConnection[]): { targets: BankReviewTarget[]; count: number; bank: string | null } {
+  const owned = connections.filter(c => c.isOwner);
+  const targets = reviewQueue(owned);
+  const banks = new Set(targets.map(t => owned.find(c => c.id === t.connectionId)!.institutionName));
+  const count = owned.flatMap(c => c.accounts).reduce((s, a) => s + a.bankPendingReview, 0);
+  return { targets, count, bank: banks.size === 1 ? [...banks][0] : null };
+}
+
 /** Activity's strip. Priority: a consent to renew, then movements to review,
  *  then the quiet status line; the "connect" invitation only when the person
  *  owns no connection, banking is available to them and they haven't closed
@@ -77,12 +88,8 @@ export function bankStrip(input: {
     return { kind: "reconnect", connection: renew, expired: renew.status === "expired", daysLeft: renew.expiresAt ? Math.max(daysLeft(renew.expiresAt, now), 0) : 0 };
   }
 
-  const targets = reviewQueue(owned);
-  if (targets.length > 0) {
-    const banks = new Set(targets.map(t => owned.find(c => c.id === t.connectionId)!.institutionName));
-    const count = owned.flatMap(c => c.accounts).reduce((s, a) => s + a.bankPendingReview, 0);
-    return { kind: "pending", count, bank: banks.size === 1 ? [...banks][0] : null, targets };
-  }
+  const pending = pendingReviews(owned);
+  if (pending.targets.length > 0) return { kind: "pending", ...pending };
 
   if (owned.length === 0 && !promptDismissed) return { kind: "connect" };
 

@@ -877,7 +877,9 @@
       "aiRateLimited": "You've asked for many suggestions in a row. Try again later or pick the columns by hand.",
       "aiNoSuggestion": "The AI found no clear match. Pick the columns by hand.",
       "aiFailed": "The suggestion could not be fetched. Pick the columns by hand."
-    }
+    },
+    "planLinesGroup": "Plans · counts as a contribution to the plan, not spending",
+    "budgetLinesGroup": "Budget lines"
   },
   "budgets": {
     "title": "Suggested budgets",
@@ -1609,6 +1611,31 @@
       "notLinked": "That account isn't linked to this connection.",
       "previewFailed": "Couldn't read the bank's transactions."
     },
-    "heldExpired": "Some transactions waiting for review are now too old to fetch from the bank (over 90 days). If any is missing, import it from a statement."
+    "heldExpired": "Some transactions waiting for review are now too old to fetch from the bank (over 90 days). If any is missing, import it from a statement.",
+    "statusCheckFailed": "We couldn't check your bank connection.",
+    "retry": "Retry",
+    "stripConnect": "Bring in your transactions automatically",
+    "stripConnectButton": "Connect bank",
+    "stripDismiss": "Don't show again",
+    "stripExpired": "The permission for {{bank}} has expired: we no longer bring in its transactions.",
+    "stripExpiring_zero": "The permission for {{bank}} expires today.",
+    "stripExpiring_one": "The permission for {{bank}} expires tomorrow.",
+    "stripExpiring_other": "The permission for {{bank}} expires in {{count}} days.",
+    "stripReview": "Review",
+    "stripUpdated": "{{bank}} · updated {{ago}}",
+    "stripNotSynced": "{{bank}} · not synced yet",
+    "pendingFromBank_one": "{{count}} {{bank}} transaction to review",
+    "pendingFromBank_other": "{{count}} {{bank}} transactions to review",
+    "pendingCount_one": "{{count}} bank transaction to review",
+    "pendingCount_other": "{{count}} bank transactions to review",
+    "firstReviewFromBank": "Your {{bank}} transactions are waiting for their first review",
+    "firstReview": "Your bank transactions are waiting for their first review",
+    "homePendingDesc": "They don't count in your month until you review them.",
+    "reviewInstruction": "Choose the budget line for each transaction. The app will remember your choice for the next ones.",
+    "reviewStep": "{{current}} of {{total}}",
+    "reviewNext": "Next: {{name}}",
+    "learnedOne": "Saved. Next time, “{{merchant}}” goes to “{{line}}” on its own.",
+    "learnedMany_one": "Saved. The app will remember this merchant for the next transactions.",
+    "learnedMany_other": "Saved. The app will remember {{count}} merchants for the next transactions."
   }
 }

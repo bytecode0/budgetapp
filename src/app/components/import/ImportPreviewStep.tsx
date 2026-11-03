@@ -2,12 +2,30 @@ import { useState, useMemo } from 'react';
 import { X, Loader2, Check, Sparkles, Columns3, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
-import { useAllocations } from '../../hooks/useAllocations';
+import { useAllocations, type Allocation } from '../../hooks/useAllocations';
 import { useImport, type ImportPreview, type ConfirmRow, type AiCategory, type PurchasesSign, type ImportSummary } from '../../hooks/useImport';
 import { useMoney } from '../../onboarding/useMoney';
 import { apiErrorMessage } from '../../lib/apiErrors';
 
 type Row = ImportPreview['rows'][number];
+
+/** A plan line: money on it is a contribution to its life plan, not spending. */
+const isPlanLine = (a: Allocation) => a.type === 'plan' && !!a.lifePlanId;
+/** Cheap tell of money sent by transfer (often to savings): its picker shows
+ *  the plan lines first. Only a hint for the order, never a choice. */
+const TRANSFER_RE = /\b(transf\w*|traspaso\w*)/i;
+
+/** The budget lines of a category picker, plan lines in their own group. */
+function AllocationOptions({ allocations, planFirst }: { allocations: Allocation[]; planFirst: boolean }) {
+  const { t } = useTranslation();
+  const plans = allocations.filter(isPlanLine);
+  const others = allocations.filter(a => !isPlanLine(a));
+  const option = (a: Allocation) => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>;
+  if (plans.length === 0) return <>{others.map(option)}</>;
+  const planGroup = <optgroup key="plans" label={t('import.planLinesGroup')}>{plans.map(option)}</optgroup>;
+  const otherGroup = <optgroup key="lines" label={t('import.budgetLinesGroup')}>{others.map(option)}</optgroup>;
+  return <>{planFirst ? [planGroup, otherGroup] : [otherGroup, planGroup]}</>;
+}
 
 interface ImportPreviewStepProps {
   data: ImportPreview;
@@ -23,6 +41,9 @@ interface ImportPreviewStepProps {
    *  /api/banking/connections/:id/confirm), with the new rows NOT kept. Then
    *  keeping nothing is a valid answer. Default: useImport().confirm. */
   onConfirm?: (rows: ConfirmRow[], dismissed: string[]) => Promise<{ error: string; code?: string } | { inserted: number; summary: ImportSummary }>;
+  /** 'bank': the bank review — rows still without a category go first and
+   *  stand out in amber. Default 'file': the import wizard, unchanged. */
+  variant?: 'file' | 'bank';
 }
 
 /** Skipped-row reason codes (shared/ingest/columns.ts: "state:PENDING"…) → text. */
@@ -38,7 +59,7 @@ function useSkippedReason() {
 // payments, rows to review, the card sign choice, warnings and the rows the
 // file lists but aren't movements yet. Mounted once per preview response, so
 // its selection starts from what the server suggested.
-export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, signLoading, onMapByHand, onConfirmed, onConfirm }: ImportPreviewStepProps) {
+export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, signLoading, onMapByHand, onConfirmed, onConfirm, variant = 'file' }: ImportPreviewStepProps) {
   const { t } = useTranslation();
   const { currency, locale } = useMoney();
   const { allocations, createAllocation } = useAllocations();
@@ -227,6 +248,17 @@ export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, si
     onConfirmed(res.summary);
   };
 
+  // Bank review: the rows that start without a category come first. Fixed at
+  // mount, so a row doesn't jump away while the user picks its line.
+  const [rowOrder] = useState<Row[]>(() => {
+    if (variant !== 'bank') return data.rows;
+    const needsLine = (r: Row) => r.status === 'new' && (r.kind === 'expense' || r.kind === 'refund') && !r.suggestedAllocationId;
+    return [...data.rows.filter(needsLine), ...data.rows.filter(r => !needsLine(r))];
+  });
+  const isUncategorized = (r: Row, kind: ConfirmRow['kind'] | null) =>
+    variant === 'bank' && r.status === 'new' && (kind === 'expense' || kind === 'refund') && !allocByRow[r.externalId];
+  const planFirstFor = (text: string) => TRANSFER_RE.test(text);
+
   const selectedCount = !signUnknown ? data.rows.filter(r => r.status === 'new' && selected.has(r.externalId) && confirmKindOf(r)).length : 0;
   const skipped = data.skipped ?? [];
 
@@ -348,7 +380,7 @@ export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, si
                     className="text-xs border border-border rounded-lg px-2 py-1 bg-background outline-none focus:border-primary max-w-[45%]"
                   >
                     <option value="">{t('import.uncategorized')}</option>
-                    {allocations.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
+                    <AllocationOptions allocations={allocations} planFirst={planFirstFor(g.label)} />
                   </select>
                 </div>
               );
@@ -406,12 +438,13 @@ export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, si
         <p className="text-sm text-muted-foreground text-center py-6">{t('import.noRowsToImport')}</p>
       ) : (
         <div className="border border-border rounded-xl divide-y divide-border max-h-[48vh] overflow-y-auto">
-          {data.rows.map(r => {
+          {rowOrder.map(r => {
             const isDup = r.status === 'duplicate';
             const isReview = r.kind === 'needs_review' && !isDup;
             const kind = confirmKindOf(r);
+            const noLine = isUncategorized(r, kind);
             return (
-              <div key={r.externalId} className={`p-3 space-y-2 ${isDup ? 'opacity-50' : ''}`}>
+              <div key={r.externalId} className={`p-3 space-y-2 ${isDup ? 'opacity-50' : ''} ${noLine ? 'bg-amber-50 dark:bg-amber-950/20' : ''}`}>
                 <div className="flex items-center gap-3">
                   <input
                     type="checkbox"
@@ -440,10 +473,10 @@ export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, si
                     <select
                       value={allocByRow[r.externalId] ?? ''}
                       onChange={e => setAllocByRow(prev => ({ ...prev, [r.externalId]: e.target.value }))}
-                      className="text-xs border border-border rounded-lg px-2 py-1 bg-background outline-none focus:border-primary max-w-[40%]"
+                      className={`text-xs border rounded-lg px-2 py-1 bg-background outline-none focus:border-primary max-w-[40%] ${noLine ? 'border-amber-300 dark:border-amber-700' : 'border-border'}`}
                     >
                       <option value="">{t('import.uncategorized')}</option>
-                      {allocations.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
+                      <AllocationOptions allocations={allocations} planFirst={kind === 'expense' && planFirstFor(`${r.description} ${r.merchant}`)} />
                     </select>
                   )}
                   <p className={`text-sm font-display shrink-0 w-20 text-right ${r.signedAmount > 0 ? 'text-emerald-600' : ''}`}>

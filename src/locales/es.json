@@ -877,7 +877,9 @@
       "aiRateLimited": "Has pedido muchas sugerencias seguidas. Inténtalo en un rato o elige las columnas a mano.",
       "aiNoSuggestion": "La IA no ha encontrado una correspondencia clara. Elige las columnas a mano.",
       "aiFailed": "No se pudo obtener la sugerencia. Elige las columnas a mano."
-    }
+    },
+    "planLinesGroup": "Planes · cuenta como aportación al plan, no como gasto",
+    "budgetLinesGroup": "Partidas"
   },
   "budgets": {
     "title": "Presupuestos sugeridos",
@@ -1609,6 +1611,31 @@
       "notLinked": "Esa cuenta no está vinculada a esta conexión.",
       "previewFailed": "No se pudieron leer los movimientos del banco."
     },
-    "heldExpired": "Algunos movimientos pendientes de revisar son ya demasiado antiguos para traerlos del banco (más de 90 días). Si te falta alguno, impórtalo desde un extracto."
+    "heldExpired": "Algunos movimientos pendientes de revisar son ya demasiado antiguos para traerlos del banco (más de 90 días). Si te falta alguno, impórtalo desde un extracto.",
+    "statusCheckFailed": "No hemos podido comprobar la conexión con tu banco.",
+    "retry": "Reintentar",
+    "stripConnect": "Trae tus movimientos automáticamente",
+    "stripConnectButton": "Conectar banco",
+    "stripDismiss": "No volver a mostrar",
+    "stripExpired": "El permiso con {{bank}} ha caducado: ya no traemos sus movimientos.",
+    "stripExpiring_zero": "El permiso con {{bank}} caduca hoy.",
+    "stripExpiring_one": "El permiso con {{bank}} caduca mañana.",
+    "stripExpiring_other": "El permiso con {{bank}} caduca en {{count}} días.",
+    "stripReview": "Revisar",
+    "stripUpdated": "{{bank}} · actualizado {{ago}}",
+    "stripNotSynced": "{{bank}} · aún sin sincronizar",
+    "pendingFromBank_one": "{{count}} movimiento de {{bank}} por revisar",
+    "pendingFromBank_other": "{{count}} movimientos de {{bank}} por revisar",
+    "pendingCount_one": "{{count}} movimiento del banco por revisar",
+    "pendingCount_other": "{{count}} movimientos del banco por revisar",
+    "firstReviewFromBank": "Tus movimientos de {{bank}} esperan su primera revisión",
+    "firstReview": "Tus movimientos del banco esperan su primera revisión",
+    "homePendingDesc": "Hasta que los revises no entran en tu mes.",
+    "reviewInstruction": "Elige la partida de cada movimiento. La app recordará tu elección para los próximos.",
+    "reviewStep": "{{current}} de {{total}}",
+    "reviewNext": "Siguiente: {{name}}",
+    "learnedOne": "Guardado. La próxima vez, «{{merchant}}» irá sola a «{{line}}».",
+    "learnedMany_one": "Guardado. La app recordará este comercio para los próximos movimientos.",
+    "learnedMany_other": "Guardado. La app recordará {{count}} comercios para los próximos movimientos."
   }
 }

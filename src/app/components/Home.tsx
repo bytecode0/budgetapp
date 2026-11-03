@@ -14,6 +14,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { SetupChecklist } from './SetupChecklist';
 import type { OnboardingStep } from '../hooks/useOnboardingNeeded';
 import { useMoney } from '../onboarding/useMoney';
+import { BankPendingNotice } from './banking/BankPendingNotice';
 
 function greeting(t: (key: string) => string) {
   const h = new Date().getHours();
@@ -46,12 +47,18 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
   const { fmt } = useMoney();
   const { language } = useLanguage();
   const { selectedMonth, isCurrentMonth } = useMonth();
-  const { plans } = usePlans();
+  const { plans, fetchPlans } = usePlans();
   const { monthlyIncome } = useAllocations();
-  const { incomes, totalIncome } = useIncome(selectedMonth);
-  const { review } = useMonthlyReview(selectedMonth);
-  const { totalOwed, timeline, fetchTimeline } = useDebts();
+  const { incomes, totalIncome, fetchIncomes } = useIncome(selectedMonth);
+  const { review, fetchReview } = useMonthlyReview(selectedMonth);
+  const { totalOwed, timeline, fetchTimeline, fetchDebts } = useDebts();
   const month = selectedMonth;
+  // Bumped after a bank review: the sections with their own data re-read it.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const refreshAfterBankReview = () => {
+    fetchReview(); fetchIncomes(selectedMonth); fetchPlans(); fetchDebts(); fetchTimeline(6);
+    setRefreshKey(k => k + 1);
+  };
 
   useEffect(() => { fetchTimeline(6); }, [fetchTimeline]);
 
@@ -265,6 +272,9 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
         </motion.div>
       )}
 
+      {/* ── Bank movements waiting for review (the connection's owner only) ── */}
+      <BankPendingNotice onChanged={refreshAfterBankReview} />
+
       {/* ── Missed plan contributions alert ── */}
       {missedPlans.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
@@ -291,10 +301,10 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
       )}
 
       {/* ── Monthly Review ── */}
-      <MonthlyReview />
+      <MonthlyReview key={`review-${refreshKey}`} />
 
       {/* ── Temporal analysis ── */}
-      <Analytics />
+      <Analytics key={`analytics-${refreshKey}`} />
 
       {/* ── Financial Tips ── */}
       <motion.div
