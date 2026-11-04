@@ -22,16 +22,16 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 | LPBETA-15 | Robo de cuenta preparado de antemano (registro + Google) | En revisión (`feature/seguridad-alta`). **Espera el `db push` de `RateLimitHit` de Luis** | No |
 | LPBETA-16 | Límite al envío de códigos por email | En revisión (`feature/seguridad-alta`). **Espera el `db push` de `RateLimitHit` de Luis** | Sí (aditivo: tabla `RateLimitHit`) |
 | LPBETA-17 | Límite de uso de la IA (coste) | En revisión (`feature/seguridad-alta`). **Espera el `db push` de `RateLimitHit` de Luis** | No (usa la tabla del 16) |
-| LPBETA-18 | Salir del hogar no quita el acceso a los datos de la pareja | En revisión (`feature/seguridad-hogar`). Decidido 4 nov: lo privado de un miembro se oculta a la pareja en todos los niveles (también el transparente); los totales lo cuentan como "Compromisos privados de tu pareja" | No |
-| LPBETA-19 | Las deudas y cuentas privadas se ven y se modifican desde la pareja | En revisión (`feature/seguridad-hogar`). Decidido 4 nov: lo privado de un miembro se oculta a la pareja en todos los niveles (también el transparente); los totales lo cuentan como "Compromisos privados de tu pareja" | No |
-| LPBETA-20 | La invitación de pareja no está ligada al email invitado | En revisión (`feature/seguridad-hogar`). Decidido 4 nov: lo privado de un miembro se oculta a la pareja en todos los niveles (también el transparente); los totales lo cuentan como "Compromisos privados de tu pareja" | No |
+| LPBETA-18 | Salir del hogar no quita el acceso a los datos de la pareja | **Hecho y desplegado** (PR #20, 4 nov). Decidido 4 nov: lo privado de un miembro se oculta a la pareja en todos los niveles (también el transparente); los totales lo cuentan como "Compromisos privados de tu pareja" | No |
+| LPBETA-19 | Las deudas y cuentas privadas se ven y se modifican desde la pareja | **Hecho y desplegado** (PR #20, 4 nov). Decidido 4 nov: lo privado de un miembro se oculta a la pareja en todos los niveles (también el transparente); los totales lo cuentan como "Compromisos privados de tu pareja" | No |
+| LPBETA-20 | La invitación de pareja no está ligada al email invitado | **Hecho y desplegado** (PR #20, 4 nov). Decidido 4 nov: lo privado de un miembro se oculta a la pareja en todos los niveles (también el transparente); los totales lo cuentan como "Compromisos privados de tu pareja" | No |
 | LPBETA-21 | Cerrar todas las sesiones (sesiones revocables) | Refinado — Media | Sí (aditivo, un campo) |
-| LPBETA-22 | Dependencias con vulnerabilidades conocidas | Refinado — Media | No |
+| LPBETA-22 | Dependencias con vulnerabilidades conocidas | **Hecho y desplegado** (PR #18, 4 nov) | No |
 | LPBETA-23 | Endurecimiento menor de seguridad | Refinado — Baja | No |
 | LPBETA-24 | Medir la paz: una pregunta al mes | En refinamiento | Sí (aditivo: una tabla pequeña) |
 | LPBETA-25 | Dominio de la BETA: `app.luisvespa.com` | Refinado — decidido el 4 nov | No |
 | LPBETA-26 | Nuevo nombre de la app: **Remanso** | **Hecho y desplegado** (PR #10, 4 nov). Falta buscar la marca en la OEPM/EUIPO y que Luis cambie `EMAIL_FROM` en Vercel | No |
-| LPBETA-27 | Rediseño de toda la app para Remanso | Fase 1 hecha y desplegada (PR #9). Fase 2: Actividad (PR #12) y Deudas (PR #15) en revisión; faltan Planes, Cuentas, Partidas, Hogar y Ajustes | No |
+| LPBETA-27 | Rediseño de toda la app para Remanso | Fase 1 hecha y desplegada (PR #9). Fase 2: Actividad (PR #12), Deudas (PR #15) y Planes (PR #19) en revisión; faltan Cuentas, Partidas, Hogar y Ajustes | No |
 
 ### Orden de ejecución (4 nov, sustituye al de abajo)
 
@@ -51,14 +51,14 @@ Reparto (4 nov): la sesión de **rebranding** hace 24–27; la **otra sesión** 
 | 3 | LPBETA-15, 16, 17 · Seguridad ALTA | otra | En revisión; espera el `db push` de Luis. Antes de invitar a nadie. |
 | 4 | LPBETA-09 · Borrar cuenta, exportar y privacidad | otra | Confianza y RGPD. |
 | ✓ | LPBETA-06 · Aviso de inversiones | otra | Hecho y desplegado (PR #13). |
-| 6 | LPBETA-18 · Seguridad MEDIA (salir del hogar) | otra | En revisión junto con 19 y 20. Antes de invitar a nadie. |
+| ✓ | LPBETA-18 · Seguridad MEDIA (salir del hogar) | otra | Hecho y desplegado con 19 y 20 (PR #20). |
 | 7 | LPBETA-25 · Dominio `app.luisvespa.com` | rebranding + Luis | Los paneles los hace Luis; los textos, Claude. |
 | 8 | LPBETA-07 · Inicio y onboarding | otra | Con el diseño nuevo (pautas de `CLAUDE.md`), después de fusionar el 26. |
 | 9 | LPBETA-10 · Generosidad | otra | El mismo flujo de onboarding que el 07. |
 | 10 | LPBETA-24 · Medir la paz | rebranding | Una tarjeta en el Inicio nuevo, después del 07. |
 | ✓ | LPBETA-11 · PWA y bienvenida | otra | Hecho y desplegado (PR #16). Falta probarla en un móvil real. |
-| 12 | LPBETA-27 · Rediseño, fase 2 (pantallas sin ticket propio) | rebranding | Actividad (PR #12) y Deudas (PR #15) en revisión. Después: Planes, Cuentas, Hogar, Ajustes y Partidas (esta, tras fusionar `feature/seguridad-hogar`). |
-| 13 | LPBETA-19 a 23 · Seguridad MEDIA y BAJA | otra | 19 y 20 en revisión con el 18; 21 a 23 pendientes. |
+| 12 | LPBETA-27 · Rediseño, fase 2 (pantallas sin ticket propio) | rebranding | Actividad (PR #12), Deudas (PR #15) y Planes (PR #19) en revisión. Después: Cuentas, Partidas (tras el 07), Hogar y Ajustes (tras el 09). |
+| 13 | LPBETA-19 a 23 · Seguridad MEDIA y BAJA | otra | 19, 20 (PR #20) y 22 (PR #18) hechos y desplegados; 21 y 23 pendientes. |
 | 14 | LPBETA-12 · Suscripciones y gastos hormiga | otra | Pantallas nuevas, ya con el diseño nuevo. |
 | 15 | LPBETA-13 · Celebrar los hitos | otra | Ídem. |
 | 16 | LPBETA-02 · Gráficas de deudas | otra | Ídem. |
