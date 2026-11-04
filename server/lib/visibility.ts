@@ -13,6 +13,7 @@
 // NOT apply this filter — combined totals are shared at shared_stats.
 import { prisma } from "./prisma.js";
 import { AuthRequest } from "../middleware/auth.js";
+import { visibleExpenseWhere, visibleIncomeWhere } from "./poolRefs.js";
 
 async function tier(req: AuthRequest): Promise<string> {
   // Linked to a pool (req.userId is someone else's) but in no household: a
@@ -31,12 +32,17 @@ export async function ownOnlyListings(req: AuthRequest): Promise<boolean> {
   return (await tier(req)) !== "transparent";
 }
 
-/** Prisma `where` fragment for the EXPENSE list, honoring the visibility tier. */
+/** Prisma `where` fragment for the EXPENSE list (and the rows a caller may
+ *  change by id), honoring the visibility tier. In every tier it leaves out
+ *  the other member's rows on a private debt or account (poolRefs.ts). */
 export async function expenseListingFilter(req: AuthRequest): Promise<Record<string, unknown>> {
-  return (await ownOnlyListings(req)) ? { payerUserId: req.authUserId! } : {};
+  const hidden = visibleExpenseWhere(req.authUserId!);
+  return (await ownOnlyListings(req)) ? { payerUserId: req.authUserId!, ...hidden } : hidden;
 }
 
-/** Prisma `where` fragment for the INCOME list, honoring the visibility tier. */
+/** Prisma `where` fragment for the INCOME list, honoring the visibility tier;
+ *  in every tier without the other member's income on a private account. */
 export async function incomeListingFilter(req: AuthRequest): Promise<Record<string, unknown>> {
-  return (await ownOnlyListings(req)) ? { ownerUserId: req.authUserId! } : {};
+  const hidden = visibleIncomeWhere(req.authUserId!);
+  return (await ownOnlyListings(req)) ? { ownerUserId: req.authUserId!, ...hidden } : hidden;
 }

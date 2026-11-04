@@ -1,9 +1,9 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
-import { toCents, serializeMoney } from "../lib/money.js";
+import { toCents, toEuros, serializeMoney } from "../lib/money.js";
 import { periodBounds } from "../lib/period.js";
-import { ALLOCATION_NOT_FOUND, allocationsInPool, hiddenLineIds, notOnHiddenDebt } from "../lib/poolRefs.js";
+import { ALLOCATION_NOT_FOUND, allocationsInPool, hiddenCommitted, hiddenLineIds, notOnHiddenDebt } from "../lib/poolRefs.js";
 import { countedAmounts, debtCommitments } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { householdBaselineIncome, householdMonthIncome } from "../lib/householdIncome.js";
@@ -25,8 +25,14 @@ monthlyBudgetsRouter.get("/", requireAuth, async (req: AuthRequest, res: Respons
         },
       },
     });
-    // The line of a debt hidden from the caller is never listed (poolRefs.ts).
-    const hidden = await hiddenLineIds(req.userId!, req.authUserId!);
+    // The line of a debt hidden from the caller is never listed (poolRefs.ts);
+    // what it commits this month comes as one figure (euros), as /review sums it.
+    const cycleStartDay = await getCycleStartDay(req.userId!);
+    const [hidden, hiddenCents] = await Promise.all([
+      hiddenLineIds(req.userId!, req.authUserId!),
+      hiddenCommitted(req.userId!, req.authUserId!, periodBounds(month, cycleStartDay), month),
+    ]);
+    const hiddenCommittedEuros = toEuros(hiddenCents);
 
     // If nothing saved, fall back to current allocation settings
     if (saved.length === 0) {
@@ -36,9 +42,8 @@ monthlyBudgetsRouter.get("/", requireAuth, async (req: AuthRequest, res: Respons
       });
       // A debt line's amount is its commitment for THIS month, not the stored
       // column (which is only refreshed when the debt itself is edited).
-      const cycleStartDay = await getCycleStartDay(req.userId!);
       const commitments = await debtCommitments(req.userId!, periodBounds(month, cycleStartDay));
-      return res.json(serializeMoney({
+      return res.json({ ...serializeMoney({
         budgets: allocations.map(a => ({
           allocationId: a.id,
           month,
@@ -46,10 +51,10 @@ monthlyBudgetsRouter.get("/", requireAuth, async (req: AuthRequest, res: Respons
           allocation: { id: a.id, name: a.name, icon: a.icon, type: a.type, sortOrder: a.sortOrder },
           saved: false, // flag: not yet saved for this specific month
         })),
-      }));
+      }), hiddenCommitted: hiddenCommittedEuros });
     }
 
-    return res.json(serializeMoney({ budgets: saved.filter(b => !hidden.has(b.allocationId)).map(b => ({ ...b, saved: true })) }));
+    return res.json({ ...serializeMoney({ budgets: saved.filter(b => !hidden.has(b.allocationId)).map(b => ({ ...b, saved: true })) }), hiddenCommitted: hiddenCommittedEuros });
   } catch (err) {
     console.error("[monthly-budgets/GET]", err);
     return res.status(500).json({ error: "Internal server error" });

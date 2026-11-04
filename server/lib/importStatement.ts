@@ -9,7 +9,7 @@
 // (the API speaks euros; the confirm route converts back with toCents).
 import { prisma } from "./prisma.js";
 import { visibleToWhere } from "./ownership.js";
-import { notOnHiddenDebt } from "./poolRefs.js";
+import { notOnHiddenDebt, visibleExpenseWhere, visibleIncomeWhere } from "./poolRefs.js";
 import { pickAllocationId } from "./categorize.js";
 import { normalizeMerchant } from "./normalizeMerchant.js";
 import { classifyRows, LATE_PAYMENT_DAYS, statementIds, type ExistingMovement, type PlannedKind, type PossibleDuplicate, type PurchasesSign, type StoredPayment, type PurchasesSignGuess, type RowWarning } from "./ingest/classify.js";
@@ -94,14 +94,16 @@ const WINDOW_DAYS = LATE_PAYMENT_DAYS + 1;
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 const euros = (cents: number) => cents / 100;
 
-async function loadExisting(userId: string, where: object): Promise<ExistingMovement[]> {
+// Only the movements the importer can see: another member's rows on a
+// private debt or account never come back as duplicates or stored payments.
+async function loadExisting(userId: string, authUserId: string, where: object): Promise<ExistingMovement[]> {
   const [expenses, incomes] = await Promise.all([
     prisma.expense.findMany({
-      where: { userId, ...where },
+      where: { userId, ...where, ...visibleExpenseWhere(authUserId) },
       select: { id: true, externalId: true, accountId: true, debtId: true, kind: true, amount: true, date: true, description: true, source: true },
     }),
     prisma.income.findMany({
-      where: { userId, ...where },
+      where: { userId, ...where, ...visibleIncomeWhere(authUserId) },
       select: { id: true, externalId: true, accountId: true, amount: true, date: true, description: true, source: true },
     }),
   ]);
@@ -167,7 +169,7 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
   const days = read.rows.map(r => r.date).sort();
   const ids = statementIds({ ...context, rows: read.rows });
   const existing = days.length
-    ? await loadExisting(userId, {
+    ? await loadExisting(userId, input.authUserId, {
       OR: [
         {
           date: {

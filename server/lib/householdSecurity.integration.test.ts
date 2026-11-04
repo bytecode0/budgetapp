@@ -298,4 +298,178 @@ describe("household security (integration, real Postgres)", { skip: !TEST_DATABA
     assert.equal(accepted.success, true);
     assert.equal((await prisma.userSettings.findUniqueOrThrow({ where: { userId: B.id } })).linkedUserId, A.id);
   });
+
+  // ── Private in every tier (review round): rows, totals, AI, rules ──────
+
+  /** A transparent couple where A has a private loan (with its line and one
+   *  payment) and a private card (with a purchase), and A's main account. */
+  async function privateSetup() {
+    const c = await couple("transparent");
+    const loan = (await ok(c.A, "POST", "/api/debts", {
+      name: "Préstamo secreto", kind: "installment", paymentMode: "installments",
+      installmentAmount: 150, installmentsTotal: 12, installmentsPaid: 0, visibility: "private",
+    })).debt.id;
+    const line = (await prisma.allocation.findFirstOrThrow({ where: { userId: c.A, debtId: loan } })).id;
+    const aMain = (await prisma.account.findFirstOrThrow({ where: { userId: c.A, ownerUserId: c.A, type: "checking" } })).id;
+    const payment = (await ok(c.A, "POST", "/api/expenses", { amount: 150, description: "Cuota secreta", allocationId: line, accountId: aMain })).expense.id;
+    const card = (await ok(c.A, "POST", "/api/accounts", { name: "Visa secreta", type: "card", currentBalance: 0, cardPaymentMode: "full", visibility: "private" })).account.id;
+    const cardDebt = await prisma.debt.findFirstOrThrow({ where: { accountId: card } });
+    assert.equal(cardDebt.visibility, "private", "a card's debt follows its account");
+    const purchase = (await ok(c.A, "POST", "/api/expenses", { amount: 30, description: "Tienda secreta", accountId: card })).expense.id;
+    return { ...c, loan, line, aMain, payment, card, cardDebt: cardDebt.id, purchase };
+  }
+
+  it("h. NOT-filters keep the rows with no debt, line or account", async () => {
+    const c = await couple("transparent");
+    await ok(c.A, "POST", "/api/debts", {
+      name: "Privada", kind: "installment", paymentMode: "installments",
+      installmentAmount: 10, installmentsTotal: 3, installmentsPaid: 0, visibility: "private",
+    });
+    // Rows with every relation null: Prisma's NOT over an optional relation must keep them.
+    const bare = await prisma.expense.create({ data: { userId: c.A, amount: 700, description: "Sin nada", merchant: "sin nada", payerUserId: c.A, createdByUserId: c.A } });
+    const bareIncome = await prisma.income.create({ data: { userId: c.A, ownerUserId: c.A, amount: 800, description: "Sin cuenta", merchant: "sin cuenta", category: "other", source: "manual" } });
+    assert.ok((await listIds(c.B, "/api/expenses", "expenses")).has(bare.id));
+    assert.ok((await listIds(c.B, "/api/income", "incomes")).has(bareIncome.id));
+    const plainLines = await prisma.allocation.count({ where: { userId: c.A, debtId: null } });
+    const bLines = (await ok(c.B, "GET", "/api/allocations")).allocations as any[];
+    assert.equal(bLines.filter(l => !l.debtId).length, plainLines, "every line without a debt is listed");
+  });
+
+  it("i. A's rows on her private debt and card: never listed to B, nor changed by B in any way", async () => {
+    const c = await privateSetup();
+    // A second identical purchase: a duplicate pair only A may see.
+    const twin = (await ok(c.A, "POST", "/api/expenses", { amount: 30, description: "Tienda secreta", accountId: c.card })).expense.id;
+    const secretIncome = (await ok(c.A, "POST", "/api/income", { amount: 50, description: "Ingreso secreto", accountId: c.card })).income.id;
+
+    const bList = await listIds(c.B, "/api/expenses", "expenses");
+    for (const id of [c.payment, c.purchase, twin]) assert.ok(!bList.has(id), `expense ${id} listed to B`);
+    assert.ok(bList.has(c.aExpense), "A's other expenses still are (transparent)");
+    assert.deepEqual((await ok(c.B, "GET", `/api/expenses?allocationId=${c.line}`)).expenses, []);
+    const aList = await listIds(c.A, "/api/expenses", "expenses");
+    for (const id of [c.payment, c.purchase, twin]) assert.ok(aList.has(id), "A sees all hers");
+
+    const dupIds = async (u: string) => JSON.stringify((await ok(u, "GET", "/api/expenses/duplicates")).groups);
+    assert.ok((await dupIds(c.A)).includes(twin));
+    assert.ok(!(await dupIds(c.B)).includes(twin));
+
+    assert.ok(!(await listIds(c.B, "/api/income", "incomes")).has(secretIncome));
+    assert.ok((await listIds(c.A, "/api/income", "incomes")).has(secretIncome));
+
+    const cardBalance = await liveBalance(c.A, c.cardDebt);
+    const loanBalance = await liveBalance(c.A, c.loan);
+    for (const id of [c.purchase, c.payment]) {
+      assert.equal((await call(c.B, "PATCH", `/api/expenses/${id}`, { amount: 1 })).status, 404);
+      assert.equal((await call(c.B, "PATCH", `/api/expenses/${id}/attribution`, { scope: "personal" })).status, 404);
+      assert.equal((await call(c.B, "DELETE", `/api/expenses/${id}`)).status, 404);
+    }
+    const merge = await call(c.B, "POST", "/api/expenses/merge", { keepId: c.purchase, removeIds: [twin] });
+    assert.notEqual(merge.status, 200, JSON.stringify(merge.body));
+    assert.equal(await prisma.expense.count({ where: { id: { in: [c.purchase, twin, c.payment] } } }), 3);
+    assert.equal(await liveBalance(c.A, c.cardDebt), cardBalance, "the private card's debt never moved");
+    assert.equal(await liveBalance(c.A, c.loan), loanBalance);
+  });
+
+  it("j. B's budget totals still hold A's private commitments, as one unnamed figure", async () => {
+    const c = await privateSetup();
+    const aAlloc = await ok(c.A, "GET", "/api/allocations");
+    const bAlloc = await ok(c.B, "GET", "/api/allocations");
+    const sum = (rows: any[], k: string) => Math.round(rows.reduce((s, r) => s + r[k], 0) * 100);
+    assert.equal(aAlloc.hiddenCommitted, 0);
+    assert.ok(bAlloc.hiddenCommitted >= 150, `hiddenCommitted ${bAlloc.hiddenCommitted}`);
+    assert.equal(sum(bAlloc.allocations, "allocatedAmount") + Math.round(bAlloc.hiddenCommitted * 100), sum(aAlloc.allocations, "allocatedAmount"));
+
+    const month = periodKey();
+    const bMonth = await ok(c.B, "GET", `/api/monthly-budgets?month=${month}`);
+    const bReview = await ok(c.B, "GET", `/api/monthly-budgets/review?month=${month}`);
+    assert.equal(sum(bMonth.budgets, "allocatedAmount") + Math.round(bMonth.hiddenCommitted * 100), Math.round(bReview.totalBudgeted * 100));
+    // A month budget saved for the hidden line counts as saved.
+    const aMonth = await ok(c.A, "POST", "/api/monthly-budgets/save", { month, budgets: [{ allocationId: c.line, allocatedAmount: 400 }] });
+    assert.ok(aMonth.budgets.some((b: any) => b.allocationId === c.line));
+    const bMonth2 = await ok(c.B, "GET", `/api/monthly-budgets?month=${month}`);
+    assert.ok(!JSON.stringify(bMonth2).includes(c.line));
+    const bReview2 = await ok(c.B, "GET", `/api/monthly-budgets/review?month=${month}`);
+    assert.equal(Math.round((bMonth2.hiddenCommitted - bMonth.hiddenCommitted) * 100), 40000 - 15000, "the saved 400 replaces the 150 cuota");
+    assert.equal(sum(bMonth2.budgets, "allocatedAmount") + Math.round(bMonth2.hiddenCommitted * 100), Math.round(bReview2.totalBudgeted * 100));
+  });
+
+  it("k. the AI classifier never gets nor returns a line hidden from the caller", async () => {
+    const c = await privateSetup();
+    const http = await import("node:http");
+    const sent: string[] = [];
+    const fake = http.createServer((req, res) => {
+      let body = "";
+      req.on("data", d => { body += d; });
+      req.on("end", () => {
+        sent.push(body);
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({
+          id: "msg_test", type: "message", role: "assistant", model: "test", stop_reason: "tool_use", stop_sequence: null,
+          usage: { input_tokens: 1, output_tokens: 1 },
+          content: [{ type: "tool_use", id: "tu_1", name: "submit_classifications", input: { classifications: [{ merchant: "cofidis", allocationId: c.line }] } }],
+        }));
+      });
+    });
+    fake.listen(0);
+    await new Promise<void>(resolve => fake.once("listening", () => resolve()));
+    const saved = { key: process.env.ANTHROPIC_API_KEY, url: process.env.ANTHROPIC_BASE_URL };
+    process.env.ANTHROPIC_API_KEY = "sk-ant-integration-test";
+    process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${(fake.address() as AddressInfo).port}`;
+    try {
+      const r = await ok(c.B, "POST", "/api/expenses/import/classify", { merchants: ["cofidis"] });
+      assert.equal(sent.length, 1, "the provider was called");
+      assert.ok(!sent[0].includes(c.line) && !sent[0].includes("Préstamo secreto") && !sent[0].includes("Visa secreta"), "a hidden line reached the AI");
+      assert.deepEqual(r.suggestions, []);
+    } finally {
+      if (saved.key === undefined) delete process.env.ANTHROPIC_API_KEY; else process.env.ANTHROPIC_API_KEY = saved.key;
+      if (saved.url === undefined) delete process.env.ANTHROPIC_BASE_URL; else process.env.ANTHROPIC_BASE_URL = saved.url;
+      await new Promise<void>(resolve => fake.close(() => resolve()));
+    }
+  });
+
+  it("l. rules and recurring commitments on a hidden line or private account: not shown to B, not B's to change", async () => {
+    const c = await privateSetup();
+    const rule = (await ok(c.A, "POST", "/api/rules", { pattern: "cofidis", allocationId: c.line })).rule.id;
+    const ruleIds = async (u: string) => new Set(((await ok(u, "GET", "/api/rules")).rules as any[]).map(r => r.id));
+    assert.ok((await ruleIds(c.A)).has(rule));
+    assert.ok(!(await ruleIds(c.B)).has(rule));
+    assert.equal((await call(c.B, "PATCH", `/api/rules/${rule}`, { pattern: "x" })).status, 404);
+    assert.equal((await call(c.B, "DELETE", `/api/rules/${rule}`)).status, 404);
+
+    // Three monthly charges: one merchant on the hidden line, one only on the private card.
+    for (let m = 1; m <= 3; m++) {
+      const date = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - m, 5));
+      await prisma.expense.create({ data: { userId: c.A, amount: 15000, description: "Cofidis", merchant: "cofidis", date, allocationId: c.line, debtId: c.loan, accountId: c.aMain, payerUserId: c.A, createdByUserId: c.A } });
+      await prisma.expense.create({ data: { userId: c.A, amount: 4000, description: "Gimnasio secreto", merchant: "gimnasio secreto", date, accountId: c.card, payerUserId: c.A, createdByUserId: c.A } });
+    }
+    const merchants = async (u: string) => ((await ok(u, "GET", "/api/recurring")).commitments as any[]).map(x => x.merchant);
+    const aMerchants = await merchants(c.A);
+    assert.ok(aMerchants.includes("cofidis") && aMerchants.includes("gimnasio secreto"), JSON.stringify(aMerchants));
+    const bBody = JSON.stringify(await ok(c.B, "GET", "/api/recurring"));
+    assert.ok(!bBody.includes("cofidis") && !bBody.includes("gimnasio secreto") && !bBody.includes("Préstamo secreto"), bBody);
+    for (const merchant of ["cofidis", "gimnasio secreto"]) {
+      const commitment = await prisma.recurringCommitment.findFirstOrThrow({ where: { userId: c.A, merchant } });
+      assert.equal((await call(c.B, "PATCH", `/api/recurring/${commitment.id}`, { status: "ignored" })).status, 404);
+      assert.equal((await prisma.recurringCommitment.findUniqueOrThrow({ where: { id: commitment.id } })).status, "detected");
+    }
+  });
+
+  it("m. B's import preview never attaches A's hidden payments or debts", async () => {
+    const c = await privateSetup();
+    // A pays her private card from her main account.
+    const cardLine = (await prisma.allocation.findFirstOrThrow({ where: { debtId: c.cardDebt } })).id;
+    await ok(c.A, "POST", "/api/expenses", { amount: 200, description: "Pago Visa", allocationId: cardLine, accountId: c.aMain });
+    const cardPayment = (await prisma.expense.findFirstOrThrow({ where: { debtId: c.cardDebt, amount: 20000 } })).id;
+    const bMain = (await prisma.account.findFirstOrThrow({ where: { ownerUserId: c.B, type: "checking" } })).id;
+    const r = await ok(c.B, "POST", "/api/expenses/import/preview", {
+      accountId: bMain,
+      rows: [
+        { rowIndex: 0, date: today(), amountCents: -20000, description: "PAGO TARJETA CREDITO" },
+        { rowIndex: 1, date: today(), amountCents: -15000, description: "Cuota secreta" },
+      ],
+    });
+    const body = JSON.stringify(r);
+    for (const secret of [c.cardDebt, cardPayment, c.loan, c.payment, c.line, "Préstamo secreto", "Visa secreta", "Cuota secreta\",\"source"]) {
+      assert.ok(!body.includes(secret), `preview leaks ${secret}: ${body}`);
+    }
+  });
 });

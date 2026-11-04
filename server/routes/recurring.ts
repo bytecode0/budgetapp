@@ -2,12 +2,27 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { serializeMoney } from "../lib/money.js";
-import { ALLOCATION_NOT_FOUND, allocationsInPool } from "../lib/poolRefs.js";
+import { ALLOCATION_NOT_FOUND, allocationsInPool, notOnHiddenLine, visibleExpenseWhere } from "../lib/poolRefs.js";
 import { detectRecurring } from "../lib/recurring.js";
 
 export const recurringRouter = Router();
 
 const STATUSES = new Set(["detected", "confirmed", "ignored"]);
+
+// The commitments a caller can see: not on the line of a debt hidden from
+// them, and recurring on at least one movement they can see — a merchant
+// detected only from the other member's rows on a private debt or account
+// (poolRefs.ts) would name it. Detection itself runs over the whole pool.
+async function visibleCommitments<T extends { merchant: string }>(req: AuthRequest, commitments: T[]): Promise<T[]> {
+  if (commitments.length === 0) return commitments;
+  const seen = await prisma.expense.findMany({
+    where: { userId: req.userId!, merchant: { in: commitments.map(c => c.merchant) }, ...visibleExpenseWhere(req.authUserId!) },
+    distinct: ["merchant"],
+    select: { merchant: true },
+  });
+  const merchants = new Set(seen.map(e => e.merchant));
+  return commitments.filter(c => merchants.has(c.merchant));
+}
 
 // GET /api/recurring
 // Re-runs detection, persists any newly-detected merchants (without clobbering
@@ -36,12 +51,12 @@ recurringRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
     );
 
     const commitments = await prisma.recurringCommitment.findMany({
-      where: { userId: req.userId! },
+      where: { userId: req.userId!, ...notOnHiddenLine(req.authUserId!) },
       include: { allocation: { select: { id: true, name: true, icon: true, type: true } } },
       orderBy: [{ status: "asc" }, { avgAmount: "desc" }],
     });
 
-    return res.json(serializeMoney({ commitments }));
+    return res.json(serializeMoney({ commitments: await visibleCommitments(req, commitments) }));
   } catch (err) {
     console.error("[recurring/GET]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -52,8 +67,8 @@ recurringRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
 recurringRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const existing = await prisma.recurringCommitment.findFirst({ where: { id, userId: req.userId! } });
-    if (!existing) return res.status(404).json({ error: "Commitment not found" });
+    const existing = await prisma.recurringCommitment.findFirst({ where: { id, userId: req.userId!, ...notOnHiddenLine(req.authUserId!) } });
+    if (!existing || (await visibleCommitments(req, [existing])).length === 0) return res.status(404).json({ error: "Commitment not found" });
 
     const { status, allocationId } = req.body as { status?: string; allocationId?: string | null };
     if (status !== undefined && !STATUSES.has(status)) {

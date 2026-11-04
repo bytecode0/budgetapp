@@ -477,6 +477,8 @@
     "years20": "20 years"
   },
   "allocation": {
+    "partnerPrivateCommitments": "Your partner's private commitments",
+    "partnerPrivateCommitmentsDesc": "They count in the total; only your partner sees the detail.",
     "title": "Allocate Your Income",
     "subtitle": "Give every euro a meaningful purpose",
     "monthlyIncome": "Monthly Income",

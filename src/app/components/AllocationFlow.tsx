@@ -4,7 +4,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useTranslation } from 'react-i18next';
 import {
   DollarSign, TrendingUp, CheckCircle2, Plus, Trash2,
-  Pencil, X, Check, Loader2, CalendarCheck, GripVertical, Repeat, Wallet,
+  Pencil, X, Check, Loader2, CalendarCheck, GripVertical, Repeat, Wallet, Lock,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -123,7 +123,7 @@ export function AllocationFlow() {
   // Per-month budget data (MonthlyBudget). The GET endpoint returns this month's
   // overrides, or the global allocation amounts as a fallback flagged saved:false.
   const {
-    budgets: monthlyBudgets, loading: monthlyLoading,
+    budgets: monthlyBudgets, hiddenCommitted, loading: monthlyLoading,
     saving: savingMonthlyBudget, isSaved: isBudgetSaved, saveBudgets, fetchBudgets,
   } = useMonthlyBudget(selectedMonth);
   const { review: monthReview } = useMonthlyReview(selectedMonth);
@@ -172,7 +172,8 @@ export function AllocationFlow() {
   }, [rawAllocations, monthlyBudgets, monthlyLoading]);
 
   // ── Derived numbers ─────────────────────────────────────
-  const totalAllocated = local.reduce((s, a) => s + a.allocatedAmount, 0);
+  // The partner's private debt lines aren't listed but are part of the budget.
+  const totalAllocated = local.reduce((s, a) => s + a.allocatedAmount, 0) + hiddenCommitted;
   const planAllocTotal = local
     .filter(a => normalizeType(a.type) === 'plan')
     .reduce((s, a) => s + a.allocatedAmount, 0);
@@ -509,6 +510,13 @@ export function AllocationFlow() {
                     title={`${a.name}: ${fmt(a.allocatedAmount)}`}
                   />
                 ))}
+                {hiddenCommitted > 0 && (
+                  <div
+                    className="h-full transition-all"
+                    style={{ width: `${(hiddenCommitted / monthlyIncome) * 100}%`, backgroundColor: getTypeColor('debt') }}
+                    title={`${t('allocation.partnerPrivateCommitments')}: ${fmt(hiddenCommitted)}`}
+                  />
+                )}
                 {freePct > 0.5 && (
                   <div className="h-full rounded-r-full" style={{ width: `${freePct}%`, backgroundColor: FREE_COLOR }} />
                 )}
@@ -689,6 +697,26 @@ export function AllocationFlow() {
               );
             })}
           </AnimatePresence>
+          {/* One neutral, read-only line: the amount only, never which debt. */}
+          {hiddenCommitted > 0 && (
+            <div className="flex items-center justify-between gap-3 pt-5 border-t border-border">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="shrink-0 w-10 h-10 flex items-center justify-center text-muted-foreground">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{t('allocation.partnerPrivateCommitments')}</p>
+                  <p className="text-xs text-muted-foreground">{t('allocation.partnerPrivateCommitmentsDesc')}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-sm font-medium">{fmt(hiddenCommitted)}</span>
+                <span className="text-xs text-muted-foreground w-8 text-right">
+                  {monthlyIncome > 0 ? Math.round((hiddenCommitted / monthlyIncome) * 100) : 0}%
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {hasDirtyAllocations && (

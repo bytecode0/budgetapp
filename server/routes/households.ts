@@ -249,6 +249,9 @@ householdsRouter.delete("/members/:userId", requireAuth, async (req: AuthRequest
         const current = await tx.userSettings.findUnique({ where: { userId: link.memberId }, select: { linkedUserId: true } });
         if (current?.linkedUserId === link.poolId) await unlinkMemberFromPool(tx, link);
       }
+      // An owner removing herself leaves the Household row with no members
+      // (as before; /partner/unlink keeps it with its owner). Harmless: nobody
+      // resolves to it, and ensureHousehold creates a new one on her next link.
       await tx.householdMember.deleteMany({ where: { householdId, userId: targetUserId } });
     }, { timeout: 30_000 });
     return res.json({ success: true });

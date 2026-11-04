@@ -8,7 +8,7 @@ import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/perio
 import { debtCommitments } from "../lib/debtBalance.js";
 import { incomeBaselines } from "../lib/householdIncome.js";
 import { visibleToWhere } from "../lib/ownership.js";
-import { notOnHiddenDebt } from "../lib/poolRefs.js";
+import { hiddenCommitted, notOnHiddenDebt } from "../lib/poolRefs.js";
 
 export const allocationsRouter = Router();
 
@@ -37,19 +37,26 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
     // (a card paid in full drops to 0 the period after), so it's recomputed on
     // every read rather than trusted from the stored column.
     const cycleStartDay = clampCycleStartDay(settings?.cycleStartDay ?? 1);
-    const commitments = await debtCommitments(req.userId!, periodBounds(currentPeriodKey(cycleStartDay), cycleStartDay));
+    const period = periodBounds(currentPeriodKey(cycleStartDay), cycleStartDay);
+    const commitments = await debtCommitments(req.userId!, period);
     const withDebtLines = allocations.map(a =>
       a.type === "debt" && a.debtId && commitments.has(a.debtId)
         ? { ...a, allocatedAmount: commitments.get(a.debtId)! }
         : a);
 
-    return res.json(serializeMoney({
-      allocations: withDebtLines,
-      ...baselines, // monthlyIncome (household), ownMonthlyIncome (editable), isCouple
-      darkMode: ownSettings?.darkMode ?? false,
-      language: ownSettings?.language ?? 'es',
-      cycleStartDay: settings?.cycleStartDay ?? 1,
-    }));
+    // The lines left out above, as one figure (euros) for the client totals.
+    const hidden = await hiddenCommitted(req.userId!, req.authUserId!, period);
+
+    return res.json({
+      ...serializeMoney({
+        allocations: withDebtLines,
+        ...baselines, // monthlyIncome (household), ownMonthlyIncome (editable), isCouple
+        darkMode: ownSettings?.darkMode ?? false,
+        language: ownSettings?.language ?? 'es',
+        cycleStartDay: settings?.cycleStartDay ?? 1,
+      }),
+      hiddenCommitted: toEuros(hidden),
+    });
   } catch (err) {
     console.error("[allocations/GET]", err);
     return res.status(500).json({ error: "Internal server error" });

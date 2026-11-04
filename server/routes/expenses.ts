@@ -302,7 +302,7 @@ expensesRouter.post("/merge", requireAuth, async (req: AuthRequest, res: Respons
     const parsed = parseMerge(keepId, removeIds);
     if ("error" in parsed) return res.status(parsed.status).json({ error: parsed.error });
     const deletable = await prisma.expense.findMany({
-      where: { id: { in: [parsed.keepId, ...parsed.removeIds] }, userId: req.userId!, ...(await expenseListingFilter(req)), ...notOnHiddenDebt(req.authUserId!) },
+      where: { id: { in: [parsed.keepId, ...parsed.removeIds] }, userId: req.userId!, ...(await expenseListingFilter(req)) },
       include: { allocation: { select: { type: true, lifePlanId: true } } },
     });
     const check = checkMerge(parsed, deletable);
@@ -401,8 +401,10 @@ expensesRouter.post("/import/classify", requireAuth, async (req: AuthRequest, re
     const merchants = [...new Set(raw.filter((m): m is string => typeof m === "string" && m.length > 0))].slice(0, 40);
     if (merchants.length === 0) return res.json({ suggestions: [] });
 
+    // Never the line of a debt hidden from the caller: its name would go to
+    // the AI and come back as a suggestion.
     const allocations = await prisma.allocation.findMany({
-      where: { userId: req.userId! },
+      where: { userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
       select: { id: true, name: true },
     });
 
@@ -506,8 +508,9 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
 expensesRouter.patch("/:id/attribution", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    // Only a row the caller can see (as DELETE /:id), and never a payment of a
-    // debt hidden from them: editing it would change that debt's balance.
+    // Only a row the caller can see (expenseListingFilter, as DELETE /:id):
+    // never the other member's row on a private debt or account, whose
+    // balance editing it would change.
     const existing = await prisma.expense.findFirst({
       where: { id, userId: req.userId!, ...(await expenseListingFilter(req)) },
       select: { id: true, amount: true, payerUserId: true, scope: true },
@@ -560,10 +563,11 @@ expensesRouter.patch("/:id/attribution", requireAuth, async (req: AuthRequest, r
 expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    // Only a row the caller can see (as DELETE /:id), and never a payment of a
-    // debt hidden from them: editing it would change that debt's balance.
+    // Only a row the caller can see (expenseListingFilter, as DELETE /:id):
+    // never the other member's row on a private debt or account, whose
+    // balance editing it would change.
     const existing = await prisma.expense.findFirst({
-      where: { id, userId: req.userId!, ...(await expenseListingFilter(req)), ...notOnHiddenDebt(req.authUserId!) },
+      where: { id, userId: req.userId!, ...(await expenseListingFilter(req)) },
       include: { allocation: { select: { type: true, lifePlanId: true } } },
     });
     if (!existing) return res.status(404).json({ error: "Expense not found" });
@@ -651,10 +655,10 @@ expensesRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Respons
   try {
     const { id } = req.params;
     // Only a row the caller can see (same filter as the list): at shared_stats
-    // a member can't delete the other's transactions by id, nor anyone a
-    // payment of a debt hidden from them (it would change its balance).
+    // a member can't delete the other's transactions by id, and in no tier
+    // the other's rows on a private debt or account (it would change its balance).
     const existing = await prisma.expense.findFirst({
-      where: { id, userId: req.userId!, ...(await expenseListingFilter(req)), ...notOnHiddenDebt(req.authUserId!) },
+      where: { id, userId: req.userId!, ...(await expenseListingFilter(req)) },
       include: { allocation: { select: { type: true, lifePlanId: true } } },
     });
     if (!existing) return res.status(404).json({ error: "Expense not found" });

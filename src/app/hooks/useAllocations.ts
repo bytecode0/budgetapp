@@ -36,6 +36,9 @@ export function useAllocations() {
   const [darkMode, setDarkMode] = useState(cachedDarkMode);
   const [dbLanguage, setDbLanguage] = useState<string>('es');
   const [cycleStartDay, setCycleStartDay] = useState(1);
+  // What the partner's private debt lines commit (euros): not listed, but
+  // part of the household's budget (server/lib/poolRefs.ts).
+  const [hiddenCommitted, setHiddenCommitted] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +54,7 @@ export function useAllocations() {
       setDarkMode(data.darkMode ?? false);
       setDbLanguage(data.language ?? 'es');
       setCycleStartDay(data.cycleStartDay ?? 1);
+      setHiddenCommitted(data.hiddenCommitted ?? 0);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -205,11 +209,11 @@ export function useAllocations() {
     return { updated: data.updated as number };
   };
 
-  const totalAllocated = allocations.reduce((s, a) => s + a.allocatedAmount, 0);
+  const totalAllocated = allocations.reduce((s, a) => s + a.allocatedAmount, 0) + hiddenCommitted;
   const unallocated = Math.max(0, monthlyIncome - totalAllocated);
 
   return {
-    allocations, monthlyIncome, ownMonthlyIncome, isCouple, darkMode, dbLanguage, cycleStartDay, loading, error, totalAllocated, unallocated,
+    allocations, monthlyIncome, ownMonthlyIncome, isCouple, darkMode, dbLanguage, cycleStartDay, loading, error, totalAllocated, unallocated, hiddenCommitted,
     fetchAllocations, updateIncome, updateDarkMode, updateLanguage, updatePayday, createAllocation, updateAllocation, deleteAllocation, reorderAllocations,
     fetchSuggestedBudgets, applyBudgets,
   };

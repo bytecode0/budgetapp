@@ -38,6 +38,8 @@ export interface BudgetReview {
 
 export function useMonthlyBudget(month: string) {
   const [budgets, setBudgets] = useState<MonthlyBudgetRow[]>([]);
+  // The partner's private debt lines this month (euros), never listed.
+  const [hiddenCommitted, setHiddenCommitted] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -48,8 +50,10 @@ export function useMonthlyBudget(month: string) {
       if (!res.ok) throw new Error('Failed to load');
       const data = await res.json();
       setBudgets(data.budgets);
+      setHiddenCommitted(data.hiddenCommitted ?? 0);
     } catch {
       setBudgets([]);
+      setHiddenCommitted(0);
     } finally {
       setLoading(false);
     }
@@ -79,7 +83,7 @@ export function useMonthlyBudget(month: string) {
 
   const isSaved = budgets.some(b => b.saved);
 
-  return { budgets, loading, saving, isSaved, fetchBudgets, saveBudgets };
+  return { budgets, hiddenCommitted, loading, saving, isSaved, fetchBudgets, saveBudgets };
 }
 
 export function useMonthlyReview(month: string) {

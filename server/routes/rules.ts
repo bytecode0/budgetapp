@@ -1,7 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
-import { ALLOCATION_NOT_FOUND, allocationsInPool } from "../lib/poolRefs.js";
+import { ALLOCATION_NOT_FOUND, allocationsInPool, notOnHiddenLine } from "../lib/poolRefs.js";
 
 export const rulesRouter = Router();
 
@@ -19,8 +19,9 @@ function validRegex(pattern: string): boolean {
 // GET /api/rules — all rules for the user, in evaluation order
 rulesRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    // Not a rule on the line of a debt hidden from the caller (poolRefs.ts).
     const rules = await prisma.categorizationRule.findMany({
-      where: { userId: req.userId! },
+      where: { userId: req.userId!, ...notOnHiddenLine(req.authUserId!) },
       orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
       include: { allocation: { select: { id: true, name: true, icon: true, type: true } } },
     });
@@ -70,7 +71,7 @@ rulesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
 rulesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const existing = await prisma.categorizationRule.findFirst({ where: { id, userId: req.userId! } });
+    const existing = await prisma.categorizationRule.findFirst({ where: { id, userId: req.userId!, ...notOnHiddenLine(req.authUserId!) } });
     if (!existing) return res.status(404).json({ error: "Rule not found" });
 
     const { matchType, pattern, allocationId, priority } = req.body;
@@ -116,7 +117,7 @@ rulesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
 rulesRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const existing = await prisma.categorizationRule.findFirst({ where: { id, userId: req.userId! } });
+    const existing = await prisma.categorizationRule.findFirst({ where: { id, userId: req.userId!, ...notOnHiddenLine(req.authUserId!) } });
     if (!existing) return res.status(404).json({ error: "Rule not found" });
 
     await prisma.categorizationRule.delete({ where: { id } });

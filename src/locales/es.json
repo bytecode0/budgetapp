@@ -477,6 +477,8 @@
     "years20": "20 años"
   },
   "allocation": {
+    "partnerPrivateCommitments": "Compromisos privados de tu pareja",
+    "partnerPrivateCommitmentsDesc": "Cuentan en el total; el detalle solo lo ve tu pareja.",
     "title": "Asigna Tus Ingresos",
     "subtitle": "Dale un propósito significativo a cada euro",
     "monthlyIncome": "Ingresos Mensuales",
