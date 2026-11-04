@@ -19,7 +19,7 @@ export function BankStrip({ onChanged }: { onChanged: () => void }) {
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
   const banking = useBanking();
-  const { connecting, startConsent, syncingId, sync } = useBankActions(banking, onChanged);
+  const { connecting, startConsent, syncingId, sync } = useBankActions(banking, onChanged, 'activity');
   const [showPicker, setShowPicker] = useState(false);
   const [queue, setQueue] = useState<BankReviewTarget[] | null>(null);
 

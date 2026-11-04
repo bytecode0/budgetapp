@@ -25,7 +25,7 @@
     "netWorth": "Net worth",
     "savingsRate": "Savings rate",
     "byPerson": "By person",
-    "personLine": "€{{income}} in · €{{spent}} spent",
+    "personLine": "{{income}} in · {{spent}} spent",
     "contribution": "{{pct}}% of income",
     "byCategory": "By category",
     "unassigned": "Unassigned",
@@ -642,8 +642,8 @@
     "payer": "Paid by",
     "splitModel": "By model",
     "splitCustom": "Custom",
-    "splitTotal": "Total €{{total}} of €{{amount}}",
-    "splitMustSum": "Split (€{{total}}) must equal the amount (€{{amount}})"
+    "splitTotal": "Total {{total}} of {{amount}}",
+    "splitMustSum": "Split ({{total}}) must equal the amount ({{amount}})"
   },
   "rules": {
     "title": "Categorization rules",
@@ -670,7 +670,7 @@
     "title": "Activity",
     "subtitle": "Track your spending against your plan",
     "totalSpent": "Total Spent",
-    "avgPerDay": "avg €{{amount}}/day",
+    "avgPerDay": "avg {{amount}}/day",
     "pctOfIncome": "% of monthly income",
     "transactions": "Transactions",
     "topCategory": "Top Category",
@@ -683,7 +683,7 @@
     "addIncome": "Add Income",
     "noMovements": "No movements yet",
     "addFirstMovement": "Add your first expense or income for this month",
-    "incomeThisMonth": "+€{{amount}} income",
+    "incomeThisMonth": "+{{amount}} income",
     "expenseRemoved": "Expense removed",
     "incomeRemoved": "Income removed",
     "today": "Today",
@@ -907,7 +907,7 @@
     "apply": "Apply to {{count}}",
     "applied": "Updated {{count}} budgets",
     "none": "Not enough history to suggest budgets yet",
-    "overIncome": "Selected budgets (€{{total}}) exceed your monthly income (€{{income}})"
+    "overIncome": "Selected budgets ({{total}}) exceed your monthly income ({{income}})"
   },
   "monthlyReview": {
     "title": "Budget Review",

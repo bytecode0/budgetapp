@@ -135,7 +135,7 @@ export function BudgetSuggestions({ isOpen, onClose, onApplied }: BudgetSuggesti
                 {overIncome && (
                   <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
-                    {t('budgets.overIncome', { total: selectedTotal.toLocaleString(), income: monthlyIncome.toLocaleString() })}
+                    {t('budgets.overIncome', { total: fmt(selectedTotal), income: fmt(monthlyIncome) })}
                   </div>
                 )}
 

@@ -37,7 +37,7 @@ function getTypeColor(type: string) {
 
 export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () => void }) {
   const { t } = useTranslation();
-  const { currency } = useMoney();
+  const { currency, fmt } = useMoney();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
 
@@ -193,10 +193,10 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
             </div>
             <p className="text-sm opacity-90">{t('activity.totalSpent')}</p>
           </div>
-          <p className="text-3xl font-display">{currency}{totalSpent.toFixed(2)}</p>
-          <p className="text-sm opacity-75 mt-1">{t('activity.avgPerDay', { amount: avgPerDay.toFixed(2) })}</p>
+          <p className="text-3xl font-display">{fmt(totalSpent)}</p>
+          <p className="text-sm opacity-75 mt-1">{t('activity.avgPerDay', { amount: fmt(avgPerDay) })}</p>
           {totalIncome > 0 && (
-            <p className="text-sm opacity-75 mt-0.5">{t('activity.incomeThisMonth', { amount: totalIncome.toFixed(2) })}</p>
+            <p className="text-sm opacity-75 mt-0.5">{t('activity.incomeThisMonth', { amount: fmt(totalIncome) })}</p>
           )}
           {monthlyIncome > 0 && (
             <div className="mt-3">
