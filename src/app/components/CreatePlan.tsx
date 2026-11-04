@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { ArrowLeft, CheckCircle2, Loader2, PiggyBank, TrendingUp, Calendar, Sparkles, Shield, Rocket, Wallet } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Loader2, PiggyBank, TrendingUp, Calendar, Sparkles, Shield, Rocket, Wallet, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { usePlans } from '../hooks/usePlans';
 import { useTranslation } from 'react-i18next';
 import { useMoney } from '../onboarding/useMoney';
+import { compoundBalance, PROJECTION_RATE_PCTS, PROJECTION_RATES } from '../../../shared/projection';
 
 // ── Safety categories ─────────────────────────────────────────────────────────
 const SAFETY_CATEGORIES = [
@@ -52,16 +53,10 @@ function calcMonthlyNeeded(target: number, current: number, deadline: string): n
   return Math.max(0, (target - current) / months);
 }
 
-function compoundBalance(current: number, monthly: number, months: number, annualRate: number): number {
-  if (annualRate === 0) return current + monthly * months;
-  const r = annualRate / 12;
-  return current * Math.pow(1 + r, months) + monthly * (Math.pow(1 + r, months) - 1) / r;
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 export function CreatePlan({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation();
-  const { fmt, currency } = useMoney();
+  const { fmt, currency, locale } = useMoney();
   const { createPlan } = usePlans();
   const [step, setStep]   = useState(1);
   const [saving, setSaving] = useState(false);
@@ -104,16 +99,14 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
   };
 
   const isCompoundGoal = goalClass === 'investment' || goalClass === 'wealth';
-  const compoundRates: [number, number, number] = goalClass === 'wealth' ? [0.05, 0.12, 0.25] : [0.01, 0.05, 0.15];
-  const compoundScenarios = goalClass === 'wealth'
-    ? [t('createPlan.conservative'), t('createPlan.expected'), t('createPlan.aggressive')]
-    : [t('createPlan.pessimistic'), t('createPlan.base'), t('createPlan.optimistic')];
+  const ratePct = (k: keyof typeof PROJECTION_RATE_PCTS) => PROJECTION_RATE_PCTS[k].toLocaleString(locale);
+  const scenarioRates = t('createPlan.scenarioRates', { low: ratePct('low'), medium: ratePct('medium'), high: ratePct('high') });
 
   const invPreview = (() => {
     const monthly  = parseFloat(invMonthly) || 0;
     const current  = parseFloat(invCurrent) || 0;
     if (monthly <= 0) return null;
-    const [r0, r1, r2] = compoundRates;
+    const [r0, r1, r2] = PROJECTION_RATES;
     return [
       { label: t('createPlan.years5'),  pessimistic: compoundBalance(current, monthly, 60,  r0), base: compoundBalance(current, monthly, 60,  r1), optimistic: compoundBalance(current, monthly, 60,  r2) },
       { label: t('createPlan.years10'), pessimistic: compoundBalance(current, monthly, 120, r0), base: compoundBalance(current, monthly, 120, r1), optimistic: compoundBalance(current, monthly, 120, r2) },
@@ -438,7 +431,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
 
                 <div>
                   <label className="block text-sm font-display mb-1">{t('createPlan.firstMilestoneOptional')}</label>
-                  <p className="text-xs text-muted-foreground mb-1.5">{t('createPlan.firstMilestonePlaceholder')}</p>
+                  <p className="text-xs text-muted-foreground mb-1.5">{t('createPlan.firstMilestonePlaceholder', { a: fmt(50000), b: fmt(100000) })}</p>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
                     <input type="number" min="0" placeholder="50000"
@@ -455,7 +448,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-secondary/5 border border-secondary/20 rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-secondary" />
-                    <p className="text-sm font-medium">{t('createPlan.projectionPreview', { amount: parseFloat(invMonthly).toLocaleString() })}</p>
+                    <p className="text-sm font-medium">{t('createPlan.projectionPreview', { amount: fmt(parseFloat(invMonthly)) })}</p>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     {invPreview?.map(row => (
@@ -468,10 +461,14 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground text-center">
-                    {`${compoundScenarios[0]} ${compoundRates[0]*100}% · ${compoundScenarios[1]} ${compoundRates[1]*100}% · ${compoundScenarios[2]} ${compoundRates[2]*100}% ${t('createPlan.annual')}`}
+                    {scenarioRates}
                   </p>
                 </motion.div>
               )}
+
+              <p className="text-xs text-muted-foreground flex items-start gap-2">
+                <Info className="w-4 h-4 shrink-0 mt-px" /> {t('planDetail.simulationDisclaimer')}
+              </p>
 
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setStep(1)} className="px-6 py-3 border border-border rounded-xl hover:bg-muted transition-colors">{t('createPlan.back')}</button>
@@ -692,7 +689,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
               {isCompoundGoal && invPreview && (
                 <div className="bg-secondary/5 border border-secondary/20 rounded-xl p-4 space-y-3">
                   <p className="text-sm font-medium flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-secondary" /> {t('createPlan.projectionPreview', { amount: parseFloat(invMonthly).toLocaleString() })}
+                    <Sparkles className="w-4 h-4 text-secondary" /> {t('createPlan.projectionPreview', { amount: fmt(parseFloat(invMonthly)) })}
                   </p>
                   <div className="grid grid-cols-3 gap-3 text-center">
                     {invPreview.map(row => (
@@ -705,7 +702,10 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground text-center">
-                    {`${compoundScenarios[0]} ${compoundRates[0]*100}% · ${compoundScenarios[1]} ${compoundRates[1]*100}% · ${compoundScenarios[2]} ${compoundRates[2]*100}% ${t('createPlan.annual')}`}
+                    {scenarioRates}
+                  </p>
+                  <p className="text-xs text-muted-foreground flex items-start gap-2">
+                    <Info className="w-4 h-4 shrink-0 mt-px" /> {t('planDetail.simulationDisclaimer')}
                   </p>
                 </div>
               )}
@@ -714,7 +714,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                 <CheckCircle2 className="w-5 h-5 text-secondary mt-0.5 shrink-0" />
                 <p className="text-sm text-muted-foreground">
                   {goalClass === 'investment' && t('createPlan.investmentProjectionNote')}
-                  {goalClass === 'wealth'     && t('createPlan.wealthProjectionNote')}
+                  {goalClass === 'wealth'     && t('createPlan.wealthProjectionNote', { low: ratePct('low'), high: ratePct('high') })}
                   {goalClass === 'safety'     && t('createPlan.safetyProjectionNote')}
                   {goalClass === 'savings'    && t('createPlan.savingsProjectionNote')}
                 </p>
@@ -740,7 +740,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                       <p className="text-sm font-medium">{t('createPlan.autoAllocationTitle')}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {effectiveMonthly > 0
-                          ? t('createPlan.autoAllocationDesc', { amount: effectiveMonthly.toLocaleString() })
+                          ? t('createPlan.autoAllocationDesc', { amount: fmt(effectiveMonthly) })
                           : t('createPlan.autoAllocationDescNoAmount')}
                       </p>
                     </div>
