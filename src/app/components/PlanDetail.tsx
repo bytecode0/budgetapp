@@ -4,6 +4,7 @@ import {
   Pencil, Trash2, CheckCircle2, Loader2, X, Check,
   PlusCircle, ChevronDown, ChevronUp, PiggyBank,
   AlertTriangle, RefreshCw,
+  Info,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -11,6 +12,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts';
 import { differenceInDays, format } from 'date-fns';
+import { es as esLocale, enGB } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { usePlans, getPlanStatus } from '../hooks/usePlans';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +20,7 @@ import { monthLabel, useMonth } from '../context/MonthContext';
 import { currentPeriodKey } from '../lib/period';
 import { useLanguage } from '../context/LanguageContext';
 import { useMoney } from '../onboarding/useMoney';
+import { compoundBalance, PROJECTION_RATE_PCTS, PROJECTION_RATES } from '../../../shared/projection';
 
 const COLOR_OPTIONS = [
   '#1E3A8A','#10B981','#F59E0B','#EF4444','#8B5CF6',
@@ -25,17 +28,6 @@ const COLOR_OPTIONS = [
 ];
 
 // ── Projection math ──────────────────────────────────────────────────────────
-
-function compoundBalance(
-  current: number,
-  monthly: number,
-  months: number,
-  annualRate: number,
-): number {
-  if (annualRate === 0) return current + monthly * months;
-  const r = annualRate / 12;
-  return current * Math.pow(1 + r, months) + monthly * (Math.pow(1 + r, months) - 1) / r;
-}
 
 const HORIZON_OPTIONS = [
   { key: 'goal', labelKey: 'planDetail.untilGoal' },
@@ -130,7 +122,7 @@ function buildProjectionData(
 
 // ── Tooltip ──────────────────────────────────────────────────────────────────
 
-function ProjectionTooltip({ active, payload, label, target, t }: any) {
+function ProjectionTooltip({ active, payload, label, target, t, fmt }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-card border border-border rounded-xl p-3 shadow-lg text-sm space-y-1.5 min-w-[180px]">
@@ -143,10 +135,10 @@ function ProjectionTooltip({ active, payload, label, target, t }: any) {
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
               <span className="text-muted-foreground text-xs">{p.name}:</span>
-              <span className="font-medium ml-auto">{t('currency.symbol')}{Math.round(p.value).toLocaleString()}</span>
+              <span className="font-medium ml-auto">{fmt(Math.round(p.value))}</span>
             </div>
             {overGoal && (
-              <p className="text-xs text-secondary pl-4">{t('planDetail.aboveGoalAmount', { amount: Math.round(gain).toLocaleString() })}</p>
+              <p className="text-xs text-secondary pl-4">{t('planDetail.aboveGoalAmount', { amount: fmt(Math.round(gain)) })}</p>
             )}
             {!overGoal && p.value >= target * 0.999 && (
               <p className="text-xs text-secondary pl-4">{t('planDetail.goalReachedTick')}</p>
@@ -166,6 +158,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
   const { cycleStartDay } = useMonth();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
+  const dateLocale = language === 'es' ? esLocale : enGB;
   const { plans, fetchPlans, updatePlan, deletePlan, contributeToPlan } = usePlans();
   const plan = plans.find(p => p.id === planId);
 
@@ -262,7 +255,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
     if ('error' in result && result.error) {
       toast.error(result.error as string);
     } else {
-      toast.success(t('planDetail.contributionAdded', { amount: amount.toLocaleString(), title: plan.title }));
+      toast.success(t('planDetail.contributionAdded', { amount: fmt(amount), title: plan.title }));
       setContribAmount('');
       setShowContribute(false);
     }
@@ -275,7 +268,6 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
   const effectiveMonthly = simMonthly ?? plan?.monthlyContribution ?? 0;
   const planType = plan?.goalClass || 'savings';
   const isInvestmentDerived = planType === 'investment' || planType === 'wealth';
-  const projRates: [number, number, number] = planType === 'wealth' ? [0.05, 0.12, 0.25] : [0.01, 0.05, 0.15];
 
   const parsedMilestones: number[] = (() => {
     if (!isInvestmentDerived) return [];
@@ -341,7 +333,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
     setSyncingAllocation(false);
     if (res.ok) {
       setSyncAllocationId(null);
-      toast.success(t('planDetail.allocationSynced', { amount: plan.monthlyContribution.toLocaleString() }));
+      toast.success(t('planDetail.allocationSynced', { amount: fmt(plan.monthlyContribution) }));
     } else {
       toast.error(t('planDetail.syncFailed'));
     }
@@ -353,7 +345,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
     const result = await updatePlan(plan.id, { monthlyContribution: newMonthly });
     setAdjustingQuota(false);
     if ('error' in result && result.error) { toast.error(result.error as string); return; }
-    toast.success(t('planDetail.quotaUpdated', { amount: newMonthly.toLocaleString() }));
+    toast.success(t('planDetail.quotaUpdated', { amount: fmt(newMonthly) }));
     if ('allocationOutOfSync' in result && result.allocationOutOfSync && result.linkedAllocationId) {
       setSyncAllocationId(result.linkedAllocationId);
     }
@@ -367,7 +359,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
       plan.targetAmount,
       isInvestmentDerived,
       horizon,
-      projRates,
+      PROJECTION_RATES,
       { now: t('planDetail.axisNow'), year: n => t('planDetail.axisYear', { n }), month: n => t('planDetail.axisMonth', { n }) },
     );
   }, [plan?.currentAmount, effectiveMonthly, plan?.targetAmount, plan?.goalClass, horizon, t]);
@@ -387,17 +379,15 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
   const monthsLeft       = daysLeft !== null ? Math.max(0, Math.ceil(daysLeft / 30)) : null;
   const isInvestment     = isInvestmentDerived;
 
-  const scenarioConfig = planType === 'wealth'
-    ? [
-        { pill: t('planDetail.conservative'), name: t('planDetail.conservative'), rate: projRates[0], stroke: '#F87171', dot: 'bg-red-400',     pillCls: 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800',         textColor: 'text-red-600 dark:text-red-400',     bg: 'bg-red-50 dark:bg-red-950/20' },
-        { pill: t('planDetail.expected'),      name: t('planDetail.expected'),     rate: projRates[1], stroke: '#FBBF24', dot: 'bg-amber-400',   pillCls: 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800', textColor: 'text-amber-600 dark:text-amber-400',  bg: 'bg-amber-50 dark:bg-amber-950/20' },
-        { pill: t('planDetail.aggressive'),    name: t('planDetail.aggressive'),   rate: projRates[2], stroke: '#34D399', dot: 'bg-emerald-400', pillCls: 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800', textColor: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/20' },
-      ]
-    : [
-        { pill: t('planDetail.pessimistic'), name: t('planDetail.pessimistic'), rate: projRates[0], stroke: '#F87171', dot: 'bg-red-400',     pillCls: 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800',         textColor: 'text-red-600 dark:text-red-400',     bg: 'bg-red-50 dark:bg-red-950/20' },
-        { pill: t('planDetail.base'),        name: t('planDetail.base'),        rate: projRates[1], stroke: '#FBBF24', dot: 'bg-amber-400',   pillCls: 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800', textColor: 'text-amber-600 dark:text-amber-400',  bg: 'bg-amber-50 dark:bg-amber-950/20' },
-        { pill: t('planDetail.optimistic'),  name: t('planDetail.optimistic'),  rate: projRates[2], stroke: '#34D399', dot: 'bg-emerald-400', pillCls: 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800', textColor: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/20' },
-      ];
+  const scenarioLabel = (k: keyof typeof PROJECTION_RATE_PCTS) =>
+    t(`planDetail.scenario.${k}`, { rate: PROJECTION_RATE_PCTS[k].toLocaleString(locale) });
+  // One neutral hue for the three scenarios: they are examples, not good or
+  // bad outcomes (no red/amber/green grading, LPBETA-06).
+  const scenarioConfig = [
+    { pill: scenarioLabel('low'), rate: PROJECTION_RATES[0], stroke: 'var(--pool)', opacity: 0.45, dash: '4 4', dotStyle: { backgroundColor: 'var(--pool)', opacity: 0.45 }, pillCls: 'bg-muted text-foreground border-border', textColor: 'text-foreground', bg: 'bg-muted/50' },
+    { pill: scenarioLabel('medium'), rate: PROJECTION_RATES[1], stroke: 'var(--pool)', opacity: 1, dash: undefined, dotStyle: { backgroundColor: 'var(--pool)', opacity: 1 }, pillCls: 'bg-muted text-foreground border-border', textColor: 'text-foreground', bg: 'bg-muted/50' },
+    { pill: scenarioLabel('high'), rate: PROJECTION_RATES[2], stroke: 'var(--pool)', opacity: 0.7, dash: '1 3', dotStyle: { backgroundColor: 'var(--pool)', opacity: 0.7 }, pillCls: 'bg-muted text-foreground border-border', textColor: 'text-foreground', bg: 'bg-muted/50' },
+  ];
 
   const projectedCompletion = (() => {
     if (plan.monthlyContribution <= 0 || remaining <= 0) return null;
@@ -593,7 +583,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
           >
             <RefreshCw className="w-4 h-4 text-amber-600 shrink-0" />
             <p className="text-sm text-amber-700 dark:text-amber-400 flex-1">
-              {t('planDetail.syncAllocationBanner', { current: plan.monthlyContribution.toLocaleString() })}
+              {t('planDetail.syncAllocationBanner', { current: fmt(plan.monthlyContribution) })}
             </p>
             <button
               onClick={handleSyncAllocation}
@@ -830,9 +820,9 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                 {monthlyStatus.status === 'pending'     && <div className="w-5 h-5 rounded-full border-2 border-primary/40 shrink-0" />}
                 <div>
                   <p className="font-medium text-sm">
-                    {monthlyStatus.status === 'contributed' && t('planDetail.monthContributed', { amount: monthlyStatus.depositedAmount.toLocaleString() })}
+                    {monthlyStatus.status === 'contributed' && t('planDetail.monthContributed', { amount: fmt(monthlyStatus.depositedAmount) })}
                     {monthlyStatus.status === 'missed'      && t('planDetail.monthMissed')}
-                    {monthlyStatus.status === 'pending'     && t('planDetail.monthPending', { amount: monthlyStatus.expectedAmount.toLocaleString() })}
+                    {monthlyStatus.status === 'pending'     && t('planDetail.monthPending', { amount: fmt(monthlyStatus.expectedAmount) })}
                   </p>
                   <p className="text-xs text-muted-foreground capitalize mt-0.5">
                     {monthLabel(currentPeriodKey(cycleStartDay), locale)}
@@ -950,7 +940,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                     className="w-full py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
                   >
                     {adjustingQuota ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                    {t('planDetail.adjustQuotaBtn', { amount: newQuota.toLocaleString() })}
+                    {t('planDetail.adjustQuotaBtn', { amount: fmt(newQuota) })}
                   </button>
                 </div>
               ) : null;
@@ -981,7 +971,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {isInvestment
-                    ? scenarioConfig.map(s => s.pill).join(' · ')
+                    ? `${scenarioConfig.map(s => s.pill).join(' · ')} · ${t('planDetail.simulationShort')}`
                     : `${fmt(effectiveMonthly)}${t('currency.perMonthSuffix')} — ${plan.currentAmount < plan.targetAmount && projectedCompletion ? `${format(projectedCompletion, 'MMM yyyy')}` : t('planDetail.goalReached')}`}
                 </p>
               </div>
@@ -1039,7 +1029,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                     />
                     {simMonthly !== null && simMonthly !== plan.monthlyContribution && (
                       <p className="text-xs text-amber-600 dark:text-amber-400">
-                        {t('planDetail.simulationNote', { amount: plan.monthlyContribution.toLocaleString() })}
+                        {t('planDetail.simulationNote', { amount: fmt(plan.monthlyContribution) })}
                         {' '}<button onClick={openEdit} className="underline hover:no-underline">{t('planDetail.saveChanges')} →</button>
                       </p>
                     )}
@@ -1067,11 +1057,17 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                     <div className="flex gap-2 flex-wrap">
                       {scenarioConfig.map(s => (
                         <div key={s.pill} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium ${s.pillCls}`}>
-                          <div className={`w-2 h-2 rounded-full ${s.dot}`} />
+                          <div className="w-2 h-2 rounded-full" style={s.dotStyle} />
                           {s.pill}
                         </div>
                       ))}
                     </div>
+                  )}
+
+                  {isInvestment && (
+                    <p className="text-xs text-muted-foreground flex items-start gap-2">
+                      <Info className="w-4 h-4 shrink-0 mt-px" /> {t('planDetail.simulationDisclaimer')}
+                    </p>
                   )}
 
                   {/* Chart */}
@@ -1093,7 +1089,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                           tickFormatter={v => v >= 1000 ? `${currency}${(v / 1000).toFixed(0)}k` : `${currency}${v}`}
                           width={60}
                         />
-                        <Tooltip content={<ProjectionTooltip target={plan.targetAmount} t={t} />} />
+                        <Tooltip content={<ProjectionTooltip target={plan.targetAmount} t={t} fmt={fmt} />} />
 
                         {isInvestment && parsedMilestones.filter(m => m !== plan.targetAmount && m > 0).map(amount => (
                           <ReferenceLine
@@ -1128,7 +1124,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
 
                         {horizon !== 'goal' && (() => {
                           const goalMonth = isInvestment
-                            ? monthsToGoal(plan.currentAmount, effectiveMonthly, plan.targetAmount, projRates[1], horizon as number)
+                            ? monthsToGoal(plan.currentAmount, effectiveMonthly, plan.targetAmount, PROJECTION_RATES[1], horizon as number)
                             : monthsToGoal(plan.currentAmount, effectiveMonthly, plan.targetAmount, 0, horizon as number);
                           if (goalMonth >= (horizon as number)) return null;
                           const step = (horizon as number) <= 24 ? 1 : (horizon as number) <= 120 ? 3 : 12;
@@ -1154,9 +1150,9 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
 
                         {isInvestment ? (
                           <>
-                            <Line type="monotone" dataKey="pessimistic" name={scenarioConfig[0].name} stroke={scenarioConfig[0].stroke} strokeWidth={2}   dot={false} activeDot={{ r: 4, fill: scenarioConfig[0].stroke }} />
-                            <Line type="monotone" dataKey="base"        name={scenarioConfig[1].name} stroke={scenarioConfig[1].stroke} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: scenarioConfig[1].stroke }} />
-                            <Line type="monotone" dataKey="optimistic"  name={scenarioConfig[2].name} stroke={scenarioConfig[2].stroke} strokeWidth={2}   dot={false} activeDot={{ r: 4, fill: scenarioConfig[2].stroke }} />
+                            <Line type="monotone" dataKey="pessimistic" name={scenarioConfig[0].pill} stroke={scenarioConfig[0].stroke} strokeOpacity={scenarioConfig[0].opacity} strokeDasharray={scenarioConfig[0].dash} strokeWidth={2}   dot={false} activeDot={{ r: 4, fill: scenarioConfig[0].stroke }} />
+                            <Line type="monotone" dataKey="base"        name={scenarioConfig[1].pill} stroke={scenarioConfig[1].stroke} strokeOpacity={scenarioConfig[1].opacity} strokeDasharray={scenarioConfig[1].dash} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: scenarioConfig[1].stroke }} />
+                            <Line type="monotone" dataKey="optimistic"  name={scenarioConfig[2].pill} stroke={scenarioConfig[2].stroke} strokeOpacity={scenarioConfig[2].opacity} strokeDasharray={scenarioConfig[2].dash} strokeWidth={2}   dot={false} activeDot={{ r: 4, fill: scenarioConfig[2].stroke }} />
                           </>
                         ) : (
                           <Line type="monotone" dataKey="linear" name="Projection" stroke={plan.color} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: plan.color }} />
@@ -1172,7 +1168,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                   {/* Summary cards */}
                   {isInvestment ? (
                     <div className="grid grid-cols-3 gap-3">
-                      {scenarioConfig.map(({ name, rate, textColor, bg }) => {
+                      {scenarioConfig.map(({ pill: name, rate, textColor, bg }) => {
                         const horizonM = horizon === 'goal' ? 480 : (horizon as number);
                         const goalM    = monthsToGoal(plan.currentAmount, effectiveMonthly, plan.targetAmount, rate, 480);
                         const balance  = compoundBalance(plan.currentAmount, effectiveMonthly, horizonM, rate);
@@ -1229,7 +1225,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                               <p className="font-display text-sm" style={{ color: plan.color }}>{fmt(Math.round(balance))}</p>
                               <p className="text-xs text-muted-foreground mt-0.5">
                                 {balance >= plan.targetAmount
-                                  ? t('planDetail.aboveGoalAmount', { amount: Math.round(balance - plan.targetAmount).toLocaleString() })
+                                  ? t('planDetail.aboveGoalAmount', { amount: fmt(Math.round(balance - plan.targetAmount)) })
                                   : t('planDetail.pctOfGoal', { pct: ((balance / plan.targetAmount) * 100).toFixed(0) })}
                               </p>
                             </div>
@@ -1297,7 +1293,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                 const reached = plan.currentAmount >= amount;
                 const barPct  = Math.min((plan.currentAmount / amount) * 100, 100);
                 const goalM   = plan.monthlyContribution > 0
-                  ? monthsToGoal(plan.currentAmount, plan.monthlyContribution, amount, projRates[1], 480)
+                  ? monthsToGoal(plan.currentAmount, plan.monthlyContribution, amount, PROJECTION_RATES[1], 480)
                   : null;
                 const goalDate = goalM !== null ? (() => { const d = new Date(); d.setMonth(d.getMonth() + goalM); return d; })() : null;
 
@@ -1316,7 +1312,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                           {reached ? (
                             <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{t('planDetail.reached')}</span>
                           ) : goalDate ? (
-                            <span className="text-xs text-muted-foreground">~{format(goalDate, 'MMM yyyy')} at {projRates[1]*100}%</span>
+                            <span className="text-xs text-muted-foreground">{t('planDetail.milestoneEta', { date: format(goalDate, 'MMM yyyy', { locale: dateLocale }), rate: PROJECTION_RATE_PCTS.medium.toLocaleString(locale) })}</span>
                           ) : null}
                           {milestoneEdit !== null && (
                             <button
