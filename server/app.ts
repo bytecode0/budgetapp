@@ -21,6 +21,7 @@ import { dashboardRouter } from "./routes/dashboard.js";
 import { stripeRouter } from "./routes/stripe.js";
 import { aiRouter } from "./routes/ai.js";
 import { onboardingRouter } from "./routes/onboarding.js";
+import { securityHeaders } from "./middleware/securityHeaders.js";
 
 // The Express app, without a listener: server/index.ts listens for local dev,
 // and api/index.ts hands it to Vercel as a function.
@@ -35,6 +36,10 @@ const app = express();
 // deployment adds a second hop
 // (e.g. a CDN in front of the existing proxy), bump this to 2.
 app.set("trust proxy", 1);
+
+// No "X-Powered-By: Express", and helmet-like headers on every response.
+app.disable("x-powered-by");
+app.use(securityHeaders);
 
 app.use(
   cors({
