@@ -204,7 +204,7 @@ export function Accounts({ pendingBankToken, onConsumedBankToken, onBankFlowDone
   const renderRow = (a: Account, handleRef?: React.RefObject<HTMLDivElement>) => {
     const Icon = typeIcon(a.type);
     return (
-      <div className="bg-card border border-border rounded-2xl p-5 flex items-center gap-4">
+      <div className="bg-card border border-border rounded-3xl p-5 flex items-center gap-4">
         {handleRef && (
           <div
             ref={handleRef}
@@ -214,7 +214,7 @@ export function Accounts({ pendingBankToken, onConsumedBankToken, onBankFlowDone
             <GripVertical className="w-4 h-4" />
           </div>
         )}
-        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center text-primary shrink-0">
+        <div className="w-11 h-11 rounded-2xl bg-surface-sunk flex items-center justify-center text-muted-foreground shrink-0">
           <Icon className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
@@ -226,11 +226,11 @@ export function Accounts({ pendingBankToken, onConsumedBankToken, onBankFlowDone
         </div>
         {a.card ? (
           <div className="text-right shrink-0">
-            <p className={`text-lg font-display ${a.card.owed > 0 ? 'text-red-500' : ''}`}>{fmtEuro(a.card.owed)}</p>
+            <p className="text-base font-semibold tabular-nums">{fmtEuro(a.card.owed)}</p>
             <p className="text-xs text-muted-foreground">{t('accounts.cardOwed')}</p>
           </div>
         ) : (
-          <p className={`text-lg font-display shrink-0 ${a.currentBalance < 0 ? 'text-red-500' : ''}`}>
+          <p className={`text-base font-semibold tabular-nums shrink-0 ${a.currentBalance < 0 ? 'text-sun-ink' : ''}`}>
             {fmtEuro(a.currentBalance)}
           </p>
         )}
@@ -264,22 +264,19 @@ export function Accounts({ pendingBankToken, onConsumedBankToken, onBankFlowDone
   return (
     <div className="space-y-6 pb-8">
       {/* ── Page title ── */}
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
-        <h1 className="text-4xl tracking-tight">{t('accounts.title')}</h1>
+      <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: 'easeOut' }} className="space-y-2">
+        <h1 className="text-4xl tracking-tight font-display">{t('accounts.title')}</h1>
         <p className="text-muted-foreground">{t('accounts.subtitle')}</p>
       </motion.div>
 
       {/* ── Net worth hero ── */}
       <motion.div
         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-        className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-3xl p-8 shadow-2xl relative overflow-hidden"
+        className="bg-card border border-border rounded-3xl p-8 space-y-1"
       >
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-32 -mt-32" />
-        <div className="relative z-10">
-          <p className="text-sm opacity-75 mb-1">{t('accounts.netWorth')}</p>
-          <p className="text-5xl font-display">{fmtEuro(netWorth)}</p>
-          <p className="text-xs opacity-60 mt-2">{t('accounts.netWorthHint', { count: active.length })}</p>
-        </div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('accounts.netWorth')}</p>
+        <p className="text-5xl font-display tabular-nums">{fmtEuro(netWorth)}</p>
+        <p className="text-sm text-muted-foreground">{t('accounts.netWorthHint', { count: active.length })}</p>
       </motion.div>
 
       {/* ── Bank connection (hidden unless enabled for this user) ── */}
@@ -292,7 +289,7 @@ export function Accounts({ pendingBankToken, onConsumedBankToken, onBankFlowDone
       />
 
       {loading ? (
-        <div className="bg-card border border-border rounded-2xl p-6 h-24 animate-pulse" />
+        <div className="bg-card border border-border rounded-3xl p-6 h-24 animate-pulse" />
       ) : active.length === 0 ? (
         <div className="text-center py-16 space-y-3">
           <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mx-auto">
@@ -337,15 +334,15 @@ export function Accounts({ pendingBankToken, onConsumedBankToken, onBankFlowDone
 
       {/* ── FAB ── */}
       <motion.button
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3, duration: 0.2, ease: 'easeOut' }}
         onClick={openCreate}
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-        className="fixed right-6 bottom-6 w-16 h-16 bg-gradient-to-br from-primary to-secondary text-primary-foreground rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center z-40 group"
+        aria-label={t('accounts.newTitle')}
+        style={{ right: 'calc(1.5rem + env(safe-area-inset-right, 0px))', bottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }}
+        className="fixed w-16 h-16 bg-primary text-primary-foreground rounded-full shadow-soft hover:-translate-y-0.5 transition-transform flex items-center justify-center z-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
-        <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform" />
+        <Plus className="w-7 h-7" />
       </motion.button>
 
       {/* ── Create / edit modal ── */}
@@ -353,14 +350,14 @@ export function Accounts({ pendingBankToken, onConsumedBankToken, onBankFlowDone
         {showForm && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-scrim flex items-end md:items-center justify-center p-4"
             onClick={e => { if (e.target === e.currentTarget) setShowForm(false); }}
           >
             <motion.div
               initial={{ opacity: 0, y: 40, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 40, scale: 0.95 }}
-              className="bg-card border border-border rounded-2xl p-6 w-full max-w-md space-y-5"
+              className="bg-card border border-border rounded-3xl shadow-soft p-6 w-full max-w-md space-y-5"
             >
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-display">{form.id ? t('accounts.editTitle') : t('accounts.newTitle')}</h2>
@@ -376,7 +373,7 @@ export function Accounts({ pendingBankToken, onConsumedBankToken, onBankFlowDone
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder={t('accounts.namePlaceholder')}
-                  className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+                  className="w-full border border-line-strong rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
                 />
               </div>
 

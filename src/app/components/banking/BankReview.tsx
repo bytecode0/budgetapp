@@ -99,12 +99,12 @@ export function BankReview({ queue, onClose, onDone, preview, confirm }: BankRev
       {target && (
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-scrim flex items-end md:items-center justify-center p-4"
           onClick={e => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.div
             initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }}
-            className="bg-card border border-border rounded-2xl p-6 w-full max-w-2xl space-y-5 max-h-[88vh] overflow-y-auto"
+            className="bg-card border border-border rounded-3xl shadow-soft p-6 w-full max-w-2xl space-y-5 max-h-[88vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
@@ -174,9 +174,9 @@ export function BankReview({ queue, onClose, onDone, preview, confirm }: BankRev
 
             {summary && (
               <div className="space-y-5">
-                <div className="bg-emerald-50 dark:bg-emerald-950/20 border-2 border-emerald-200 dark:border-emerald-800 rounded-2xl p-5 space-y-2">
+                <div className="bg-reed-soft rounded-2xl p-5 space-y-2">
                   <p className="font-display text-lg flex items-center gap-2">
-                    <Check className="w-5 h-5 text-emerald-600" /> {t('import.summaryTitle')}
+                    <Check className="w-5 h-5 text-reed" /> {t('import.summaryTitle')}
                   </p>
                   <p className="text-sm">
                     {summaryParts(summary).length > 0 ? summaryParts(summary).join(', ') : t('import.summaryNothing')}

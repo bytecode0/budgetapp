@@ -165,7 +165,7 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
                 </div>
                 <div className="min-w-0">
                   <p className="font-display truncate">{c.institutionName}</p>
-                  <p className={`text-xs ${c.status === 'active' && !expired ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}>{statusLine(c)}</p>
+                  <p className={`text-xs ${c.status === 'active' && !expired ? 'text-muted-foreground' : 'text-sun-ink'}`}>{statusLine(c)}</p>
                   {c.expiresAt && c.status === 'active' && !reconnect && (
                     <p className="text-xs text-muted-foreground">{t('banking.consentUntil', { date: fmtDate(c.expiresAt) })}</p>
                   )}
@@ -187,15 +187,15 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
             </div>
 
             {reconnect && (
-              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 flex items-center justify-between gap-3">
+              <div className="bg-sun-soft text-sun-ink rounded-2xl p-4 flex items-center justify-between gap-3">
                 <div className="flex gap-2 min-w-0">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <AlertTriangle className="w-4 h-4 text-sun-ink shrink-0 mt-0.5" />
                   <p className="text-sm">
                     {expired ? t('banking.expiredWarning') : t('banking.expiringWarning', { count: Math.max(left ?? 0, 0), date: fmtDate(c.expiresAt!) })}
                   </p>
                 </div>
                 {c.isOwner && (
-                  <button onClick={() => startConsent({ connectionId: c.id })} disabled={connecting} className="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs font-display hover:bg-amber-500/20 transition-colors shrink-0 disabled:opacity-50">
+                  <button onClick={() => startConsent({ connectionId: c.id })} disabled={connecting} className="h-9 px-3 rounded-lg bg-card text-foreground border border-line-strong text-xs font-medium hover:bg-muted transition-colors shrink-0 disabled:opacity-50">
                     {t('banking.reconnect')}
                   </button>
                 )}
@@ -227,7 +227,7 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
                     )}
                   </div>
                   {c.isOwner && a.bankSyncNotice === 'held_expired' && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400 flex gap-1.5">
+                    <p className="text-xs text-sun-ink flex gap-1.5">
                       <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                       {t('banking.heldExpired')}
                     </p>
@@ -266,12 +266,12 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
         {mapping && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-scrim flex items-end md:items-center justify-center p-4"
             onClick={e => { if (e.target === e.currentTarget && !linking) { setMapping(null); endTokenFlow(); } }}
           >
             <motion.div
               initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }}
-              className="bg-card border border-border rounded-2xl p-6 w-full max-w-md space-y-5 max-h-[85vh] overflow-y-auto"
+              className="bg-card border border-border rounded-3xl shadow-soft p-6 w-full max-w-md space-y-5 max-h-[85vh] overflow-y-auto"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -297,7 +297,7 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
                       <select
                         value={choices[a.id] ?? 'new'}
                         onChange={e => setChoices(c => ({ ...c, [a.id]: e.target.value }))}
-                        className="w-full border border-border rounded-xl px-4 py-2.5 bg-background outline-none focus:border-primary text-sm"
+                        className="w-full border border-line-strong rounded-xl px-4 py-2.5 bg-background outline-none focus:border-primary text-sm"
                       >
                         <option value="new">{t(a.kind === 'card' ? 'banking.mapNewCard' : 'banking.mapNewAccount')}</option>
                         {targetsFor(a).map(acc => (
@@ -330,12 +330,12 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
         {confirmDisconnect && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-scrim flex items-end md:items-center justify-center p-4"
             onClick={e => { if (e.target === e.currentTarget) setConfirmDisconnect(null); }}
           >
             <motion.div
               initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }}
-              className="bg-card border border-border rounded-2xl p-6 w-full max-w-md space-y-5"
+              className="bg-card border border-border rounded-3xl shadow-soft p-6 w-full max-w-md space-y-5"
             >
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-display">{t('banking.disconnectTitle', { bank: confirmDisconnect.institutionName })}</h2>

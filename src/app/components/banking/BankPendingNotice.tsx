@@ -24,18 +24,18 @@ export function BankPendingNotice({ onChanged }: { onChanged: () => void }) {
       {targets.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.11 }}
-          className="flex items-start gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-5 py-4"
+          className="flex items-start gap-3 bg-sun-soft text-sun-ink rounded-2xl px-5 py-4"
         >
-          <ListChecks className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+          <ListChecks className="w-5 h-5 text-sun-ink shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="font-medium text-amber-700 dark:text-amber-400">
+            <p className="font-semibold">
               <PendingText count={count} bank={bank} />
             </p>
-            <p className="text-sm text-amber-600/70 dark:text-amber-400/70 mt-0.5">{t('banking.homePendingDesc')}</p>
+            <p className="text-sm text-foreground/80 mt-0.5">{t('banking.homePendingDesc')}</p>
           </div>
           <button
             onClick={() => setQueue(targets)}
-            className="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs font-display hover:bg-amber-500/20 transition-colors shrink-0"
+            className="h-9 px-3 rounded-lg bg-card text-foreground border border-line-strong text-xs font-medium hover:bg-muted transition-colors shrink-0"
           >
             {t('banking.stripReview')}
           </button>
