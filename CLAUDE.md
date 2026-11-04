@@ -4,7 +4,7 @@
 
 Remanso is an authenticated budgeting app (every API route behind `requireAuth`) for **families who earn well, get to the end of the month just barely, and never learned a system to save**. They may have debts (cards, car, installments), but debt does not drown them; what they lack is a method, not money (decided 4 Nov 2026, `docs/vision-y-plan-beta.md`).
 
-**Name (decided 4 Nov 2026, LPBETA-17):** the product is **Remanso**; it was called LifePlan. Only the visible brand changed: the repo, `model LifePlan` (savings plans), `usePlans.ts` and other internal code keep the old name on purpose. In a lockup next to the mark the name is lowercase (`remanso`); in prose, `Remanso`. Don't add new user-facing "LifePlan".
+**Name (decided 4 Nov 2026, LPBETA-26):** the product is **Remanso**; it was called LifePlan. Only the visible brand changed: the repo, `model LifePlan` (savings plans), `usePlans.ts` and other internal code keep the old name on purpose. In a lockup next to the mark the name is lowercase (`remanso`); in prose, `Remanso`. Don't add new user-facing "LifePlan".
 
 The app is the tool of a system: **see** where the money goes and how much of the next paycheck is already committed; **order** a monthly budget where every euro has a destination; **get out of debt** with a dated plan (snowball/avalanche); **save with purpose** (named plans, always an emergency fund, a fixed "pay yourself first" % that each user chooses); and **save to invest**. The **"futuro comprometido"** (share of income already committed to debt) stays as the entry diagnosis, not the headline.
 
@@ -149,9 +149,9 @@ This is a financial app. Rounding bugs here destroy user trust faster than anyth
 
 ## UI/UX Patterns — follow these in every new module
 
-**The app's design is Remanso (LPBETA-18, approved 4 Nov 2026).** The reference is the design system at https://claude.ai/artifact/WMDkSACG5weNQxzPB6KyB5 (logo, tokens, components, voice); the tokens live in `src/styles/theme.css`. Principles: each screen answers "¿vamos bien?" first, with **one** big number; calm over data (lots of air, few numbers at once); **going over budget is not an error**: it is `sun-ink` on `sun-soft` ("vas justo"), never red; red (`alert`/`destructive`) is only for real errors and deleting. No gradients, no emoji as decoration, no bouncy or spinning motion.
+**The app's design is Remanso (LPBETA-27, approved 4 Nov 2026).** The reference is the design system at https://claude.ai/artifact/WMDkSACG5weNQxzPB6KyB5 (logo, tokens, components, voice); the tokens live in `src/styles/theme.css`. Principles: each screen answers "¿vamos bien?" first, with **one** big number; calm over data (lots of air, few numbers at once); **going over budget is not an error**: it is `sun-ink` on `sun-soft` ("vas justo"), never red; red (`alert`/`destructive`) is only for real errors and deleting. No gradients, no emoji as decoration, no bouncy or spinning motion.
 
-Screens built before the redesign still use the old patterns (gradients, `emerald`/`red`/`amber` classes); phase 2 of LPBETA-18 moves them over screen by screen. **New or touched UI follows the rules below.**
+Screens built before the redesign still use the old patterns (gradients, `emerald`/`red`/`amber` classes); phase 2 of LPBETA-27 moves them over screen by screen. **New or touched UI follows the rules below.**
 
 **Light/dark theme:** always available from the `ThemeToggle` (`src/app/components/shared/ThemeToggle.tsx`) in the top bar, the sidebar and the onboarding header, never only in Settings. The choice is the person's own (`UserSettings.darkMode` of `req.authUserId`, never the household pool) so it follows them to every device; `src/app/lib/theme.ts` keeps a device copy only to paint before load (`index.html`). Design every screen in both themes.
 

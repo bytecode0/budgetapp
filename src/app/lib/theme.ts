@@ -1,4 +1,4 @@
-// Light / dark theme (LPBETA-18). The person's choice is stored on the server
+// Light / dark theme (LPBETA-27). The person's choice is stored on the server
 // (their own UserSettings.darkMode), so it follows them to every device. This
 // device keeps a copy only to paint the right theme before the app loads
 // (index.html reads it before first paint); the server's value always wins.
