@@ -18,6 +18,11 @@ model User {
   // success or lock, and until when password sign-in is locked.
   failedLogins     Int       @default(0)
   loginLockedUntil DateTime?
+  // Last time this person reviewed bank movements in the app (POST
+  // /api/banking/connections/:id/confirm) — set only by that user action, never
+  // by the daily sync, which moves Account.bankReviewedAt on its own. Read by
+  // the active-users count (server/lib/activeStats.ts, LPBETA-05).
+  lastBankReviewAt DateTime?
 
   settings       UserSettings?
   subscription   Subscription?
@@ -460,6 +465,10 @@ model PlanDeposit {
   amount  Int // cents
   month   String // "2026-04"
   note    String @default("")
+  // Who last created or changed it (req.authUserId): in a household any member
+  // can deposit into any plan of the pool. Null for deposits from before this
+  // column. Read by the active-users count (server/lib/activeStats.ts).
+  byUserId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

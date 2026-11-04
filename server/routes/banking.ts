@@ -445,6 +445,13 @@ bankingRouter.post("/connections/:id/confirm", ...guarded, async (req: BankingRe
         bankDismissedIds: mergeDismissed(account.bankDismissedIds, dismissed),
       },
     });
+    // A review is the user's own activity (the daily sync never gets here). It
+    // only feeds the active-users count, so it never fails the review.
+    try {
+      await prisma.user.update({ where: { id: req.authUserId! }, data: { lastBankReviewAt: new Date() } });
+    } catch (err) {
+      console.error(`[banking/confirm] review time not saved: ${syncErrorCode(err)}`);
+    }
     // Nothing waits for review now: the balance (a card's debt) can follow the bank.
     try {
       await refreshBalance(req.bankingClient!, connection, account);
