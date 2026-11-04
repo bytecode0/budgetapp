@@ -16,7 +16,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ error?: string; code?: string }>;
-  register: (name: string, email: string, password: string) => Promise<{ error?: string }>;
+  register: (name: string, email: string, password: string) => Promise<{ error?: string; code?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ name, email, password, language: i18n.language === "en" ? "en" : "es" }),
     });
     const data = await res.json();
-    if (!res.ok) return { error: data.error || "Registration failed" };
+    if (!res.ok) return { error: data.error || "Registration failed", code: data.code };
     return {};
   };
 

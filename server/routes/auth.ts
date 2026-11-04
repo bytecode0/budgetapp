@@ -7,6 +7,8 @@ import { signToken, verifyToken } from "../lib/jwt.js";
 import { consumeOtp, generateOtp, hashOtp, type OtpResult } from "../lib/otp.js";
 import { clearLoginFailures, reserveLoginAttempt } from "../lib/loginThrottle.js";
 import { createDefaultAllocations } from "../lib/defaults.js";
+import { googleSignIn } from "../lib/googleSignIn.js";
+import { codeSendChecks, prismaRateLimitStore, takeRateLimit } from "../lib/rateLimit.js";
 import {
   sendVerificationEmail,
   sendPasswordChangedEmail,
@@ -168,38 +170,24 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
       verified_email: boolean;
     }>({ url: "https://www.googleapis.com/oauth2/v2/userinfo" });
 
-    if (!data.email) {
-      return res.redirect(`${appUrl}/?error=google_no_email`);
+    const signIn = await googleSignIn(prisma, data);
+    if ("error" in signIn) {
+      if (signIn.error === "no_email") return res.redirect(`${appUrl}/?error=google_no_email`);
+      console.error("[auth/google/callback] Google says the email is not verified");
+      return res.redirect(`${appUrl}/?error=google_failed`);
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
-    const isNewUser = !existingUser;
-
-    const user = await prisma.user.upsert({
-      where: { email: data.email },
-      update: {
-        emailVerified: data.verified_email ? new Date() : undefined,
-        image: data.picture,
-      },
-      create: {
-        email: data.email,
-        name: data.name,
-        image: data.picture,
-        emailVerified: data.verified_email ? new Date() : null,
-      },
-    });
-
-    if (isNewUser) {
+    if (signIn.isNewUser) {
       const locale = parsedState.lang ?? undefined;
-      sendWelcomeGoogleEmail(user.email!, user.name ?? "", locale).catch((e) =>
+      sendWelcomeGoogleEmail(signIn.email, signIn.name ?? "", locale).catch((e) =>
         console.error("[auth/google/callback] welcome google email failed:", e)
       );
-      createDefaultAllocations(user.id, locale).catch((e) =>
+      createDefaultAllocations(signIn.userId, locale).catch((e) =>
         console.error("[auth/google/callback] createDefaultAllocations failed:", e)
       );
     }
 
-    const sessionToken = createGoogleSession(user.id);
+    const sessionToken = createGoogleSession(signIn.userId);
     return res.redirect(`${appUrl}/auth/google/callback?token=${sessionToken}`);
   } catch (err) {
     console.error("[auth/google/callback]", err);
@@ -277,6 +265,16 @@ function dummyHash(): Promise<string> {
   return (dummyPasswordHash ??= bcrypt.hash(randomBytes(16).toString("hex"), 10));
 }
 
+// Emailed codes are rate limited (LPBETA-16, server/lib/rateLimit.ts) per
+// address and per IP. Every request counts, before looking the email up, so
+// whether the limit is reached says nothing about whether an account exists.
+const rateLimitStore = prismaRateLimitStore(prisma);
+function allowCodeSend(email: string, req: Request): Promise<boolean> {
+  return takeRateLimit(rateLimitStore, codeSendChecks(email, req.ip));
+}
+
+const OTP_TYPES = new Set(["email_verification", "password_reset"]);
+
 // Register
 authRouter.post("/register", async (req: Request, res: Response) => {
   try {
@@ -284,6 +282,9 @@ authRouter.post("/register", async (req: Request, res: Response) => {
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Name, email and password are required" });
+    }
+    if (typeof email !== "string" || typeof password !== "string") {
+      return res.status(400).json({ error: "Email and password must be text" });
     }
 
     // Optional: the UI language at sign-up, used for the verification email and
@@ -297,6 +298,10 @@ authRouter.post("/register", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
+    if (!(await allowCodeSend(email, req))) {
+      return res.status(429).json({ error: "Too many codes requested, try again later", code: "rate_limited" });
+    }
+
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing?.emailVerified) {
       return res.status(409).json({ error: "An account with this email already exists" });
@@ -304,13 +309,22 @@ authRouter.post("/register", async (req: Request, res: Response) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const user = existing
-      ? await prisma.user.update({ where: { email }, data: { name, passwordHash } })
-      : await prisma.user.create({ data: { name, email, passwordHash } });
+    // Only while the account is still unverified: if it was verified since the
+    // check above (by its code or by Google), its password is not ours to set.
+    if (existing) {
+      const updated = await prisma.user.updateMany({
+        where: { id: existing.id, emailVerified: null },
+        data: { name, passwordHash },
+      });
+      if (updated.count !== 1) {
+        return res.status(409).json({ error: "An account with this email already exists" });
+      }
+    }
+    const userId = existing ? existing.id : (await prisma.user.create({ data: { name, email, passwordHash } })).id;
     await prisma.userSettings.upsert({
-      where: { userId: user.id },
+      where: { userId },
       update: { language: locale },
-      create: { userId: user.id, monthlyIncome: 0, language: locale },
+      create: { userId, monthlyIncome: 0, language: locale },
     });
 
     const otp = await createOtp(email, "email_verification");
@@ -374,7 +388,9 @@ authRouter.post("/verify-email", async (req: Request, res: Response) => {
   }
 });
 
-// Resend OTP
+// Resend OTP. One answer for a code sent, an unknown email and a limit
+// reached, so the response doesn't reveal which emails have an account.
+const RESEND_SENT = { message: "If an account exists, a new code was sent" };
 authRouter.post("/resend-otp", async (req: Request, res: Response) => {
   try {
     const { email, type } = req.body;
@@ -382,23 +398,25 @@ authRouter.post("/resend-otp", async (req: Request, res: Response) => {
     if (!email || !type) {
       return res.status(400).json({ error: "Email and type are required" });
     }
+    if (typeof email !== "string" || !OTP_TYPES.has(type)) {
+      return res.status(400).json({ error: "Invalid email or code type" });
+    }
+
+    if (!(await allowCodeSend(email, req))) return res.json(RESEND_SENT);
 
     const user = await prisma.user.findUnique({
       where: { email },
       include: { settings: { select: { language: true } } },
     });
-    if (!user) {
-      return res.json({ message: "If an account exists, a new code was sent" });
-    }
+    if (!user) return res.json(RESEND_SENT);
 
     const last = await prisma.otpToken.findFirst({
       where: { email, type, used: false },
       orderBy: { createdAt: "desc" },
     });
 
-    if (last && last.createdAt > new Date(Date.now() - 60_000)) {
-      return res.status(429).json({ error: "Wait before requesting a new code" });
-    }
+    // The screens wait 60 s before offering a resend; a request inside that gets the same answer.
+    if (last && last.createdAt > new Date(Date.now() - 60_000)) return res.json(RESEND_SENT);
 
     const otp = await createOtp(email, type);
 
@@ -409,31 +427,34 @@ authRouter.post("/resend-otp", async (req: Request, res: Response) => {
       await sendPasswordResetEmail(email, otp, locale);
     }
 
-    return res.json({ message: "Code sent" });
+    return res.json(RESEND_SENT);
   } catch (err) {
     console.error("[auth/resend-otp]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// Send password reset OTP
+// Send password reset OTP. One answer for a code sent, an unknown email and a
+// limit reached, so the response doesn't reveal which emails have an account.
+const RESET_SENT = { message: "If an account exists, a reset code was sent" };
 authRouter.post("/send-reset", async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
+    if (typeof email !== "string") return res.status(400).json({ error: "Invalid email" });
+
+    if (!(await allowCodeSend(email, req))) return res.json(RESET_SENT);
 
     const user = await prisma.user.findUnique({
       where: { email },
       include: { settings: { select: { language: true } } },
     });
-    if (!user) {
-      return res.json({ message: "If an account exists, a reset code was sent" });
-    }
+    if (!user) return res.json(RESET_SENT);
 
     const otp = await createOtp(email, "password_reset");
     await sendPasswordResetEmail(email, otp, resolveLocale(user.settings?.language));
 
-    return res.json({ message: "Reset code sent" });
+    return res.json(RESET_SENT);
   } catch (err) {
     console.error("[auth/send-reset]", err);
     return res.status(500).json({ error: "Internal server error" });

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { TermsNotice } from './TermsNotice';
 import { useAuth } from '../../context/AuthContext';
 import { RemansoMark } from '../shared/RemansoMark';
+import { apiErrorMessage } from '../../lib/apiErrors';
 
 interface SignupProps {
   onSignupSuccess: (email: string) => void;
@@ -30,7 +31,7 @@ export function Signup({ onSignupSuccess, onSwitchToLogin }: SignupProps) {
     const result = await register(formData.name, formData.email, formData.password);
     setIsLoading(false);
     if (result.error) {
-      toast.error(result.error);
+      toast.error(apiErrorMessage(t, result));
       return;
     }
     toast.success(t('auth.signup.codeSent'));

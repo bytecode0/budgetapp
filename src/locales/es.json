@@ -785,6 +785,7 @@
     "aiClassified": "La IA clasificó {{count}} comercios",
     "aiNoneFound": "La IA no pudo clasificar estos con confianza",
     "aiFailed": "Falló la clasificación con IA",
+    "aiRateLimited": "Has usado mucho la IA en poco tiempo. Inténtalo en un rato o elige las categorías a mano.",
     "aiSuggested": "IA",
     "aiSuggestCategories": "Sugerir categorías",
     "aiCategoriesProposed": "{{count}} categorías propuestas",
@@ -1599,7 +1600,8 @@
   "apiErrors": {
     "refundOnDebtLine": "Una devolución no puede ir en la partida de una deuda: deshace una compra, no paga la deuda.",
     "allocationNotFound": "Esa categoría ya no existe. Recarga la página y elige otra.",
-    "accountNotFound": "Esa cuenta no está disponible. Recarga la página y elige otra."
+    "accountNotFound": "Esa cuenta no está disponible. Recarga la página y elige otra.",
+    "rateLimited": "Has hecho demasiados intentos seguidos. Espera un rato y vuelve a probar."
   },
   "banking": {
     "connectBank": "Conecta tu banco",

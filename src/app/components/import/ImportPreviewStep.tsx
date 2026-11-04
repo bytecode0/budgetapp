@@ -125,7 +125,7 @@ export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, si
   const runClassify = async (merchants: string[]) => {
     if (merchants.length === 0) return;
     const res = await classify(merchants);
-    if (res.error) { toast.error(t('import.aiFailed')); return; }
+    if (res.error) { toast.error(t(res.code === 'rate_limited' ? 'import.aiRateLimited' : 'import.aiFailed')); return; }
     const suggestions = res.suggestions ?? [];
     if (suggestions.length === 0) { toast.info(t('import.aiNoneFound')); return; }
     const idsByMerchant = new Map(merchantGroups.map(g => [g.merchant, g.ids]));
@@ -147,7 +147,7 @@ export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, si
     const merchants = uncategorizedMerchants();
     if (merchants.length === 0) return;
     const res = await suggestCategories(merchants);
-    if (res.error) { toast.error(t('import.aiFailed')); return; }
+    if (res.error) { toast.error(t(res.code === 'rate_limited' ? 'import.aiRateLimited' : 'import.aiFailed')); return; }
     const cats = res.categories ?? [];
     if (cats.length === 0) { toast.info(t('import.aiNoneFound')); return; }
     setProposedCats(cats);
