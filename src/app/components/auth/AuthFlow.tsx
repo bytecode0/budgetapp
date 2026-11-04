@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ArrowLeft } from 'lucide-react';
+import { startsOnLanding } from '../../../../shared/install';
+import { isStandalone } from '../../lib/installPrompt';
+import { Landing } from './Landing';
 import { Login } from './Login';
 import { Signup } from './Signup';
 import { ForgotPassword } from './ForgotPassword';
@@ -8,6 +12,7 @@ import { VerifyEmail } from './VerifyEmail';
 import { GoogleCallback } from './GoogleCallback';
 
 type AuthScreen =
+  | 'landing'
   | 'login'
   | 'signup'
   | 'verify-email'
@@ -17,12 +22,22 @@ type AuthScreen =
 
 interface AuthFlowProps {
   onAuthenticated: () => void;
+  /** A partner invite is pending: go straight to sign-in, as the banner asks. */
+  hasInvite?: boolean;
   inviteBanner?: { senderName: string; senderEmail: string } | null;
 }
 
-export function AuthFlow({ onAuthenticated, inviteBanner }: AuthFlowProps) {
+export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: AuthFlowProps) {
   const { t } = useTranslation();
-  const [currentScreen, setCurrentScreen] = useState<AuthScreen>('login');
+  // Visitors without a session first see what Remanso is (the public welcome
+  // page), unless they are mid-flow or opened the installed app.
+  const [hasLanding] = useState(() => startsOnLanding({
+    pathname: window.location.pathname,
+    search: window.location.search,
+    hasInvite,
+    standalone: isStandalone(),
+  }));
+  const [currentScreen, setCurrentScreen] = useState<AuthScreen>(hasLanding ? 'landing' : 'login');
   const [pendingEmail, setPendingEmail] = useState('');
   const [googleToken, setGoogleToken] = useState<string | null>(null);
   const [googleError, setGoogleError] = useState<string | null>(null);
@@ -53,6 +68,13 @@ export function AuthFlow({ onAuthenticated, inviteBanner }: AuthFlowProps) {
 
   const renderScreen = () => {
     switch (currentScreen) {
+      case 'landing':
+        return (
+          <Landing
+            onSignup={() => setCurrentScreen('signup')}
+            onLogin={() => setCurrentScreen('login')}
+          />
+        );
       case 'login':
         return (
           <Login
@@ -113,6 +135,14 @@ export function AuthFlow({ onAuthenticated, inviteBanner }: AuthFlowProps) {
           <span>💑</span>
           <span><strong>{inviteBanner.senderName}</strong> {t('auth.authFlow.inviteBannerSuffix')}</span>
         </div>
+      )}
+      {hasLanding && (currentScreen === 'login' || currentScreen === 'signup') && (
+        <button
+          onClick={() => setCurrentScreen('landing')}
+          className="absolute top-4 left-4 z-10 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> {t('auth.landing.back')}
+        </button>
       )}
       {renderScreen()}
     </>

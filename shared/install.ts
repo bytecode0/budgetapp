@@ -1,5 +1,5 @@
-// Installing Remanso on the phone (LPBETA-11). Pure: the app passes in what
-// the browser reports.
+// Installing Remanso on the phone (LPBETA-11) and the first screen a visitor
+// without a session sees. Pure: the app passes in what the browser reports.
 
 /** Which install hint to show: iPhone/iPad instructions (Safari has no install
  *  event), the browser's own install prompt (Android), or none. */
@@ -31,4 +31,21 @@ export function installHint(env: InstallEnv): InstallHint {
   // Desktop browsers fire the event too; the hint is about the phone.
   if (env.canPrompt && isMobile(env.userAgent, env.maxTouchPoints)) return "prompt";
   return null;
+}
+
+export interface AuthEntry {
+  pathname: string;
+  search: string;
+  /** A partner invite is pending (?invite= or saved before an OAuth redirect). */
+  hasInvite: boolean;
+  standalone: boolean;
+}
+
+/** Whether a visitor without a session starts on the public welcome page
+ *  rather than the sign-in form. Not when they are mid-flow (Google callback or
+ *  error, partner invite) or opened the installed app: they already know it. */
+export function startsOnLanding(entry: AuthEntry): boolean {
+  if (entry.standalone || entry.hasInvite) return false;
+  if (entry.pathname === "/auth/google/callback") return false;
+  return !new URLSearchParams(entry.search).has("error");
 }

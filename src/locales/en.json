@@ -1072,6 +1072,41 @@
     },
     "authFlow": {
       "inviteBannerSuffix": "invited you to share finances — log in or create an account to accept."
+    },
+    "landing": {
+      "title": "Your money, at ease.",
+      "lead": "Remanso is a simple method to see where your money goes, stop scraping by at the end of the month and save steadily every month.",
+      "signup": "Create account",
+      "login": "Sign in",
+      "back": "Back",
+      "stepsTitle": "The method, in five steps",
+      "steps": {
+        "see": {
+          "title": "See",
+          "body": "Where your money goes, and how much of your salary is already committed before you are paid: instalments, cards and loans."
+        },
+        "order": {
+          "title": "Organise",
+          "body": "A budget for each month, where every part of your salary has a job."
+        },
+        "debts": {
+          "title": "Get out of debt",
+          "body": "A plan with a date to finish paying off your cards, loans and instalment purchases."
+        },
+        "save": {
+          "title": "Save with a purpose",
+          "body": "Plans with a name and a goal: a cushion for the unexpected, a deposit on a home, the children’s education."
+        },
+        "invest": {
+          "title": "Save to invest",
+          "body": "Set aside part of each month to invest wherever you choose. Remanso does not tell you what to invest in or manage your money: it helps that money exist."
+        }
+      },
+      "privacyTitle": "Your data is yours",
+      "privacyBody": "Remanso shows no ads, and does not sell your data or hand it to anyone. If you connect your bank, it is read-only: Remanso cannot move money or make payments.",
+      "privacyLink": "How we look after your data",
+      "privacy": "Privacy",
+      "terms": "Terms"
     }
   },
   "billing": {

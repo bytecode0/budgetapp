@@ -1072,6 +1072,41 @@
     },
     "authFlow": {
       "inviteBannerSuffix": "te ha invitado a compartir las finanzas — inicia sesión o crea una cuenta para aceptar."
+    },
+    "landing": {
+      "title": "Tu dinero, en calma.",
+      "lead": "Remanso es un método sencillo para ver a dónde va tu dinero, dejar de llegar justo a fin de mes y ahorrar cada mes con constancia.",
+      "signup": "Crear cuenta",
+      "login": "Entrar",
+      "back": "Volver",
+      "stepsTitle": "El método, en cinco pasos",
+      "steps": {
+        "see": {
+          "title": "Ver",
+          "body": "A dónde va tu dinero y cuánto de tu sueldo ya está comprometido antes de cobrarlo: cuotas, tarjetas y préstamos."
+        },
+        "order": {
+          "title": "Ordenar",
+          "body": "Un presupuesto para cada mes, en el que cada parte del sueldo tiene un destino."
+        },
+        "debts": {
+          "title": "Salir de deudas",
+          "body": "Un plan con fecha para terminar de pagar tus tarjetas, préstamos y compras a plazos."
+        },
+        "save": {
+          "title": "Ahorrar con propósito",
+          "body": "Planes con nombre y meta: un colchón para imprevistos, la entrada de una casa, los estudios de los hijos."
+        },
+        "invest": {
+          "title": "Ahorrar para invertir",
+          "body": "Apartar cada mes una parte para invertirla donde tú quieras. Remanso no te dice en qué invertir ni gestiona tu dinero: te ayuda a que ese dinero exista."
+        }
+      },
+      "privacyTitle": "Tus datos son tuyos",
+      "privacyBody": "Remanso no muestra publicidad, no vende tus datos ni los cede a nadie. Si conectas tu banco, es solo para leer: Remanso no puede mover dinero ni hacer pagos.",
+      "privacyLink": "Cómo cuidamos tus datos",
+      "privacy": "Privacidad",
+      "terms": "Términos"
     }
   },
   "billing": {
