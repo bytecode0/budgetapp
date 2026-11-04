@@ -40,8 +40,8 @@ export function BankStrip({ onChanged }: { onChanged: () => void }) {
     return t('banking.stripUpdated', { bank: c.institutionName, ago });
   };
 
-  const amber = 'bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-5 py-4 flex items-center justify-between gap-3';
-  const amberButton = 'px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs font-display hover:bg-amber-500/20 transition-colors shrink-0 disabled:opacity-50 flex items-center gap-1.5';
+  const watch = 'bg-sun-soft text-sun-ink rounded-2xl px-5 py-4 flex items-center justify-between gap-3';
+  const watchButton = 'h-9 px-3 rounded-lg bg-card text-foreground border border-line-strong text-xs font-medium hover:bg-muted transition-colors shrink-0 disabled:opacity-50 flex items-center gap-1.5';
 
   const content = (() => {
     switch (strip.kind) {
@@ -69,26 +69,26 @@ export function BankStrip({ onChanged }: { onChanged: () => void }) {
         );
       case 'reconnect':
         return (
-          <div className={amber}>
+          <div className={watch}>
             <p className="text-sm flex gap-2 min-w-0">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-4 h-4 text-sun-ink shrink-0 mt-0.5" />
               {strip.expired
                 ? t('banking.stripExpired', { bank: strip.connection.institutionName })
                 : t('banking.stripExpiring', { bank: strip.connection.institutionName, count: strip.daysLeft })}
             </p>
-            <button onClick={() => startConsent({ connectionId: strip.connection.id })} disabled={connecting} className={amberButton}>
+            <button onClick={() => startConsent({ connectionId: strip.connection.id })} disabled={connecting} className={watchButton}>
               {t('banking.reconnect')}
             </button>
           </div>
         );
       case 'pending':
         return (
-          <div className={amber}>
+          <div className={watch}>
             <p className="text-sm flex gap-2 min-w-0">
-              <ListChecks className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <ListChecks className="w-4 h-4 text-sun-ink shrink-0 mt-0.5" />
               <PendingText count={strip.count} bank={strip.bank} />
             </p>
-            <button onClick={() => setQueue(strip.targets)} className={amberButton}>
+            <button onClick={() => setQueue(strip.targets)} className={watchButton}>
               {t('banking.stripReview')}
             </button>
           </div>

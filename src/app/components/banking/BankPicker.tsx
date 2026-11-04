@@ -41,12 +41,12 @@ export function BankPicker({ open, onClose, fetchInstitutions, connecting, onCho
       {open && (
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-scrim flex items-end md:items-center justify-center p-4"
           onClick={e => { if (e.target === e.currentTarget && !connecting) onClose(); }}
         >
           <motion.div
             initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }}
-            className="bg-card border border-border rounded-2xl p-6 w-full max-w-md space-y-4 max-h-[80vh] overflow-y-auto"
+            className="bg-card border border-border rounded-3xl shadow-soft p-6 w-full max-w-md space-y-4 max-h-[80vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-display">{t('banking.chooseBankTitle')}</h2>
