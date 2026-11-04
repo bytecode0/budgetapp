@@ -669,11 +669,11 @@
   "activity": {
     "title": "Activity",
     "subtitle": "Track your spending against your plan",
-    "totalSpent": "Total Spent",
+    "totalSpent": "Spent this month",
     "avgPerDay": "avg {{amount}}/day",
     "pctOfIncome": "% of monthly income",
     "transactions": "Transactions",
-    "topCategory": "Top Category",
+    "topCategory": "Where most went",
     "noExpenses": "No expenses yet",
     "all": "All ({{count}})",
     "unassigned": "Unassigned ({{count}})",
@@ -682,7 +682,7 @@
     "addExpense": "Add Expense",
     "addIncome": "Add Income",
     "noMovements": "No movements yet",
-    "addFirstMovement": "Add your first expense or income for this month",
+    "addFirstMovement": "Add your first expense or income with the + button, or import your bank statement.",
     "incomeThisMonth": "+{{amount}} income",
     "expenseRemoved": "Expense removed",
     "incomeRemoved": "Income removed",
@@ -692,7 +692,14 @@
     "shared": "Shared",
     "sharedPaidBy": "Shared · paid by {{name}}",
     "payCard": "Pay card",
-    "refund": "Refund"
+    "refund": "Refund",
+    "movementsCount_one": "{{count}} movement",
+    "movementsCount_other": "{{count}} movements",
+    "incomeLabel": "Income",
+    "editMovement": "Edit movement",
+    "deleteMovement": "Delete movement",
+    "openAddMenu": "Add a movement",
+    "closeAddMenu": "Close"
   },
   "addIncome": {
     "title": "Add income",
