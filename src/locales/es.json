@@ -1072,6 +1072,41 @@
     },
     "authFlow": {
       "inviteBannerSuffix": "te ha invitado a compartir las finanzas — inicia sesión o crea una cuenta para aceptar."
+    },
+    "landing": {
+      "title": "Tu dinero, en calma.",
+      "lead": "Remanso es un método sencillo para ver a dónde va tu dinero, dejar de llegar justo a fin de mes y ahorrar cada mes con constancia.",
+      "signup": "Crear cuenta",
+      "login": "Entrar",
+      "back": "Volver",
+      "stepsTitle": "El método, en cinco pasos",
+      "steps": {
+        "see": {
+          "title": "Ver",
+          "body": "A dónde va tu dinero y cuánto de tu sueldo ya está comprometido antes de cobrarlo: cuotas, tarjetas y préstamos."
+        },
+        "order": {
+          "title": "Ordenar",
+          "body": "Un presupuesto para cada mes, en el que cada parte del sueldo tiene un destino."
+        },
+        "debts": {
+          "title": "Salir de deudas",
+          "body": "Un plan con fecha para terminar de pagar tus tarjetas, préstamos y compras a plazos."
+        },
+        "save": {
+          "title": "Ahorrar con propósito",
+          "body": "Planes con nombre y meta: un colchón para imprevistos, la entrada de una casa, los estudios de los hijos."
+        },
+        "invest": {
+          "title": "Ahorrar para invertir",
+          "body": "Apartar cada mes una parte para invertirla donde tú quieras. Remanso no te dice en qué invertir ni gestiona tu dinero: te ayuda a que ese dinero exista."
+        }
+      },
+      "privacyTitle": "Tus datos son tuyos",
+      "privacyBody": "Remanso no muestra publicidad, no vende tus datos ni los cede a terceros para sus propios fines. Si conectas tu banco, es solo para leer: Remanso no puede mover dinero ni hacer pagos.",
+      "privacyLink": "Cómo cuidamos tus datos",
+      "privacy": "Privacidad",
+      "terms": "Términos"
     }
   },
   "billing": {
@@ -1433,7 +1468,7 @@
         {
           "title": "Cookies y almacenamiento local",
           "paragraphs": [
-            "Remanso usa una cookie, llamada «token», que mantiene tu sesión iniciada. Es técnica e imprescindible: no es accesible desde JavaScript, caduca a los 7 días y se borra al cerrar sesión. Cuando entras con Google o conectas tu banco, una cookie técnica temporal (como mucho 10 y 30 minutos) comprueba que la vuelta la inició tu navegador. Además, tu navegador guarda en su almacenamiento local el idioma que eliges y si has ocultado el aviso «Completa tu configuración». No usamos cookies de analítica, de publicidad ni de terceros, por eso no te pedimos consentimiento para ellas."
+            "Remanso usa una cookie, llamada «token», que mantiene tu sesión iniciada. Es técnica e imprescindible: no es accesible desde JavaScript, caduca a los 7 días y se borra al cerrar sesión. Cuando entras con Google o conectas tu banco, una cookie técnica temporal (como mucho 10 y 30 minutos) comprueba que la vuelta la inició tu navegador. Además, tu navegador guarda en su almacenamiento local el idioma y el modo claro u oscuro que eliges, si has ocultado los avisos «Completa tu configuración» e «Instala la app», si ya has entrado alguna vez en ese dispositivo y si tu cuenta puede conectar bancos. No usamos cookies de analítica, de publicidad ni de terceros, por eso no te pedimos consentimiento para ellas."
           ]
         },
         {
@@ -1657,5 +1692,13 @@
     "learnedOne": "Guardado. La próxima vez, «{{merchant}}» irá sola a «{{line}}».",
     "learnedMany_one": "Guardado. La app recordará este comercio para los próximos movimientos.",
     "learnedMany_other": "Guardado. La app recordará {{count}} comercios para los próximos movimientos."
+  },
+  "install": {
+    "title": "Ten Remanso en tu pantalla de inicio",
+    "iosStep1": "Toca Compartir. Si no lo ves, está dentro del botón «⋯».",
+    "iosStep2": "Elige «Añadir a pantalla de inicio».",
+    "promptBody": "Se abre como una app, sin pasar por ninguna tienda.",
+    "installButton": "Instalar",
+    "dismiss": "Cerrar el aviso"
   }
 }

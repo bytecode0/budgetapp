@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "Remanso",
+  "short_name": "Remanso",
+  "description": "Ve a dónde va tu dinero, págate a ti primero y ahorra cada mes con constancia.",
+  "lang": "es",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F3F6F4",
+  "theme_color": "#F3F6F4",
+  "icons": [
+    { "src": "/icons/remanso-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/remanso-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/remanso-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

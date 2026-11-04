@@ -1072,6 +1072,41 @@
     },
     "authFlow": {
       "inviteBannerSuffix": "invited you to share finances — log in or create an account to accept."
+    },
+    "landing": {
+      "title": "Your money, at ease.",
+      "lead": "Remanso is a simple method to see where your money goes, stop scraping by at the end of the month and save steadily every month.",
+      "signup": "Create account",
+      "login": "Sign in",
+      "back": "Back",
+      "stepsTitle": "The method, in five steps",
+      "steps": {
+        "see": {
+          "title": "See",
+          "body": "Where your money goes, and how much of your salary is already committed before you are paid: instalments, cards and loans."
+        },
+        "order": {
+          "title": "Organise",
+          "body": "A budget for each month, where every part of your salary has a job."
+        },
+        "debts": {
+          "title": "Get out of debt",
+          "body": "A plan with a date to finish paying off your cards, loans and instalment purchases."
+        },
+        "save": {
+          "title": "Save with a purpose",
+          "body": "Plans with a name and a goal: a cushion for the unexpected, a deposit on a home, the children’s education."
+        },
+        "invest": {
+          "title": "Save to invest",
+          "body": "Set aside part of each month to invest wherever you choose. Remanso does not tell you what to invest in or manage your money: it helps that money exist."
+        }
+      },
+      "privacyTitle": "Your data is yours",
+      "privacyBody": "Remanso shows no ads, and does not sell your data or share it with third parties for their own purposes. If you connect your bank, it is read-only: Remanso cannot move money or make payments.",
+      "privacyLink": "How we look after your data",
+      "privacy": "Privacy",
+      "terms": "Terms"
     }
   },
   "billing": {
@@ -1433,7 +1468,7 @@
         {
           "title": "Cookies and local storage",
           "paragraphs": [
-            "Remanso uses a cookie, called \"token\", which keeps you signed in. It is technical and strictly necessary: it cannot be read by JavaScript, it expires after 7 days and it is deleted when you sign out. When you sign in with Google or connect your bank, a temporary technical cookie (at most 10 and 30 minutes) checks that the return was started by your browser. Your browser also keeps in its local storage the language you choose and whether you have hidden the \"Finish your setup\" notice. We use no analytics, advertising or third-party cookies, which is why we don't ask for your consent to them."
+            "Remanso uses a cookie, called \"token\", which keeps you signed in. It is technical and strictly necessary: it cannot be read by JavaScript, it expires after 7 days and it is deleted when you sign out. When you sign in with Google or connect your bank, a temporary technical cookie (at most 10 and 30 minutes) checks that the return was started by your browser. Your browser also keeps in its local storage the language and light or dark mode you choose, whether you have hidden the \"Finish your setup\" and \"Install the app\" notices, whether you have signed in on that device before and whether your account can connect banks. We use no analytics, advertising or third-party cookies, which is why we don't ask for your consent to them."
           ]
         },
         {
@@ -1657,5 +1692,13 @@
     "learnedOne": "Saved. Next time, “{{merchant}}” goes to “{{line}}” on its own.",
     "learnedMany_one": "Saved. The app will remember this merchant for the next transactions.",
     "learnedMany_other": "Saved. The app will remember {{count}} merchants for the next transactions."
+  },
+  "install": {
+    "title": "Keep Remanso on your home screen",
+    "iosStep1": "Tap Share. If you don’t see it, it is inside the “⋯” button.",
+    "iosStep2": "Choose “Add to Home Screen”.",
+    "promptBody": "It opens like an app, without going through any app store.",
+    "installButton": "Install",
+    "dismiss": "Close this notice"
   }
 }

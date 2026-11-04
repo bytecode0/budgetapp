@@ -32,6 +32,8 @@ import { apiErrorMessage } from './lib/apiErrors';
 import { applyDarkMode } from './lib/theme';
 import { ThemeToggle } from './components/shared/ThemeToggle';
 import { RemansoMark } from './components/shared/RemansoMark';
+import { InstallHint } from './components/shared/InstallHint';
+import { markSignedIn } from './lib/installPrompt';
 import { takeBankReturn, type BankReturnScreen } from './components/banking/bankReturn';
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
@@ -54,6 +56,8 @@ function writePendingInvite(token: string | null): void {
 
 function AppInner() {
   const { user, loading, logout, refreshUser } = useAuth();
+  // Remember that someone signed in here: the welcome page is then skipped.
+  useEffect(() => { if (user) markSignedIn(); }, [user]);
   const { needsOnboarding, missing: setupMissing, loading: onboardingLoading, refresh: refreshOnboardingStatus } = useOnboardingNeeded(Boolean(user));
   const { enabled: billingEnabled } = useBillingEnabled(Boolean(user));
   // Set when the dashboard's "Completa tu configuración" reopens the wizard at a step.
@@ -257,6 +261,7 @@ function AppInner() {
     return (
       <AuthFlow
         onAuthenticated={() => refreshUser()}
+        hasInvite={inviteChecking || inviteToken !== null}
         inviteBanner={inviteDetails ? { senderName: inviteDetails.senderName, senderEmail: inviteDetails.senderEmail } : null}
       />
     );
@@ -495,6 +500,7 @@ function AppInner() {
       {/* Main Content */}
       <div className="lg:ml-72 pt-16 lg:pt-0">
         <main className="container mx-auto px-4 lg:px-8 py-6 lg:py-8 max-w-7xl">
+          <InstallHint />
           <AnimatePresence mode="wait">
             <motion.div
               key={currentScreen}
