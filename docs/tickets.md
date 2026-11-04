@@ -9,7 +9,7 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 | LPBETA-02 | Gráficas de deudas, detalle y plan de pago | Refinado | No |
 | LPBETA-03 | Stripe y control de acceso Premium | Refinado | No |
 | LPBETA-04 | Pequeños pendientes | Lista | — |
-| LPBETA-05 | Medir usuarios activos | **Hecho** en `feature/lpbeta-05-medir` (4 nov) — falta `db push` de producción | Sí (aditivo: `User.lastBankReviewAt`, `PlanDeposit.byUserId`) |
+| LPBETA-05 | Medir usuarios activos | **Hecho y desplegado** (PR #8, 4 nov) | Sí (aditivo: `User.lastBankReviewAt`, `PlanDeposit.byUserId`) |
 | LPBETA-06 | LifePlan no asesora sobre inversiones (simulador con aviso) | Refinado | No |
 | LPBETA-07 | Inicio y onboarding para el nuevo cliente | Refinado — **va antes de la BETA** | Por confirmar al diseñar |
 | LPBETA-08 | Enlace de invitación para amigos | Aplazado (después de la BETA) | Sí (aditivo) |
@@ -19,8 +19,56 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 | LPBETA-12 | Detección de suscripciones y gastos hormiga | Refinado | Sí (aditivo, pequeño) |
 | LPBETA-13 | Celebrar los hitos | En refinamiento | Probablemente sí (aditivo, solo "ya visto") |
 | LPBETA-14 | Seguridad del acceso (códigos y contraseñas) | **Hecho y desplegado** (PR #7, 4 nov) | Sí (aditivo, aplicado en el schema) |
+| LPBETA-15 | Robo de cuenta preparado de antemano (registro + Google) | Refinado — **Alta, antes de invitar a nadie** | No |
+| LPBETA-16 | Límite al envío de códigos por email | Refinado — **Alta, antes de invitar a nadie** | Sí (aditivo, tabla de contadores) |
+| LPBETA-17 | Límite de uso de la IA (coste) | Refinado — **Alta, antes de invitar a nadie** | No (reutiliza la tabla del 16) |
+| LPBETA-18 | Salir del hogar no quita el acceso a los datos de la pareja | Refinado — **Media, antes de invitar a nadie** | No |
+| LPBETA-19 | Las deudas y cuentas privadas se ven y se modifican desde la pareja | Refinado — Media | No |
+| LPBETA-20 | La invitación de pareja no está ligada al email invitado | Refinado — Media (decidido 4 nov: solo el email invitado) | No |
+| LPBETA-21 | Cerrar todas las sesiones (sesiones revocables) | Refinado — Media | Sí (aditivo, un campo) |
+| LPBETA-22 | Dependencias con vulnerabilidades conocidas | Refinado — Media | No |
+| LPBETA-23 | Endurecimiento menor de seguridad | Refinado — Baja | No |
+| LPBETA-24 | Medir la paz: una pregunta al mes | En refinamiento | Sí (aditivo: una tabla pequeña) |
+| LPBETA-25 | Dominio de la BETA: `app.luisvespa.com` | Refinado — decidido el 4 nov | No |
+| LPBETA-26 | Nuevo nombre de la app: **Remanso** | **Hecho** en el PR #10 — falta fusionar y comprobar la marca | No |
+| LPBETA-27 | Rediseño de toda la app para Remanso | **Fase 1 hecha y desplegada** (PR #9); fase 2 pendiente | No |
 
-### Orden de prioridad (4 nov; Luis: medir primero, LPBETA-03 de los últimos)
+### Orden de ejecución (4 nov, sustituye al de abajo)
+
+**Cambio del 4 nov (auditoría de seguridad):** se añaden LPBETA-15 a LPBETA-23. Prioridad según la gravedad: **Alta** = un atacante puede entrar en una cuenta ajena o gastar dinero de LifePlan; **Media** = un miembro de la pareja ve o cambia lo que no debe, o hace falta para responder a un robo de sesión; **Baja** = endurecimiento sin un ataque directo hoy. La auditoría no encontró forma de entrar sin credenciales ni de leer los datos de otro hogar: los huecos están en el registro, en los límites de uso y en la privacidad dentro de la pareja.
+
+**Decisión de Luis (4 nov):** todos los tickets se implementan **antes de la primera ola de amigos**. Ya no hay bloques "durante" y "después" de la BETA: el orden solo sirve para no hacer el mismo trabajo dos veces. *Por confirmar:* si "todos" incluye LPBETA-03 (Stripe, que Luis quería de los últimos) y LPBETA-08 (invitaciones con descuento, que depende de 03).
+
+Reparto (4 nov): la sesión de **rebranding** hace 24–27; la **otra sesión** hace el resto, cada ticket en su rama y su PR. Las dos se avisan antes de tocar un fichero compartido.
+
+| # | Ticket | Quién | Estado / por qué aquí |
+|---|---|---|---|
+| ✓ | LPBETA-14 · Seguridad del acceso | rebranding | Hecho y desplegado (PR #7). |
+| ✓ | LPBETA-05 · Medir usuarios activos | otra | Hecho y desplegado (PR #8). |
+| ✓ | LPBETA-27 · Rediseño, fase 1 (sistema de diseño, modo claro/oscuro) | rebranding | Hecho y desplegado (PR #9). |
+| 1 | LPBETA-26 · Nombre Remanso y logo | rebranding | En el PR #10. Falta fusionar y buscar la marca en la OEPM/EUIPO. |
+| 2 | LPBETA-04 · Pequeños pendientes | otra | El `/deploy` con el `db push` de producción: lo usan casi todos los siguientes. |
+| 3 | LPBETA-15, 16, 17 · Seguridad ALTA | otra | Antes de invitar a nadie. |
+| 4 | LPBETA-09 · Borrar cuenta, exportar y privacidad | otra | Confianza y RGPD. |
+| 5 | LPBETA-06 · Aviso de inversiones | otra | Pequeño y decidido. |
+| 6 | LPBETA-18 · Seguridad MEDIA (salir del hogar) | otra | Antes de invitar a nadie. |
+| 7 | LPBETA-25 · Dominio `app.luisvespa.com` | rebranding + Luis | Los paneles los hace Luis; los textos, Claude. |
+| 8 | LPBETA-07 · Inicio y onboarding | otra | Con el diseño nuevo (pautas de `CLAUDE.md`), después de fusionar el 26. |
+| 9 | LPBETA-10 · Generosidad | otra | El mismo flujo de onboarding que el 07. |
+| 10 | LPBETA-24 · Medir la paz | rebranding | Una tarjeta en el Inicio nuevo, después del 07. |
+| 11 | LPBETA-11 · PWA y bienvenida | otra | El icono ya existe (`public/icons/remanso-app-icon.svg`). |
+| 12 | LPBETA-27 · Rediseño, fase 2 (pantallas sin ticket propio) | rebranding | Actividad, Deudas, Planes, Cuentas, Hogar y Ajustes. |
+| 13 | LPBETA-19 a 23 · Seguridad MEDIA y BAJA | otra | |
+| 14 | LPBETA-12 · Suscripciones y gastos hormiga | otra | Pantallas nuevas, ya con el diseño nuevo. |
+| 15 | LPBETA-13 · Celebrar los hitos | otra | Ídem. |
+| 16 | LPBETA-02 · Gráficas de deudas | otra | Ídem. |
+| 17 | LPBETA-01 · Ciclo de facturación de la tarjeta | otra | Sobre todo servidor. |
+| 18 | LPBETA-08 · Invitación | otra | Si entra. |
+| 19 | LPBETA-03 · Stripe y Premium | otra | El último, como pidió Luis, si entra. |
+
+**Renumeración (4 nov, decisión de Luis):** los tickets de seguridad de la auditoría conservan LPBETA-15 a 23. Los de marca pasan a **24** (paz, antes 15), **25** (dominio, antes 16), **26** (Remanso, antes 17) y **27** (rediseño, antes 18). Los commits y PR anteriores al 4 nov por la tarde (PR #9 y #10) los citan con el número antiguo.
+
+### Orden anterior (con la BETA por olas; sustituido el 4 nov)
 
 Situación: la alfa está desplegada en `budget.luisvespa.com` con 2 usuarios. Tamaño: S = un día o menos, M = 2–3 días, L = una semana.
 
@@ -440,6 +488,174 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 
 **Cuidado:** toca la autenticación (lista de "no modificar sin preguntar"). Este ticket es esa pregunta.
 
+
+---
+
+## LPBETA-15 · Robo de cuenta preparado de antemano (registro + Google) — REFINADO · Prioridad ALTA
+
+**Por qué:** permite entrar en la cuenta de otra persona con todos sus datos financieros, sin saber su contraseña. En una comunidad donde todos se conocen, basta con saber el email del amigo.
+
+**Lo que hay hoy (verificado en el código, 4 nov):**
+- `POST /api/auth/register` (`server/routes/auth.ts:300-309`): si el email existe y no está verificado, sobrescribe `passwordHash` con la contraseña nueva.
+- `GET /api/auth/google/callback` (`auth.ts:178-190`): hace `upsert` por email y pone `emailVerified`, pero **conserva el `passwordHash`** que hubiera.
+- **Ataque:** el atacante se registra con `amigo@gmail.com` y su propia contraseña (la cuenta queda sin verificar). Días después el amigo entra con Google: la cuenta se marca verificada y el atacante entra con su contraseña en la cuenta del amigo.
+- Además, el callback acepta el login aunque Google diga `verified_email: false`: una cuenta de Google con un email sin verificar entra en la cuenta existente con ese email.
+
+**Propuesta:**
+- Cuando Google verifica una cuenta que **no** estaba verificada, borrar su `passwordHash` (la contraseña la puso alguien que nunca demostró ser el dueño del email). Quien la quiera, la crea con "He olvidado mi contraseña".
+- Rechazar el login de Google si `verified_email` no es `true` (`?error=google_failed`).
+- Tests: cuenta sin verificar + Google → la contraseña antigua ya no sirve; `verified_email: false` → no hay sesión.
+
+**Cuidado:** toca la autenticación (lista de "no modificar sin preguntar"). Este ticket es esa pregunta.
+
+---
+
+## LPBETA-16 · Límite al envío de códigos por email — REFINADO · Prioridad ALTA
+
+**Por qué:** LPBETA-14 limitó a 5 los intentos **por código**, pero se pueden pedir códigos nuevos sin límite, así que el código de recuperación se puede seguir forzando. Y cada envío gasta la cuota de Resend (100 al día en el plan gratuito).
+
+**Lo que hay hoy (verificado en el código, 4 nov):**
+- `POST /api/auth/send-reset` (`auth.ts:420`) no tiene ningún límite: cada llamada borra el código anterior y crea uno nuevo.
+- El código se guarda **antes** de enviar el email (`createOtp`), así que es válido aunque el envío falle por cuota.
+- **Ataque:** ~200.000 códigos × 5 intentos (≈1,2 millones de peticiones) dan de media un acierto → cambia la contraseña de la víctima. Lento, pero automatizable y sin freno.
+- **Efecto secundario:** unas 100 peticiones agotan la cuota diaria de Resend y nadie más puede registrarse ni recuperar su contraseña ese día. También sirve para llenar de emails el buzón de alguien.
+- `resend-otp` tiene una espera de 60 s por email, pero ninguna por IP ni un tope diario.
+- El limitador en memoria (`server/lib/rateLimit.ts`) no vale en Vercel (lo dice su propio comentario).
+
+**Propuesta:**
+- Un **contador en la base de datos** por clave y ventana, reutilizable (lo usa también LPBETA-17). **Schema aditivo**, p. ej. `RateLimitHit { key String, windowStart DateTime, count Int, @@id([key, windowStart]) }`; se propone antes de aplicarlo.
+- Límites para `send-reset`, `resend-otp` y `register`: por email (p. ej. 3 cada hora, 10 al día) y por IP (`req.ip`, ya fiable con `trust proxy`).
+- **Tope de códigos por cuenta y día** (p. ej. 10): con eso el ataque necesita años.
+- Respuesta igual cuando se supera el límite y cuando el email no existe, para no revelar qué emails tienen cuenta.
+- Tests: el cuarto envío en una hora se rechaza; un email inexistente responde igual.
+
+**Cuidado:** toca la autenticación.
+
+---
+
+## LPBETA-17 · Límite de uso de la IA (coste) — REFINADO · Prioridad ALTA
+
+**Por qué:** cualquiera puede crear una cuenta gratuita y gastar sin límite en la API de Anthropic, que paga LifePlan (CLAUDE.md: "never expose a route that spends money per request" sin control).
+
+**Lo que hay hoy (verificado en el código, 4 nov):**
+- `POST /api/expenses/import/classify` (`server/routes/expenses.ts:392`) y `POST /api/expenses/import/suggest-categories` (`expenses.ts:421`) llaman a la IA **sin límite de peticiones**.
+- Recortan a 40 comercios, pero **no la longitud de cada uno**: el cuerpo admite 12 MB, que se convierten en tokens.
+- Solo `suggest-mapping` tiene límite (10/hora, `expenses.ts:445`), y es en memoria.
+
+**Propuesta:**
+- Pasar los tres endpoints al contador en base de datos de LPBETA-16 (p. ej. 30 llamadas/hora y 100/día por usuario, a confirmar con el uso real de un import).
+- Truncar cada comercio a ~100 caracteres antes de mandarlo a la IA.
+- Un tope de gasto en la consola de Anthropic como red de seguridad (lo hace Luis, fuera del código).
+- Tests: la llamada 31 de la hora devuelve 429 con `code: "rate_limited"`; un comercio largo llega truncado.
+
+---
+
+## LPBETA-18 · Salir del hogar no quita el acceso a los datos de la pareja — REFINADO · Prioridad MEDIA (antes de invitar a nadie)
+
+**Por qué:** los primeros amigos llegan en pareja. Hoy la visibilidad "solo estadísticas" se salta en un clic, y expulsar a alguien del hogar no le quita el acceso.
+
+**Lo que hay hoy (verificado en el código, 4 nov):**
+- `DELETE /api/households/members/:userId` (`server/routes/households.ts:210`) solo borra el `HouseholdMember`. **No toca `UserSettings.linkedUserId`**, que es lo que da acceso a los datos (`requireAuth` → `req.userId`).
+- Sin hogar, `tier()` (`server/lib/visibility.ts`) devuelve `"transparent"`.
+- **Ataque:** en un hogar `shared_stats`, el miembro se "sale" a sí mismo y a partir de ahí lista **todos los movimientos e ingresos** de su pareja.
+- Si es el propietario quien expulsa al otro, el expulsado sigue viendo y cambiando todo.
+- `/api/partner/unlink` sí lo hace bien (`unlinkMemberFromPool`, en una transacción).
+
+**Propuesta:**
+- Que este endpoint haga lo mismo que `/partner/unlink`: `unlinkMemberFromPool` con los bloqueos de `lockSettings`. O quitarlo y que la UI use solo `/partner/unlink`.
+- Por defensa en profundidad: si `linkedUserId` apunta a un pool pero no hay `HouseholdMember` activo, aplicar la visibilidad más restrictiva, no `transparent`.
+- Tests: tras salir del hogar, `GET /api/expenses` ya no devuelve movimientos de la pareja; el expulsado recibe sus propios datos y nada más.
+
+---
+
+## LPBETA-19 · Las deudas y cuentas privadas se ven y se modifican desde la pareja — REFINADO · Prioridad MEDIA
+
+**Por qué:** una deuda o cuenta marcada "privada" debe ser invisible para la pareja. Es parte de la promesa de privacidad (LPBETA-09) y justo lo que el nuevo cliente no quiere enseñar.
+
+**Lo que hay hoy (verificado en el código, 4 nov):**
+- `ensureDebtLine` (`server/lib/debtBalance.ts:342`) crea una línea de presupuesto (`Allocation` tipo `debt`) para **todas** las deudas activas, también las privadas, con el nombre de la deuda.
+- `GET /api/allocations`, `GET /api/monthly-budgets` (y `/review`) y `GET /api/analytics` no filtran esas líneas: la pareja ve el **nombre, el id y la cuota mensual** de la deuda privada, aunque `GET /api/debts` la oculta.
+- Además se puede **escribir** en ella:
+  - `POST /api/expenses` o `PATCH /api/expenses/:id` con esa línea: `debtForAllocation` (`expenses.ts:35`) solo comprueba el pool, así que el gasto se convierte en un pago de la deuda privada y cambia su saldo (puede llegar a marcarla `paid_off`).
+  - `POST /api/expenses/import/confirm` con `{ kind: "payment", debtId }` (`server/lib/ingest/confirm.ts:68`) carga todas las deudas del pool, y la respuesta devuelve su nombre.
+  - `POST /api/allocations { type: "debt", debtId }` (`allocations.ts:69`) solo comprueba el pool.
+- Ingresos: `ownedAccountId` (`server/routes/income.ts:16`) no aplica `visibleToWhere`. Se puede registrar un ingreso en la **cuenta privada** de la pareja, y la respuesta revela su nombre y tipo. Los gastos ya lo hacen bien (`resolveAccountId`).
+
+**Propuesta:**
+- Lecturas: ocultar las líneas de deuda cuya deuda es privada de otro miembro (en presupuesto, revisión y analítica). En los totales agregados pueden seguir contando, como ya está documentado para los saldos.
+- Escrituras: aplicar `visibleToWhere(req.authUserId)` en `debtForAllocation`, en la lista de deudas de `confirmImport`, en `POST /api/allocations` y en `ownedAccountId` de ingresos.
+- Tests con un hogar de dos miembros: la deuda privada de A no aparece en `GET /api/allocations` de B; B no puede pagarla ni por gasto ni por import; B no puede usar la cuenta privada de A en un ingreso.
+
+---
+
+## LPBETA-20 · La invitación de pareja no está ligada al email invitado — REFINADO · Prioridad MEDIA
+
+**Por qué:** aceptar una invitación da acceso total a las finanzas de quien invita. Hoy lo consigue cualquiera que tenga el enlace, no solo la persona invitada.
+
+**Lo que hay hoy (verificado en el código, 4 nov):**
+- `POST /api/partner/accept` (`server/routes/partner.ts:189`) comprueba el token, pero **no que el email del que acepta sea `invitedEmail`**.
+- El token es un UUID aleatorio (no se puede adivinar), pero el enlace viaja por email y WhatsApp: un reenvío, un pantallazo o un chat de grupo bastan.
+- `GET /api/partner/invite/:token` (`partner.ts:163`, público) devuelve el nombre y el email de quien invita.
+
+**Decidido (Luis, 4 nov):** la invitación de pareja es **solo para el email que la recibió**. Con otro email no se puede aceptar: quien invita genera una invitación nueva para el email correcto. Es más molesto, pero más seguro (Luis, 4 nov).
+
+**Propuesta:**
+- Aceptar solo si el email (normalizado: minúsculas y sin espacios) de la cuenta que acepta coincide con `invitedEmail`. Si no coincide: 403 con un error claro y traducido que diga qué hacer, sin revelar el email invitado ("Esta invitación es para otro email. Pide a quien te invitó que te envíe una nueva a tu email de LifePlan").
+- Que el endpoint público devuelva solo lo necesario (nombre de quien invita), no su email.
+- Tests: otra cuenta con el token recibe 403; la cuenta invitada lo acepta; mayúsculas o espacios en el email no impiden aceptar.
+
+---
+
+## LPBETA-21 · Cerrar todas las sesiones (sesiones revocables) — REFINADO · Prioridad MEDIA
+
+**Por qué:** si alguien roba una sesión (un portátil compartido, un móvil perdido), hoy no hay forma de echarle.
+
+**Lo que hay hoy (verificado en el código, 4 nov):**
+- La sesión es un JWT de 7 días (`server/lib/jwt.ts`) sin versión ni lista de revocadas.
+- Cambiar la contraseña (`/reset-password`) **no cierra** las sesiones abiertas.
+- `/logout` solo borra la cookie de ese navegador; el token sigue valiendo si se copió.
+
+**Propuesta:**
+- **Schema aditivo:** `User.tokenVersion Int @default(0)`; se propone antes de aplicarlo. El JWT lleva la versión y `requireAuth` (que ya lee el usuario en cada petición) la compara.
+- Subir la versión al restablecer la contraseña y con un botón "Cerrar sesión en todos los dispositivos" en Ajustes.
+- Tests: tras el reset, la cookie anterior recibe 401; la nueva funciona.
+
+**Cuidado:** toca el middleware de autenticación (lista de "no modificar sin preguntar").
+
+---
+
+## LPBETA-22 · Dependencias con vulnerabilidades conocidas — REFINADO · Prioridad MEDIA
+
+**Por qué:** `npm audit --omit=dev` (4 nov) da 6 vulnerabilidades: 2 críticas, 3 altas y 1 moderada.
+
+**Lo que hay hoy:**
+- `proxy-addr` — **crítica**: IP falsificable con direcciones IPv4 mapeadas en IPv6. Afecta a `req.ip`, que usarán los límites de LPBETA-16. Se arregla con `npm audit fix`.
+- `body-parser` y `qs` (vía `express`) — DoS. Sin arreglo publicado para Express 4.
+- `xlsx@0.18.5` — prototype pollution y ReDoS. Hoy solo se usa en tests y fixtures (`server/lib/ingest/fixtures/makeFixtures.ts`), no con archivos de usuarios.
+- `react-router@7.13.0` — los avisos afectan sobre todo al modo SSR/RSC, que esta SPA no usa; mirar los de redirección abierta.
+
+**Propuesta:**
+- `npm audit fix` y `npm run verify`.
+- Mover `xlsx` a `devDependencies` o cambiarlo por la versión del CDN de SheetJS (la de npm ya no recibe parches). Si algún día se leen Excel de usuarios en el servidor, tiene que ser con la versión parcheada.
+- Subir `react-router` cuando haya versión arreglada; valorar Express 5 para `body-parser`/`qs`.
+- Añadir `npm audit --omit=dev --audit-level=critical` al CI.
+
+---
+
+## LPBETA-23 · Endurecimiento menor de seguridad — REFINADO · Prioridad BAJA
+
+**Por qué:** ninguno da hoy acceso a datos ajenos, pero cada uno quita una pieza a un ataque futuro. Se pueden hacer por partes.
+
+**Lista (verificado en el código, 4 nov):**
+1. **Stripe `/confirm-session`** (`server/routes/stripe.ts:109`): no comprueba que la sesión de pago sea del usuario (`client_reference_id` o `customer`). Un pago puede activar Premium en varias cuentas. Impacto bajo hoy (Stripe apagado, Premium no desbloquea nada). **Hacerlo dentro de LPBETA-03.**
+2. **Token de Google en la URL** (`auth.ts:203`, `?token=`): vale 2 minutos y se puede usar más de una vez; queda en el historial y en los logs. Hacerlo de un solo uso o mandarlo en una cookie corta.
+3. **Pagador y reparto sin validar** (`expenses.ts:188, 209, 516, 530`): se aceptan ids de usuarios ajenos al hogar. No da acceso a nada, pero corrompe los balances del hogar. Exigir miembros activos (o el propio usuario si no hay hogar).
+4. **Dueño de cuenta no activo** (`server/routes/accounts.ts:183`): se puede pasar una cuenta a un miembro invitado o que ya salió (falta `status: "active"`).
+5. **Saber si un email tiene cuenta**: `register` responde 409 y el bloqueo de login 429 solo para cuentas que existen. Respuestas iguales en ambos casos.
+6. **Emails sin normalizar** en registro, login y recuperación: `Ana@x.com` y `ana@x.com` son cuentas distintas. Pasar a minúsculas y quitar espacios (con un script que compruebe antes que no hay duplicados en producción).
+7. **Cabeceras de seguridad**: no hay CSP, HSTS ni `X-Frame-Options` (ni en Express ni en `vercel.json`), así que la app se puede incrustar en otra web (clickjacking). Añadirlas en `vercel.json` (`headers`) para el frontend y con `helmet` en la API.
+8. **No es seguridad, regla de negocio:** la línea de generosidad se puede borrar cambiándola antes a `flexible` (`allocations.ts:234, 262`). Impedir cambiar el tipo de `generosity`.
+
 ---
 
 ## LPBETA-13 · Celebrar los hitos — EN REFINAMIENTO
@@ -472,3 +688,112 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 2. ¿Tono: sobrio (tarjeta) o festivo (confeti)?
 3. ¿Los interruptores de notificaciones: se quitan ya o se dejan para cuando este ticket esté hecho?
 4. ¿Antes o después de la BETA?
+
+---
+
+## LPBETA-24 · Medir la paz: una pregunta al mes — EN REFINAMIENTO
+
+**Por qué:** la misión promete que ver y controlar el dinero "genera paz interior". LPBETA-05 mide el **uso**, no la paz. Sin un dato propio, no se puede decir si la misión funciona, y los testimonios ("pasamos de 2 a 4 en tres meses") dependerían de la memoria de cada uno. **No enseña nada** (decisión del 4 nov: la app no enseña), solo pregunta.
+
+**Lo que ya existe (verificado, 4 nov):** nada parecido. El periodo de presupuesto de cada usuario se calcula desde su `cycleStartDay` (`server/lib/period.ts`, etiqueta `YYYY-MM`). `npm run stats:active` (LPBETA-05) ya imprime recuentos agregados sin nombres ni importes.
+
+**Propuesta:**
+- **La pregunta:** *"¿Cómo te sientes hoy con tu dinero?"*, con 5 opciones de 1 (muy intranquilo) a 5 (en paz), cada una con una palabra corta. Sin texto libre: más rápido de responder y nada sensible que guardar.
+- **Cuándo:** una vez por periodo de presupuesto (el del día de cobro de cada uno), como una tarjeta pequeña en Inicio. Aparece al empezar el periodo, o en la primera visita de quien acaba de registrarse (**esa es la línea base**). Se puede cerrar ("ahora no") y no vuelve hasta el periodo siguiente. Nunca más de una vez por periodo, sin emails ni notificaciones.
+- **Para el usuario:** después de responder, si ya hay 2 o más respuestas, una línea sencilla con su evolución ("hace 3 meses: 2 · hoy: 4"). Sin juicio si baja.
+- **Hogar:** cada persona responde por sí misma y **su respuesta es privada**: la pareja no la ve.
+- **Para Luis (`stats:active`):** media del último periodo, cuántos respondieron, distribución 1–5 y, de quienes tienen 2 o más respuestas, cuántos suben, igual o bajan. **Solo si hay al menos 5 respuestas en el grupo**: con amigos que se conocen, una media de 2 personas identifica a alguien. Nunca respuestas individuales.
+- **Schema (aditivo, se propone antes de aplicarlo):** una tabla `PeaceCheckin` (`id`, `userId`, `period` "YYYY-MM", `score` 1–5, `createdAt`), única por (`userId`, `period`). Se borra en cascada con el usuario (LPBETA-09). El periodo se guarda porque hace falta para la unicidad; si el usuario cambia su día de cobro, las respuestas antiguas quedan en su periodo original.
+- **API:** `GET /api/checkins` (las mías y si toca preguntar este periodo) y `POST /api/checkins` (`{ score }`, el servidor pone el periodo), detrás de `requireAuth`. Responder cuenta como actividad para LPBETA-05.
+- **Privacidad:** se menciona en la promesa de privacidad (LPBETA-09): "una pregunta al mes sobre cómo te sientes con tu dinero; solo tú ves tu respuesta y Luis solo ve medias de grupos de 5 o más".
+- Textos en es y en. Tests: una respuesta por periodo, el umbral de 5 en las estadísticas, y que la pareja no ve la respuesta.
+
+**Preguntas abiertas para Luis:**
+1. ¿Te vale la frase *"¿Cómo te sientes hoy con tu dinero?"* y la escala de 1 a 5? (Alternativa: caras o emojis en vez de números.)
+2. ¿El usuario ve su propia evolución, o solo la pregunta?
+3. ¿Dónde lo colocas en el orden? (Propuesta: después del 09, antes de la primera ola de amigos.)
+
+---
+
+## LPBETA-25 · Dominio de la BETA: `app.luisvespa.com` — REFINADO (decidido el 4 nov)
+
+**Por qué:** "budget" va contra el mensaje (vendemos ahorro y paz, no presupuestos), y `app.` sirve para cualquier nombre que se elija en LPBETA-26. La app sigue colgando de la marca personal (Luis Vespa → Método Ruta → la app).
+
+**Lo que ya existe (verificado, 4 nov):** el dominio llega por variables de entorno (`APP_URL`, `GOOGLE_CALLBACK_URL`, `BANKING_CALLBACK_URL`); el código no lo lleva escrito salvo en textos. `budget.luisvespa.com` aparece escrito a mano en: la introducción de la política de privacidad y de los términos (`legal.*` en `es.json`/`en.json`), `CLAUDE.md` (fila de `BANKING_CALLBACK_URL`), el comando `/deploy` (`.claude/skills/deploy/SKILL.md`), `docs/` y algunos tests (solo como dato de ejemplo).
+
+**Pasos de Luis (paneles; los secretos nunca pasan por Claude):**
+1. **Cloudflare:** registro `CNAME app → cname.vercel-dns.com`, con el proxy **desactivado** (nube gris), igual que `budget`.
+2. **Vercel → Domains:** añadir `app.luisvespa.com` al proyecto. Cuando funcione, configurar `budget.luisvespa.com` como **redirección 308 a `app.luisvespa.com`**, para que sigan funcionando los enlaces antiguos de los emails ya enviados.
+3. **Google Cloud Console:** añadir la URL de retorno `https://app.luisvespa.com/api/auth/google/callback`. La antigua se quita cuando todo funcione.
+4. **Enable Banking:** registrar `https://app.luisvespa.com/api/banking/callback`. Comprobar si en modo restringido hace falta que ellos lo aprueben, y si tardan, hacer este paso el primero.
+5. **Variables en Vercel (Production):** `APP_URL=https://app.luisvespa.com`, `GOOGLE_CALLBACK_URL=…/api/auth/google/callback`, `BANKING_CALLBACK_URL=…/api/banking/callback`, y redesplegar.
+6. Stripe está apagado; cuando se active (LPBETA-03), su webhook ya irá a `app.`.
+
+**Parte de Claude (un PR):** cambiar `budget.` por `app.` en los textos legales (es y en), en `CLAUDE.md`, en `docs/` y en los tests. **El comando `/deploy` vive en `.claude/skills/`, que el sandbox de Claude no deja editar:** o lo cambia Luis, o da permiso para esa edición. Los tests que usan `budget.luisvespa.com` como ejemplo pueden quedarse así.
+
+**Efectos para los usuarios:**
+- La sesión es una cookie del dominio antiguo: **los 2 usuarios tendrán que iniciar sesión otra vez**, una sola vez. Avisarles.
+- Las conexiones con bancos ya hechas siguen funcionando: la URL de retorno solo se usa al conectar o renovar.
+- La app instalada en el móvil (LPBETA-11) todavía no existe, así que no hay nada instalado que migrar. Es otra razón para hacerlo ya.
+
+**Verificación (en producción):** `GET https://app.luisvespa.com/api/health` → 200; login con email y con Google; conectar un banco en el sandbox de Enable Banking (si aplica); el enlace de un email nuevo apunta a `app.`; `https://budget.luisvespa.com/cualquier-ruta` redirige a `app.`.
+
+---
+
+## LPBETA-26 · Nuevo nombre de la app: Remanso — DECIDIDO (4 nov)
+
+**Decisión de Luis (4 nov): Remanso.** Sereno queda como alternativa si la comprobación de marca encuentra un problema. Antes de publicar, siguen haciendo falta los pasos 2 y 3 de abajo (OEPM/EUIPO y dominio `.es`). La encuesta de YouTube ya no es para decidir, pero puede servir como contenido ("así se llama la app").
+
+**Por qué (investigación del 4 nov):** "LifePlan" está muy ocupado en finanzas (la herramienta "Life Plan" de Bank of America, una marca LIFEPLAN de software registrada en EE. UU., el software LIFEPlan de planificación financiera de Maxomsoft y varias apps con ese nombre). Además es genérico, está en inglés para un público español y no transmite la promesa de paz. Cambiarlo ahora cuesta poco: 2 usuarios y casi nada publicado.
+
+**Finalistas (decisión del 4 nov):**
+- **Remanso** (recomendación de Claude): agua en calma; para el público de la iglesia recuerda las "aguas de reposo" del Salmo 23. Lema posible: *"Remanso: tu dinero, en calma."* No se encontraron apps de finanzas con ese nombre. `remanso.app` y `remansoapp.com` están ocupados; `usaremanso.com` y `remansofinanzas.com` estaban libres el 4 nov.
+- **Sereno:** calma y claridad. No se encontraron choques en finanzas.
+- Descartados: Granero (en Lucas 12 los graneros del rico necio son una advertencia contra acumular), Siembra (AFP Siembra, pensiones, República Dominicana), Cuentas Claras (Mis Cuentas Claras, app de finanzas del hogar).
+
+**Pasos de Luis para decidir:**
+1. Encuesta en la pestaña Comunidad de YouTube (Luisvespa.oficial) y preguntar a los 2 usuarios actuales.
+2. Buscar el elegido en el localizador de la OEPM y en EUIPO eSearch, clases 9 (software), 36 (finanzas) y 42 (servicios de software). Para el registro definitivo, un abogado de marcas.
+3. Comprobar en dominios.es si el `.es` está libre (la búsqueda del 4 nov no cubre `.es`).
+
+**Parte de Claude cuando haya nombre (un PR, sin schema):**
+- La marca visible: `productName` en `server/lib/email/theme.ts`, unas 22 apariciones en cada `es.json`/`en.json`, el `<title>` de `index.html`, los textos legales, el nombre del remitente en `EMAIL_FROM` (lo cambia Luis en Vercel) y los textos de la página de bienvenida (LPBETA-11).
+- **Cuidado: `LifePlan` también es el nombre interno de los planes de ahorro** (`model LifePlan` en el schema, `usePlans.ts`, `planContribution.ts`…). **Eso no se renombra**: es código y base de datos, no marca, y cambiarlo exigiría una migración que este proyecto no usa.
+- `CLAUDE.md` y el comando `/deploy` (este último lo cambia Luis o lo autoriza, como en LPBETA-25).
+
+**Preguntas abiertas para Luis:**
+1. ¿Remanso o Sereno? (Tras la encuesta.)
+2. ¿Lema? Propuesta para Remanso: *"tu dinero, en calma"*.
+
+---
+
+## LPBETA-27 · Rediseño de toda la app para Remanso — EN REFINAMIENTO
+
+**Estado (4 nov):** Luis pidió a Claude el rediseño y el logo. **Propuesta de la fase 1 publicada** como sistema de diseño (https://claude.ai/artifact/WMDkSACG5weNQxzPB6KyB5): logo (marca, versión de una tinta e icono de app), paleta clara y oscura con contraste AA comprobado, Fraunces + Figtree, espacios, radios y 10 componentes base. **Falta la aprobación de Luis** antes de llevarla a `theme.css` y a las pantallas. **Confirmado por Luis (4 nov):** lo diseña Claude, logo provisional de Claude, claro y oscuro desde el principio. **Canal (corregido por Luis, 4 nov):** Luisvespa.oficial sigue siendo su marca personal, con su propia identidad; Remanso es un producto que se promociona desde ahí (y quizá desde otros creadores). El canal no se adapta a Remanso.
+
+**Por qué (decisión del 4 nov):** la app cambia de nombre (Remanso), de cliente (familias que ganan bien y quieren ahorrar) y de promesa (**ver tu dinero da calma**). La interfaz de hoy nació para otra cosa: un presupuesto y un tablero de deudas, con el tema por defecto de shadcn y mucho número a la vista. Remanso tiene que **sentirse** tranquila, no solo decirlo.
+
+**Lo que ya existe (verificado, 4 nov):**
+- Tema en `src/styles/theme.css`: azul `#1E3A8A` (primary), verde `#10B981` (secondary), ámbar `#F59E0B` (accent), fondo `#F9FAFB`, radio `0.875rem`, con modo oscuro. Tipografías Outfit (títulos y números) y Manrope (texto), en `fonts.css`.
+- 31 pantallas y componentes en `src/app/components/` y 48 componentes de shadcn/ui en `ui/`.
+- Las pautas de interfaz de `CLAUDE.md` (FAB, modales, tarjetas con degradado, tipografía, colores de estado) describen el diseño actual. **Cambiarán con el rediseño.**
+- **Dependencias que no se usan:** `@mui/material`, `@mui/icons-material`, `@emotion/*`, `react-slick`, `react-responsive-masonry` y `@popperjs/core` están en `package.json`, pero ningún fichero de `src/` los importa. Restos de la plantilla de Figma: se quitan en este ticket.
+
+**Propuesta, en dos fases:**
+
+**Fase 1: sistema de diseño (antes que cualquier pantalla nueva).**
+- Principios: calma antes que datos (una respuesta clara por pantalla: "¿vamos bien?"), mucho aire, pocos números a la vez, sin rojo alarmista (el rojo solo para errores reales) y lenguaje amable.
+- **Identidad:** logo e icono de app (sirve también para la PWA, LPBETA-11), paleta nueva inspirada en el agua en calma, tipografía, radios, sombras y movimiento (transiciones suaves y cortas).
+- **Tokens** en `theme.css` (claro y oscuro), con contraste AA comprobado.
+- **Componentes base:** tarjeta, tarjeta principal, semáforo de estado, botones, campos, FAB, hoja o modal, estados vacíos y gráficas (colores de series).
+- Un **documento de referencia** visual del sistema y la actualización de las pautas de `CLAUDE.md`.
+
+**Fase 2: pantallas.** Se rediseña cada pantalla cuando se toca su ticket (Inicio y onboarding en el 07, bienvenida en el 11…), y al final las que no tengan ticket propio: Actividad, Deudas, Planes, Cuentas, Hogar y Ajustes. Cada una en su PR, probada en el móvil (375 px) y en el escritorio, en claro y oscuro.
+
+**Fuera de alcance:** cambiar la lógica, las rutas o el schema. El rediseño es visual y de textos.
+
+**Preguntas abiertas para Luis:**
+1. ¿Hay diseñador, o lo propone Claude? (Claude puede preparar el sistema de diseño como página de referencia o en Figma, si Luis tiene cuenta.)
+2. ¿Logo: lo encargas, o Claude prepara una propuesta provisional?
+3. ¿Hay que parecerse al canal de YouTube (colores o miniaturas actuales), o el canal se adaptará a Remanso?
+4. ¿Modo oscuro desde el principio, o solo claro en la primera versión?
