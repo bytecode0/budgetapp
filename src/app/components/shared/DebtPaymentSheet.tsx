@@ -92,14 +92,14 @@ export function DebtPaymentSheet({
       {open && current && (
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-scrim flex items-end md:items-center justify-center p-4"
           onClick={e => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.div
             initial={{ opacity: 0, y: 40, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.95 }}
-            className="bg-card border border-border rounded-2xl p-6 w-full max-w-md space-y-5"
+            className="bg-card border border-border rounded-3xl shadow-soft p-6 w-full max-w-md space-y-5"
           >
             <div className="flex items-center justify-between">
               <div>
@@ -117,7 +117,7 @@ export function DebtPaymentSheet({
                 <select
                   value={current.debtId}
                   onChange={e => choose(e.target.value)}
-                  className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+                  className="w-full border border-line-strong rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
                 >
                   {choices.map(c => <option key={c.debtId} value={c.debtId}>{c.name}</option>)}
                 </select>
@@ -134,7 +134,7 @@ export function DebtPaymentSheet({
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
                   placeholder="0"
-                  className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary"
+                  className="w-full pl-8 pr-4 py-3 border border-line-strong rounded-xl bg-background outline-none focus:border-primary"
                 />
               </div>
               <p className="text-xs text-muted-foreground">{t('debts.payPartialHint')}</p>
@@ -143,12 +143,12 @@ export function DebtPaymentSheet({
             <div className="space-y-2">
               <label className="text-xs text-muted-foreground">{t('debts.payFromLabel')}</label>
               {payFrom.length === 0 ? (
-                <p className="text-sm text-amber-700 dark:text-amber-500">{t('debts.noPayFromAccount')}</p>
+                <p className="text-sm text-sun-ink">{t('debts.noPayFromAccount')}</p>
               ) : (
                 <select
                   value={accountId}
                   onChange={e => setAccountId(e.target.value)}
-                  className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+                  className="w-full border border-line-strong rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
                 >
                   {payFrom.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
@@ -161,7 +161,7 @@ export function DebtPaymentSheet({
                 type="date"
                 value={date}
                 onChange={e => setDate(e.target.value)}
-                className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+                className="w-full border border-line-strong rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
               />
             </div>
 

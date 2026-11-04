@@ -1105,6 +1105,8 @@
     "upgradeNow": "Mejorar Ahora"
   },
   "debts": {
+    "debtFreeBy": "Al ritmo de este plan, sin deudas en {{date}}",
+    "close": "Cerrar",
     "title": "Deudas",
     "subtitle": "Cada tarjeta de crédito, préstamo y plan de cuotas — en un solo lugar.",
     "totalOwed": "Total adeudado",

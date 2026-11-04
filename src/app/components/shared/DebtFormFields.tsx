@@ -124,7 +124,7 @@ export function DebtFormFields({ form, setForm }: DebtFormFieldsProps) {
           value={form.name}
           onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
           placeholder={t('debts.namePlaceholder')}
-          className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+          className="w-full border border-line-strong rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
         />
       </div>
 
@@ -184,7 +184,7 @@ export function DebtFormFields({ form, setForm }: DebtFormFieldsProps) {
             value={form.currentBalance}
             onChange={e => setForm(f => ({ ...f, currentBalance: e.target.value }))}
             placeholder="0"
-            className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary"
+            className="w-full pl-8 pr-4 py-3 border border-line-strong rounded-xl bg-background outline-none focus:border-primary"
           />
         </div>
         <p className="text-xs text-muted-foreground">
@@ -202,7 +202,7 @@ export function DebtFormFields({ form, setForm }: DebtFormFieldsProps) {
             value={form.apr}
             onChange={e => setForm(f => ({ ...f, apr: e.target.value }))}
             placeholder="0.0"
-            className="w-full pr-8 pl-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary"
+            className="w-full pr-8 pl-4 py-3 border border-line-strong rounded-xl bg-background outline-none focus:border-primary"
           />
           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
         </div>
@@ -217,7 +217,7 @@ export function DebtFormFields({ form, setForm }: DebtFormFieldsProps) {
             value={form.creditLimit}
             onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))}
             placeholder="0"
-            className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+            className="w-full border border-line-strong rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
           />
         </div>
       )}
@@ -231,7 +231,7 @@ export function DebtFormFields({ form, setForm }: DebtFormFieldsProps) {
           value={form.paymentDueDay}
           onChange={e => setForm(f => ({ ...f, paymentDueDay: e.target.value }))}
           placeholder="1-28"
-          className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+          className="w-full border border-line-strong rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
         />
       </div>
 
@@ -246,7 +246,7 @@ export function DebtFormFields({ form, setForm }: DebtFormFieldsProps) {
               value={form.minimumPayment}
               onChange={e => setForm(f => ({ ...f, minimumPayment: e.target.value }))}
               placeholder="0"
-              className="w-full pl-8 pr-4 py-3 border border-border rounded-xl bg-background outline-none focus:border-primary"
+              className="w-full pl-8 pr-4 py-3 border border-line-strong rounded-xl bg-background outline-none focus:border-primary"
             />
           </div>
         </div>
@@ -263,7 +263,7 @@ export function DebtFormFields({ form, setForm }: DebtFormFieldsProps) {
                 value={form.installmentAmount}
                 onChange={e => setForm(f => ({ ...f, installmentAmount: e.target.value }))}
                 placeholder="0"
-                className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+                className="w-full border border-line-strong rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
               />
             </div>
             <div className="space-y-2">
@@ -273,7 +273,7 @@ export function DebtFormFields({ form, setForm }: DebtFormFieldsProps) {
                 value={form.installmentsTotal}
                 onChange={e => setForm(f => ({ ...f, installmentsTotal: e.target.value }))}
                 placeholder="12"
-                className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+                className="w-full border border-line-strong rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
               />
               <div className="flex gap-1">
                 {INSTALLMENT_SHORTCUTS.map(n => (
@@ -296,7 +296,7 @@ export function DebtFormFields({ form, setForm }: DebtFormFieldsProps) {
               value={form.installmentsPaid}
               onChange={e => setForm(f => ({ ...f, installmentsPaid: e.target.value }))}
               placeholder="0"
-              className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+              className="w-full border border-line-strong rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
             />
           </div>
         </>
