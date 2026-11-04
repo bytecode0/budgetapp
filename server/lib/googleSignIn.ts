@@ -8,8 +8,10 @@
 //    whoever set it never proved they own the email. The owner can set one
 //    with "forgot password". The name is Google's too (the old one came
 //    from the same unverified sign-up), and the caller welcomes the account
-//    like a new one (`claimed`).
+//    like a new one (`claimed`). Its language is reset too: to the UI
+//    language of this sign-in, or the default.
 import type { PrismaClient } from "@prisma/client";
+import type { EmailLocale } from "./email/locales/index.js";
 
 export interface GoogleProfile {
   email?: string;
@@ -30,9 +32,14 @@ export type GoogleSignInResult =
       claimed: boolean;
     };
 
-type Db = Pick<PrismaClient, "user">;
+type Db = Pick<PrismaClient, "user" | "userSettings">;
 
-export async function googleSignIn(db: Db, profile: GoogleProfile, now: Date = new Date()): Promise<GoogleSignInResult> {
+export async function googleSignIn(
+  db: Db,
+  profile: GoogleProfile,
+  lang: EmailLocale | null = null,
+  now: Date = new Date(),
+): Promise<GoogleSignInResult> {
   const email = profile.email;
   if (!email) return { error: "no_email" };
   if (profile.verified_email !== true) return { error: "unverified" };
@@ -58,6 +65,14 @@ export async function googleSignIn(db: Db, profile: GoogleProfile, now: Date = n
     },
   });
   const isClaimed = !!existing && claimed.count === 1;
+  if (isClaimed) {
+    const language = lang ?? "es";
+    await db.userSettings.upsert({
+      where: { userId: user.id },
+      update: { language },
+      create: { userId: user.id, monthlyIncome: 0, language },
+    });
+  }
   return {
     userId: user.id,
     email,

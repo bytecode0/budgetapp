@@ -48,6 +48,11 @@ export interface RateLimitStore {
 
 class Full extends Error {}
 
+// The column is `timestamp` (no zone) holding UTC, as Prisma writes it. A Date
+// bound in raw SQL is converted with the session's time zone instead, so it is
+// passed as text and converted to UTC explicitly.
+const utc = (d: Date) => Prisma.sql`(${d.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
+
 export function prismaRateLimitStore(db: Pick<PrismaClient, "$transaction" | "$executeRaw">): RateLimitStore {
   return {
     async takeAll(counters) {
@@ -57,7 +62,7 @@ export function prismaRateLimitStore(db: Pick<PrismaClient, "$transaction" | "$e
             if (limit < 1) throw new Full();
             const rows = await tx.$queryRaw<{ count: number }[]>(Prisma.sql`
               INSERT INTO "RateLimitHit" ("key", "windowStart", "count")
-              VALUES (${key}, ${windowStart}, 1)
+              VALUES (${key}, ${utc(windowStart)}, 1)
               ON CONFLICT ("key", "windowStart") DO UPDATE SET "count" = "RateLimitHit"."count" + 1
               WHERE "RateLimitHit"."count" < ${limit}
               RETURNING "count"`);
@@ -71,7 +76,7 @@ export function prismaRateLimitStore(db: Pick<PrismaClient, "$transaction" | "$e
       }
     },
     async deleteOlderThan(before) {
-      await db.$executeRaw(Prisma.sql`DELETE FROM "RateLimitHit" WHERE "windowStart" < ${before}`);
+      await db.$executeRaw(Prisma.sql`DELETE FROM "RateLimitHit" WHERE "windowStart" < ${utc(before)}`);
     },
   };
 }
@@ -142,16 +147,23 @@ export async function takeRateLimit(
 // is shared by the three routes and is the per-account daily cap: 10 codes a
 // day × 5 tries each (OTP_MAX_ATTEMPTS) makes guessing a 6-digit code take
 // years, and one address can't burn the email provider's daily quota. The IP
-// rules stop one client from cycling through many addresses.
+// rules stop one client from cycling through many addresses. The global rule
+// (one counter for everyone) keeps many IPs together from exhausting the
+// provider's quota (Resend free: 100/day) for everyone: past it nobody gets a
+// code until 00:00 UTC, but other emails (welcome, password changed) still go.
+export const CODE_GLOBAL_DAILY: RateRule = { name: "code-global-1d", limit: 80, windowMs: DAY_MS };
+const GLOBAL_ID = "all";
 export const CODE_EMAIL_HOURLY: RateRule = { name: "code-email-1h", limit: 3, windowMs: HOUR_MS };
 export const CODE_EMAIL_DAILY: RateRule = { name: "code-email-1d", limit: 10, windowMs: DAY_MS };
 export const CODE_IP_HOURLY: RateRule = { name: "code-ip-1h", limit: 20, windowMs: HOUR_MS };
 export const CODE_IP_DAILY: RateRule = { name: "code-ip-1d", limit: 50, windowMs: DAY_MS };
 
-/** The checks for sending a code to `email` from `ip` (no IP rule when unknown). */
+/** The checks for sending a code to `email` from `ip` (no IP rule when unknown).
+ *  The global one goes first, so every send locks the counters in the same order. */
 export function codeSendChecks(email: string, ip: string | undefined): { rule: RateRule; id: string }[] {
   const address = email.trim().toLowerCase();
   return [
+    { rule: CODE_GLOBAL_DAILY, id: GLOBAL_ID },
     { rule: CODE_EMAIL_HOURLY, id: address },
     { rule: CODE_EMAIL_DAILY, id: address },
     ...(ip ? [{ rule: CODE_IP_HOURLY, id: ipLimitId(ip) }, { rule: CODE_IP_DAILY, id: ipLimitId(ip) }] : []),

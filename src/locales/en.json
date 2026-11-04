@@ -1036,6 +1036,7 @@
     },
     "verifyEmail": {
       "verifiedToast": "Email verified. Welcome to Remanso.",
+      "noPassword": "Your account has no password. To create one, use \"Forgot password?\" when signing in, or sign in with Google.",
       "back": "Back",
       "title": "Check your inbox",
       "sentCodeTo": "We sent a 6-digit code to",

@@ -43,6 +43,7 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
   // Kept in memory only, for the verify request; gone on a reload (the server
   // then verifies the account without a password).
   const [pendingPassword, setPendingPassword] = useState('');
+  const [pendingName, setPendingName] = useState('');
   const [googleToken, setGoogleToken] = useState<string | null>(null);
   const [googleError, setGoogleError] = useState<string | null>(null);
 
@@ -88,6 +89,7 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
             onNeedVerification={(email, password) => {
               setPendingEmail(email);
               setPendingPassword(password);
+              setPendingName('');
               setCurrentScreen('verify-email');
             }}
             googleError={googleError}
@@ -96,9 +98,10 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
       case 'signup':
         return (
           <Signup
-            onSignupSuccess={(email, password) => {
+            onSignupSuccess={(email, password, name) => {
               setPendingEmail(email);
               setPendingPassword(password);
+              setPendingName(name);
               setCurrentScreen('verify-email');
             }}
             onSwitchToLogin={() => setCurrentScreen('login')}
@@ -109,7 +112,8 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
           <VerifyEmail
             email={pendingEmail}
             password={pendingPassword}
-            onVerified={() => { setPendingPassword(''); setCurrentScreen('welcome'); }}
+            name={pendingName}
+            onVerified={() => { setPendingPassword(''); setPendingName(''); setCurrentScreen('welcome'); }}
             onBack={() => setCurrentScreen('signup')}
           />
         );

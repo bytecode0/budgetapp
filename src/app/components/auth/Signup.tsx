@@ -10,7 +10,7 @@ import { apiErrorMessage } from '../../lib/apiErrors';
 
 interface SignupProps {
   /** The password goes on to the code screen: verifying is what sets it (server/routes/auth.ts /verify-email). */
-  onSignupSuccess: (email: string, password: string) => void;
+  onSignupSuccess: (email: string, password: string, name: string) => void;
   onSwitchToLogin: () => void;
 }
 
@@ -36,7 +36,7 @@ export function Signup({ onSignupSuccess, onSwitchToLogin }: SignupProps) {
       return;
     }
     toast.success(t('auth.signup.codeSent'));
-    onSignupSuccess(formData.email, formData.password);
+    onSignupSuccess(formData.email, formData.password, formData.name);
   };
 
   const handleGoogleSignup = () => {

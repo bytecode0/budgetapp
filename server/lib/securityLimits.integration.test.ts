@@ -109,6 +109,8 @@ describe("security limits (integration, real Postgres)", { skip: !TEST_DATABASE_
     assert.equal(results.filter(Boolean).length, 25);
     const count = async (key: string) => (await prisma.rateLimitHit.findFirst({ where: { key } }))?.count ?? 0;
     assert.equal(await count("t:concurrent"), 25, "the 15 refused hits weren't counted");
+    const row = await prisma.rateLimitHit.findFirst({ where: { key: "t:concurrent" } });
+    assert.equal(row?.windowStart.toISOString(), windowStart.toISOString(), "stored in UTC whatever the session time zone");
 
     // All or nothing: a full second counter leaves the first one untouched.
     assert.equal(await store.takeAll([{ key: "t:other", windowStart, limit: 5 }, { key: "t:concurrent", windowStart, limit: 25 }]), false);
@@ -170,7 +172,7 @@ describe("security limits (integration, real Postgres)", { skip: !TEST_DATABASE_
 
   it("Google: a password set on an unverified account stops working once Google verifies it", async () => {
     // The attacker registers the friend's email with their own password.
-    assert.equal((await post("/api/auth/register", { name: "Attacker", email: "friend@test.local", password: "attacker-pass" })).status, 200);
+    assert.equal((await post("/api/auth/register", { name: "Attacker", email: "friend@test.local", password: "attacker-pass", language: "en" })).status, 200);
     const login = () => post("/api/auth/login", { email: "friend@test.local", password: "attacker-pass" });
     assert.equal((await login()).body.code, "EMAIL_NOT_VERIFIED", "the password is right, only unverified");
 
@@ -185,6 +187,8 @@ describe("security limits (integration, real Postgres)", { skip: !TEST_DATABASE_
     assert.ok(user?.emailVerified);
     assert.equal(user?.passwordHash, null);
     assert.equal(user?.name, "Friend", "the attacker's name goes too");
+    const settings = await prisma.userSettings.findUnique({ where: { userId: user!.id } });
+    assert.equal(settings?.language, "es", "and their language, back to the default");
     const r = await login();
     assert.equal(r.status, 401, "the attacker's password no longer signs in");
 
@@ -200,12 +204,12 @@ describe("security limits (integration, real Postgres)", { skip: !TEST_DATABASE_
       console.log = (...args: unknown[]) => { lines.push(args.map(String).join(" ")); };
       return { lines, restore: () => { console.log = log; } };
     };
-    const registerAndCapture = async (password: string) => {
+    const registerAndCapture = async (password: string, name: string, language: string) => {
       const cap = await code();
       try {
         const res = await fetch(base + "/api/auth/register", {
           method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ name: "N", email, password }),
+          body: JSON.stringify({ name, email, password, language }),
         });
         assert.equal(res.status, 200);
       } finally { cap.restore(); }
@@ -217,12 +221,16 @@ describe("security limits (integration, real Postgres)", { skip: !TEST_DATABASE_
       return otp!;
     };
 
-    await registerAndCapture("victim-pass-1");     // the victim signs up (code C1)
-    const c2 = await registerAndCapture("attacker-pass-2"); // the attacker re-registers; C2 goes to the victim
+    await registerAndCapture("victim-pass-1", "Victim", "es");     // the victim signs up (code C1)
+    const c2 = await registerAndCapture("attacker-pass-2", "Attacker", "en"); // the attacker re-registers; C2 goes to the victim
 
-    // The victim verifies with the code in their inbox, carrying the password they typed.
-    const verified = await post("/api/auth/verify-email", { email, otp: c2, password: "victim-pass-1" });
+    // The victim verifies with the code in their inbox, carrying what they typed.
+    const verified = await post("/api/auth/verify-email", { email, otp: c2, password: "victim-pass-1", name: "Victim", language: "es" });
     assert.equal(verified.status, 200);
+    assert.equal(verified.body.passwordSet, true);
+    const user = await prisma.user.findUnique({ where: { email }, include: { settings: true } });
+    assert.equal(user?.name, "Victim");
+    assert.equal(user?.settings?.language, "es");
 
     assert.equal((await post("/api/auth/login", { email, password: "attacker-pass-2" })).status, 401, "the attacker's password doesn't work");
     assert.equal((await post("/api/auth/login", { email, password: "victim-pass-1" })).status, 200, "the victim's does");
@@ -231,22 +239,53 @@ describe("security limits (integration, real Postgres)", { skip: !TEST_DATABASE_
   it("verify-email without a password verifies with no password; a verified account keeps its own", async () => {
     await prisma.otpToken.deleteMany({});
     const email = "nopass@test.local";
-    await prisma.user.create({ data: { email, passwordHash: await bcrypt.hash("someone-else", 4) } });
+    await prisma.user.create({
+      data: { email, name: "Someone else", passwordHash: await bcrypt.hash("someone-else", 4), settings: { create: { monthlyIncome: 0, language: "en" } } },
+    });
     const { hashOtp } = await import("./otp.js");
     const otpRow = (otp: string) => ({ email, type: "email_verification", tokenHash: hashOtp(otp), expiresAt: new Date(Date.now() + 60_000) });
     await prisma.otpToken.create({ data: otpRow("123456") });
-    assert.equal((await post("/api/auth/verify-email", { email, otp: "123456" })).status, 200);
-    const user = await prisma.user.findUnique({ where: { email } });
+    const first = await post("/api/auth/verify-email", { email, otp: "123456" }); // an old bundle sends only these
+    assert.equal(first.status, 200);
+    assert.equal(first.body.passwordSet, false, "the screen tells them to create one");
+    const user = await prisma.user.findUnique({ where: { email }, include: { settings: true } });
     assert.ok(user?.emailVerified);
     assert.equal(user?.passwordHash, null);
+    assert.equal(user?.name, null, "no name came with it");
+    assert.equal(user?.settings?.language, "es", "the default language");
 
     // Already verified: a later code (resend-otp) doesn't touch the password.
     await prisma.user.update({ where: { email }, data: { passwordHash: await bcrypt.hash("own-pass-1", 4) } });
     await prisma.otpToken.create({ data: otpRow("654321") });
-    assert.equal((await post("/api/auth/verify-email", { email, otp: "654321", password: "other-pass-2" })).status, 200);
+    const again = await post("/api/auth/verify-email", { email, otp: "654321", password: "other-pass-2", name: "Other", language: "en" });
+    assert.equal(again.status, 200);
+    assert.equal(again.body.passwordSet, true);
+    const kept = await prisma.user.findUnique({ where: { email }, include: { settings: true } });
+    assert.equal(kept?.name, null, "a verified account keeps its name");
+    assert.equal(kept?.settings?.language, "es", "and its language");
     assert.equal((await post("/api/auth/login", { email, password: "own-pass-1" })).status, 200);
 
     assert.equal((await post("/api/auth/verify-email", { email, otp: "000000", password: "short" })).status, 400);
+    assert.equal((await post("/api/auth/verify-email", { email, otp: "000000", language: "fr" })).status, 400);
+    assert.equal((await post("/api/auth/verify-email", { email, otp: "000000", name: { x: 1 } })).status, 400);
+  });
+
+  it("past the global daily cap no address gets a code, with the same answers", async () => {
+    await prisma.otpToken.deleteMany({});
+    await prisma.user.create({ data: { email: "global@test.local", emailVerified: new Date(), passwordHash: "x" } });
+    const unknown = await post("/api/auth/send-reset", { email: "nobody@test.local" });
+    const { CODE_GLOBAL_DAILY, rateLimitKey, windowStartOf } = rateLimit;
+    // Everyone else has used today's codes (from other IPs).
+    await prisma.rateLimitHit.upsert({
+      where: { key_windowStart: { key: rateLimitKey(CODE_GLOBAL_DAILY, "all"), windowStart: windowStartOf(new Date(), CODE_GLOBAL_DAILY.windowMs) } },
+      update: { count: CODE_GLOBAL_DAILY.limit },
+      create: { key: rateLimitKey(CODE_GLOBAL_DAILY, "all"), windowStart: windowStartOf(new Date(), CODE_GLOBAL_DAILY.windowMs), count: CODE_GLOBAL_DAILY.limit },
+    });
+    assert.deepEqual(await post("/api/auth/send-reset", { email: "global@test.local" }), unknown);
+    assert.equal(await prisma.otpToken.count({ where: { email: "global@test.local" } }), 0, "no code was made");
+    const reg = await post("/api/auth/register", { name: "N", email: "fresh@test.local", password: "password123" });
+    assert.equal(reg.status, 429);
+    assert.equal(reg.body.code, "rate_limited");
   });
 
   it("Google keeps the password of an account its owner already verified", async () => {

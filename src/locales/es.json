@@ -1036,6 +1036,7 @@
     },
     "verifyEmail": {
       "verifiedToast": "Email verificado. Te damos la bienvenida a Remanso.",
+      "noPassword": "Tu cuenta no tiene contraseña. Para crear una, usa «¿Olvidaste la contraseña?» al iniciar sesión, o entra con Google.",
       "back": "Atrás",
       "title": "Revisa tu bandeja de entrada",
       "sentCodeTo": "Te enviamos un código de 6 dígitos a",

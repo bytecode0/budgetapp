@@ -170,7 +170,7 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
       verified_email: boolean;
     }>({ url: "https://www.googleapis.com/oauth2/v2/userinfo" });
 
-    const signIn = await googleSignIn(prisma, data);
+    const signIn = await googleSignIn(prisma, data, parsedState.lang);
     if ("error" in signIn) {
       if (signIn.error === "no_email") return res.redirect(`${appUrl}/?error=google_no_email`);
       console.error("[auth/google/callback] Google says the email is not verified");
@@ -343,10 +343,22 @@ authRouter.post("/register", async (req: Request, res: Response) => {
 // Verify email OTP
 authRouter.post("/verify-email", async (req: Request, res: Response) => {
   try {
-    const { email, otp, password } = req.body;
+    const { email, otp, password, name, language } = req.body;
 
     if (!email || !otp) {
       return res.status(400).json({ error: "Email and OTP are required" });
+    }
+    // The name and UI language typed at sign-up, for the same reason as the
+    // password below: what is stored came from the last register, maybe not
+    // the owner's. Absent (login path, reload, old bundle) → no name and the
+    // default language.
+    const hasName = name !== undefined && name !== null && name !== "";
+    if (hasName && typeof name !== "string") {
+      return res.status(400).json({ error: "Name must be text" });
+    }
+    const locale = language === undefined || language === null ? "es" : parseLocale(language);
+    if (!locale) {
+      return res.status(400).json({ error: "language must be 'es' or 'en'" });
     }
     // The password typed at sign-up (or at the login that sent them here).
     // Optional: without it the account is verified with no password at all.
@@ -366,15 +378,30 @@ authRouter.post("/verify-email", async (req: Request, res: Response) => {
     // reloaded): they can use "forgot password" or Google. An account that
     // was already verified keeps its password.
     const passwordHash = typeof password === "string" && password ? await bcrypt.hash(password, 10) : null;
-    await prisma.user.updateMany({
+    const verified = await prisma.user.updateMany({
       where: { email: String(email), emailVerified: null },
-      data: { emailVerified: new Date(), passwordHash, failedLogins: 0, loginLockedUntil: null },
+      data: {
+        emailVerified: new Date(),
+        passwordHash,
+        name: hasName ? name : null,
+        failedLogins: 0,
+        loginLockedUntil: null,
+      },
     });
-    const user = await prisma.user.findUnique({
-      where: { email: String(email) },
+    const found = await prisma.user.findUnique({ where: { email: String(email) }, select: { id: true } });
+    if (!found) return otpFailure(res, "invalid");
+    if (verified.count === 1) {
+      // Only on the unverified → verified step: a verified account keeps its settings.
+      await prisma.userSettings.upsert({
+        where: { userId: found.id },
+        update: { language: locale },
+        create: { userId: found.id, monthlyIncome: 0, language: locale },
+      });
+    }
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: found.id },
       include: { settings: { select: { language: true } } },
     });
-    if (!user) return otpFailure(res, "invalid");
 
     setAuthCookie(res, user.id);
 
@@ -392,6 +419,9 @@ authRouter.post("/verify-email", async (req: Request, res: Response) => {
     });
 
     return res.json({
+      // false: the account has no password (none came with this request), so
+      // the screen tells them to create one with "forgot password" or use Google.
+      passwordSet: user.passwordHash !== null,
       user: {
         id: user.id,
         name: user.name,

@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  AI_DAILY, AI_HOURLY, AI_MAPPING_HOURLY, CODE_EMAIL_DAILY, CODE_EMAIL_HOURLY, CODE_IP_HOURLY,
+  AI_DAILY, AI_HOURLY, AI_MAPPING_HOURLY, CODE_EMAIL_DAILY, CODE_GLOBAL_DAILY, CODE_EMAIL_HOURLY, CODE_IP_HOURLY,
   aiChecks, codeSendChecks, ipLimitId, rateLimitKey, takeRateLimit, windowStartOf,
   type RateLimitStore, type RateRule,
 } from "./rateLimit.js";
@@ -86,8 +86,8 @@ test("one IP can't cycle through many addresses", async () => {
 });
 
 test("without an IP only the email rules apply", () => {
-  assert.deepEqual(codeSendChecks("a@b.c", undefined).map(c => c.rule.name), ["code-email-1h", "code-email-1d"]);
-  assert.equal(codeSendChecks("a@b.c", "1.1.1.1").length, 4);
+  assert.deepEqual(codeSendChecks("a@b.c", undefined).map(c => c.rule.name), ["code-global-1d", "code-email-1h", "code-email-1d"]);
+  assert.equal(codeSendChecks("a@b.c", "1.1.1.1").length, 5);
 });
 
 test("a refused hit takes nothing: hammering in one hour can't lock the address out for the day", async () => {
@@ -107,6 +107,17 @@ test("a hit refused by one rule takes nothing from the others", async () => {
   }
   assert.equal(await takeRateLimit(store, codeSendChecks("victim@example.com", "9.9.9.9"), at("2026-11-04T10:00:00Z"), NEVER_CLEAN), false);
   assert.ok(![...rows.values()].some(r => r.key === rateLimitKey(CODE_EMAIL_HOURLY, "victim@example.com")));
+});
+
+test("at most 80 codes a day for everyone, whatever the addresses and IPs", async () => {
+  const { store } = memoryStore();
+  let sent = 0;
+  for (let i = 0; i < 120; i++) {
+    const hh = String(Math.floor(i / 10)).padStart(2, "0");
+    if (await takeRateLimit(store, codeSendChecks(`u${i}@example.com`, `10.0.${i}.1`), at(`2026-11-04T${hh}:00:00Z`), NEVER_CLEAN)) sent++;
+  }
+  assert.equal(sent, CODE_GLOBAL_DAILY.limit);
+  assert.equal(await takeRateLimit(store, codeSendChecks("next@example.com", "10.9.9.9"), at("2026-11-05T00:00:00Z"), NEVER_CLEAN), true, "a new day");
 });
 
 test("IPv4 counts by address, IPv6 by its /64", () => {
