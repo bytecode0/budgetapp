@@ -62,3 +62,25 @@ export async function ensureHousehold(
 
   return householdId;
 }
+
+/**
+ * Whether every id in `userIds` may be named on the caller's money — as an
+ * expense's payer, beneficiary or share holder, or an account's owner: an
+ * ACTIVE member of the caller's household (not an invited one, nor one who
+ * left), or the caller themself when there is no household. Ids that aren't
+ * non-empty strings fail. An empty list passes.
+ */
+export async function areActiveMembers(
+  householdId: string | null | undefined,
+  authUserId: string,
+  userIds: unknown[],
+): Promise<boolean> {
+  if (userIds.some(id => typeof id !== "string" || id === "")) return false;
+  const wanted = new Set(userIds as string[]);
+  if (wanted.size === 0) return true;
+  if (!householdId) return wanted.size === 1 && wanted.has(authUserId);
+  const found = await prisma.householdMember.count({
+    where: { householdId, status: "active", userId: { in: [...wanted] } },
+  });
+  return found === wanted.size;
+}

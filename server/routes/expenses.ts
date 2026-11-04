@@ -25,6 +25,11 @@ import { countedAmounts, syncDebtStatus } from "../lib/debtBalance.js";
 import { pickDefaultAccount } from "../lib/defaultAccount.js";
 import { ACCOUNT_NOT_FOUND, ALLOCATION_NOT_FOUND, allocationsInPool, notOnHiddenDebt } from "../lib/poolRefs.js";
 import { visibleToWhere } from "../lib/ownership.js";
+import { areActiveMembers } from "../lib/household.js";
+
+// Payer, beneficiary and share holders must be people of this household
+// (LPBETA-23): an outsider's id would corrupt the household balances.
+const NOT_A_MEMBER = { error: "Payer, beneficiary and shares must be active household members", code: "not_household_member" };
 
 export const expensesRouter = Router();
 
@@ -154,6 +159,9 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
     if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
       return res.status(400).json({ error: "Valid amount is required" });
     }
+
+    const named = [payerUserId, beneficiaryUserId].filter(v => v !== undefined && v !== null && v !== "");
+    if (!(await areActiveMembers(req.householdId, req.authUserId!, named))) return res.status(400).json(NOT_A_MEMBER);
 
     const amountCents = toCents(amount);
     const merchant = normalizeMerchant(description);
@@ -518,29 +526,42 @@ expensesRouter.patch("/:id/attribution", requireAuth, async (req: AuthRequest, r
     if (!existing) return res.status(404).json({ error: "Expense not found" });
 
     const { scope, payerUserId, beneficiaryUserId, shares } = req.body as {
-      scope?: string; payerUserId?: string; beneficiaryUserId?: string; shares?: { userId: string; amount: number }[];
+      scope?: string; payerUserId?: unknown; beneficiaryUserId?: unknown; shares?: unknown;
     };
+    if (shares !== undefined && !Array.isArray(shares)) return res.status(400).json({ error: "Shares must be a list" });
+    const shareList = (shares ?? []) as { userId?: unknown; amount?: unknown }[];
+    const shareIds = shareList.map(s => s?.userId);
+    if (new Set(shareIds).size !== shareIds.length) return res.status(400).json({ error: "Each person can have only one share" });
+    // Payer and beneficiary are optional ("" = not given); every share names someone.
+    const named = [payerUserId, beneficiaryUserId].filter(v => v !== undefined && v !== null && v !== "");
+    if (!(await areActiveMembers(req.householdId, req.authUserId!, [...named, ...shareIds]))) {
+      return res.status(400).json(NOT_A_MEMBER);
+    }
     const newScope = scope === "shared" || scope === "personal" ? scope : existing.scope;
-    const newPayer = payerUserId || existing.payerUserId || req.authUserId!;
+    const newPayer = (payerUserId as string | undefined) || existing.payerUserId || req.authUserId!;
+
+    // Validated before anything is written, so a bad split leaves the row as it was.
+    const customShares = newScope === "shared" && shareList.length > 0
+      ? shareList.map(s => ({ expenseId: id, userId: s.userId as string, amount: toCents(s.amount as number | string) }))
+      : null;
+    if (customShares && customShares.reduce((a, b) => a + b.amount, 0) !== existing.amount) {
+      return res.status(400).json({ error: "Shares must sum to the expense amount" });
+    }
 
     await prisma.expense.update({
       where: { id },
       data: {
         scope: newScope,
         payerUserId: newPayer,
-        beneficiaryUserId: newScope === "personal" ? (beneficiaryUserId || null) : null,
+        beneficiaryUserId: newScope === "personal" ? ((beneficiaryUserId as string | undefined) || null) : null,
         scopeSource: "manual",
       },
     });
 
     if (newScope === "shared") {
-      if (Array.isArray(shares) && shares.length > 0) {
-        const data = shares.map(s => ({ expenseId: id, userId: s.userId, amount: toCents(s.amount) }));
-        if (data.reduce((a, b) => a + b.amount, 0) !== existing.amount) {
-          return res.status(400).json({ error: "Shares must sum to the expense amount" });
-        }
+      if (customShares) {
         await prisma.expenseShare.deleteMany({ where: { expenseId: id } });
-        await prisma.expenseShare.createMany({ data });
+        await prisma.expenseShare.createMany({ data: customShares });
       } else {
         await rebuildExpenseShares(id, existing.amount, req.householdId, newPayer);
       }
