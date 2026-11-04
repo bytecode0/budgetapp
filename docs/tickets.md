@@ -586,6 +586,8 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 
 ## LPBETA-18 · Rediseño de toda la app para Remanso — EN REFINAMIENTO
 
+**Estado (4 nov):** Luis pidió a Claude el rediseño y el logo. **Propuesta de la fase 1 publicada** como sistema de diseño (https://claude.ai/artifact/WMDkSACG5weNQxzPB6KyB5): logo (marca, versión de una tinta e icono de app), paleta clara y oscura con contraste AA comprobado, Fraunces + Figtree, espacios, radios y 10 componentes base. **Falta la aprobación de Luis** antes de llevarla a `theme.css` y a las pantallas. Respuestas tomadas por defecto: lo diseña Claude, logo provisional de Claude, el canal de YouTube se adaptará a Remanso, y claro y oscuro desde el principio.
+
 **Por qué (decisión del 4 nov):** la app cambia de nombre (Remanso), de cliente (familias que ganan bien y quieren ahorrar) y de promesa (**ver tu dinero da calma**). La interfaz de hoy nació para otra cosa: un presupuesto y un tablero de deudas, con el tema por defecto de shadcn y mucho número a la vista. Remanso tiene que **sentirse** tranquila, no solo decirlo.
 
 **Lo que ya existe (verificado, 4 nov):**
