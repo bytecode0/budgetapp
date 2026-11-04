@@ -20,6 +20,8 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 | LPBETA-13 | Celebrar los hitos | En refinamiento | Probablemente sí (aditivo, solo "ya visto") |
 | LPBETA-14 | Seguridad del acceso (códigos y contraseñas) | **Hecho y desplegado** (PR #7, 4 nov) | Sí (aditivo, aplicado en el schema) |
 | LPBETA-15 | Medir la paz: una pregunta al mes | En refinamiento | Sí (aditivo: una tabla pequeña) |
+| LPBETA-16 | Dominio de la BETA: `app.luisvespa.com` | Refinado — decidido el 4 nov | No |
+| LPBETA-17 | Nuevo nombre de la app: Remanso o Sereno | En decisión (Luis) | No |
 
 ### Orden de prioridad (4 nov; Luis: medir primero, LPBETA-03 de los últimos)
 
@@ -42,6 +44,8 @@ Situación: la alfa está desplegada en `budget.luisvespa.com` con 2 usuarios. T
 | 7 | LPBETA-11 · PWA y página de bienvenida | S–M | El amigo recibe un enlace por WhatsApp: necesita ver qué es antes de registrarse, y luego instalarla solo. Faltan respuestas de Luis (logo, página pública o solo con enlace). |
 
 **Sin colocar todavía — LPBETA-15 · Medir la paz (S–M).** Propuesta de Claude: justo después del 09 y antes de invitar a la primera ola, porque **la primera respuesta de cada persona es su línea base**. Si llega tarde, no se podrá decir "antes de LifePlan estaba en 2". Luis decide.
+
+**Sin colocar todavía — LPBETA-16 · Dominio `app.luisvespa.com` (S) y LPBETA-17 · Nuevo nombre (S–M).** Propuesta de Claude: los dos **antes de invitar a la primera ola** y en el mismo despliegue, para que los amigos conozcan la app desde el primer día con su nombre y su dirección definitivos. Cambiarlos después obliga a explicarlo a cada usuario.
 
 **B. Durante la BETA (de finales de noviembre a diciembre)**
 | # | Ticket | Tamaño | Por qué va aquí |
@@ -499,3 +503,53 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 1. ¿Te vale la frase *"¿Cómo te sientes hoy con tu dinero?"* y la escala de 1 a 5? (Alternativa: caras o emojis en vez de números.)
 2. ¿El usuario ve su propia evolución, o solo la pregunta?
 3. ¿Dónde lo colocas en el orden? (Propuesta: después del 09, antes de la primera ola de amigos.)
+
+---
+
+## LPBETA-16 · Dominio de la BETA: `app.luisvespa.com` — REFINADO (decidido el 4 nov)
+
+**Por qué:** "budget" va contra el mensaje (vendemos ahorro y paz, no presupuestos), y `app.` sirve para cualquier nombre que se elija en LPBETA-17. La app sigue colgando de la marca personal (Luis Vespa → Método Ruta → la app).
+
+**Lo que ya existe (verificado, 4 nov):** el dominio llega por variables de entorno (`APP_URL`, `GOOGLE_CALLBACK_URL`, `BANKING_CALLBACK_URL`); el código no lo lleva escrito salvo en textos. `budget.luisvespa.com` aparece escrito a mano en: la introducción de la política de privacidad y de los términos (`legal.*` en `es.json`/`en.json`), `CLAUDE.md` (fila de `BANKING_CALLBACK_URL`), el comando `/deploy` (`.claude/skills/deploy/SKILL.md`), `docs/` y algunos tests (solo como dato de ejemplo).
+
+**Pasos de Luis (paneles; los secretos nunca pasan por Claude):**
+1. **Cloudflare:** registro `CNAME app → cname.vercel-dns.com`, con el proxy **desactivado** (nube gris), igual que `budget`.
+2. **Vercel → Domains:** añadir `app.luisvespa.com` al proyecto. Cuando funcione, configurar `budget.luisvespa.com` como **redirección 308 a `app.luisvespa.com`**, para que sigan funcionando los enlaces antiguos de los emails ya enviados.
+3. **Google Cloud Console:** añadir la URL de retorno `https://app.luisvespa.com/api/auth/google/callback`. La antigua se quita cuando todo funcione.
+4. **Enable Banking:** registrar `https://app.luisvespa.com/api/banking/callback`. Comprobar si en modo restringido hace falta que ellos lo aprueben, y si tardan, hacer este paso el primero.
+5. **Variables en Vercel (Production):** `APP_URL=https://app.luisvespa.com`, `GOOGLE_CALLBACK_URL=…/api/auth/google/callback`, `BANKING_CALLBACK_URL=…/api/banking/callback`, y redesplegar.
+6. Stripe está apagado; cuando se active (LPBETA-03), su webhook ya irá a `app.`.
+
+**Parte de Claude (un PR):** cambiar `budget.` por `app.` en los textos legales (es y en), en `CLAUDE.md`, en `docs/` y en los tests. **El comando `/deploy` vive en `.claude/skills/`, que el sandbox de Claude no deja editar:** o lo cambia Luis, o da permiso para esa edición. Los tests que usan `budget.luisvespa.com` como ejemplo pueden quedarse así.
+
+**Efectos para los usuarios:**
+- La sesión es una cookie del dominio antiguo: **los 2 usuarios tendrán que iniciar sesión otra vez**, una sola vez. Avisarles.
+- Las conexiones con bancos ya hechas siguen funcionando: la URL de retorno solo se usa al conectar o renovar.
+- La app instalada en el móvil (LPBETA-11) todavía no existe, así que no hay nada instalado que migrar. Es otra razón para hacerlo ya.
+
+**Verificación (en producción):** `GET https://app.luisvespa.com/api/health` → 200; login con email y con Google; conectar un banco en el sandbox de Enable Banking (si aplica); el enlace de un email nuevo apunta a `app.`; `https://budget.luisvespa.com/cualquier-ruta` redirige a `app.`.
+
+---
+
+## LPBETA-17 · Nuevo nombre de la app: Remanso o Sereno — EN DECISIÓN (Luis)
+
+**Por qué (investigación del 4 nov):** "LifePlan" está muy ocupado en finanzas (la herramienta "Life Plan" de Bank of America, una marca LIFEPLAN de software registrada en EE. UU., el software LIFEPlan de planificación financiera de Maxomsoft y varias apps con ese nombre). Además es genérico, está en inglés para un público español y no transmite la promesa de paz. Cambiarlo ahora cuesta poco: 2 usuarios y casi nada publicado.
+
+**Finalistas (decisión del 4 nov):**
+- **Remanso** (recomendación de Claude): agua en calma; para el público de la iglesia recuerda las "aguas de reposo" del Salmo 23. Lema posible: *"Remanso: tu dinero, en calma."* No se encontraron apps de finanzas con ese nombre. `remanso.app` y `remansoapp.com` están ocupados; `usaremanso.com` y `remansofinanzas.com` estaban libres el 4 nov.
+- **Sereno:** calma y claridad. No se encontraron choques en finanzas.
+- Descartados: Granero (en Lucas 12 los graneros del rico necio son una advertencia contra acumular), Siembra (AFP Siembra, pensiones, República Dominicana), Cuentas Claras (Mis Cuentas Claras, app de finanzas del hogar).
+
+**Pasos de Luis para decidir:**
+1. Encuesta en la pestaña Comunidad de YouTube (Luisvespa.oficial) y preguntar a los 2 usuarios actuales.
+2. Buscar el elegido en el localizador de la OEPM y en EUIPO eSearch, clases 9 (software), 36 (finanzas) y 42 (servicios de software). Para el registro definitivo, un abogado de marcas.
+3. Comprobar en dominios.es si el `.es` está libre (la búsqueda del 4 nov no cubre `.es`).
+
+**Parte de Claude cuando haya nombre (un PR, sin schema):**
+- La marca visible: `productName` en `server/lib/email/theme.ts`, unas 22 apariciones en cada `es.json`/`en.json`, el `<title>` de `index.html`, los textos legales, el nombre del remitente en `EMAIL_FROM` (lo cambia Luis en Vercel) y los textos de la página de bienvenida (LPBETA-11).
+- **Cuidado: `LifePlan` también es el nombre interno de los planes de ahorro** (`model LifePlan` en el schema, `usePlans.ts`, `planContribution.ts`…). **Eso no se renombra**: es código y base de datos, no marca, y cambiarlo exigiría una migración que este proyecto no usa.
+- `CLAUDE.md` y el comando `/deploy` (este último lo cambia Luis o lo autoriza, como en LPBETA-16).
+
+**Preguntas abiertas para Luis:**
+1. ¿Remanso o Sereno? (Tras la encuesta.)
+2. ¿Lema? Propuesta para Remanso: *"tu dinero, en calma"*.
