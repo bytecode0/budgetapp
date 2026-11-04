@@ -445,6 +445,8 @@ bankingRouter.post("/connections/:id/confirm", ...guarded, async (req: BankingRe
         bankDismissedIds: mergeDismissed(account.bankDismissedIds, dismissed),
       },
     });
+    // A review is the user's own activity (the daily sync never gets here).
+    await prisma.user.update({ where: { id: req.authUserId! }, data: { lastBankReviewAt: new Date() } });
     // Nothing waits for review now: the balance (a card's debt) can follow the bank.
     try {
       await refreshBalance(req.bankingClient!, connection, account);
