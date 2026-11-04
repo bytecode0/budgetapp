@@ -32,6 +32,9 @@ type HeaderRule = { source: string; headers: { key: string; value: string }[] };
 const vercel = JSON.parse(read("vercel.json")) as { headers: HeaderRule[] };
 const pageRule = vercel.headers.find(h => h.source === "/((?!api/).*)");
 const header = (key: string) => pageRule?.headers.find(h => h.key === key)?.value;
+// The page CSP ships report-only first (violations show in the console, nothing
+// is blocked); switch the key to Content-Security-Policy once checked in the browser.
+const pageCsp = () => header("Content-Security-Policy") ?? header("Content-Security-Policy-Report-Only");
 
 test("vercel.json sets the security headers on every page", () => {
   assert.ok(pageRule, "a header rule for every non-API path");
@@ -40,7 +43,7 @@ test("vercel.json sets the security headers on every page", () => {
   assert.equal(header("X-Content-Type-Options"), "nosniff");
   assert.equal(header("Referrer-Policy"), "strict-origin-when-cross-origin");
   assert.ok(header("Permissions-Policy"));
-  const csp = header("Content-Security-Policy") ?? "";
+  const csp = pageCsp() ?? "";
   assert.match(csp, /frame-ancestors 'none'/);
   assert.match(csp, /connect-src 'self'(;|$)/);
   assert.doesNotMatch(csp.match(/script-src [^;]*/)?.[0] ?? "", /'unsafe-inline'|'unsafe-eval'/);
@@ -53,7 +56,7 @@ test("the CSP script hashes match index.html's inline scripts exactly", () => {
   const inline = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1]);
   assert.ok(inline.length > 0, "index.html has its theme script");
   const expected = inline.map(body => `'sha256-${createHash("sha256").update(body, "utf8").digest("base64")}'`).sort();
-  const scriptSrc = (header("Content-Security-Policy") ?? "").match(/script-src ([^;]*)/)?.[1] ?? "";
+  const scriptSrc = (pageCsp() ?? "").match(/script-src ([^;]*)/)?.[1] ?? "";
   const allowed = scriptSrc.split(/\s+/).filter(s => s.startsWith("'sha256-")).sort();
   assert.deepEqual(allowed, expected,
     "update the sha256 in vercel.json's script-src to the one above (index.html's inline script changed)");
