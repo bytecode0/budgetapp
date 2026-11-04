@@ -20,6 +20,9 @@
     <meta name="apple-mobile-web-app-title" content="Remanso" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+    <!-- The CSP in vercel.json allows this script by its sha256: editing it
+         means updating that hash (server/middleware/securityHeaders.test.ts
+         fails until you do). -->
     <script>
       // Paint the last theme chosen on this device before the app loads, so a
       // dark-mode user never sees a white flash. The server's value (per

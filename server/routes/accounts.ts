@@ -11,6 +11,7 @@ import { loadDebtLedgers, debtState, owedNow, monthlyCommitment } from "../lib/d
 import { ownerChangeSplitsDebtLink, mirroredCardDebtId } from "../lib/debtAccountLink.js";
 import { parseColumnMapping, storedMapping } from "../../shared/ingest/validate.js";
 import { CARD_PAYMENT_MODES, cardDebtOwnershipChanges, createCardDebt, updateCardDebt, type CardSettings } from "../lib/cardDebt.js";
+import { areActiveMembers } from "../lib/household.js";
 
 export const accountsRouter = Router();
 
@@ -174,18 +175,11 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     if (visibility !== undefined && !VISIBILITIES.has(visibility)) {
       return res.status(400).json({ error: "Invalid visibility" });
     }
-    // ownerUserId can only be reassigned to a member of the same household;
-    // without a household the only valid owner is the caller.
-    if (ownerUserId !== undefined && typeof ownerUserId !== "string") {
-      return res.status(400).json({ error: "Owner must be a household member" });
-    }
-    if (ownerUserId !== undefined && ownerUserId !== req.authUserId) {
-      const member = req.householdId
-        ? await prisma.householdMember.findFirst({
-            where: { householdId: req.householdId, userId: ownerUserId }, select: { id: true },
-          })
-        : null;
-      if (!member) return res.status(400).json({ error: "Owner must be a household member" });
+    // ownerUserId can only be reassigned to an ACTIVE member of the same
+    // household — not an invited one or one who left (LPBETA-23); without a
+    // household the only valid owner is the caller.
+    if (ownerUserId !== undefined && !(await areActiveMembers(req.householdId, req.authUserId!, [ownerUserId]))) {
+      return res.status(400).json({ error: "Owner must be an active household member", code: "not_household_member" });
     }
 
     const finalType = type ?? existing.type;
