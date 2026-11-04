@@ -1657,5 +1657,13 @@
     "learnedOne": "Guardado. La próxima vez, «{{merchant}}» irá sola a «{{line}}».",
     "learnedMany_one": "Guardado. La app recordará este comercio para los próximos movimientos.",
     "learnedMany_other": "Guardado. La app recordará {{count}} comercios para los próximos movimientos."
+  },
+  "install": {
+    "title": "Ten Remanso en tu pantalla de inicio",
+    "iosStep1": "Toca Compartir. Si no lo ves, está dentro del botón «⋯».",
+    "iosStep2": "Elige «Añadir a pantalla de inicio».",
+    "promptBody": "Se abre como una app, sin pasar por ninguna tienda.",
+    "installButton": "Instalar",
+    "dismiss": "Cerrar el aviso"
   }
 }

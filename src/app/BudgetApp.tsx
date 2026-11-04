@@ -32,6 +32,7 @@ import { apiErrorMessage } from './lib/apiErrors';
 import { applyDarkMode } from './lib/theme';
 import { ThemeToggle } from './components/shared/ThemeToggle';
 import { RemansoMark } from './components/shared/RemansoMark';
+import { InstallHint } from './components/shared/InstallHint';
 import { takeBankReturn, type BankReturnScreen } from './components/banking/bankReturn';
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
@@ -495,6 +496,7 @@ function AppInner() {
       {/* Main Content */}
       <div className="lg:ml-72 pt-16 lg:pt-0">
         <main className="container mx-auto px-4 lg:px-8 py-6 lg:py-8 max-w-7xl">
+          <InstallHint />
           <AnimatePresence mode="wait">
             <motion.div
               key={currentScreen}

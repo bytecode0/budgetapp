@@ -11,6 +11,14 @@
     />
     <meta name="theme-color" content="#F3F6F4" />
     <link rel="icon" type="image/svg+xml" href="/icons/remanso-mark.svg" />
+    <!-- Installable on the phone (LPBETA-11). No service worker on purpose:
+         no offline mode, so the app never shows stale money data. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Remanso" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
     <script>
       // Paint the last theme chosen on this device before the app loads, so a

@@ -1657,5 +1657,13 @@
     "learnedOne": "Saved. Next time, “{{merchant}}” goes to “{{line}}” on its own.",
     "learnedMany_one": "Saved. The app will remember this merchant for the next transactions.",
     "learnedMany_other": "Saved. The app will remember {{count}} merchants for the next transactions."
+  },
+  "install": {
+    "title": "Keep Remanso on your home screen",
+    "iosStep1": "Tap Share. If you don’t see it, it is inside the “⋯” button.",
+    "iosStep2": "Choose “Add to Home Screen”.",
+    "promptBody": "It opens like an app, without going through any app store.",
+    "installButton": "Install",
+    "dismiss": "Close this notice"
   }
 }
