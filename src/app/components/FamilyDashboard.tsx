@@ -43,9 +43,9 @@ export function FamilyDashboard() {
   const maxCat = Math.max(1, ...byCategory.map(c => c.total));
 
   const stats = [
-    { label: t('familyDashboard.income'), value: eur(health.income), icon: TrendingUp, tone: 'text-emerald-600' },
-    { label: t('familyDashboard.expenses'), value: eur(health.expenses), icon: TrendingDown, tone: 'text-red-500' },
-    { label: t('familyDashboard.savings'), value: eur(health.savings), icon: PiggyBank, tone: health.savings >= 0 ? 'text-emerald-600' : 'text-red-500' },
+    { label: t('familyDashboard.income'), value: eur(health.income), icon: TrendingUp, tone: 'text-reed' },
+    { label: t('familyDashboard.expenses'), value: eur(health.expenses), icon: TrendingDown, tone: 'text-foreground' },
+    { label: t('familyDashboard.savings'), value: eur(health.savings), icon: PiggyBank, tone: health.savings >= 0 ? 'text-reed' : 'text-sun-ink' },
     { label: t('familyDashboard.netWorth'), value: eur(health.netWorth), icon: Landmark, tone: '' },
   ];
 
@@ -70,9 +70,9 @@ export function FamilyDashboard() {
       </div>
 
       {/* Savings rate */}
-      <div className="bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 rounded-2xl p-5 flex items-center justify-between">
+      <div className="bg-pool-soft rounded-2xl p-5 flex items-center justify-between">
         <span className="text-sm text-muted-foreground">{t('familyDashboard.savingsRate')}</span>
-        <span className={`text-2xl font-display ${health.savingsRate >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{health.savingsRate}%</span>
+        <span className={`text-2xl font-display ${health.savingsRate >= 0 ? 'text-reed' : 'text-sun-ink'}`}>{health.savingsRate}%</span>
       </div>
 
       {/* By person */}

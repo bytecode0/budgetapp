@@ -48,6 +48,8 @@
     "title": "Ajustes",
     "subtitle": "Gestiona tus preferencias y cuenta",
     "profile": {
+      "planFree": "Plan gratuito",
+      "planPremium": "Premium",
       "activePlans_one": "{{count}} plan de vida activo",
       "activePlans_other": "{{count}} planes de vida activos"
     },

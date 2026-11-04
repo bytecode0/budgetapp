@@ -40,12 +40,12 @@ export function PartnerInviteAccept({ token, invite, onAccept, onDismiss }: Prop
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-scrim flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.92, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.92, y: 20 }}
-        className="bg-card border border-border rounded-3xl p-8 w-full max-w-sm shadow-2xl"
+        className="bg-card border border-border rounded-3xl p-8 w-full max-w-sm shadow-soft"
       >
         <AnimatePresence mode="wait">
           {done ? (
@@ -55,8 +55,8 @@ export function PartnerInviteAccept({ token, invite, onAccept, onDismiss }: Prop
               animate={{ opacity: 1, y: 0 }}
               className="text-center space-y-4"
             >
-              <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950/30 rounded-full flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+              <div className="w-16 h-16 bg-reed-soft rounded-full flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-8 h-8 text-reed" />
               </div>
               <div>
                 <h2 className="font-display text-2xl mb-1">{t('partnerInvite.linked')}</h2>
@@ -74,7 +74,7 @@ export function PartnerInviteAccept({ token, invite, onAccept, onDismiss }: Prop
           ) : (
             <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
               <div className="flex items-center justify-between">
-                <div className="w-12 h-12 bg-gradient-to-br from-primary/20 to-violet-500/20 rounded-2xl flex items-center justify-center">
+                <div className="w-12 h-12 bg-pool-soft rounded-2xl flex items-center justify-center">
                   <Heart className="w-6 h-6 text-primary" />
                 </div>
                 <button
@@ -96,7 +96,7 @@ export function PartnerInviteAccept({ token, invite, onAccept, onDismiss }: Prop
                 <p className="font-medium text-xs uppercase tracking-wide text-muted-foreground mb-3">{t('partnerInvite.onceLinked')}</p>
                 {shareItems.map(item => (
                   <div key={item} className="flex items-center gap-2 text-muted-foreground">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-reed shrink-0" />
                     {item}
                   </div>
                 ))}
@@ -105,7 +105,7 @@ export function PartnerInviteAccept({ token, invite, onAccept, onDismiss }: Prop
               <p className="text-xs text-muted-foreground">{t('partnerInvite.ownDataMoves')}</p>
 
               {error && (
-                <div className="flex items-center gap-2 text-sm text-red-500 bg-red-50 dark:bg-red-950/20 px-3 py-2 rounded-xl">
+                <div className="flex items-center gap-2 text-sm text-alert bg-alert-soft px-3 py-2 rounded-xl">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   {error}
                 </div>
@@ -121,7 +121,7 @@ export function PartnerInviteAccept({ token, invite, onAccept, onDismiss }: Prop
                 <button
                   onClick={handleAccept}
                   disabled={accepting}
-                  className="flex-1 py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl hover:shadow-md transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                  className="flex-1 py-3 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl hover:shadow-md transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
                 >
                   {accepting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Heart className="w-4 h-4" />}
                   {t('partnerInvite.accept')}

@@ -198,41 +198,33 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
         animate={{ opacity: 1, y: 0 }}
         className="space-y-2"
       >
-        <h1 className="text-4xl tracking-tight">{t('settings.title')}</h1>
+        <h1 className="text-4xl tracking-tight font-display">{t('settings.title')}</h1>
         <p className="text-muted-foreground">{t('settings.subtitle')}</p>
       </motion.div>
 
-      {/* Profile Card */}
+      {/* Profile Card (LPBETA-27: calm card, no gradient) */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="bg-gradient-to-br from-primary to-primary/90 text-primary-foreground rounded-3xl p-8 shadow-2xl relative overflow-hidden"
+        transition={{ delay: 0.05, duration: 0.2, ease: 'easeOut' }}
+        className="bg-card border border-border rounded-3xl p-6 md:p-8 flex items-center gap-5"
       >
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-32 -mt-32" />
-
-        <div className="relative z-10 flex items-center gap-6">
-          <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm shrink-0">
-            {user?.image ? (
-              <img src={user.image} alt={user.name ?? ''} className="w-full h-full rounded-full object-cover" />
-            ) : (
-              <span className="text-2xl font-display">{initials}</span>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-2xl font-display mb-1 truncate">{user?.name ?? '—'}</h2>
-            <p className="text-sm opacity-90 mb-3 truncate">{user?.email ?? '—'}</p>
-            <div className="flex items-center gap-4 text-sm flex-wrap">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-secondary rounded-full" />
-                <span className="opacity-90 capitalize">{user?.plan ?? 'Free'} Plan</span>
-              </div>
-              <span className="opacity-60">•</span>
-              <span className="opacity-90">
-                {t('settings.profile.activePlans', { count: activePlans })}
-              </span>
-            </div>
-          </div>
+        <div className="w-16 h-16 bg-pool-soft text-pool rounded-full flex items-center justify-center shrink-0 overflow-hidden">
+          {user?.image ? (
+            <img src={user.image} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-xl font-display">{initials}</span>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-2xl font-display truncate">{user?.name ?? '—'}</h2>
+          <p className="text-sm text-muted-foreground truncate">{user?.email ?? '—'}</p>
+          <p className="text-sm text-muted-foreground mt-2 flex items-center gap-2 flex-wrap">
+            <span className="px-2.5 py-0.5 rounded-full bg-pool-soft text-pool text-xs font-medium">
+              {user?.plan === 'premium' ? t('settings.profile.planPremium') : t('settings.profile.planFree')}
+            </span>
+            {t('settings.profile.activePlans', { count: activePlans })}
+          </p>
         </div>
       </motion.div>
 
@@ -241,7 +233,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="bg-card border border-border rounded-2xl overflow-hidden"
+        className="bg-card border border-border rounded-3xl overflow-hidden"
       >
         <div className="px-6 py-4 border-b border-border">
           <h3 className="text-sm uppercase tracking-wide text-muted-foreground">{t('settings.financial.sectionTitle')}</h3>
@@ -279,7 +271,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                   max={28}
                   value={paydayInput}
                   onChange={e => setPaydayInput(e.target.value)}
-                  className="w-20 border border-border rounded-xl px-3 py-2 bg-background outline-none focus:border-primary text-sm text-center"
+                  className="w-20 border border-line-strong rounded-xl px-3 py-2 bg-background outline-none focus:border-primary text-sm text-center"
                 />
                 <button
                   onClick={handleSavePayday}
@@ -340,7 +332,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
           >
             <motion.div
               animate={{ x: darkMode ? 28 : 2 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
               className="absolute top-1 w-5 h-5 bg-white rounded-full shadow-md"
             />
           </button>
@@ -385,7 +377,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className="bg-card border border-border rounded-2xl overflow-hidden"
+        className="bg-card border border-border rounded-3xl overflow-hidden"
       >
         <div className="px-6 py-4 border-b border-border">
           <h3 className="text-sm uppercase tracking-wide text-muted-foreground">{t('settings.notifications.sectionTitle')}</h3>
@@ -410,7 +402,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
               >
                 <motion.div
                   animate={{ x: notifications.planMilestones ? 28 : 2 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
                   className="absolute top-1 w-5 h-5 bg-white rounded-full shadow-md"
                 />
               </button>
@@ -435,7 +427,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
               >
                 <motion.div
                   animate={{ x: notifications.monthlyReminders ? 28 : 2 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
                   className="absolute top-1 w-5 h-5 bg-white rounded-full shadow-md"
                 />
               </button>
@@ -460,7 +452,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
               >
                 <motion.div
                   animate={{ x: notifications.smartInsights ? 28 : 2 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
                   className="absolute top-1 w-5 h-5 bg-white rounded-full shadow-md"
                 />
               </button>
@@ -474,7 +466,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5 }}
-        className="bg-card border border-border rounded-2xl overflow-hidden"
+        className="bg-card border border-border rounded-3xl overflow-hidden"
       >
         <div className="px-6 py-4 border-b border-border">
           <h3 className="text-sm uppercase tracking-wide text-muted-foreground">{t('settings.support.sectionTitle')}</h3>
@@ -517,10 +509,10 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.55 }}
-        className="bg-card border border-border rounded-2xl overflow-hidden"
+        className="bg-card border border-border rounded-3xl overflow-hidden"
       >
         <div className="px-6 py-4 border-b border-border flex items-center gap-2">
-          <Heart className="w-4 h-4 text-pink-500" />
+          <Heart className="w-4 h-4 text-sun-ink" />
           <h3 className="text-sm uppercase tracking-wide text-muted-foreground">{t('settings.sharedFinances.sectionTitle')}</h3>
         </div>
 
@@ -534,9 +526,9 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
             </div>
           ) : partnerStatus?.state === 'linked_secondary' ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-xl">
-                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-950/40 rounded-full flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <div className="flex items-center gap-3 p-4 bg-reed-soft rounded-xl">
+                <div className="w-10 h-10 bg-card rounded-full flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-5 h-5 text-reed" />
                 </div>
                 <div className="min-w-0">
                   <p className="font-medium text-sm">{t('settings.sharedFinances.linkedTo', { name: partnerStatus.linkedTo?.name })}</p>
@@ -549,7 +541,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                 disabled={unlinking}
                 className={`w-full py-2.5 rounded-xl border text-sm flex items-center justify-center gap-2 transition-colors ${
                   confirmUnlink
-                    ? 'border-red-300 bg-red-50 text-red-600 dark:bg-red-950/20 dark:border-red-800'
+                    ? 'border-destructive bg-alert-soft text-alert'
                     : 'border-border hover:bg-muted text-muted-foreground'
                 }`}
               >
@@ -559,9 +551,9 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
             </div>
           ) : partnerStatus?.state === 'linked_primary' ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800 rounded-xl">
-                <div className="w-10 h-10 bg-violet-100 dark:bg-violet-950/40 rounded-full flex items-center justify-center shrink-0">
-                  <Heart className="w-5 h-5 text-violet-600" />
+              <div className="flex items-center gap-3 p-4 bg-pool-soft rounded-xl">
+                <div className="w-10 h-10 bg-card rounded-full flex items-center justify-center shrink-0">
+                  <Heart className="w-5 h-5 text-pool" />
                 </div>
                 <div className="min-w-0">
                   <p className="font-medium text-sm">{t('settings.sharedFinances.partnerLinked', { name: partnerStatus.linkedPartner?.name })}</p>
@@ -574,7 +566,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                 disabled={unlinking}
                 className={`w-full py-2.5 rounded-xl border text-sm flex items-center justify-center gap-2 transition-colors ${
                   confirmUnlink
-                    ? 'border-red-300 bg-red-50 text-red-600 dark:bg-red-950/20 dark:border-red-800'
+                    ? 'border-destructive bg-alert-soft text-alert'
                     : 'border-border hover:bg-muted text-muted-foreground'
                 }`}
               >
@@ -584,9 +576,9 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
             </div>
           ) : partnerStatus?.state === 'invite_pending' ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl">
-                <div className="w-10 h-10 bg-amber-100 dark:bg-amber-950/40 rounded-full flex items-center justify-center shrink-0">
-                  <Send className="w-5 h-5 text-amber-600" />
+              <div className="flex items-center gap-3 p-4 bg-sun-soft rounded-xl">
+                <div className="w-10 h-10 bg-card rounded-full flex items-center justify-center shrink-0">
+                  <Send className="w-5 h-5 text-sun-ink" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-sm">{t('settings.sharedFinances.invitationSent')}</p>
@@ -594,16 +586,16 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                 </div>
                 <button
                   onClick={handleCancelInvite}
-                  className="w-7 h-7 flex items-center justify-center hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-lg transition-colors shrink-0"
+                  className="w-7 h-7 flex items-center justify-center hover:bg-card rounded-lg transition-colors shrink-0"
                   title="Cancel invite"
                 >
-                  <X className="w-4 h-4 text-amber-600" />
+                  <X className="w-4 h-4 text-sun-ink" />
                 </button>
               </div>
               <p className="text-xs text-muted-foreground">{t('settings.sharedFinances.inviteExpiry')}</p>
               {fallbackUrl && (
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                  <p className="text-xs font-medium text-sun-ink flex items-center gap-1">
                     <AlertTriangle className="w-3.5 h-3.5" />
                     {t('settings.sharedFinances.emailNotSent')}
                   </p>
@@ -635,12 +627,12 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                   value={inviteEmail}
                   onChange={e => setInviteEmail(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleSendInvite(); }}
-                  className="flex-1 border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary bg-background"
+                  className="flex-1 border border-line-strong rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary bg-background"
                 />
                 <button
                   onClick={handleSendInvite}
                   disabled={sendingInvite || !inviteEmail.trim()}
-                  className="px-4 py-2.5 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl text-sm flex items-center gap-2 disabled:opacity-50 hover:shadow-md transition-all"
+                  className="px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl text-sm flex items-center gap-2 disabled:opacity-50 hover:shadow-md transition-all"
                 >
                   {sendingInvite ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 </button>
@@ -660,10 +652,10 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.56 }}
-        className="bg-card border border-border rounded-2xl overflow-hidden"
+        className="bg-card border border-border rounded-3xl overflow-hidden"
       >
         <div className="px-6 py-4 border-b border-border flex items-center gap-2">
-          <Crown className="w-4 h-4 text-amber-500" />
+          <Crown className="w-4 h-4 text-sun-ink" />
           <h3 className="text-sm uppercase tracking-wide text-muted-foreground">{t('billing.title')}</h3>
         </div>
         <div className="p-6 space-y-4">
@@ -676,9 +668,9 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
               ) : (
                 <>
                   {/* Current plan badge */}
-                  <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-amber-500/10 to-yellow-500/5 border border-amber-400/30 rounded-xl">
-                    <div className="w-10 h-10 bg-amber-100 dark:bg-amber-950/40 rounded-full flex items-center justify-center shrink-0">
-                      <Crown className="w-5 h-5 text-amber-600" />
+                  <div className="flex items-center gap-3 p-4 bg-sun-soft rounded-xl">
+                    <div className="w-10 h-10 bg-card rounded-full flex items-center justify-center shrink-0">
+                      <Crown className="w-5 h-5 text-sun-ink" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-display text-sm">{t('billing.premium')}</p>
@@ -694,8 +686,8 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                       billingInfo?.subscriptionStatus === 'active'
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
-                        : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                        ? 'bg-reed-soft text-reed'
+                        : 'bg-sun-soft text-sun-ink'
                     }`}>
                       {billingInfo?.subscriptionStatus === 'active' ? t('billing.active') : t('billing.pastDue')}
                     </span>
@@ -720,7 +712,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                     <button
                       onClick={handleReactivate}
                       disabled={reactivateLoading}
-                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-primary to-secondary text-primary-foreground text-sm font-display flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-display flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {reactivateLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                       {t('billing.reactivate')}
@@ -731,7 +723,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                       disabled={cancelLoading}
                       className={`w-full py-2.5 rounded-xl border text-sm flex items-center justify-center gap-2 transition-colors ${
                         confirmCancel
-                          ? 'border-red-300 bg-red-50 text-red-600 dark:bg-red-950/20 dark:border-red-800'
+                          ? 'border-destructive bg-alert-soft text-alert'
                           : 'border-border hover:bg-muted text-muted-foreground'
                       }`}
                     >
@@ -748,13 +740,13 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
           ) : (
             /* Free plan — upgrade CTA */
             <div className="space-y-4">
-              <div className="bg-gradient-to-br from-primary/10 to-secondary/10 border border-primary/20 rounded-xl p-5">
+              <div className="bg-pool-soft rounded-xl p-5">
                 <h4 className="font-display text-primary mb-1">{t('billing.upgradeTitle')}</h4>
                 <p className="text-sm text-muted-foreground mb-4">{t('billing.upgradeDesc')}</p>
                 <button
                   onClick={handleUpgrade}
                   disabled={upgradeLoading}
-                  className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl font-display text-sm flex items-center justify-center gap-2 hover:shadow-lg transition-all disabled:opacity-70"
+                  className="w-full py-3 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-display text-sm flex items-center justify-center gap-2 hover:shadow-lg transition-all disabled:opacity-70"
                 >
                   {upgradeLoading ? (
                     <Loader2 className="w-4 h-4 animate-spin" />

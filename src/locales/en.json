@@ -48,6 +48,8 @@
     "title": "Settings",
     "subtitle": "Manage your preferences and account",
     "profile": {
+      "planFree": "Free plan",
+      "planPremium": "Premium",
       "activePlans_one": "{{count}} active life plan",
       "activePlans_other": "{{count}} active life plans"
     },
