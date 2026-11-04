@@ -292,7 +292,12 @@ export async function purgeUser(db: PrismaClient, userId: string, deps: PurgeDep
       SELECT "id" FROM "User" WHERE "id" = ${userId} AND "deletionRequestedAt" <= ${cutoff} FOR UPDATE`;
     if (claimed.length === 0) return "not_due";
 
-    // a. Stripe, before anything irreversible.
+    // a. Stripe, before anything irreversible. It can't roll back with the
+    //    transaction: if Stripe succeeds and a later step fails, the account
+    //    stays (still marked) with its subscription already cancelled. That
+    //    is acceptable — the person asked to delete it, and tomorrow's run
+    //    retries, finding the subscription cancelled (cancelStripeSubscriptionNow
+    //    treats that as done).
     const subscription = await tx.subscription.findUnique({ where: { userId }, select: { stripeSubscriptionId: true } });
     if (subscription?.stripeSubscriptionId) {
       if (deps.cancelStripeSubscription) await deps.cancelStripeSubscription(subscription.stripeSubscriptionId);

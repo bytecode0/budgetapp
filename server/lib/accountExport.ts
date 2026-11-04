@@ -12,6 +12,9 @@
 //     planUnlink) — what would move to the member is hers, the rest of the
 //     pool is the owner's, so a couple's two exports never overlap;
 //   - recurring commitments have no owner: they are in the pool owner's export.
+// On top of that, the visibility rule every listing uses (server/lib/poolRefs.ts):
+// nothing on another member's private debt, debt line or account is ever
+// exported, while my own private rows always are.
 // Alone, everything in my own scope is mine.
 //
 // Size: a Vercel Function response is capped at 4.5 MB. Movements, the only
@@ -26,6 +29,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { loadUnlinkInput, planUnlink, type UnlinkPlan } from "./partnerUnlink.js";
 import { partnerLinkOf } from "./accountDeletion.js";
+import { notOnHiddenDebt, notOnHiddenLine, visibleExpenseWhere, visibleIncomeWhere } from "./poolRefs.js";
 
 export const EXPORT_MAX_BYTES = 4_000_000;
 export const EXPORT_FORMAT_VERSION = 1;
@@ -80,12 +84,17 @@ export async function loadOwnership(db: PrismaClient, me: string): Promise<Owner
     : ownershipFor(me, { kind: "owner", plan });
 }
 
-/** How many of my expenses there are, without loading them. */
+/** The expenses I may export: in my scopes and never on another member's
+ *  private debt, debt line or account (the same rule as every listing,
+ *  server/lib/poolRefs.ts) — my own private ones always are. */
+const exportableExpenses = (own: Ownership) => ({ userId: { in: own.scopes }, ...visibleExpenseWhere(own.me) });
+
+/** How many of my expenses there are: a count alone, ids only when the
+ *  household split has to be applied row by row. */
 async function countMyExpenses(db: PrismaClient, own: Ownership): Promise<number> {
-  const inMyScope = await db.expense.count({ where: { userId: own.me } });
-  const s = own.situation;
-  if (s.kind === "solo") return inMyScope;
-  return s.kind === "member" ? inMyScope + s.plan.move.expenseIds.length : inMyScope - s.plan.move.expenseIds.length;
+  if (own.situation.kind === "solo") return db.expense.count({ where: exportableExpenses(own) });
+  const rows = await db.expense.findMany({ where: exportableExpenses(own), select: { id: true, userId: true } });
+  return rows.filter(r => own.inMyShare("expenseIds", r)).length;
 }
 
 const ISO_DAY = (d: Date) => d.toISOString().slice(0, 10);
@@ -161,9 +170,12 @@ async function loadRecords(db: PrismaClient, own: Ownership) {
       },
     }),
     db.lifePlan.findMany({ where: inScope, include: { deposits: { orderBy: { month: "asc" } } } }),
-    db.allocation.findMany({ where: inScope, orderBy: { sortOrder: "asc" }, include: { monthlyBudgets: { orderBy: { month: "asc" } } } }),
-    db.categorizationRule.findMany({ where: inScope }),
-    db.recurringCommitment.findMany({ where: inScope }),
+    // Never another member's private debt line, nor what points at it.
+    db.allocation.findMany({
+      where: { ...inScope, ...notOnHiddenDebt(own.me) }, orderBy: { sortOrder: "asc" }, include: { monthlyBudgets: { orderBy: { month: "asc" } } },
+    }),
+    db.categorizationRule.findMany({ where: { ...inScope, ...notOnHiddenLine(own.me) } }),
+    db.recurringCommitment.findMany({ where: { ...inScope, ...notOnHiddenLine(own.me) } }),
   ]);
   return {
     accounts: accounts.filter(own.owns),
@@ -192,7 +204,7 @@ export async function buildJsonExport(db: PrismaClient, me: string, now = new Da
     }),
     loadRecords(db, own),
     countMyExpenses(db, own),
-    db.income.count({ where: { userId: { in: own.scopes }, ownerUserId: me } }),
+    db.income.count({ where: { userId: { in: own.scopes }, ownerUserId: me, ...visibleIncomeWhere(me) } }),
   ]);
   const { settings, subscription, householdMemberships, ...profile } = user;
   return {
@@ -229,11 +241,11 @@ export async function buildMovementRows(db: PrismaClient, me: string): Promise<M
   // Names only of what I own or what the household shares (never a partner's private row).
   const visible = { OR: [{ ownerUserId: me }, { visibility: "household" }] };
   const [expenses, incomes, accounts, debts, allocations] = await Promise.all([
-    db.expense.findMany({ where: inScope }),
-    db.income.findMany({ where: { ...inScope, ownerUserId: me } }),
+    db.expense.findMany({ where: exportableExpenses(own) }),
+    db.income.findMany({ where: { ...inScope, ownerUserId: me, ...visibleIncomeWhere(me) } }),
     db.account.findMany({ where: { ...inScope, ...visible }, select: { id: true, name: true, currency: true } }),
     db.debt.findMany({ where: { ...inScope, ...visible }, select: { id: true, name: true } }),
-    db.allocation.findMany({ where: inScope, select: { id: true, name: true } }),
+    db.allocation.findMany({ where: { ...inScope, ...notOnHiddenDebt(me) }, select: { id: true, name: true } }),
   ]);
   const accountById = new Map(accounts.map(a => [a.id, a]));
   const debtName = new Map(debts.map(d => [d.id, d.name]));

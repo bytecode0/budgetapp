@@ -149,6 +149,25 @@ describe("account export and deletion (integration, real Postgres)", { skip: !TE
     }
   });
 
+  it("export follows the listings' visibility: never the partner's private items, always my own", async () => {
+    const privAccount = await prisma.account.create({ data: { userId: A, ownerUserId: A, name: "ANA-PRIVATE-ACC", type: "checking", visibility: "private" } });
+    await prisma.expense.create({ data: { userId: A, amount: 400, description: "ANA-PRIVATE-BUY", accountId: privAccount.id, createdByUserId: A, payerUserId: A } });
+    const privDebt = await prisma.debt.create({ data: { userId: A, ownerUserId: A, name: "ANA-PRIVATE-DEBT", kind: "other", visibility: "private", currentBalance: 9_000 } });
+    const privLine = await prisma.allocation.create({ data: { userId: A, name: "ANA-PRIVATE-LINE", type: "debt", debtId: privDebt.id } });
+    // A legacy row: B's expense in A's private debt line.
+    await prisma.expense.create({ data: { userId: A, amount: 100, description: "BEA-IN-HIDDEN-LINE", allocationId: privLine.id, createdByUserId: B, payerUserId: B } });
+
+    const bJson = await (await raw(B, "GET", "/api/account/export")).text();
+    const bCsv = await (await raw(B, "GET", "/api/account/export/movements")).text();
+    for (const name of ["ANA-PRIVATE-ACC", "ANA-PRIVATE-BUY", "ANA-PRIVATE-DEBT", "ANA-PRIVATE-LINE", "BEA-IN-HIDDEN-LINE"]) {
+      assert.ok(!bJson.includes(name) && !bCsv.includes(name), `B's export shows ${name}`);
+    }
+    const aJson = await (await raw(A, "GET", "/api/account/export")).text();
+    const aCsv = await (await raw(A, "GET", "/api/account/export/movements")).text();
+    for (const name of ["ANA-PRIVATE-ACC", "ANA-PRIVATE-DEBT", "ANA-PRIVATE-LINE"]) assert.ok(aJson.includes(name), `A's export lacks ${name}`);
+    assert.ok(aCsv.includes("ANA-PRIVATE-BUY") && aCsv.includes("ANA-PRIVATE-ACC"));
+  });
+
   it("request → cancel: the mark is set with a 24 h due date, then cleared", async () => {
     const wrong = await raw(A, "POST", "/api/account/deletion", { code: "000000" });
     assert.equal(wrong.status, 400);
