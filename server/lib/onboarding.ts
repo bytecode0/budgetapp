@@ -11,15 +11,27 @@ import { debtState, monthlyCommitment, owedNow, sumOwed, type DebtLedger } from 
 import { buildDebtTimeline } from "./debtTimeline.js";
 import { simulatePayoff } from "./debtPayoff.js";
 import { currentPeriodKey, periodBounds } from "./period.js";
+import { emergencyFundTarget } from "../../shared/incomeShare.js";
 
 /** Name of the checking account every user gets on first load (server/lib/defaults.ts). */
 export const DEFAULT_ACCOUNT_NAME = "Main account";
 
-/** Wizard steps, by index (0 = welcome … 8 = result). */
+/** Wizard steps, in order. */
 export const ONBOARDING_STEPS = [
-  "welcome", "income", "savings", "bank", "cards", "loans", "fixed", "flexible", "result",
+  "welcome", "goal", "income", "savings", "bank", "cards", "loans", "fixed", "flexible", "result",
 ] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
+
+/** The opening question "¿Qué quieres conseguir?" (LPBETA-07). Only "debt"
+ *  changes the wizard: the cards and loans steps get their full weight. */
+export const ONBOARDING_GOALS = ["steady", "emergency", "debt", "invest"] as const;
+export type OnboardingGoal = (typeof ONBOARDING_GOALS)[number];
+
+export function parseOnboardingGoal(value: unknown): OnboardingGoal | null {
+  return typeof value === "string" && (ONBOARDING_GOALS as readonly string[]).includes(value)
+    ? value as OnboardingGoal
+    : null;
+}
 
 export interface StatusAccount {
   id: string;
@@ -40,6 +52,7 @@ export interface StatusInput {
   allocations: { type: string; allocatedAmount: number }[];
   noCards: boolean; // the user answered "I have no credit cards"
   noLoans: boolean; // the user answered "I have no loans"
+  goal: string | null; // UserSettings.onboardingGoal
 }
 
 export interface OnboardingChecklist {
@@ -55,7 +68,7 @@ export interface OnboardingStatus {
   checklist: OnboardingChecklist;
   missing: OnboardingStep[]; // in wizard order — the steps that would fill each gap
   /** The user's stored answers, so the UI can offer to undo them. */
-  answers: { noCards: boolean; noLoans: boolean };
+  answers: { noCards: boolean; noLoans: boolean; goal: OnboardingGoal | null };
   /** The signed-in user's own seeded checking account while still untouched
    *  — what the bank step fills in. Null once named/funded, if there is none,
    *  or if it belongs to someone else (a partner never edits the primary's). */
@@ -100,7 +113,7 @@ export function deriveOnboardingStatus(input: StatusInput): OnboardingStatus {
   const anyBudget = input.allocations.some(a => a.allocatedAmount > 0);
   const needsOnboarding = missing.length === Object.keys(CHECKLIST_STEP).length && !anyBudget;
   const defaultAccountId = open.find(a => a.ownerUserId === input.authUserId && isUntouchedDefaultAccount(a))?.id ?? null;
-  const answers = { noCards: input.noCards, noLoans: input.noLoans };
+  const answers = { noCards: input.noCards, noLoans: input.noLoans, goal: parseOnboardingGoal(input.goal) };
   return { needsOnboarding, checklist, missing, answers, defaultAccountId };
 }
 
@@ -120,6 +133,12 @@ export interface ResultInput {
   monthlyIncome: number; // cents
   cycleStartDay: number;
   allocations: { type: string; allocatedAmount: number }[]; // cents
+  /** What the user already has saved (their cash/savings accounts), cents. */
+  savedSoFar?: number;
+  /** A savings plan of type "emergency" already exists. */
+  hasEmergencyPlan?: boolean;
+  payYourselfFirstBps?: number | null;
+  goal?: OnboardingGoal | null;
   now?: Date;
 }
 
@@ -134,7 +153,18 @@ export interface OnboardingResult {
   payoffOrder: { id: string; name: string; monthPaidOff: number }[];
   budgeted: number;        // cents — non-debt budget lines (fixed, flexible…)
   leftover: number;        // cents — income − committed − budgeted (may be < 0)
+  /** The month's expenses: debt payments plus every budget line that is not
+   *  saving or giving (fixed, flexible…). What an emergency fund must cover. */
+  monthlyExpenses: number; // cents
+  emergencyFundSuggested: number; // cents — 3 × monthlyExpenses (editable in the UI)
+  savedSoFar: number;      // cents
+  hasEmergencyPlan: boolean;
+  payYourselfFirstBps: number | null;
+  goal: OnboardingGoal | null;
 }
+
+/** Budget lines that are not an expense: saving into a plan, and giving. */
+const NOT_AN_EXPENSE = new Set(["plan", "generosity"]);
 
 export function computeOnboardingResult(input: ResultInput): OnboardingResult {
   const period = periodBounds(currentPeriodKey(input.cycleStartDay, input.now), input.cycleStartDay);
@@ -183,6 +213,10 @@ export function computeOnboardingResult(input: ResultInput): OnboardingResult {
   // Debt lines are already counted in `committed`.
   const budgeted = input.allocations.filter(a => a.type !== "debt").reduce((s, a) => s + a.allocatedAmount, 0);
 
+  const monthlyExpenses = committed + input.allocations
+    .filter(a => a.type !== "debt" && !NOT_AN_EXPENSE.has(a.type))
+    .reduce((s, a) => s + a.allocatedAmount, 0);
+
   return {
     monthlyIncome: input.monthlyIncome,
     committed,
@@ -193,5 +227,11 @@ export function computeOnboardingResult(input: ResultInput): OnboardingResult {
     payoffOrder,
     budgeted,
     leftover: input.monthlyIncome - committed - budgeted,
+    monthlyExpenses,
+    emergencyFundSuggested: emergencyFundTarget(monthlyExpenses),
+    savedSoFar: input.savedSoFar ?? 0,
+    hasEmergencyPlan: input.hasEmergencyPlan ?? false,
+    payYourselfFirstBps: input.payYourselfFirstBps ?? null,
+    goal: input.goal ?? null,
   };
 }

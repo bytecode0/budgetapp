@@ -71,6 +71,11 @@ const MONEY_KEYS = new Set([
   "budgetAmount",
   "owed",
   "leftover",
+  "paidYourself",
+  "payYourselfFirstGoal",
+  "monthlyExpenses",
+  "emergencyFundSuggested",
+  "savedSoFar",
 ]);
 
 /**

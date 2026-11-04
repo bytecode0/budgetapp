@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMonth } from '../context/MonthContext';
 import { motion } from 'motion/react';
-import { AlertTriangle, CheckCircle2, ArrowRight, Sparkles, CreditCard } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CreditCard } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { MonthlyReview } from './MonthlyReview';
 import { Analytics } from './Analytics';
@@ -15,10 +15,15 @@ import type { OnboardingStep } from '../hooks/useOnboardingNeeded';
 import { useMoney } from '../onboarding/useMoney';
 import { BankPendingNotice } from './banking/BankPendingNotice';
 import { budgetedShareTone, sharePct, spentShareTone, toCents, type Tone } from '../../../shared/budgetStatus';
+import { monthLight } from '../../../shared/incomeShare';
+import { useMonthSavings } from '../hooks/useMonthSavings';
+import { PaidYourselfCard } from './PaidYourselfCard';
+import { MonthLightCard } from './MonthLightCard';
 
-// Tones on the hero's dark gradient (shared/budgetStatus.ts decides the tone).
-const HERO_TEXT: Record<Tone, string> = { good: 'text-emerald-300', warning: 'text-amber-300', over: 'text-red-300', neutral: '' };
-const HERO_BAR: Record<Tone, string> = { good: 'bg-emerald-300', warning: 'bg-amber-300', over: 'bg-red-300', neutral: 'bg-white/40' };
+// Tones as Remanso tokens (shared/budgetStatus.ts decides the tone). Going
+// over is the "watch" state, sun — never red (CLAUDE.md).
+const TONE_TEXT: Record<Tone, string> = { good: 'text-reed', warning: 'text-sun-ink', over: 'text-sun-ink', neutral: '' };
+const TONE_BAR: Record<Tone, string> = { good: 'bg-reed', warning: 'bg-sun', over: 'bg-sun-ink', neutral: 'bg-muted-foreground/40' };
 
 function greeting(t: (key: string) => string) {
   const h = new Date().getHours();
@@ -50,16 +55,17 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
   const { t } = useTranslation();
   const { fmt } = useMoney();
   const { language } = useLanguage();
-  const { selectedMonth, isCurrentMonth } = useMonth();
+  const { selectedMonth, isCurrentMonth, isFutureMonth } = useMonth();
   const { plans, fetchPlans } = usePlans();
   const { monthlyIncome } = useAllocations();
   const { review, fetchReview } = useMonthlyReview(selectedMonth);
   const { totalOwed, timeline, fetchTimeline, fetchDebts } = useDebts();
+  const { savings, refresh: refreshSavings } = useMonthSavings(selectedMonth);
   const month = selectedMonth;
   // Bumped after a bank review: the sections with their own data re-read it.
   const [refreshKey, setRefreshKey] = useState(0);
   const refreshAfterBankReview = () => {
-    fetchReview(); fetchPlans(); fetchDebts(); fetchTimeline(6);
+    fetchReview(); fetchPlans(); fetchDebts(); fetchTimeline(6); refreshSavings();
     setRefreshKey(k => k + 1);
   };
 
@@ -90,14 +96,12 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
   }, [isCurrentMonth, selectedMonth]);
 
   // Budget comparison uses categorized spending only — uncategorized money has no
-  // budget to compare against (it's surfaced separately by the amber nudge below).
+  // budget to compare against (it's surfaced separately by the nudge below).
   // The "spent so far" stat still shows the inclusive total (review.totalActual).
   // All compared in integer cents (shared/budgetStatus.ts).
   const budgetedCents   = review ? toCents(review.totalBudgeted) : 0;
   const categorizedCents = review ? toCents(review.totalActual) - toCents(review.unassigned) : 0;
-  const isOverBudget    = !!review && categorizedCents > budgetedCents;
   const overBudgetCount = review?.review.filter(r => r.diff > 0.5).length ?? 0;
-  const budgetDiff      = Math.abs(categorizedCents - budgetedCents) / 100;
   const budgetUsedPct   = sharePct(categorizedCents, budgetedCents);
   const usedTone        = spentShareTone(categorizedCents, budgetedCents);
 
@@ -107,100 +111,123 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
   const budgetedTone  = budgetedShareTone(incomeCents, budgetedCents);
   const budgetedPct   = sharePct(budgetedCents, incomeCents);
   const budgetGap     = Math.abs(incomeCents - budgetedCents) / 100;
-  // A budget with nothing coming in: red, and said plainly (no "% of 0").
+  // A budget with nothing coming in: the watch state, said plainly (no "% of 0").
   const noIncome      = budgetedTone !== 'neutral' && incomeCents <= 0;
+
+  // The traffic light: spending vs budget first, then "Págate a ti primero"
+  // (what it measures and why: shared/incomeShare.ts, monthLight).
+  const light = monthLight({
+    spentCents: categorizedCents,
+    budgetedCents,
+    paidCents: savings ? toCents(savings.paidYourself) : 0,
+    goalCents: savings?.payYourselfFirstGoal != null ? toCents(savings.payYourselfFirstGoal) : null,
+    closed: !isCurrentMonth && !isFutureMonth,
+  });
 
   return (
     <div className="space-y-6 pb-8">
 
       {onResumeSetup && <SetupChecklist missing={setupMissing} onResume={onResumeSetup} onChanged={onSetupChanged} />}
 
-      {/* ── Hero header ── */}
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-3xl p-8 relative overflow-hidden"
-      >
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-32 -mt-32" />
-        <div className="relative z-10">
-          <p className="text-sm opacity-75 mb-1">
-            {isCurrentMonth ? greeting(t) : t('home.reviewingPastMonth')}
-          </p>
-          <h1 className="text-4xl font-display tracking-tight mb-1">{monthLabel(month, language)}</h1>
-          <p className="opacity-75 text-sm">
-            {isCurrentMonth ? t('home.hereBudgetDoing') : t('home.historicalSummary')}
-          </p>
+      {/* ── The month at a glance ── */}
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="space-y-1">
+        <p className="text-sm text-muted-foreground">{isCurrentMonth ? greeting(t) : t('home.reviewingPastMonth')}</p>
+        <h1 className="text-4xl tracking-tight font-display capitalize">{monthLabel(month, language)}</h1>
+      </motion.div>
+
+      {/* ── The one answer: "Te has pagado X de Y este mes" ── */}
+      {savings && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05, duration: 0.2 }}>
+          <PaidYourselfCard
+            savings={savings}
+            onChanged={refreshSavings}
+            onSetAside={onNavigate ? () => onNavigate('dashboard') : undefined}
+          />
+        </motion.div>
+      )}
+
+      {/* ── Traffic light: one sentence on how the month is going ── */}
+      {review && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08, duration: 0.2 }}>
+          <MonthLightCard
+            result={light}
+            overBudgetCount={light.light === 'over' ? overBudgetCount : 0}
+            action={onNavigate && isCurrentMonth && (light.light === 'over' || light.light === 'tight')
+              ? { label: t('home.viewExpenses'), onClick: () => onNavigate('activity') }
+              : undefined}
+          />
+        </motion.div>
+      )}
+
+      {/* ── The month's figures ── */}
+      {review && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.2 }}
+          className="bg-card border border-border rounded-3xl p-6 space-y-5"
+        >
+          <h2 className="text-lg font-semibold">{t('home.monthTitle')}</h2>
 
           {/* Income vs total budgeted: how much of what comes in is already assigned */}
-          {review && <div className="mt-6 bg-white/10 rounded-2xl p-4 space-y-2">
+          <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs opacity-80">{t('home.incomeVsBudgeted')}</p>
+              <p className="text-xs text-muted-foreground">{t('home.incomeVsBudgeted')}</p>
               {budgetedTone !== 'neutral' && !noIncome && (
-                <p className={`text-sm font-display ${HERO_TEXT[budgetedTone]}`}>{t('home.budgetedPct', { pct: budgetedPct })}</p>
+                <p className={`text-sm font-semibold ${TONE_TEXT[budgetedTone]}`}>{t('home.budgetedPct', { pct: budgetedPct })}</p>
               )}
             </div>
             {budgetedTone === 'neutral' ? (
-              <p className="text-sm opacity-80">{t('home.budgetedNeutral')}</p>
+              <p className="text-sm text-muted-foreground">{t('home.budgetedNeutral')}</p>
             ) : (
               <>
-                <p className="text-2xl font-display">
+                <p className="text-2xl font-display tabular-nums">
                   {t('home.budgetedOfIncome', { budgeted: fmt(budgetedCents / 100), income: fmt(incomeCents / 100) })}
                 </p>
-                <div className="h-2 bg-white/20 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full transition-all ${HERO_BAR[budgetedTone]}`} style={{ width: `${noIncome ? 100 : Math.min(budgetedPct, 100)}%` }} />
+                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${TONE_BAR[budgetedTone]}`} style={{ width: `${noIncome ? 100 : Math.min(budgetedPct, 100)}%` }} />
                 </div>
-                <p className={`text-xs ${budgetedTone === 'over' ? HERO_TEXT.over : 'opacity-80'}`}>
+                <p className={`text-xs ${budgetedTone === 'good' ? 'text-muted-foreground' : TONE_TEXT[budgetedTone]}`}>
                   {noIncome
                     ? t('home.budgetedNoIncome', { amount: fmt(budgetedCents / 100) })
                     : t(`home.budgetedTone.${budgetedTone}`, { amount: fmt(budgetGap) })}
                 </p>
               </>
             )}
-          </div>}
+          </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-6 pt-6 border-t border-white/20">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-5 border-t border-border">
             <div>
-              <p className="text-xs opacity-70 mb-1">{t('home.monthlyIncome')}</p>
-              <p className="text-2xl font-display">{fmt(displayIncome)}</p>
-              {incomeRecorded && <p className="text-xs opacity-60">{t('home.actualIncome')}</p>}
+              <p className="text-xs text-muted-foreground mb-1">{t('home.monthlyIncome')}</p>
+              <p className="text-2xl font-display tabular-nums">{fmt(displayIncome)}</p>
+              {incomeRecorded && <p className="text-xs text-muted-foreground">{t('home.actualIncome')}</p>}
             </div>
             <div>
-              <p className="text-xs opacity-70 mb-1">{t('home.spentSoFar')}</p>
-              <p className="text-2xl font-display">
-                {fmt(review?.totalActual ?? 0)}
-              </p>
+              <p className="text-xs text-muted-foreground mb-1">{t('home.spentSoFar')}</p>
+              <p className="text-2xl font-display tabular-nums">{fmt(review.totalActual)}</p>
             </div>
             <div>
-              <p className="text-xs opacity-70 mb-1">{t('home.budgetUsed')}</p>
-              <p className={`text-2xl font-display ${usedTone === 'good' ? '' : HERO_TEXT[usedTone]}`}>
-                {budgetUsedPct}%
-              </p>
+              <p className="text-xs text-muted-foreground mb-1">{t('home.budgetUsed')}</p>
+              <p className={`text-2xl font-display tabular-nums ${usedTone === 'good' ? '' : TONE_TEXT[usedTone]}`}>{budgetUsedPct}%</p>
             </div>
             <div>
-              <p className="text-xs opacity-70 mb-1">{t('home.totalSaved')}</p>
-              <p className="text-2xl font-display">{fmt(totalSaved)}</p>
-              <p className="text-xs opacity-60">{t('home.acrossAllPlans')}</p>
-            </div>
-            <div>
-              <p className="text-xs opacity-70 mb-1">{t('home.lifePlans')}</p>
-              <p className="text-2xl font-display">{completedPlans}/{totalPlans}</p>
-              <p className="text-xs opacity-60">{t('home.completed')}</p>
+              <p className="text-xs text-muted-foreground mb-1">{t('home.totalSaved')}</p>
+              <p className="text-2xl font-display tabular-nums">{fmt(totalSaved)}</p>
+              <p className="text-xs text-muted-foreground">{t('home.plansCompleted', { done: completedPlans, total: totalPlans })}</p>
             </div>
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      )}
 
-      {/* ── Committed future: the core differentiator — how much of what's
-           coming in is already spoken for by debt, before you've spent a cent ── */}
+      {/* ── Committed future: debt goes below the month (LPBETA-07) ── */}
       {totalOwed > 0 && timeline.length > 0 && (
         <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
-          className="bg-card border border-border rounded-2xl p-6"
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.2 }}
+          className="bg-card border border-border rounded-3xl p-6"
         >
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-destructive/10 flex items-center justify-center text-destructive shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-pool-soft text-pool flex items-center justify-center shrink-0">
               <CreditCard className="w-6 h-6" />
             </div>
             <div className="flex-1 min-w-0">
-              <h2 className="text-xl font-display">{t('home.committedFutureTitle')}</h2>
+              <h2 className="text-lg font-semibold">{t('home.committedFutureTitle')}</h2>
               <p className="text-sm text-muted-foreground">
                 {t('home.committedFutureSubtitle', { pct: timeline[0].pctCommitted })}
               </p>
@@ -219,74 +246,15 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
               <div key={p.period} className="text-center">
                 <div className="h-16 flex items-end justify-center">
                   <div
-                    className="w-full max-w-8 bg-destructive/70 rounded-t-md transition-all"
+                    className="w-full max-w-8 bg-pool/60 rounded-t-md transition-all"
                     style={{ height: `${Math.min(100, Math.max(2, p.pctCommitted))}%` }}
                   />
                 </div>
                 <p className="text-xs text-muted-foreground mt-1 capitalize">{shortMonthLabel(p.period, language)}</p>
-                <p className="text-xs font-display">{p.pctCommitted}%</p>
+                <p className="text-xs font-display tabular-nums">{p.pctCommitted}%</p>
               </div>
             ))}
           </div>
-        </motion.div>
-      )}
-
-      {/* ── Budget status banner ── */}
-      {review && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          {isOverBudget ? (
-            <div className="flex items-start gap-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-2xl px-5 py-4">
-              <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-medium text-red-700 dark:text-red-400">
-                  {t('home.overBudgetBy', { amount: fmt(budgetDiff) })}
-                </p>
-                <p className="text-sm text-red-600/70 dark:text-red-400/70 mt-0.5">
-                  {t('home.categoriesExceeded', { count: overBudgetCount })}
-                </p>
-              </div>
-              {onNavigate && isCurrentMonth && (
-                <button
-                  onClick={() => onNavigate('activity')}
-                  className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 hover:underline shrink-0"
-                >
-                  {t('home.viewExpenses')} <ArrowRight className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-          ) : review.totalActual > 0 ? (
-            <div className="flex items-start gap-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl px-5 py-4">
-              <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-medium text-emerald-700 dark:text-emerald-400">
-                  {isCurrentMonth
-                    ? t('home.onTrack', { amount: fmt(budgetDiff) })
-                    : t('home.finishedUnder', { amount: fmt(budgetDiff) })}
-                </p>
-                <p className="text-sm text-emerald-600/70 dark:text-emerald-400/70 mt-0.5">
-                  {t('home.usedPct', { pct: budgetUsedPct })}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-start gap-3 bg-muted/50 border border-border rounded-2xl px-5 py-4">
-              <Sparkles className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
-              <div>
-                <p className="font-medium">{t('home.noExpenses')}</p>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  {isCurrentMonth ? t('home.startTracking') : t('home.noExpenseDataPeriod')}
-                </p>
-              </div>
-              {onNavigate && isCurrentMonth && (
-                <button
-                  onClick={() => onNavigate('activity')}
-                  className="text-xs text-primary flex items-center gap-1 hover:underline shrink-0"
-                >
-                  {t('home.addExpense')} <ArrowRight className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-          )}
         </motion.div>
       )}
 
@@ -294,21 +262,21 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
       {review && review.unassigned > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
-          className="flex items-start gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-5 py-4"
+          className="flex items-start gap-3 bg-sun-soft text-sun-ink rounded-2xl px-5 py-4"
         >
-          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="font-medium text-amber-700 dark:text-amber-400">
+            <p className="font-medium">
               {t('home.unassignedTitle', { amount: fmt(review.unassigned) })}
             </p>
-            <p className="text-sm text-amber-600/70 dark:text-amber-400/70 mt-0.5">
+            <p className="text-sm opacity-80 mt-0.5">
               {t('home.unassignedDesc')}
             </p>
           </div>
           {onNavigate && (
             <button
               onClick={() => onNavigate('activity')}
-              className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 hover:underline shrink-0"
+              className="text-xs flex items-center gap-1 hover:underline shrink-0"
             >
               {t('home.viewExpenses')} <ArrowRight className="w-3 h-3" />
             </button>
@@ -322,20 +290,20 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
       {/* ── Missed plan contributions alert ── */}
       {missedPlans.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-          <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-5 py-4">
-            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 bg-sun-soft text-sun-ink rounded-2xl px-5 py-4">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="font-medium text-amber-800 dark:text-amber-300">
+              <p className="font-medium">
                 {t('home.missedPlanContribs', { count: missedPlans.length })}
               </p>
-              <p className="text-sm text-amber-700/70 dark:text-amber-400/70 mt-0.5">
+              <p className="text-sm opacity-80 mt-0.5">
                 {missedPlans.map(p => `${p.icon} ${p.title}`).join(' · ')}
               </p>
             </div>
             {onNavigate && (
               <button
                 onClick={() => onNavigate('dashboard')}
-                className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1 hover:underline shrink-0"
+                className="text-xs flex items-center gap-1 hover:underline shrink-0"
               >
                 {t('home.reviewPlans')} <ArrowRight className="w-3 h-3" />
               </button>
@@ -350,57 +318,6 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
       {/* ── Temporal analysis ── */}
       <Analytics key={`analytics-${refreshKey}`} />
 
-      {/* ── Financial Tips ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-        className="bg-gradient-to-br from-secondary/5 via-primary/5 to-accent/5 border border-primary/10 rounded-2xl p-6 md:p-8"
-      >
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center text-primary-foreground">
-            <Sparkles className="w-6 h-6" />
-          </div>
-          <div>
-            <h2 className="text-xl font-display">{t('home.financialTips')}</h2>
-            <p className="text-sm text-muted-foreground">{t('home.principlesOptimize')}</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            {
-              badge: t('home.tip5030Badge'),
-              badgeColor: 'bg-primary/10 text-primary',
-              title: t('home.tip5030Title'),
-              desc: t('home.tip5030Body'),
-            },
-            {
-              badge: t('home.tipAutomateBadge'),
-              badgeColor: 'bg-secondary/10 text-secondary',
-              title: t('home.tipAutomateTitle'),
-              desc: t('home.tipAutomateBody'),
-            },
-            {
-              badge: t('home.tipReviewBadge'),
-              badgeColor: 'bg-accent/10 text-accent',
-              title: t('home.tipReviewTitle'),
-              desc: t('home.tipReviewBody'),
-            },
-          ].map((rec, index) => (
-            <motion.div
-              key={rec.title}
-              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35 + index * 0.08 }}
-              className="bg-card border border-border rounded-xl p-5"
-            >
-              <div className={`inline-flex px-3 py-1 rounded-full text-xs mb-3 ${rec.badgeColor}`}>
-                {rec.badge}
-              </div>
-              <h4 className="font-display mb-2">{rec.title}</h4>
-              <p className="text-sm text-muted-foreground leading-relaxed">{rec.desc}</p>
-            </motion.div>
-          ))}
-        </div>
-      </motion.div>
     </div>
   );
 }

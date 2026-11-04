@@ -77,6 +77,13 @@ model UserSettings {
   // shows again, on any device (Accounts still offers connecting). Per real
   // person (authUserId), not per pool. server/lib/banking/prompt.ts
   bankPromptDismissedAt DateTime?
+  // Onboarding (LPBETA-07), all on the POOL's row (req.userId), like the
+  // income baseline they are measured against. Percentages are basis points
+  // (1000 = 10 %), integers like every amount. Null = never chosen.
+  // onboardingGoal: the opening question — "steady" | "emergency" | "debt" | "invest".
+  onboardingGoal      String?
+  // "Págate a ti primero": the share of the household's income to set aside on payday.
+  payYourselfFirstBps Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

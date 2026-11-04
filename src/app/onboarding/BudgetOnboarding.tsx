@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft } from 'lucide-react';
-import type { OnboardingStep } from '../hooks/useOnboardingNeeded';
+import { fetchOnboardingGoal, type OnboardingGoal, type OnboardingStep } from '../hooks/useOnboardingNeeded';
+import { GoalStep } from './GoalStep';
 import { WelcomeStep } from './WelcomeStep';
 import { IncomeStep } from './IncomeStep';
 import { SavingsStep } from './SavingsStep';
@@ -15,9 +16,10 @@ import { ResultScreen } from './ResultScreen';
 import { RemansoMark } from '../components/shared/RemansoMark';
 
 // Steps between the welcome and the result, with the header's back/continue.
-const WIZARD_STEPS: OnboardingStep[] = ['income', 'savings', 'bank', 'cards', 'loans', 'fixed', 'flexible'];
+const WIZARD_STEPS: OnboardingStep[] = ['goal', 'income', 'savings', 'bank', 'cards', 'loans', 'fixed', 'flexible'];
 
 const STEP_META: Partial<Record<OnboardingStep, { titleKey: string; subtitleKey: string }>> = {
+  goal: { titleKey: 'onboarding.goal.title', subtitleKey: 'onboarding.goal.subtitle' },
   income: { titleKey: 'onboarding.income.title', subtitleKey: 'onboarding.income.subtitle' },
   savings: { titleKey: 'onboarding.savings.title', subtitleKey: 'onboarding.savings.subtitle' },
   bank: { titleKey: 'onboarding.bank.title', subtitleKey: 'onboarding.bank.subtitle' },
@@ -43,13 +45,25 @@ interface BudgetOnboardingProps {
 export function BudgetOnboarding({ initialStep = 'welcome', onDone, themeToggle }: BudgetOnboardingProps) {
   const { t } = useTranslation();
   const [step, setStep] = useState<OnboardingStep>(initialStep);
+  // The opening answer (LPBETA-07). Unless it is "Salir de deudas", the cards
+  // and loans steps are asked quietly: a lighter question, "No tengo" first.
+  const [goal, setGoal] = useState<OnboardingGoal | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchOnboardingGoal().then(g => { if (!cancelled) setGoal(prev => prev ?? g); });
+    return () => { cancelled = true; };
+  }, []);
+  const quietDebts = goal !== 'debt';
 
   const currentIdx = WIZARD_STEPS.indexOf(step);
   const inWizard = currentIdx >= 0;
   const goNext = () => setStep(WIZARD_STEPS[currentIdx + 1] ?? 'result');
   const goBack = () => setStep(currentIdx <= 0 ? 'welcome' : WIZARD_STEPS[currentIdx - 1]);
 
-  const meta = STEP_META[step];
+  const baseMeta = STEP_META[step];
+  const meta = baseMeta && quietDebts && (step === 'cards' || step === 'loans')
+    ? { titleKey: `onboarding.${step}.titleQuiet`, subtitleKey: `onboarding.${step}.subtitleQuiet` }
+    : baseMeta;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -108,12 +122,13 @@ export function BudgetOnboarding({ initialStep = 'welcome', onDone, themeToggle 
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
             >
-              {step === 'welcome' && <WelcomeStep onStart={() => setStep('income')} />}
+              {step === 'welcome' && <WelcomeStep onStart={() => setStep('goal')} />}
+              {step === 'goal' && <GoalStep goal={goal} onChange={setGoal} />}
               {step === 'income' && <IncomeStep />}
               {step === 'savings' && <SavingsStep />}
               {step === 'bank' && <BankStep />}
-              {step === 'cards' && <CardsStep />}
-              {step === 'loans' && <LoansStep />}
+              {step === 'cards' && <CardsStep quiet={quietDebts} />}
+              {step === 'loans' && <LoansStep quiet={quietDebts} />}
               {step === 'fixed' && <BudgetLinesStep type="fixed" />}
               {step === 'flexible' && <BudgetLinesStep type="flexible" />}
               {step === 'result' && <ResultScreen onDone={onDone} />}

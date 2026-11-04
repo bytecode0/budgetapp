@@ -25,7 +25,7 @@ planDepositsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response)
 });
 
 // POST /api/plan-deposits/confirm
-// Batch upsert deposits for a month, then recalculate currentAmount for each plan
+// Batch upsert deposits for a month; each plan's currentAmount moves by the change
 planDepositsRouter.post("/confirm", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { month, deposits } = req.body as {
@@ -48,37 +48,38 @@ planDepositsRouter.post("/confirm", requireAuth, async (req: AuthRequest, res: R
       return res.status(403).json({ error: "One or more plans not found" });
     }
 
-    // Upsert each deposit
-    await Promise.all(
-      deposits.map(d =>
-        prisma.planDeposit.upsert({
+    // Upsert each deposit and move the plan's balance by what the deposit
+    // changed (new − previous). currentAmount also holds the plan's starting
+    // amount, direct contributions and plan-line expenses, so it is never
+    // overwritten with the sum of deposits (that wiped all of those).
+    // The last entry wins when a plan appears twice.
+    const byPlan = new Map(deposits.map(d => [d.planId, d]));
+    await prisma.$transaction(async (tx) => {
+      const previous = await tx.planDeposit.findMany({
+        where: { planId: { in: [...byPlan.keys()] }, month },
+        select: { planId: true, amount: true },
+      });
+      const before = new Map(previous.map(p => [p.planId, p.amount]));
+      for (const d of byPlan.values()) {
+        const amount = toCents(d.amount);
+        await tx.planDeposit.upsert({
           where: { planId_month: { planId: d.planId, month } },
-          update: { amount: toCents(d.amount), note: d.note ?? "", byUserId: req.authUserId! },
+          update: { amount, note: d.note ?? "", byUserId: req.authUserId! },
           create: {
             userId: req.userId!,
             byUserId: req.authUserId!,
             planId: d.planId,
             month,
-            amount: toCents(d.amount),
+            amount,
             note: d.note ?? "",
           },
-        })
-      )
-    );
-
-    // Recalculate currentAmount for each affected plan = sum of all deposits
-    await Promise.all(
-      planIds.map(async planId => {
-        const { _sum } = await prisma.planDeposit.aggregate({
-          where: { planId },
-          _sum: { amount: true },
         });
-        await prisma.lifePlan.update({
-          where: { id: planId },
-          data: { currentAmount: _sum.amount ?? 0 },
-        });
-      })
-    );
+        const delta = amount - (before.get(d.planId) ?? 0);
+        if (delta !== 0) {
+          await tx.lifePlan.update({ where: { id: d.planId }, data: { currentAmount: { increment: delta } } });
+        }
+      }
+    });
 
     // Return updated deposits with plan info
     const updated = await prisma.planDeposit.findMany({
