@@ -102,16 +102,24 @@ describe("security limits (integration, real Postgres)", { skip: !TEST_DATABASE_
     return { status: res.status, body: await res.json() as Record<string, unknown> };
   }
 
-  it("counts every hit exactly once under concurrency, and deletes old windows", async () => {
+  it("under concurrency exactly `limit` hits get through, refused ones take nothing, and old windows go", async () => {
     const store = rateLimit.prismaRateLimitStore(prisma);
     const windowStart = new Date("2026-11-04T10:00:00Z");
-    const counts = await Promise.all(Array.from({ length: 25 }, () => store.increment("t:concurrent", windowStart)));
-    assert.deepEqual([...counts].sort((a, b) => a - b), Array.from({ length: 25 }, (_, i) => i + 1));
+    const results = await Promise.all(Array.from({ length: 40 }, () => store.takeAll([{ key: "t:concurrent", windowStart, limit: 25 }])));
+    assert.equal(results.filter(Boolean).length, 25);
+    const count = async (key: string) => (await prisma.rateLimitHit.findFirst({ where: { key } }))?.count ?? 0;
+    assert.equal(await count("t:concurrent"), 25, "the 15 refused hits weren't counted");
 
-    await store.increment("t:old", new Date("2026-11-01T10:00:00Z"));
+    // All or nothing: a full second counter leaves the first one untouched.
+    assert.equal(await store.takeAll([{ key: "t:other", windowStart, limit: 5 }, { key: "t:concurrent", windowStart, limit: 25 }]), false);
+    assert.equal(await count("t:other"), 0);
+    assert.equal(await store.takeAll([{ key: "t:other", windowStart, limit: 5 }]), true);
+    assert.equal(await count("t:other"), 1);
+
+    await store.takeAll([{ key: "t:old", windowStart: new Date("2026-11-01T10:00:00Z"), limit: 5 }]);
     await store.deleteOlderThan(new Date("2026-11-02T10:00:00Z"));
-    const keys = (await prisma.rateLimitHit.findMany()).map(r => r.key);
-    assert.deepEqual(keys, ["t:concurrent"]);
+    const keys = (await prisma.rateLimitHit.findMany({ orderBy: { key: "asc" } })).map(r => r.key);
+    assert.deepEqual(keys, ["t:concurrent", "t:other"]);
   });
 
   it("send-reset: the fourth request in an hour sends nothing, and answers like an unknown email", async () => {
@@ -172,15 +180,73 @@ describe("security limits (integration, real Postgres)", { skip: !TEST_DATABASE_
 
     // The friend signs in with Google.
     const result = await googleSignIn(prisma, { email: "friend@test.local", name: "Friend", verified_email: true });
-    assert.ok("userId" in result && !result.isNewUser);
+    assert.ok("userId" in result && !result.isNewUser && result.claimed);
     const user = await prisma.user.findUnique({ where: { email: "friend@test.local" } });
     assert.ok(user?.emailVerified);
     assert.equal(user?.passwordHash, null);
+    assert.equal(user?.name, "Friend", "the attacker's name goes too");
     const r = await login();
     assert.equal(r.status, 401, "the attacker's password no longer signs in");
 
     // And registering again can't put a password back on the verified account.
     assert.equal((await post("/api/auth/register", { name: "Attacker", email: "friend@test.local", password: "attacker-pass" })).status, 409);
+  });
+
+  it("register: a later register can't plant its password on the account its owner then verifies", async () => {
+    const email = "victim@test.local";
+    const code = async () => {
+      const lines: string[] = [];
+      const log = console.log;
+      console.log = (...args: unknown[]) => { lines.push(args.map(String).join(" ")); };
+      return { lines, restore: () => { console.log = log; } };
+    };
+    const registerAndCapture = async (password: string) => {
+      const cap = await code();
+      try {
+        const res = await fetch(base + "/api/auth/register", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: "N", email, password }),
+        });
+        assert.equal(res.status, 200);
+      } finally { cap.restore(); }
+      // The code is the 6-digit run in the printed email whose hash is the stored one.
+      const { hashOtp } = await import("./otp.js");
+      const token = await prisma.otpToken.findFirst({ where: { email, type: "email_verification" } });
+      const otp = [...new Set(cap.lines.join("\n").match(/\d{6}/g) ?? [])].find(c => hashOtp(c) === token?.tokenHash);
+      assert.ok(otp, "code found in the console email");
+      return otp!;
+    };
+
+    await registerAndCapture("victim-pass-1");     // the victim signs up (code C1)
+    const c2 = await registerAndCapture("attacker-pass-2"); // the attacker re-registers; C2 goes to the victim
+
+    // The victim verifies with the code in their inbox, carrying the password they typed.
+    const verified = await post("/api/auth/verify-email", { email, otp: c2, password: "victim-pass-1" });
+    assert.equal(verified.status, 200);
+
+    assert.equal((await post("/api/auth/login", { email, password: "attacker-pass-2" })).status, 401, "the attacker's password doesn't work");
+    assert.equal((await post("/api/auth/login", { email, password: "victim-pass-1" })).status, 200, "the victim's does");
+  });
+
+  it("verify-email without a password verifies with no password; a verified account keeps its own", async () => {
+    await prisma.otpToken.deleteMany({});
+    const email = "nopass@test.local";
+    await prisma.user.create({ data: { email, passwordHash: await bcrypt.hash("someone-else", 4) } });
+    const { hashOtp } = await import("./otp.js");
+    const otpRow = (otp: string) => ({ email, type: "email_verification", tokenHash: hashOtp(otp), expiresAt: new Date(Date.now() + 60_000) });
+    await prisma.otpToken.create({ data: otpRow("123456") });
+    assert.equal((await post("/api/auth/verify-email", { email, otp: "123456" })).status, 200);
+    const user = await prisma.user.findUnique({ where: { email } });
+    assert.ok(user?.emailVerified);
+    assert.equal(user?.passwordHash, null);
+
+    // Already verified: a later code (resend-otp) doesn't touch the password.
+    await prisma.user.update({ where: { email }, data: { passwordHash: await bcrypt.hash("own-pass-1", 4) } });
+    await prisma.otpToken.create({ data: otpRow("654321") });
+    assert.equal((await post("/api/auth/verify-email", { email, otp: "654321", password: "other-pass-2" })).status, 200);
+    assert.equal((await post("/api/auth/login", { email, password: "own-pass-1" })).status, 200);
+
+    assert.equal((await post("/api/auth/verify-email", { email, otp: "000000", password: "short" })).status, 400);
   });
 
   it("Google keeps the password of an account its owner already verified", async () => {

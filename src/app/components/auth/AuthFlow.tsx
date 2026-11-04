@@ -40,6 +40,9 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
   }));
   const [currentScreen, setCurrentScreen] = useState<AuthScreen>(hasLanding ? 'landing' : 'login');
   const [pendingEmail, setPendingEmail] = useState('');
+  // Kept in memory only, for the verify request; gone on a reload (the server
+  // then verifies the account without a password).
+  const [pendingPassword, setPendingPassword] = useState('');
   const [googleToken, setGoogleToken] = useState<string | null>(null);
   const [googleError, setGoogleError] = useState<string | null>(null);
 
@@ -82,8 +85,9 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
             onLogin={onAuthenticated}
             onSwitchToSignup={() => setCurrentScreen('signup')}
             onForgotPassword={() => setCurrentScreen('forgot-password')}
-            onNeedVerification={(email) => {
+            onNeedVerification={(email, password) => {
               setPendingEmail(email);
+              setPendingPassword(password);
               setCurrentScreen('verify-email');
             }}
             googleError={googleError}
@@ -92,8 +96,9 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
       case 'signup':
         return (
           <Signup
-            onSignupSuccess={(email) => {
+            onSignupSuccess={(email, password) => {
               setPendingEmail(email);
+              setPendingPassword(password);
               setCurrentScreen('verify-email');
             }}
             onSwitchToLogin={() => setCurrentScreen('login')}
@@ -103,7 +108,8 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
         return (
           <VerifyEmail
             email={pendingEmail}
-            onVerified={() => setCurrentScreen('welcome')}
+            password={pendingPassword}
+            onVerified={() => { setPendingPassword(''); setCurrentScreen('welcome'); }}
             onBack={() => setCurrentScreen('signup')}
           />
         );

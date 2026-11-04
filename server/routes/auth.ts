@@ -177,7 +177,10 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
       return res.redirect(`${appUrl}/?error=google_failed`);
     }
 
-    if (signIn.isNewUser) {
+    // An unverified account Google just verified is, for the person, a new
+    // one: welcome them and seed it (createDefaultAllocations skips an
+    // account that already has categories).
+    if (signIn.isNewUser || signIn.claimed) {
       const locale = parsedState.lang ?? undefined;
       sendWelcomeGoogleEmail(signIn.email, signIn.name ?? "", locale).catch((e) =>
         console.error("[auth/google/callback] welcome google email failed:", e)
@@ -340,20 +343,38 @@ authRouter.post("/register", async (req: Request, res: Response) => {
 // Verify email OTP
 authRouter.post("/verify-email", async (req: Request, res: Response) => {
   try {
-    const { email, otp } = req.body;
+    const { email, otp, password } = req.body;
 
     if (!email || !otp) {
       return res.status(400).json({ error: "Email and OTP are required" });
+    }
+    // The password typed at sign-up (or at the login that sent them here).
+    // Optional: without it the account is verified with no password at all.
+    if (password !== undefined && password !== null && password !== "" &&
+        (typeof password !== "string" || password.length < 8)) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
     const result = await consumeOtp(prisma, String(email), "email_verification", String(otp));
     if (result !== "ok") return otpFailure(res, result);
 
-    const user = await prisma.user.update({
-      where: { email },
-      data: { emailVerified: new Date() },
+    // Verifying sets the password, in the same conditional update as the
+    // verification: the stored hash is whatever the LAST register wrote, and
+    // that may be someone else who registered this email after its owner
+    // (the code still reaches only the owner). So it is replaced by the one
+    // the person verifying typed, or dropped when the request has none (page
+    // reloaded): they can use "forgot password" or Google. An account that
+    // was already verified keeps its password.
+    const passwordHash = typeof password === "string" && password ? await bcrypt.hash(password, 10) : null;
+    await prisma.user.updateMany({
+      where: { email: String(email), emailVerified: null },
+      data: { emailVerified: new Date(), passwordHash, failedLogins: 0, loginLockedUntil: null },
+    });
+    const user = await prisma.user.findUnique({
+      where: { email: String(email) },
       include: { settings: { select: { language: true } } },
     });
+    if (!user) return otpFailure(res, "invalid");
 
     setAuthCookie(res, user.id);
 
@@ -390,6 +411,14 @@ authRouter.post("/verify-email", async (req: Request, res: Response) => {
 
 // Resend OTP. One answer for a code sent, an unknown email and a limit
 // reached, so the response doesn't reveal which emails have an account.
+//
+// Known gap, here and in /send-reset: the body is the same, but not the rest.
+// Only a real account waits for the email provider, so it answers slower
+// (hundreds of ms), and a provider failure (quota, outage) turns into a 500
+// only for a real account. Both still tell, to someone who measures, whether
+// an email has an account. Closing it means answering before sending (send in
+// the background, which a Vercel function may cut off) or padding the time;
+// left for later.
 const RESEND_SENT = { message: "If an account exists, a new code was sent" };
 authRouter.post("/resend-otp", async (req: Request, res: Response) => {
   try {

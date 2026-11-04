@@ -12,11 +12,13 @@ import { RemansoMark } from '../shared/RemansoMark';
 
 interface VerifyEmailProps {
   email: string;
+  /** What they typed at sign-up or login; verifying sets it as the password. */
+  password: string;
   onVerified: () => void;
   onBack: () => void;
 }
 
-export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
+export function VerifyEmail({ email, password, onVerified, onBack }: VerifyEmailProps) {
   const { t } = useTranslation();
   const { refreshUser } = useAuth();
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
@@ -60,7 +62,7 @@ export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp: code }),
+        body: JSON.stringify({ email, otp: code, ...(password && { password }) }),
       });
       const data = await res.json();
       if (!res.ok) {

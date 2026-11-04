@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   AI_DAILY, AI_HOURLY, AI_MAPPING_HOURLY, CODE_EMAIL_DAILY, CODE_EMAIL_HOURLY, CODE_IP_HOURLY,
-  aiChecks, codeSendChecks, rateLimitKey, takeRateLimit, windowStartOf,
+  aiChecks, codeSendChecks, ipLimitId, rateLimitKey, takeRateLimit, windowStartOf,
   type RateLimitStore, type RateRule,
 } from "./rateLimit.js";
 
@@ -14,13 +14,17 @@ const NEVER_CLEAN = () => 1;
 function memoryStore() {
   const rows = new Map<string, { key: string; windowStart: Date; count: number }>();
   const deletes: Date[] = [];
+  const id = (key: string, windowStart: Date) => `${key}|${windowStart.toISOString()}`;
   const store: RateLimitStore = {
-    async increment(key, windowStart) {
-      const id = `${key}|${windowStart.toISOString()}`;
-      const row = rows.get(id) ?? { key, windowStart, count: 0 };
-      row.count++;
-      rows.set(id, row);
-      return row.count;
+    // Same contract as the SQL one: all counters move, or none.
+    async takeAll(counters) {
+      if (counters.some(c => (rows.get(id(c.key, c.windowStart))?.count ?? 0) >= c.limit)) return false;
+      for (const { key, windowStart } of counters) {
+        const row = rows.get(id(key, windowStart)) ?? { key, windowStart, count: 0 };
+        row.count++;
+        rows.set(id(key, windowStart), row);
+      }
+      return true;
     },
     async deleteOlderThan(before) {
       deletes.push(before);
@@ -86,12 +90,47 @@ test("without an IP only the email rules apply", () => {
   assert.equal(codeSendChecks("a@b.c", "1.1.1.1").length, 4);
 });
 
-test("refused hits still count, so hammering keeps the limit closed", async () => {
+test("a refused hit takes nothing: hammering in one hour can't lock the address out for the day", async () => {
   const { store, rows } = memoryStore();
-  const rule: RateRule = { name: "t", limit: 1, windowMs: 1000 };
-  await takeRateLimit(store, [{ rule, id: "x" }], at("2026-11-04T10:00:00Z"), NEVER_CLEAN);
-  await takeRateLimit(store, [{ rule, id: "x" }], at("2026-11-04T10:00:00.5Z"), NEVER_CLEAN);
-  assert.equal([...rows.values()][0].count, 2);
+  for (let i = 0; i < 100; i++) {
+    await takeRateLimit(store, codeSendChecks("victim@example.com", `10.0.0.${i % 50}`), at("2026-11-04T10:00:00Z"), NEVER_CLEAN);
+  }
+  const daily = [...rows.values()].find(r => r.key === rateLimitKey(CODE_EMAIL_DAILY, "victim@example.com"));
+  assert.equal(daily?.count, CODE_EMAIL_HOURLY.limit, "only the 3 sent codes count toward the day");
+  assert.equal(await takeRateLimit(store, codeSendChecks("victim@example.com", "1.1.1.1"), at("2026-11-04T11:00:00Z"), NEVER_CLEAN), true);
+});
+
+test("a hit refused by one rule takes nothing from the others", async () => {
+  const { store, rows } = memoryStore();
+  for (let i = 0; i < CODE_IP_HOURLY.limit; i++) {
+    await takeRateLimit(store, codeSendChecks(`user${i}@example.com`, "9.9.9.9"), at("2026-11-04T10:00:00Z"), NEVER_CLEAN);
+  }
+  assert.equal(await takeRateLimit(store, codeSendChecks("victim@example.com", "9.9.9.9"), at("2026-11-04T10:00:00Z"), NEVER_CLEAN), false);
+  assert.ok(![...rows.values()].some(r => r.key === rateLimitKey(CODE_EMAIL_HOURLY, "victim@example.com")));
+});
+
+test("IPv4 counts by address, IPv6 by its /64", () => {
+  assert.equal(ipLimitId("203.0.113.7"), "203.0.113.7");
+  assert.equal(ipLimitId("::ffff:203.0.113.7"), "203.0.113.7", "IPv4-mapped is the IPv4");
+  assert.equal(ipLimitId("::FFFF:203.0.113.7"), "203.0.113.7");
+  assert.equal(ipLimitId("2001:db8:85a3:1234:aaaa:bbbb:cccc:dddd"), "2001:db8:85a3:1234::/64");
+  assert.equal(ipLimitId("2001:0db8:85a3:1234::1"), "2001:db8:85a3:1234::/64", "leading zeros and :: compression");
+  assert.equal(ipLimitId("2001:db8::1"), "2001:db8:0:0::/64");
+  assert.equal(ipLimitId("2001:db8::"), "2001:db8:0:0::/64");
+  assert.equal(ipLimitId("::1"), "0:0:0:0::/64");
+  assert.equal(ipLimitId("fe80::1%eth0"), "fe80:0:0:0::/64");
+  assert.equal(ipLimitId("64:ff9b::192.0.2.33"), "64:ff9b:0:0::/64", "embedded IPv4 in the low bits");
+  assert.equal(ipLimitId("::1.2.3.4"), "0:0:0:0::/64");
+  assert.equal(ipLimitId("not-an-ip"), "not-an-ip");
+});
+
+test("addresses in one IPv6 /64 share the IP limit", async () => {
+  const { store } = memoryStore();
+  let sent = 0;
+  for (let i = 0; i < 30; i++) {
+    if (await takeRateLimit(store, codeSendChecks(`u${i}@example.com`, `2001:db8:1:2::${(i + 1).toString(16)}`), at("2026-11-04T10:00:00Z"), NEVER_CLEAN)) sent++;
+  }
+  assert.equal(sent, CODE_IP_HOURLY.limit);
 });
 
 test("the AI budget is 30 calls an hour per person, shared by the endpoints", async () => {

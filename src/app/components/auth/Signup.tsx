@@ -9,7 +9,8 @@ import { RemansoMark } from '../shared/RemansoMark';
 import { apiErrorMessage } from '../../lib/apiErrors';
 
 interface SignupProps {
-  onSignupSuccess: (email: string) => void;
+  /** The password goes on to the code screen: verifying is what sets it (server/routes/auth.ts /verify-email). */
+  onSignupSuccess: (email: string, password: string) => void;
   onSwitchToLogin: () => void;
 }
 
@@ -35,7 +36,7 @@ export function Signup({ onSignupSuccess, onSwitchToLogin }: SignupProps) {
       return;
     }
     toast.success(t('auth.signup.codeSent'));
-    onSignupSuccess(formData.email);
+    onSignupSuccess(formData.email, formData.password);
   };
 
   const handleGoogleSignup = () => {

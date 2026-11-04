@@ -6,7 +6,9 @@
 //    carrying that address would get in.
 //  - When Google verifies an account nobody had verified, its password goes:
 //    whoever set it never proved they own the email. The owner can set one
-//    with "forgot password".
+//    with "forgot password". The name is Google's too (the old one came
+//    from the same unverified sign-up), and the caller welcomes the account
+//    like a new one (`claimed`).
 import type { PrismaClient } from "@prisma/client";
 
 export interface GoogleProfile {
@@ -18,7 +20,15 @@ export interface GoogleProfile {
 
 export type GoogleSignInResult =
   | { error: "no_email" | "unverified" }
-  | { userId: string; email: string; name: string | null; isNewUser: boolean };
+  | {
+      userId: string;
+      email: string;
+      name: string | null;
+      /** Created by this sign-in. */
+      isNewUser: boolean;
+      /** An existing account nobody had verified, verified by this sign-in. */
+      claimed: boolean;
+    };
 
 type Db = Pick<PrismaClient, "user">;
 
@@ -37,9 +47,22 @@ export async function googleSignIn(db: Db, profile: GoogleProfile, now: Date = n
   // Conditional on the account still being unverified, so it is atomic with
   // the check: a register that races in can't keep its password either (it
   // only writes while the account is unverified, see POST /register).
-  await db.user.updateMany({
+  const claimed = await db.user.updateMany({
     where: { id: user.id, emailVerified: null },
-    data: { emailVerified: now, passwordHash: null, failedLogins: 0, loginLockedUntil: null },
+    data: {
+      emailVerified: now,
+      passwordHash: null,
+      failedLogins: 0,
+      loginLockedUntil: null,
+      ...(profile.name && { name: profile.name }),
+    },
   });
-  return { userId: user.id, email, name: user.name, isNewUser: !existing };
+  const isClaimed = !!existing && claimed.count === 1;
+  return {
+    userId: user.id,
+    email,
+    name: isClaimed && profile.name ? profile.name : user.name,
+    isNewUser: !existing,
+    claimed: isClaimed,
+  };
 }

@@ -51,12 +51,13 @@ test("no email from Google is its own error", async () => {
   assert.deepEqual(await googleSignIn(db, { verified_email: true }), { error: "no_email" });
 });
 
-test("an account nobody verified loses the password someone set on it", async () => {
+test("an account nobody verified loses the password and name someone set on it, and is claimed", async () => {
   const rows: Row[] = [{ id: "u1", email: "ana@example.com", name: "Attacker", emailVerified: null, passwordHash: "attacker-hash" }];
   const { db } = fakeDb(rows);
-  const result = await googleSignIn(db, { email: "ana@example.com", verified_email: true, picture: "p" }, NOW);
-  assert.deepEqual(result, { userId: "u1", email: "ana@example.com", name: "Attacker", isNewUser: false });
+  const result = await googleSignIn(db, { email: "ana@example.com", name: "Ana", verified_email: true, picture: "p" }, NOW);
+  assert.deepEqual(result, { userId: "u1", email: "ana@example.com", name: "Ana", isNewUser: false, claimed: true });
   assert.equal(rows[0].passwordHash, null);
+  assert.equal(rows[0].name, "Ana");
   assert.equal(rows[0].emailVerified, NOW);
 });
 
@@ -64,7 +65,9 @@ test("a verified account keeps its password and its verification date", async ()
   const verifiedAt = new Date("2026-01-01T00:00:00Z");
   const rows: Row[] = [{ id: "u1", email: "ana@example.com", name: "Ana", emailVerified: verifiedAt, passwordHash: "own-hash" }];
   const { db } = fakeDb(rows);
-  await googleSignIn(db, { email: "ana@example.com", verified_email: true }, NOW);
+  const result = await googleSignIn(db, { email: "ana@example.com", name: "Google Name", verified_email: true }, NOW);
+  assert.ok("userId" in result && !result.claimed && !result.isNewUser);
+  assert.equal(rows[0].name, "Ana", "a verified account keeps its name");
   assert.equal(rows[0].passwordHash, "own-hash");
   assert.equal(rows[0].emailVerified, verifiedAt);
 });
@@ -73,7 +76,7 @@ test("a new email becomes a verified account with no password", async () => {
   const rows: Row[] = [];
   const { db } = fakeDb(rows);
   const result = await googleSignIn(db, { email: "new@example.com", name: "New", verified_email: true }, NOW);
-  assert.ok("userId" in result && result.isNewUser);
+  assert.ok("userId" in result && result.isNewUser && !result.claimed);
   assert.equal(rows[0].emailVerified, NOW);
   assert.equal(rows[0].passwordHash, null);
 });
