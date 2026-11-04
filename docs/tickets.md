@@ -21,9 +21,35 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 | LPBETA-14 | Seguridad del acceso (códigos y contraseñas) | **Hecho y desplegado** (PR #7, 4 nov) | Sí (aditivo, aplicado en el schema) |
 | LPBETA-15 | Medir la paz: una pregunta al mes | En refinamiento | Sí (aditivo: una tabla pequeña) |
 | LPBETA-16 | Dominio de la BETA: `app.luisvespa.com` | Refinado — decidido el 4 nov | No |
-| LPBETA-17 | Nuevo nombre de la app: Remanso o Sereno | En decisión (Luis) | No |
+| LPBETA-17 | Nuevo nombre de la app: **Remanso** | Decidido el 4 nov — falta comprobar la marca | No |
+| LPBETA-18 | Rediseño de toda la app para Remanso | En refinamiento | No (se verá al diseñar) |
 
-### Orden de prioridad (4 nov; Luis: medir primero, LPBETA-03 de los últimos)
+### Orden de ejecución (4 nov, sustituye al de abajo)
+
+**Decisión de Luis (4 nov):** todos los tickets se implementan **antes de la primera ola de amigos**. Ya no hay bloques "durante" y "después" de la BETA: el orden solo sirve para no hacer el mismo trabajo dos veces. *Por confirmar:* si "todos" incluye LPBETA-03 (Stripe, que Luis quería de los últimos) y LPBETA-08 (invitaciones con descuento, que depende de 03).
+
+| # | Ticket | Por qué en este lugar |
+|---|---|---|
+| ✓ | LPBETA-14 · Seguridad del acceso | Hecho y desplegado (PR #7). |
+| ✓ | LPBETA-05 · Medir usuarios activos | Hecho en su rama; falta el `db push` de producción y fusionar. |
+| 1 | LPBETA-04 · Pequeños pendientes | El `/deploy` con el `db push` de producción: lo usan casi todos los siguientes. |
+| 2 | LPBETA-09 · Borrar cuenta, exportar y privacidad | Confianza y RGPD. Va antes del rediseño porque es sobre todo servidor. |
+| 3 | LPBETA-06 · Aviso de inversiones | Pequeño y decidido. |
+| 4 | LPBETA-16 + LPBETA-17 · `app.luisvespa.com` y el nombre Remanso | Un mismo despliegue. Fija la marca antes de rediseñar. |
+| 5 | **LPBETA-18 · Rediseño: sistema de diseño** (colores, tipografía, logo, componentes) | **Antes de cualquier pantalla nueva:** si no, el 07, 10, 11, 12, 13 y 15 se diseñan dos veces. |
+| 6 | LPBETA-07 · Inicio y onboarding | La primera pantalla del rediseño, ya con el sistema nuevo. |
+| 7 | LPBETA-10 · Generosidad | Mismo flujo de onboarding que el 07. |
+| 8 | LPBETA-15 · Medir la paz | Una tarjeta en el Inicio nuevo. |
+| 9 | LPBETA-11 · PWA y bienvenida | El icono y la página de bienvenida salen del sistema de diseño. |
+| 10 | LPBETA-18 · Rediseño del resto de pantallas | Actividad, Deudas, Planes, Cuentas, Ajustes… |
+| 11 | LPBETA-12 · Suscripciones y gastos hormiga | Pantallas nuevas, ya con el diseño nuevo. |
+| 12 | LPBETA-13 · Celebrar los hitos | Ídem. |
+| 13 | LPBETA-02 · Gráficas de deudas | Ídem. |
+| 14 | LPBETA-01 · Ciclo de facturación de la tarjeta | Sobre todo servidor. |
+| 15 | LPBETA-08 · Invitación | Si entra (ver arriba). |
+| 16 | LPBETA-03 · Stripe y Premium | El último, como pidió Luis, si entra. |
+
+### Orden anterior (con la BETA por olas; sustituido el 4 nov)
 
 Situación: la alfa está desplegada en `budget.luisvespa.com` con 2 usuarios. Tamaño: S = un día o menos, M = 2–3 días, L = una semana.
 
@@ -531,7 +557,9 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 
 ---
 
-## LPBETA-17 · Nuevo nombre de la app: Remanso o Sereno — EN DECISIÓN (Luis)
+## LPBETA-17 · Nuevo nombre de la app: Remanso — DECIDIDO (4 nov)
+
+**Decisión de Luis (4 nov): Remanso.** Sereno queda como alternativa si la comprobación de marca encuentra un problema. Antes de publicar, siguen haciendo falta los pasos 2 y 3 de abajo (OEPM/EUIPO y dominio `.es`). La encuesta de YouTube ya no es para decidir, pero puede servir como contenido ("así se llama la app").
 
 **Por qué (investigación del 4 nov):** "LifePlan" está muy ocupado en finanzas (la herramienta "Life Plan" de Bank of America, una marca LIFEPLAN de software registrada en EE. UU., el software LIFEPlan de planificación financiera de Maxomsoft y varias apps con ese nombre). Además es genérico, está en inglés para un público español y no transmite la promesa de paz. Cambiarlo ahora cuesta poco: 2 usuarios y casi nada publicado.
 
@@ -553,3 +581,34 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 **Preguntas abiertas para Luis:**
 1. ¿Remanso o Sereno? (Tras la encuesta.)
 2. ¿Lema? Propuesta para Remanso: *"tu dinero, en calma"*.
+
+---
+
+## LPBETA-18 · Rediseño de toda la app para Remanso — EN REFINAMIENTO
+
+**Por qué (decisión del 4 nov):** la app cambia de nombre (Remanso), de cliente (familias que ganan bien y quieren ahorrar) y de promesa (**ver tu dinero da calma**). La interfaz de hoy nació para otra cosa: un presupuesto y un tablero de deudas, con el tema por defecto de shadcn y mucho número a la vista. Remanso tiene que **sentirse** tranquila, no solo decirlo.
+
+**Lo que ya existe (verificado, 4 nov):**
+- Tema en `src/styles/theme.css`: azul `#1E3A8A` (primary), verde `#10B981` (secondary), ámbar `#F59E0B` (accent), fondo `#F9FAFB`, radio `0.875rem`, con modo oscuro. Tipografías Outfit (títulos y números) y Manrope (texto), en `fonts.css`.
+- 31 pantallas y componentes en `src/app/components/` y 48 componentes de shadcn/ui en `ui/`.
+- Las pautas de interfaz de `CLAUDE.md` (FAB, modales, tarjetas con degradado, tipografía, colores de estado) describen el diseño actual. **Cambiarán con el rediseño.**
+- **Dependencias que no se usan:** `@mui/material`, `@mui/icons-material`, `@emotion/*`, `react-slick`, `react-responsive-masonry` y `@popperjs/core` están en `package.json`, pero ningún fichero de `src/` los importa. Restos de la plantilla de Figma: se quitan en este ticket.
+
+**Propuesta, en dos fases:**
+
+**Fase 1: sistema de diseño (antes que cualquier pantalla nueva).**
+- Principios: calma antes que datos (una respuesta clara por pantalla: "¿vamos bien?"), mucho aire, pocos números a la vez, sin rojo alarmista (el rojo solo para errores reales) y lenguaje amable.
+- **Identidad:** logo e icono de app (sirve también para la PWA, LPBETA-11), paleta nueva inspirada en el agua en calma, tipografía, radios, sombras y movimiento (transiciones suaves y cortas).
+- **Tokens** en `theme.css` (claro y oscuro), con contraste AA comprobado.
+- **Componentes base:** tarjeta, tarjeta principal, semáforo de estado, botones, campos, FAB, hoja o modal, estados vacíos y gráficas (colores de series).
+- Un **documento de referencia** visual del sistema y la actualización de las pautas de `CLAUDE.md`.
+
+**Fase 2: pantallas.** Se rediseña cada pantalla cuando se toca su ticket (Inicio y onboarding en el 07, bienvenida en el 11…), y al final las que no tengan ticket propio: Actividad, Deudas, Planes, Cuentas, Hogar y Ajustes. Cada una en su PR, probada en el móvil (375 px) y en el escritorio, en claro y oscuro.
+
+**Fuera de alcance:** cambiar la lógica, las rutas o el schema. El rediseño es visual y de textos.
+
+**Preguntas abiertas para Luis:**
+1. ¿Hay diseñador, o lo propone Claude? (Claude puede preparar el sistema de diseño como página de referencia o en Figma, si Luis tiene cuenta.)
+2. ¿Logo: lo encargas, o Claude prepara una propuesta provisional?
+3. ¿Hay que parecerse al canal de YouTube (colores o miniaturas actuales), o el canal se adaptará a Remanso?
+4. ¿Modo oscuro desde el principio, o solo claro en la primera versión?
