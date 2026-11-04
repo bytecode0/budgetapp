@@ -465,6 +465,10 @@ model PlanDeposit {
   amount  Int // cents
   month   String // "2026-04"
   note    String @default("")
+  // Who last created or changed it (req.authUserId): in a household any member
+  // can deposit into any plan of the pool. Null for deposits from before this
+  // column. Read by the active-users count (server/lib/activeStats.ts).
+  byUserId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

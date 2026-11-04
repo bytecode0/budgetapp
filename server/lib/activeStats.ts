@@ -1,8 +1,8 @@
 // Active-users count for the BETA (LPBETA-05, docs/vision-y-plan-beta.md §3).
 //
 // An active user has done something in the app in the last 30 days: entered
-// an expense or an income (by hand or a file import), made a plan deposit, or
-// reviewed bank movements. What the daily bank sync writes on its own
+// an expense or an income (by hand or a file import), made or changed a plan
+// deposit, or reviewed bank movements. What the daily bank sync writes on its own
 // (source "bank_sync", and the Account.bankReviewedAt cursor it advances) is
 // not the person's activity; their review is, via User.lastBankReviewAt.
 //
@@ -83,8 +83,10 @@ export function computeActiveStats(input: ActivityInput, now: Date): ActiveStats
 }
 
 // Reads only ids and dates. Rows from before per-person attribution existed
-// (Expense.createdByUserId, LifePlan.ownerUserId null) count for the pool's
-// owner (userId), the best that is known about them.
+// (Expense.createdByUserId, PlanDeposit.byUserId, LifePlan.ownerUserId null)
+// count for the pool's owner (userId) or the plan's owner, the best that is
+// known about them. Editing an expense or income is not counted: nothing
+// records who edited it, and automated updates move updatedAt too.
 export async function loadActivity(prisma: PrismaClient, now: Date): Promise<ActivityInput> {
   const from = new Date(now.getTime() - 30 * DAY_MS);
   const [users, expenses, incomes, reviewers, plans, deposits, households] = await Promise.all([
@@ -101,9 +103,10 @@ export async function loadActivity(prisma: PrismaClient, now: Date): Promise<Act
     }),
     prisma.user.findMany({ where: { lastBankReviewAt: { gte: from } }, select: { id: true, lastBankReviewAt: true } }),
     prisma.lifePlan.findMany({ select: { userId: true, ownerUserId: true } }),
+    // updatedAt: changing this month's deposit is activity too (upsert by month).
     prisma.planDeposit.findMany({
-      where: { createdAt: { gte: from } },
-      select: { userId: true, createdAt: true, plan: { select: { ownerUserId: true } } },
+      where: { updatedAt: { gte: from } },
+      select: { userId: true, byUserId: true, updatedAt: true, plan: { select: { ownerUserId: true } } },
     }),
     prisma.householdMember.groupBy({ by: ["householdId"], _count: { userId: true } }),
   ]);
@@ -112,7 +115,7 @@ export async function loadActivity(prisma: PrismaClient, now: Date): Promise<Act
   for (const e of expenses) if (e._max.createdAt) activity.push({ userId: e.createdByUserId ?? e.userId, at: e._max.createdAt });
   for (const i of incomes) if (i._max.createdAt) activity.push({ userId: i.ownerUserId, at: i._max.createdAt });
   for (const r of reviewers) if (r.lastBankReviewAt) activity.push({ userId: r.id, at: r.lastBankReviewAt });
-  const depositRows = deposits.map(d => ({ userId: d.plan.ownerUserId ?? d.userId, at: d.createdAt }));
+  const depositRows = deposits.map(d => ({ userId: d.byUserId ?? d.plan.ownerUserId ?? d.userId, at: d.updatedAt }));
   activity.push(...depositRows);
 
   return {

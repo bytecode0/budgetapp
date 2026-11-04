@@ -5,11 +5,14 @@
 //   DATABASE_URL='' npm run stats:active
 //
 // Definition and sources: server/lib/activeStats.ts.
-import { prisma } from "../lib/prisma.js";
+import { PrismaClient } from "@prisma/client";
 import { computeActiveStats, formatActiveStats, loadActivity } from "../lib/activeStats.js";
 import { pathToFileURL } from "node:url";
 
-// Error name and Prisma code only: a message can echo values.
+// Its own client with Prisma's logging off: Prisma would print full error
+// messages, which can echo values. Errors are reported by name and code only.
+const prisma = new PrismaClient({ log: [] });
+
 function errorTag(e: unknown): string {
   if (!(e instanceof Error)) return typeof e;
   const code = (e as { code?: unknown }).code;

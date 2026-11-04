@@ -9,7 +9,7 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 | LPBETA-02 | Gráficas de deudas, detalle y plan de pago | Refinado | No |
 | LPBETA-03 | Stripe y control de acceso Premium | Refinado | No |
 | LPBETA-04 | Pequeños pendientes | Lista | — |
-| LPBETA-05 | Medir usuarios activos | **Hecho** en `feature/lpbeta-05-medir` (4 nov) — falta `db push` de producción | Sí (aditivo: `User.lastBankReviewAt`) |
+| LPBETA-05 | Medir usuarios activos | **Hecho** en `feature/lpbeta-05-medir` (4 nov) — falta `db push` de producción | Sí (aditivo: `User.lastBankReviewAt`, `PlanDeposit.byUserId`) |
 | LPBETA-06 | LifePlan no asesora sobre inversiones (simulador con aviso) | Refinado | No |
 | LPBETA-07 | Inicio y onboarding para el nuevo cliente | Refinado — **va antes de la BETA** | Por confirmar al diseñar |
 | LPBETA-08 | Enlace de invitación para amigos | Aplazado (después de la BETA) | Sí (aditivo) |
@@ -195,7 +195,12 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 
 **Implementado:** `npm run stats:active` (`server/scripts/activeStats.ts`, lógica en `server/lib/activeStats.ts`). Solo lectura; imprime números y fechas, nunca nombres, emails, ids ni importes.
 - **Cambio respecto a lo refinado:** la sincronización diaria con el banco escribe movimientos (`source: "bank_sync"`) y adelanta `Account.bankReviewedAt` ella sola, así que ninguna de las dos cosas dice si la persona usó la app. Se añade **`User.lastBankReviewAt`** (schema aditivo), que solo se marca cuando el usuario confirma una revisión de movimientos del banco (`POST /api/banking/connections/:id/confirm`). Las filas `bank_sync` no cuentan como actividad.
-- **Limitaciones conocidas:** las filas antiguas sin `createdByUserId` / `ownerUserId` cuentan para el titular del pool; un ingreso cuenta para quien lo gana (`Income.ownerUserId`), que casi siempre es quien lo apunta. Las revisiones de banco anteriores a este cambio no se ven.
+- **Aportaciones:** en un hogar cualquiera aporta a cualquier plan del pool, así que se añade **`PlanDeposit.byUserId`** (quién la creó o la cambió por última vez; schema aditivo). Cambiar la aportación del mes también cuenta (`updatedAt`).
+- **Limitaciones conocidas:**
+  - las filas antiguas sin `createdByUserId` / `byUserId` / `ownerUserId` cuentan para el titular del pool o del plan;
+  - un ingreso cuenta para quien lo gana (`Income.ownerUserId`), que es quien lo apunta;
+  - **editar** un gasto o un ingreso (p. ej. cambiar la categoría de un movimiento del banco) no cuenta: nada guarda quién lo editó. Quien solo usa la banca cuenta como activo cuando revisa movimientos retenidos, apunta algo o aporta a un plan; si la sincronización no retiene nada y solo mira la app, sale como inactivo;
+  - las revisiones de banco y las aportaciones anteriores a este cambio no tienen autor.
 - **Uso en producción:** `DATABASE_URL='' npm run stats:active`, con la URL de Neon entre las comillas, en tu terminal.
 - Tests: 7 unitarios y uno de integración contra Postgres (qué cuenta y qué no, y que el informe no filtra datos).
 

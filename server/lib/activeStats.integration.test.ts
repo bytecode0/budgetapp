@@ -77,4 +77,44 @@ describe("active users (integration, real Postgres)", { skip: !TEST_DATABASE_URL
       assert.ok(!text.includes(secret), `report leaks ${secret}`);
     }
   });
+
+  it("credits who did it in a household, and legacy rows to the pool owner", async () => {
+    const list = (await prisma.$queryRaw<{ tablename: string }[]>`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`)
+      .map(t => `"public"."${t.tablename}"`).join(", ");
+    await prisma.$executeRawUnsafe(`TRUNCATE ${list} CASCADE`);
+    const now = new Date();
+    const owner = await prisma.user.create({ data: { email: "owner@test.local" } });
+    const partner = await prisma.user.create({ data: { email: "partner@test.local" } });
+    const legacyOwner = await prisma.user.create({ data: { email: "legacy@test.local" } });
+
+    // The partner deposits into a plan the owner created, in the owner's pool.
+    const plan = await prisma.lifePlan.create({ data: { userId: owner.id, ownerUserId: owner.id, title: "Viaje", targetAmount: 100000 } });
+    await prisma.planDeposit.create({ data: { userId: owner.id, planId: plan.id, byUserId: partner.id, amount: 3000, month: "2026-11" } });
+    // An expense from before createdByUserId existed: the pool owner's.
+    await prisma.expense.create({ data: { userId: legacyOwner.id, createdByUserId: null, amount: 900, source: "manual" } });
+
+    const s = stats.computeActiveStats(await stats.loadActivity(prisma, now), now);
+    const input = await stats.loadActivity(prisma, now);
+    const activeIds = new Set(input.activity.map(a => a.userId));
+    assert.ok(activeIds.has(partner.id), "the partner who deposited is active");
+    assert.ok(!activeIds.has(owner.id), "the plan's creator did nothing");
+    assert.ok(activeIds.has(legacyOwner.id), "a legacy row counts for the pool owner");
+    assert.equal(s.active.last30, 2);
+    assert.equal(s.depositedLast30, 1);
+  });
+
+  it("changing an old deposit this month is activity", async () => {
+    const now = new Date();
+    const old = new Date(now.getTime() - 90 * DAY_MS);
+    const saver = await prisma.user.create({ data: { email: "old-saver@test.local", createdAt: old } });
+    const plan = await prisma.lifePlan.create({ data: { userId: saver.id, ownerUserId: saver.id, title: "Casa", targetAmount: 100000 } });
+    const deposit = await prisma.planDeposit.create({ data: { userId: saver.id, planId: plan.id, amount: 1000, month: "2026-08", createdAt: old } });
+    await prisma.$executeRaw`UPDATE "PlanDeposit" SET "updatedAt" = ${old} WHERE id = ${deposit.id}`;
+    let ids = new Set((await stats.loadActivity(prisma, now)).activity.map(a => a.userId));
+    assert.ok(!ids.has(saver.id), "an untouched 90-day-old deposit is not activity");
+
+    await prisma.planDeposit.update({ where: { id: deposit.id }, data: { amount: 2000, byUserId: saver.id } });
+    ids = new Set((await stats.loadActivity(prisma, now)).activity.map(a => a.userId));
+    assert.ok(ids.has(saver.id));
+  });
 });

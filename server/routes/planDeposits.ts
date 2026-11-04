@@ -53,9 +53,10 @@ planDepositsRouter.post("/confirm", requireAuth, async (req: AuthRequest, res: R
       deposits.map(d =>
         prisma.planDeposit.upsert({
           where: { planId_month: { planId: d.planId, month } },
-          update: { amount: toCents(d.amount), note: d.note ?? "" },
+          update: { amount: toCents(d.amount), note: d.note ?? "", byUserId: req.authUserId! },
           create: {
             userId: req.userId!,
+            byUserId: req.authUserId!,
             planId: d.planId,
             month,
             amount: toCents(d.amount),
