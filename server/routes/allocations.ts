@@ -25,7 +25,7 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
       incomeBaselines(req.userId!, req.authUserId!),
     ]);
     // Theme and language belong to the person, not the household pool: in a
-    // couple each member keeps their own (LPBETA-18).
+    // couple each member keeps their own (LPBETA-27).
     const ownSettings = req.authUserId === req.userId
       ? settings
       : await prisma.userSettings.findUnique({ where: { userId: req.authUserId! } });
@@ -288,7 +288,7 @@ allocationsRouter.patch("/settings/display", requireAuth, async (req: AuthReques
     if (darkMode !== undefined) updateData.darkMode = Boolean(darkMode);
     if (language !== undefined) updateData.language = String(language);
 
-    // The signed-in person's own row, never the household pool's (LPBETA-18).
+    // The signed-in person's own row, never the household pool's (LPBETA-27).
     const settings = await prisma.userSettings.upsert({
       where: { userId: req.authUserId! },
       update: updateData,

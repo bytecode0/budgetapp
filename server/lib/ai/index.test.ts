@@ -81,7 +81,7 @@ test("openrouter: chat completions with bearer auth, model, JSON mode, timeout a
   const h = init.headers as Record<string, string>;
   assert.equal(h.Authorization, `Bearer ${KEY}`);
   assert.equal(h["HTTP-Referer"], "https://budget.example.com");
-  assert.equal(h["X-Title"], "LifePlan");
+  assert.equal(h["X-Title"], "Remanso");
   assert.ok(init.signal instanceof AbortSignal);
   const body = JSON.parse(String(init.body));
   assert.equal(body.model, "some/model:free");

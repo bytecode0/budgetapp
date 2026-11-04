@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, Target } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import type { OnboardingStep } from '../hooks/useOnboardingNeeded';
 import { WelcomeStep } from './WelcomeStep';
 import { IncomeStep } from './IncomeStep';
@@ -12,6 +12,7 @@ import { CardsStep } from './CardsStep';
 import { LoansStep } from './LoansStep';
 import { BudgetLinesStep } from './BudgetLinesStep';
 import { ResultScreen } from './ResultScreen';
+import { RemansoMark } from '../components/shared/RemansoMark';
 
 // Steps between the welcome and the result, with the header's back/continue.
 const WIZARD_STEPS: OnboardingStep[] = ['income', 'savings', 'bank', 'cards', 'loans', 'fixed', 'flexible'];
@@ -54,10 +55,8 @@ export function BudgetOnboarding({ initialStep = 'welcome', onDone, themeToggle 
     <div className="min-h-screen bg-background flex flex-col">
       <header className="w-full bg-card border-b border-border py-4 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
-            <Target className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <span className="font-display text-lg text-foreground">LifePlan</span>
+          <RemansoMark className="w-8 h-8" />
+          <span className="font-display text-lg text-foreground">remanso</span>
         </div>
         <div className="flex items-center gap-2">
         {inWizard && (

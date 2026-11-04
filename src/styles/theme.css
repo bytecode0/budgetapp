@@ -1,7 +1,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Remanso design system (LPBETA-18): https://claude.ai/artifact/WMDkSACG5weNQxzPB6KyB5
+  /* Remanso design system (LPBETA-27): https://claude.ai/artifact/WMDkSACG5weNQxzPB6KyB5
      Brand names first, then the shadcn/Tailwind names mapped onto them. */
   --font-size: 16px;
   --surface: #F3F6F4;

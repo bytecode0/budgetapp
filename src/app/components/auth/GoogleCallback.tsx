@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Target, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { RemansoMark } from '../shared/RemansoMark';
 
 interface GoogleCallbackProps {
   token: string;
@@ -41,10 +42,8 @@ export function GoogleCallback({ token, onSuccess, onError }: GoogleCallbackProp
         transition={{ duration: 0.4 }}
         className="text-center"
       >
-        <div className="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center shadow-lg mx-auto mb-4">
-          <Target className="w-9 h-9 text-primary-foreground" />
-        </div>
-        <h2 className="text-xl font-display text-primary mb-2">LifePlan</h2>
+        <RemansoMark className="w-16 h-16 mx-auto mb-4" />
+        <h2 className="text-xl font-display text-primary mb-2">remanso</h2>
         <Loader2 className="w-6 h-6 animate-spin text-primary mx-auto mb-2" />
         <p className="text-sm text-muted-foreground">Signing you in...</p>
       </motion.div>

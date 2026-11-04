@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Mail, Lock, Eye, EyeOff, Target } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { TermsNotice } from './TermsNotice';
 import { useAuth } from '../../context/AuthContext';
+import { RemansoMark } from '../shared/RemansoMark';
 
 interface LoginProps {
   onLogin: () => void;
@@ -62,9 +63,7 @@ export function Login({ onLogin, onSwitchToSignup, onForgotPassword, onNeedVerif
           className="text-center mb-8"
         >
           <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center shadow-lg">
-              <Target className="w-9 h-9 text-primary-foreground" />
-            </div>
+            <RemansoMark className="w-16 h-16" />
           </div>
           <h1 className="text-3xl font-display text-primary mb-2">{t('auth.login.title')}</h1>
           <p className="text-muted-foreground">{t('auth.login.subtitle')}</p>

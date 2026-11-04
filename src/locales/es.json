@@ -33,7 +33,7 @@
     "noData": "Aún no hay datos del hogar"
   },
   "sidebar": {
-    "tagline": "Planificador Financiero de Vida",
+    "tagline": "Tu dinero, en calma",
     "planTagline": "Planifica tu futuro, no solo registres el pasado",
     "planStatus": "Estado del Plan",
     "aligned": "En Seguimiento",
@@ -937,7 +937,7 @@
   },
   "partnerInvite": {
     "title": "Invitación a finanzas compartidas",
-    "invited": "{{name}} ({{email}}) te ha invitado a compartir sus datos financieros en LifePlan.",
+    "invited": "{{name}} ({{email}}) te ha invitado a compartir sus datos financieros en Remanso.",
     "onceLinked": "Una vez vinculados, compartiréis",
     "shareExpenses": "Todos los gastos e historial de compras",
     "sharePlans": "Planes de vida y objetivos de ahorro",
@@ -972,7 +972,7 @@
       "googleCancelled": "Inicio de sesión con Google cancelado",
       "googleFailed": "Error al iniciar sesión con Google. Inténtalo de nuevo.",
       "verifyEmailFirst": "Por favor, verifica tu email primero.",
-      "welcomeBack": "¡Bienvenido de vuelta a LifePlan!"
+      "welcomeBack": "¡Bienvenido de vuelta a Remanso!"
     },
     "signup": {
       "title": "Empieza a planificar tu futuro",
@@ -1023,6 +1023,7 @@
       "goToLogin": "Ir al inicio de sesión →"
     },
     "verifyEmail": {
+      "verifiedToast": "Email verificado. Te damos la bienvenida a Remanso.",
       "back": "Atrás",
       "title": "Revisa tu bandeja de entrada",
       "sentCodeTo": "Te enviamos un código de 6 dígitos a",
@@ -1035,7 +1036,7 @@
       "tagline": "¡Casi listo! Verifica tu email para empezar a planificar tu futuro financiero."
     },
     "welcome": {
-      "title": "¡Bienvenido a LifePlan!",
+      "title": "¡Bienvenido a Remanso!",
       "subtitle": "Ya tienes tu Plan Gratuito listo. Empecemos a construir tu futuro financiero.",
       "featurePlans": "Crea Planes de Vida",
       "featurePlansDesc": "Establece objetivos financieros significativos para vacaciones, inversiones y más",
@@ -1368,12 +1369,12 @@
   },
   "legal": {
     "lastUpdated": "Última actualización: 29 de octubre de 2026",
-    "backToApp": "Volver a LifePlan",
+    "backToApp": "Volver a Remanso",
     "privacyLink": "Política de privacidad",
     "termsLink": "Términos del servicio",
     "privacy": {
       "title": "Política de privacidad",
-      "intro": "Esta política explica qué datos trata LifePlan (budget.luisvespa.com), para qué los usa y con quién se comparten. LifePlan es una aplicación gratuita, en fase beta, para organizar tu presupuesto y tus deudas.",
+      "intro": "Esta política explica qué datos trata Remanso (budget.luisvespa.com), para qué los usa y con quién se comparten. Remanso es una aplicación gratuita, en fase beta, para organizar tu presupuesto y tus deudas.",
       "sections": [
         {
           "title": "Quién es el responsable",
@@ -1397,9 +1398,9 @@
           ]
         },
         {
-          "title": "Lo que LifePlan no hace",
+          "title": "Lo que Remanso no hace",
           "paragraphs": [
-            "LifePlan solo se conecta a tu banco si tú lo pides, y solo para leer: no puede mover dinero ni hacer pagos. Si no lo conectas, los datos solo entran porque tú los escribes o importas un archivo. No muestra publicidad, no vende tus datos ni los cede a terceros para sus propios fines, y no usa cookies de analítica ni de publicidad. Tampoco toma decisiones automatizadas que te afecten jurídicamente."
+            "Remanso solo se conecta a tu banco si tú lo pides, y solo para leer: no puede mover dinero ni hacer pagos. Si no lo conectas, los datos solo entran porque tú los escribes o importas un archivo. No muestra publicidad, no vende tus datos ni los cede a terceros para sus propios fines, y no usa cookies de analítica ni de publicidad. Tampoco toma decisiones automatizadas que te afecten jurídicamente."
           ]
         },
         {
@@ -1420,7 +1421,7 @@
         {
           "title": "Proveedores que tratan datos por nosotros",
           "paragraphs": [
-            "Para que LifePlan funcione usamos estos proveedores, que tratan datos solo para prestarnos su servicio:"
+            "Para que Remanso funcione usamos estos proveedores, que tratan datos solo para prestarnos su servicio:"
           ],
           "items": [
             "Neon: base de datos PostgreSQL donde se guardan tus datos, alojada en la Unión Europea (Fráncfort).",
@@ -1436,7 +1437,7 @@
         {
           "title": "Cookies y almacenamiento local",
           "paragraphs": [
-            "LifePlan usa una cookie, llamada «token», que mantiene tu sesión iniciada. Es técnica e imprescindible: no es accesible desde JavaScript, caduca a los 7 días y se borra al cerrar sesión. Cuando entras con Google o conectas tu banco, una cookie técnica temporal (como mucho 10 y 30 minutos) comprueba que la vuelta la inició tu navegador. Además, tu navegador guarda en su almacenamiento local el idioma que eliges y si has ocultado el aviso «Completa tu configuración». No usamos cookies de analítica, de publicidad ni de terceros, por eso no te pedimos consentimiento para ellas."
+            "Remanso usa una cookie, llamada «token», que mantiene tu sesión iniciada. Es técnica e imprescindible: no es accesible desde JavaScript, caduca a los 7 días y se borra al cerrar sesión. Cuando entras con Google o conectas tu banco, una cookie técnica temporal (como mucho 10 y 30 minutos) comprueba que la vuelta la inició tu navegador. Además, tu navegador guarda en su almacenamiento local el idioma que eliges y si has ocultado el aviso «Completa tu configuración». No usamos cookies de analítica, de publicidad ni de terceros, por eso no te pedimos consentimiento para ellas."
           ]
         },
         {
@@ -1462,7 +1463,7 @@
         {
           "title": "Menores",
           "paragraphs": [
-            "LifePlan está pensada para personas mayores de 18 años. No debes crear una cuenta si eres menor de edad."
+            "Remanso está pensado para personas mayores de 18 años. No debes crear una cuenta si eres menor de edad."
           ]
         },
         {
@@ -1475,30 +1476,30 @@
     },
     "terms": {
       "title": "Términos del servicio",
-      "intro": "Estos términos regulan el uso de LifePlan (budget.luisvespa.com), una aplicación de Luis Vespa para organizar tu presupuesto y tus deudas. Al crear una cuenta o usar la aplicación, los aceptas.",
+      "intro": "Estos términos regulan el uso de Remanso (budget.luisvespa.com), una aplicación de Luis Vespa para organizar tu presupuesto y tus deudas. Al crear una cuenta o usar la aplicación, los aceptas.",
       "sections": [
         {
           "title": "Una beta gratuita",
           "paragraphs": [
-            "LifePlan está en fase beta y es gratuita. Durante la beta las funciones pueden cambiar, aparecer o desaparecer. Si en el futuro hubiera planes de pago, lo anunciaremos con antelación y nunca te cobraremos nada sin que lo aceptes expresamente."
+            "Remanso está en fase beta y es gratuito. Durante la beta las funciones pueden cambiar, aparecer o desaparecer. Si en el futuro hubiera planes de pago, lo anunciaremos con antelación y nunca te cobraremos nada sin que lo aceptes expresamente."
           ]
         },
         {
           "title": "Tu cuenta",
           "paragraphs": [
-            "Para usar LifePlan debes tener al menos 18 años y dar datos ciertos al registrarte. Eres responsable de mantener tu contraseña en secreto y de lo que se haga con tu cuenta. Si crees que alguien ha accedido a ella, escríbenos a contact@luisvespa.com."
+            "Para usar Remanso debes tener al menos 18 años y dar datos ciertos al registrarte. Eres responsable de mantener tu contraseña en secreto y de lo que se haga con tu cuenta. Si crees que alguien ha accedido a ella, escríbenos a contact@luisvespa.com."
           ]
         },
         {
           "title": "No es asesoramiento financiero",
           "paragraphs": [
-            "LifePlan es una herramienta para organizarte. Sus cifras (presupuesto, futuro comprometido, fecha de salida de deudas, orden de pago) son estimaciones calculadas con los datos que tú introduces, y solo son tan exactas como esos datos. No constituyen asesoramiento financiero, jurídico ni fiscal. LifePlan no es un banco, no mueve dinero ni hace pagos por ti, y las decisiones sobre tu dinero son siempre tuyas."
+            "Remanso es una herramienta para organizarte. Sus cifras (presupuesto, futuro comprometido, fecha de salida de deudas, orden de pago) son estimaciones calculadas con los datos que tú introduces, y solo son tan exactas como esos datos. No constituyen asesoramiento financiero, jurídico ni fiscal. Remanso no es un banco, no mueve dinero ni hace pagos por ti, y las decisiones sobre tu dinero son siempre tuyas."
           ]
         },
         {
           "title": "Uso aceptable",
           "paragraphs": [
-            "Te comprometes a usar LifePlan de forma lícita y, en particular, a no:"
+            "Te comprometes a usar Remanso de forma lícita y, en particular, a no:"
           ],
           "items": [
             "intentar acceder a cuentas o datos de otras personas;",
@@ -1516,13 +1517,13 @@
         {
           "title": "Sin garantías",
           "paragraphs": [
-            "LifePlan se ofrece «tal cual», sin garantías de ningún tipo. Al ser una beta, puede tener errores, interrupciones o, en casos excepcionales, pérdida de datos: conserva tus propios registros de lo importante. En la medida en que la ley lo permita, no respondemos de los daños derivados del uso de la aplicación o de decisiones tomadas a partir de sus cifras. Nada de esto limita los derechos que te reconoce la normativa de consumidores ni la responsabilidad por dolo o culpa grave."
+            "Remanso se ofrece «tal cual», sin garantías de ningún tipo. Al ser una beta, puede tener errores, interrupciones o, en casos excepcionales, pérdida de datos: conserva tus propios registros de lo importante. En la medida en que la ley lo permita, no respondemos de los daños derivados del uso de la aplicación o de decisiones tomadas a partir de sus cifras. Nada de esto limita los derechos que te reconoce la normativa de consumidores ni la responsabilidad por dolo o culpa grave."
           ]
         },
         {
           "title": "Fin del servicio o de tu cuenta",
           "paragraphs": [
-            "Puedes dejar de usar LifePlan cuando quieras y pedir que eliminemos tu cuenta escribiendo a contact@luisvespa.com. Podemos suspender o cerrar una cuenta que incumpla estos términos. También podemos cerrar la beta o el servicio; en ese caso te avisaremos con antelación razonable siempre que sea posible."
+            "Puedes dejar de usar Remanso cuando quieras y pedir que eliminemos tu cuenta escribiendo a contact@luisvespa.com. Podemos suspender o cerrar una cuenta que incumpla estos términos. También podemos cerrar la beta o el servicio; en ese caso te avisaremos con antelación razonable siempre que sea posible."
           ]
         },
         {
@@ -1609,7 +1610,7 @@
     "reviewPendingNote_one": "{{count}} movimiento pendiente no se importa hasta que el banco lo contabilice.",
     "reviewPendingNote_other": "{{count}} movimientos pendientes no se importan hasta que el banco los contabilice.",
     "reviewNothingNew": "No hay movimientos nuevos",
-    "reviewNothingNewDesc": "Todo lo que trae el banco ya está en LifePlan.",
+    "reviewNothingNewDesc": "Todo lo que trae el banco ya está en Remanso.",
     "reviewStart": "Empezar a sincronizar",
     "reviewDoneHint": "A partir de ahora, los movimientos nuevos de esta cuenta llegarán solos cada día.",
     "errors": {

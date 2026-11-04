@@ -1,8 +1,8 @@
-// The entire authenticated LifePlan BudgetApp tree — providers, shell, and every
+// The entire authenticated Remanso app tree — providers, shell, and every
 // screen.
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LayoutDashboard, Sparkles, Wallet, Target, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight, Landmark, Users, CreditCard } from 'lucide-react';
+import { LayoutDashboard, Sparkles, Wallet, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight, Landmark, Users, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 import { Home } from './components/Home';
@@ -31,6 +31,7 @@ import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/useP
 import { apiErrorMessage } from './lib/apiErrors';
 import { applyDarkMode } from './lib/theme';
 import { ThemeToggle } from './components/shared/ThemeToggle';
+import { RemansoMark } from './components/shared/RemansoMark';
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
 
@@ -226,10 +227,8 @@ function AppInner() {
           transition={{ duration: 0.5 }}
           className="text-center"
         >
-          <div className="w-20 h-20 bg-gradient-to-br from-primary to-secondary rounded-3xl flex items-center justify-center shadow-2xl mx-auto mb-4">
-            <Target className="w-11 h-11 text-primary-foreground" />
-          </div>
-          <h2 className="text-2xl font-display text-primary mb-2">LifePlan</h2>
+          <RemansoMark className="w-20 h-20 mx-auto mb-4" />
+          <h2 className="text-2xl font-display text-primary mb-2">remanso</h2>
           <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto" />
         </motion.div>
       </div>
@@ -303,10 +302,8 @@ function AppInner() {
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-card/80 backdrop-blur-xl border-b border-border z-50 flex items-center justify-between px-4">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
-            <Target className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <h2 className="font-display text-xl text-primary">LifePlan</h2>
+          <RemansoMark className="w-8 h-8" />
+          <h2 className="font-display text-xl text-primary">remanso</h2>
         </div>
         <div className="flex items-center gap-1">
         <ThemeToggle darkMode={darkMode} onToggle={toggleDarkMode} />
@@ -382,11 +379,9 @@ function AppInner() {
       <div className="hidden lg:block fixed left-0 top-0 bottom-0 w-72 bg-card border-r border-border overflow-y-auto">
         <div className="p-6 border-b border-border">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center shadow-lg">
-              <Target className="w-7 h-7 text-primary-foreground" />
-            </div>
+            <RemansoMark className="w-12 h-12" />
             <div className="min-w-0 flex-1">
-              <h1 className="text-2xl font-display text-primary">LifePlan</h1>
+              <h1 className="text-2xl font-display text-primary">remanso</h1>
               <p className="text-xs text-muted-foreground">{t('sidebar.tagline')}</p>
             </div>
           </div>

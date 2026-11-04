@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Target, CheckCircle2, Sparkles, Crown, Loader2 } from 'lucide-react';
+import { CheckCircle2, Sparkles, Crown, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createCheckoutSession } from '../../../api/stripe';
 import { useBillingEnabled } from '../../hooks/useBillingEnabled';
+import { RemansoMark } from '../shared/RemansoMark';
 
 interface WelcomeProps {
   onContinue: () => void;
@@ -118,9 +119,7 @@ export function Welcome({ onContinue }: WelcomeProps) {
           className="text-center mb-10"
         >
           <div className="flex justify-center mb-6">
-            <div className="w-20 h-20 bg-gradient-to-br from-primary to-secondary rounded-3xl flex items-center justify-center shadow-2xl">
-              <Target className="w-11 h-11 text-primary-foreground" />
-            </div>
+            <RemansoMark className="w-20 h-20" />
           </div>
           <h1 className="text-4xl md:text-5xl font-display text-primary mb-4">
             {t('auth.welcome.choosePlan')}

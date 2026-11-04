@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { motion } from 'motion/react';
-import { ArrowLeft, Target } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import { RemansoMark } from './shared/RemansoMark';
 
 export type LegalPageKind = 'privacy' | 'terms';
 
@@ -24,10 +25,8 @@ export function LegalPage({ page }: { page: LegalPageKind }) {
     <div className="min-h-screen bg-background text-foreground">
       <header className="w-full bg-card border-b border-border py-4 px-4 sm:px-8 flex items-center justify-between gap-3">
         <a href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
-            <Target className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <span className="font-display text-lg">LifePlan</span>
+          <RemansoMark className="w-8 h-8" />
+          <span className="font-display text-lg">remanso</span>
         </a>
         <a href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
           <ArrowLeft className="w-4 h-4" /> {t('legal.backToApp')}

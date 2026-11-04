@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Mail, ArrowLeft, Target } from 'lucide-react';
+import { Mail, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { apiErrorMessage } from '../../lib/apiErrors';
@@ -8,6 +8,7 @@ import { apiErrorMessage } from '../../lib/apiErrors';
 // Same length as the server's codes (server/lib/otp.ts OTP_LENGTH).
 const OTP_LENGTH = 6;
 import { useAuth } from '../../context/AuthContext';
+import { RemansoMark } from '../shared/RemansoMark';
 
 interface VerifyEmailProps {
   email: string;
@@ -66,7 +67,7 @@ export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
         toast.error(apiErrorMessage(t, data) || 'Verification failed');
         return;
       }
-      toast.success('Email verified! Welcome to LifePlan!');
+      toast.success(t('auth.verifyEmail.verifiedToast'));
       onVerified();
     } catch {
       toast.error('Something went wrong. Please try again.');
@@ -193,9 +194,7 @@ export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
           transition={{ duration: 0.5, delay: 0.3 }}
           className="mt-6 bg-gradient-to-br from-secondary/10 to-primary/10 border border-primary/20 rounded-2xl p-4 flex items-center gap-3"
         >
-          <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center flex-shrink-0">
-            <Target className="w-5 h-5 text-primary-foreground" />
-          </div>
+          <RemansoMark className="w-10 h-10 flex-shrink-0" />
           <p className="text-sm text-muted-foreground">
             {t('auth.verifyEmail.tagline')}
           </p>

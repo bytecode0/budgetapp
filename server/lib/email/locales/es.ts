@@ -9,7 +9,7 @@
 export const es = {
   common: {
     // Same tagline as the app's sidebar (src/locales/es.json → sidebar.tagline).
-    tagline: "{product} · Planificador Financiero de Vida",
+    tagline: "{product} · Tu dinero, en calma",
     footerReason: "Recibes este correo porque tienes una cuenta en {product}.",
     visit: "Visitar {product}",
     support: "Contactar con soporte",

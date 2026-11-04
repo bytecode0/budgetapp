@@ -1,7 +1,7 @@
 import { Moon, Sun } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-// Always-visible light/dark switch (LPBETA-18): in the mobile top bar, the
+// Always-visible light/dark switch (LPBETA-27): in the mobile top bar, the
 // desktop sidebar and the onboarding header, never only in Settings. One tap;
 // the choice is saved for the person on the server. `showLabel` adds the
 // mode's name next to the icon where there is room (the sidebar).

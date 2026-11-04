@@ -6,7 +6,7 @@ import { isTimeout, redactSecrets } from "./errors.js";
 
 export const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 // Sent as X-Title: how the app shows up in OpenRouter's dashboards. Not user-facing.
-const APP_TITLE = "LifePlan";
+const APP_TITLE = "Remanso";
 
 /** APP_URL as the optional HTTP-Referer, only when it's a valid http(s) URL. */
 function referer(): string | null {

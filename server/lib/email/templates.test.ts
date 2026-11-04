@@ -88,7 +88,7 @@ test("interpolated user values are escaped in the html and left readable in the 
 
 test("a user value containing a placeholder is not re-interpolated", () => {
   const email = welcomeEmail({ name: "{product}" }, "en");
-  assert.match(email.subject, /Welcome to LifePlan, \{product\}!/);
+  assert.match(email.subject, /Welcome to Remanso, \{product\}!/);
 });
 
 test("an empty name uses the nameless variant instead of a dangling comma", () => {

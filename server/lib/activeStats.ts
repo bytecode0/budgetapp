@@ -131,7 +131,7 @@ const pct = (part: number, whole: number) => (whole > 0 ? ` (${Math.round((part 
 
 export function formatActiveStats(s: ActiveStats, now: Date): string {
   const lines = [
-    `LifePlan — usuarios activos a ${now.toISOString().slice(0, 10)}`,
+    `Remanso — usuarios activos a ${now.toISOString().slice(0, 10)}`,
     "",
     `Registrados:   ${s.registered.total} en total · ${s.registered.last7} en 7 días · ${s.registered.last30} en 30 días`,
     `Activos:       ${s.active.last7} en 7 días · ${s.active.last30} en 30 días${pct(s.active.last30, s.registered.total)}`,
