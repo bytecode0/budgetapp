@@ -18,7 +18,7 @@ export const DEFAULT_ACCOUNT_NAME = "Main account";
 
 /** Wizard steps, in order. */
 export const ONBOARDING_STEPS = [
-  "welcome", "goal", "income", "savings", "bank", "cards", "loans", "fixed", "flexible", "result",
+  "welcome", "goal", "income", "savings", "bank", "cards", "loans", "generosity", "fixed", "flexible", "result",
 ] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 

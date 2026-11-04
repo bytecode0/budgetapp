@@ -96,11 +96,11 @@ describe("income shares and first goals (integration, real Postgres)", { skip: !
     await ok(B, "PATCH", "/api/allocations/settings/income", { monthlyIncome: 3000 });
 
     let m = (await ok(B, "GET", `/api/dashboard/month?month=${month()}`)).data;
-    assert.deepEqual(m, { month: month(), householdIncome: 3000, paidYourself: 0, payYourselfFirstBps: null, payYourselfFirstGoal: null });
+    assert.deepEqual(m, { month: month(), householdIncome: 3000, paidYourself: 0, payYourselfFirstBps: null, payYourselfFirstGoal: null, generosityAmount: 0, generosityBps: null });
 
     assert.equal((await call(B, "PATCH", "/api/onboarding/preferences", { payYourselfFirstPct: 150 })).status, 400);
     assert.equal((await call(B, "PATCH", "/api/onboarding/preferences", {})).status, 400);
-    assert.deepEqual((await ok(B, "PATCH", "/api/onboarding/preferences", { payYourselfFirstPct: 12.5 })).data, { payYourselfFirstBps: 1250 });
+    assert.deepEqual((await ok(B, "PATCH", "/api/onboarding/preferences", { payYourselfFirstPct: 12.5 })).data, { payYourselfFirstBps: 1250, generosityBps: null });
 
     const plan = (await ok(B, "POST", "/api/plans", { title: "Colchón", type: "emergency", targetAmount: 6000, monthlyContribution: 100, autoCreateAllocation: true })).plan;
     await ok(B, "POST", "/api/plan-deposits/confirm", { month: month(), deposits: [{ planId: plan.id, amount: 200 }] });
@@ -149,5 +149,78 @@ describe("income shares and first goals (integration, real Postgres)", { skip: !
     await ok(D, "POST", "/api/plans", { title: "Fondo de emergencia", type: "emergency", targetAmount: 3900, currentAmount: 2500 });
     r = (await ok(D, "GET", "/api/onboarding/result")).data;
     assert.equal(r.hasEmergencyPlan, true);
+  });
+
+  // ── LPBETA-10: the Generosity line ─────────────────────────────────────
+
+  it("every budget gets one Generosity line at 0, first, even under concurrent reads", async () => {
+    const E = await signUp("Eva", "eva@example.com");
+    const reads = await Promise.all([1, 2, 3, 4].map(() => ok(E, "GET", "/api/allocations")));
+    const lines = await prisma.allocation.findMany({ where: { userId: E, type: "generosity" } });
+    assert.equal(lines.length, 1);
+    assert.equal(lines[0].allocatedAmount, 0);
+    assert.equal(lines[0].name, "Generosidad");
+    const all = reads[3].allocations as { type: string }[];
+    assert.equal(all[0].type, "generosity");
+    assert.equal(reads[3].generosityBps, null);
+    // Signup's default lines are still there.
+    assert.deepEqual(all.slice(1).map(a => a.type).sort(), ["fixed", "flexible"]);
+  });
+
+  it("the Generosity line can't be deleted, retyped, duplicated, nor can another line become one", async () => {
+    const F = await signUp("Fran", "fran@example.com");
+    const { allocations } = await ok(F, "GET", "/api/allocations");
+    const gen = allocations.find((a: any) => a.type === "generosity");
+    const fixed = allocations.find((a: any) => a.type === "fixed");
+    assert.equal((await call(F, "DELETE", `/api/allocations/${gen.id}`)).status, 400);
+    assert.equal((await call(F, "PATCH", `/api/allocations/${gen.id}`, { type: "flexible" })).status, 400);
+    assert.equal((await call(F, "PATCH", `/api/allocations/${fixed.id}`, { type: "generosity" })).status, 400);
+    assert.equal((await call(F, "POST", "/api/allocations", { name: "Dar", type: "generosity", allocatedAmount: 10 })).status, 400);
+    // Saving it with its own type (what the budget screen sends) still works.
+    await ok(F, "PATCH", `/api/allocations/${gen.id}`, { name: "Dar", type: "generosity" });
+    assert.equal(await prisma.allocation.count({ where: { userId: F, type: "generosity" } }), 1);
+  });
+
+  it("a share of the household's income keeps its % when the income changes; a typed amount replaces it", async () => {
+    const G = await signUp("Gema", "gema@example.com");
+    await ok(G, "PATCH", "/api/allocations/settings/income", { monthlyIncome: 3000 });
+    assert.equal((await call(G, "PATCH", "/api/onboarding/preferences", { generosityPct: -1 })).status, 400);
+    const saved = (await ok(G, "PATCH", "/api/onboarding/preferences", { generosityPct: 10 })).data;
+    assert.deepEqual(saved, { payYourselfFirstBps: null, generosityBps: 1000, generosityAmount: 300 });
+
+    await ok(G, "PATCH", "/api/allocations/settings/income", { monthlyIncome: 4000 });
+    const { allocations, generosityBps } = await ok(G, "GET", "/api/allocations");
+    const gen = allocations.find((a: any) => a.type === "generosity");
+    assert.equal(gen.allocatedAmount, 400);
+    assert.equal(generosityBps, 1000);
+
+    const review = await ok(G, "GET", `/api/monthly-budgets/review?month=${month()}`);
+    assert.equal(review.review.find((r: any) => r.type === "generosity").budgeted, 400);
+    const budgets = await ok(G, "GET", `/api/monthly-budgets?month=${month()}`);
+    assert.equal(budgets.budgets.find((b: any) => b.allocation.type === "generosity").allocatedAmount, 400);
+    assert.equal((await ok(G, "GET", `/api/dashboard/month?month=${month()}`)).data.generosityAmount, 400);
+    assert.equal((await ok(G, "GET", "/api/onboarding/result")).data.generosityAmount, 400);
+
+    // Renaming it (the amount sent unchanged) keeps the share…
+    await ok(G, "PATCH", `/api/allocations/${gen.id}`, { name: "Dar", allocatedAmount: 400 });
+    assert.equal((await ok(G, "GET", "/api/allocations")).generosityBps, 1000);
+    // …typing another amount makes it that fixed amount.
+    await ok(G, "PATCH", `/api/allocations/${gen.id}`, { allocatedAmount: 50 });
+    await ok(G, "PATCH", "/api/allocations/settings/income", { monthlyIncome: 5000 });
+    const after = await ok(G, "GET", "/api/allocations");
+    assert.equal(after.generosityBps, null);
+    assert.equal(after.allocations.find((a: any) => a.type === "generosity").allocatedAmount, 50);
+
+    // "Ahora no" = 0 %.
+    const notNow = (await ok(G, "PATCH", "/api/onboarding/preferences", { generosityPct: 0 })).data;
+    assert.deepEqual(notNow, { payYourselfFirstBps: null, generosityBps: 0, generosityAmount: 0 });
+    assert.equal((await ok(G, "GET", `/api/dashboard/month?month=${month()}`)).data.generosityAmount, 0);
+  });
+
+  it("saving the share before ever opening the budget still seeds the default lines", async () => {
+    const user = await prisma.user.create({ data: { name: "Hugo", email: "hugo@example.com", emailVerified: new Date() } });
+    await ok(user.id, "PATCH", "/api/onboarding/preferences", { generosityPct: 5 });
+    const types = (await prisma.allocation.findMany({ where: { userId: user.id }, select: { type: true } })).map(a => a.type).sort();
+    assert.deepEqual(types, ["fixed", "flexible", "generosity"]);
   });
 });

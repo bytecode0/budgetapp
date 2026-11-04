@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 // Wizard steps in order — mirrors ONBOARDING_STEPS in server/lib/onboarding.ts.
 export const ONBOARDING_STEPS = [
-  'welcome', 'goal', 'income', 'savings', 'bank', 'cards', 'loans', 'fixed', 'flexible', 'result',
+  'welcome', 'goal', 'income', 'savings', 'bank', 'cards', 'loans', 'generosity', 'fixed', 'flexible', 'result',
 ] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 
@@ -49,6 +49,11 @@ async function patchJson(url: string, body: unknown): Promise<{ data?: any; erro
 
 export function setOnboardingGoal(goal: OnboardingGoal | null) {
   return patchJson('/api/onboarding/answers', { goal });
+}
+
+/** The Generosity line's share of the household's income, in percent (0 = "ahora no"). */
+export function setGenerosityPct(pct: number) {
+  return patchJson('/api/onboarding/preferences', { generosityPct: pct });
 }
 
 /** The "Págate a ti primero" share, in percent (null = not chosen). */

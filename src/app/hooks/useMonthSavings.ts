@@ -8,6 +8,8 @@ export interface MonthSavings {
   paidYourself: number;
   payYourselfFirstBps: number | null;
   payYourselfFirstGoal: number | null;
+  generosityAmount: number; // "Das X al mes" (LPBETA-10)
+  generosityBps: number | null;
 }
 
 export function useMonthSavings(month: string) {

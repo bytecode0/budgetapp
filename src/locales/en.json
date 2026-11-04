@@ -216,7 +216,9 @@
       "categoriesExceeded_one": "{{count}} line has gone over its budget.",
       "categoriesExceeded_other": "{{count}} lines have gone over their budget."
     },
-    "plansCompleted": "{{done}} of {{total}} plans completed"
+    "plansCompleted": "{{done}} of {{total}} plans completed",
+    "generosityLabel": "Generosity",
+    "gives": "You give {{amount}} a month"
   },
   "dashboard": {
     "title": "Your plans",
@@ -1361,7 +1363,9 @@
         "noRoom": "Today your budget leaves {{leftover}} free: to reach your %, you'll need to make room for it.",
         "saved": "Saved",
         "saveFailed": "It couldn't be saved. Please try again."
-      }
+      },
+      "generosityLabel": "Generosity",
+      "givesNothing": "You're not setting anything aside to give for now."
     },
     "bank": {
       "title": "Your bank account",
@@ -1478,6 +1482,16 @@
       "other": "Other",
       "customLabel": "Your percentage",
       "invalid": "Enter a percentage between 0 and 100."
+    },
+    "generosity": {
+      "title": "Would you like to set aside a part to give?",
+      "subtitle": "A percentage of what comes into your household, to give wherever you choose.",
+      "desc": "It's the first line of your budget. It's optional: choose any percentage, or \"Not now\", and change it whenever you like. If your income changes, the percentage stays the same.",
+      "notNow": "Not now",
+      "gives": "You give {{amount}} a month.",
+      "givesNothing": "For now you're not setting anything aside to give. You can change it whenever you like.",
+      "noIncome": "Once you add your income, we'll work out how much it is.",
+      "saveFailed": "It couldn't be saved. Please try again."
     }
   },
   "currency": {

@@ -96,7 +96,8 @@ export interface MergeInput {
 }
 
 export interface MergePlan {
-  /** Her untouched default line → the pool line it merges into (hers is deleted). */
+  /** Her untouched default line, or her Generosity line, → the pool line it
+   *  merges into (hers is deleted). */
   allocationRemap: Map<string, string>;
   /** Her seeded "Main account", never used, when she keeps another open
    *  non-card account of her own: deleted instead of cluttering the pool. */
@@ -191,7 +192,15 @@ export function planPoolMerge(input: MergeInput): MergePlan {
     if (a.isDefault && !poolDefault.has(a.type)) poolDefault.set(a.type, a.id);
   }
   const allocationRemap = new Map<string, string>();
+  // A budget has one Generosity line (LPBETA-10, server/lib/generosity.ts):
+  // hers always merges into the pool's, used or not — her expenses on it
+  // move to the pool's line. Without one in the pool, hers moves and is it.
+  const poolGenerosity = input.poolAllocations.find(a => a.type === "generosity")?.id;
   for (const a of input.memberAllocations) {
+    if (a.type === "generosity") {
+      if (poolGenerosity) allocationRemap.set(a.id, poolGenerosity);
+      continue;
+    }
     const target = poolDefault.get(a.type);
     if (target && isUntouchedDefaultAllocation(a)) allocationRemap.set(a.id, target);
   }

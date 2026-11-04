@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft } from 'lucide-react';
 import { fetchOnboardingGoal, type OnboardingGoal, type OnboardingStep } from '../hooks/useOnboardingNeeded';
 import { GoalStep } from './GoalStep';
+import { GenerosityStep } from './GenerosityStep';
 import { WelcomeStep } from './WelcomeStep';
 import { IncomeStep } from './IncomeStep';
 import { SavingsStep } from './SavingsStep';
@@ -16,7 +17,7 @@ import { ResultScreen } from './ResultScreen';
 import { RemansoMark } from '../components/shared/RemansoMark';
 
 // Steps between the welcome and the result, with the header's back/continue.
-const WIZARD_STEPS: OnboardingStep[] = ['goal', 'income', 'savings', 'bank', 'cards', 'loans', 'fixed', 'flexible'];
+const WIZARD_STEPS: OnboardingStep[] = ['goal', 'income', 'savings', 'bank', 'cards', 'loans', 'generosity', 'fixed', 'flexible'];
 
 const STEP_META: Partial<Record<OnboardingStep, { titleKey: string; subtitleKey: string }>> = {
   goal: { titleKey: 'onboarding.goal.title', subtitleKey: 'onboarding.goal.subtitle' },
@@ -25,6 +26,7 @@ const STEP_META: Partial<Record<OnboardingStep, { titleKey: string; subtitleKey:
   bank: { titleKey: 'onboarding.bank.title', subtitleKey: 'onboarding.bank.subtitle' },
   cards: { titleKey: 'onboarding.cards.title', subtitleKey: 'onboarding.cards.subtitle' },
   loans: { titleKey: 'onboarding.loans.title', subtitleKey: 'onboarding.loans.subtitle' },
+  generosity: { titleKey: 'onboarding.generosity.title', subtitleKey: 'onboarding.generosity.subtitle' },
   fixed: { titleKey: 'onboarding.lines.fixed.title', subtitleKey: 'onboarding.lines.fixed.subtitle' },
   flexible: { titleKey: 'onboarding.lines.flexible.title', subtitleKey: 'onboarding.lines.flexible.subtitle' },
 };
@@ -129,6 +131,7 @@ export function BudgetOnboarding({ initialStep = 'welcome', onDone, themeToggle 
               {step === 'bank' && <BankStep />}
               {step === 'cards' && <CardsStep quiet={quietDebts} />}
               {step === 'loans' && <LoansStep quiet={quietDebts} />}
+              {step === 'generosity' && <GenerosityStep />}
               {step === 'fixed' && <BudgetLinesStep type="fixed" />}
               {step === 'flexible' && <BudgetLinesStep type="flexible" />}
               {step === 'result' && <ResultScreen onDone={onDone} />}

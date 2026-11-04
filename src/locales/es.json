@@ -216,7 +216,9 @@
       "categoriesExceeded_one": "{{count}} partida se ha pasado de su presupuesto.",
       "categoriesExceeded_other": "{{count}} partidas se han pasado de su presupuesto."
     },
-    "plansCompleted": "{{done}} de {{total}} planes completados"
+    "plansCompleted": "{{done}} de {{total}} planes completados",
+    "generosityLabel": "Generosidad",
+    "gives": "Das {{amount}} al mes"
   },
   "dashboard": {
     "title": "Tus planes",
@@ -1361,7 +1363,9 @@
         "noRoom": "Hoy tu presupuesto deja {{leftover}} libres: para llegar a tu %, tendrás que hacerle sitio.",
         "saved": "Guardado",
         "saveFailed": "No se ha podido guardar. Inténtalo de nuevo."
-      }
+      },
+      "generosityLabel": "Generosidad",
+      "givesNothing": "Ahora no reservas nada para dar."
     },
     "bank": {
       "title": "Tu cuenta del banco",
@@ -1478,6 +1482,16 @@
       "other": "Otro",
       "customLabel": "Tu porcentaje",
       "invalid": "Pon un porcentaje entre 0 y 100."
+    },
+    "generosity": {
+      "title": "¿Quieres reservar una parte para dar?",
+      "subtitle": "Un porcentaje de lo que entra en tu hogar, para dar donde tú quieras.",
+      "desc": "Es la primera línea de tu presupuesto. Es opcional: elige el porcentaje que quieras, o «Ahora no», y cámbialo cuando quieras. Si vuestros ingresos cambian, se mantiene el mismo porcentaje.",
+      "notNow": "Ahora no",
+      "gives": "Das {{amount}} al mes.",
+      "givesNothing": "Por ahora no reservas nada para dar. Puedes cambiarlo cuando quieras.",
+      "noIncome": "Cuando añadas tus ingresos, calcularemos cuánto es.",
+      "saveFailed": "No se ha podido guardar. Inténtalo de nuevo."
     }
   },
   "currency": {

@@ -21,6 +21,7 @@ interface OnboardingResult {
   savedSoFar: number;             // euros
   hasEmergencyPlan: boolean;
   payYourselfFirstBps: number | null;
+  generosityAmount: number;       // euros — the Generosity line this month (LPBETA-10)
 }
 
 interface ResultScreenProps {
@@ -128,6 +129,16 @@ export function ResultScreen({ onDone }: ResultScreenProps) {
                 ? t('onboarding.result.committedOf', { committed: fmt(result.committed), income: fmt(income) })
                 : t('onboarding.result.committedNone')}
             </p>
+          </div>
+          <div className="bg-card border border-border rounded-3xl p-6">
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-sun" aria-hidden="true" /> {t('onboarding.result.generosityLabel')}
+            </p>
+            {result.generosityAmount > 0 ? (
+              <p className="text-2xl font-display tabular-nums">{t('home.gives', { amount: fmt(result.generosityAmount) })}</p>
+            ) : (
+              <p className="text-sm mt-1">{t('onboarding.result.givesNothing')}</p>
+            )}
           </div>
         </motion.div>
       )}

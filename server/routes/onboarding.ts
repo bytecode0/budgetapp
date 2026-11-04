@@ -2,10 +2,12 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { serializeMoney } from "../lib/money.js";
-import { clampCycleStartDay } from "../lib/period.js";
+import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/period.js";
+import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { loadDebtLedgers } from "../lib/debtBalance.js";
 import { deriveOnboardingStatus, computeOnboardingResult, parseOnboardingGoal } from "../lib/onboarding.js";
 import { pctToBps } from "../../shared/incomeShare.js";
+import { ensureGenerosityLine, syncGenerosity } from "../lib/generosity.js";
 import { householdBaselineIncome } from "../lib/householdIncome.js";
 
 export const onboardingRouter = Router();
@@ -93,24 +95,49 @@ onboardingRouter.patch("/answers", requireAuth, async (req: AuthRequest, res: Re
   }
 });
 
-// PATCH /api/onboarding/preferences  { payYourselfFirstPct: number | null }
-// The "Págate a ti primero" share the user chose (0–100 %, null = not chosen),
-// on the pool's settings: it is measured against the household's income.
+// PATCH /api/onboarding/preferences  { payYourselfFirstPct?: number | null, generosityPct?: number }
+// Shares of the household's income the user chose, on the pool's settings
+// (they are measured against the household's income):
+// - payYourselfFirstPct: "Págate a ti primero" (0–100 %, null = not chosen).
+// - generosityPct: the Generosity line (0–100 %; "ahora no" = 0). Its line is
+//   created if missing and its amount set from this period's income; later it
+//   follows the income with the same % (server/lib/generosity.ts).
 onboardingRouter.patch("/preferences", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { payYourselfFirstPct } = req.body ?? {};
-    if (payYourselfFirstPct === undefined) return res.status(400).json({ error: "payYourselfFirstPct is required" });
-    const bps = payYourselfFirstPct === null ? null : pctToBps(payYourselfFirstPct);
-    if (payYourselfFirstPct !== null && bps === null) {
-      return res.status(400).json({ error: "payYourselfFirstPct must be between 0 and 100" });
+    const { payYourselfFirstPct, generosityPct } = req.body ?? {};
+    if (payYourselfFirstPct === undefined && generosityPct === undefined) {
+      return res.status(400).json({ error: "payYourselfFirstPct or generosityPct is required" });
+    }
+    const data: { payYourselfFirstBps?: number | null; generosityBps?: number } = {};
+    if (payYourselfFirstPct !== undefined) {
+      const bps = payYourselfFirstPct === null ? null : pctToBps(payYourselfFirstPct);
+      if (payYourselfFirstPct !== null && bps === null) {
+        return res.status(400).json({ error: "payYourselfFirstPct must be between 0 and 100" });
+      }
+      data.payYourselfFirstBps = bps;
+    }
+    if (generosityPct !== undefined) {
+      const bps = pctToBps(generosityPct);
+      if (bps === null) return res.status(400).json({ error: "generosityPct must be between 0 and 100" });
+      data.generosityBps = bps;
     }
     const settings = await prisma.userSettings.upsert({
       where: { userId: req.userId! },
-      update: { payYourselfFirstBps: bps },
-      create: { userId: req.userId!, payYourselfFirstBps: bps },
-      select: { payYourselfFirstBps: true },
+      update: data,
+      create: { userId: req.userId!, ...data },
+      select: { payYourselfFirstBps: true, generosityBps: true, cycleStartDay: true },
     });
-    return res.json({ data: settings });
+    let generosityAmount: number | undefined;
+    if (data.generosityBps !== undefined) {
+      await ensureGenerosityLine(req.userId!);
+      const cycle = clampCycleStartDay(settings.cycleStartDay);
+      generosityAmount = (await syncGenerosity(req.userId!, periodBounds(currentPeriodKey(cycle), cycle))).amount;
+    }
+    return res.json({ data: serializeMoney({
+      payYourselfFirstBps: settings.payYourselfFirstBps,
+      generosityBps: settings.generosityBps,
+      ...(generosityAmount !== undefined && { generosityAmount }),
+    }) });
   } catch (err) {
     console.error("[onboarding/preferences]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -125,6 +152,9 @@ onboardingRouter.patch("/preferences", requireAuth, async (req: AuthRequest, res
 onboardingRouter.get("/result", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
+    // The Generosity line's amount for this period first (it may follow the income).
+    const cycle = await getCycleStartDay(userId);
+    const generosity = await syncGenerosity(userId, periodBounds(currentPeriodKey(cycle), cycle));
     const [settings, monthlyIncome, debts, allocations, savingsAccounts, emergencyPlans] = await Promise.all([
       prisma.userSettings.findUnique({ where: { userId }, select: { cycleStartDay: true, payYourselfFirstBps: true, onboardingGoal: true } }),
       householdBaselineIncome(userId),
@@ -152,7 +182,7 @@ onboardingRouter.get("/result", requireAuth, async (req: AuthRequest, res: Respo
       payYourselfFirstBps: settings?.payYourselfFirstBps ?? null,
       goal: parseOnboardingGoal(settings?.onboardingGoal),
     });
-    return res.json({ data: serializeMoney(result) });
+    return res.json({ data: serializeMoney({ ...result, generosityAmount: generosity.amount, generosityBps: generosity.bps }) });
   } catch (err) {
     console.error("[onboarding/result]", err);
     return res.status(500).json({ error: "Internal server error" });

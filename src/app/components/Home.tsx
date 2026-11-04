@@ -213,6 +213,16 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
               <p className="text-xs text-muted-foreground">{t('home.plansCompleted', { done: completedPlans, total: totalPlans })}</p>
             </div>
           </div>
+
+          {/* The Generosity line this month (LPBETA-10): said plainly, no judgement at 0. */}
+          {savings && (
+            <div className="flex items-center justify-between gap-3 pt-5 border-t border-border text-sm">
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <span className="w-2 h-2 rounded-full bg-sun" aria-hidden="true" /> {t('home.generosityLabel')}
+              </span>
+              <span className="tabular-nums">{t('home.gives', { amount: fmt(savings.generosityAmount) })}</span>
+            </div>
+          )}
         </motion.div>
       )}
 

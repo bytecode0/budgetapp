@@ -9,6 +9,8 @@ import { debtCommitments } from "../lib/debtBalance.js";
 import { incomeBaselines } from "../lib/householdIncome.js";
 import { visibleToWhere } from "../lib/ownership.js";
 import { hiddenCommitted, notOnHiddenDebt } from "../lib/poolRefs.js";
+import { getCycleStartDay } from "../lib/getCycleStartDay.js";
+import { GENEROSITY_TYPE, clearGenerosityShare, ensureGenerosityLine, syncGenerosity } from "../lib/generosity.js";
 
 export const allocationsRouter = Router();
 
@@ -17,6 +19,12 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
   try {
     // Ensure defaults exist for this user
     await createDefaultAllocations(req.userId!);
+    // Every budget has its Generosity line (LPBETA-10): created at 0 for
+    // users from before it, and with a share set its amount follows this
+    // period's household income (server/lib/generosity.ts).
+    await ensureGenerosityLine(req.userId!);
+    const poolCycle = await getCycleStartDay(req.userId!);
+    const generosity = await syncGenerosity(req.userId!, periodBounds(currentPeriodKey(poolCycle), poolCycle));
 
     const [allocations, settings, baselines] = await Promise.all([
       // Not the line of a debt hidden from the caller (server/lib/poolRefs.ts).
@@ -45,6 +53,7 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
         : a);
 
     // The lines left out above, as one figure (euros) for the client totals.
+    // Never the Generosity line: it has no debt, so it is never hidden.
     const hidden = await hiddenCommitted(req.userId!, req.authUserId!, commitments);
 
     return res.json({
@@ -54,6 +63,7 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
         darkMode: ownSettings?.darkMode ?? false,
         language: ownSettings?.language ?? 'es',
         cycleStartDay: settings?.cycleStartDay ?? 1,
+        generosityBps: generosity.bps, // null: the line holds a fixed amount
       }),
       hiddenCommitted: toEuros(hidden),
     });
@@ -69,6 +79,8 @@ allocationsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response)
     const { name, icon, type, allocatedAmount, actualAmount, lifePlanId, debtId } = req.body;
 
     if (!name) return res.status(400).json({ error: "Name is required" });
+    // The budget's one Generosity line already exists (server/lib/generosity.ts).
+    if (type === GENEROSITY_TYPE) return res.status(400).json({ error: "La línea de generosidad ya existe" });
 
     // Validate lifePlanId belongs to user if provided
     if (lifePlanId) {
@@ -196,9 +208,12 @@ allocationsRouter.patch("/budgets", requireAuth, async (req: AuthRequest, res: R
 
     const owned = await prisma.allocation.findMany({
       where: { id: { in: valid.map(b => b.id!) }, userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
-      select: { id: true },
+      select: { id: true, type: true, allocatedAmount: true },
     });
     const ownedIds = new Set(owned.map(a => a.id));
+    // A new amount typed for the Generosity line replaces its share.
+    const generosityRetyped = owned.some(a => a.type === GENEROSITY_TYPE
+      && valid.some(b => b.id === a.id && toCents(b.allocatedAmount!) !== a.allocatedAmount));
 
     const updated = await prisma.$transaction(
       valid
@@ -210,6 +225,8 @@ allocationsRouter.patch("/budgets", requireAuth, async (req: AuthRequest, res: R
           }),
         ),
     );
+
+    if (generosityRetyped) await clearGenerosityShare(req.userId!);
 
     return res.json(serializeMoney({ updated: updated.length, allocations: updated }));
   } catch (err) {
@@ -240,6 +257,12 @@ allocationsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respo
       return res.status(400).json({ error: "El importe de una línea de deuda se edita desde la deuda vinculada" });
     }
 
+    // Generosity stays a Generosity line, and no other line becomes one
+    // (Método Ruta R1: it could then be deleted, or there'd be two).
+    if (type !== undefined && type !== existing.type && (existing.type === GENEROSITY_TYPE || type === GENEROSITY_TYPE)) {
+      return res.status(400).json({ error: "El tipo de la línea de generosidad no se puede cambiar" });
+    }
+
     const newType = type ?? existing.type;
     const allocation = await prisma.allocation.update({
       where: { id },
@@ -257,6 +280,10 @@ allocationsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respo
         ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
       },
     });
+    // A new amount typed for the Generosity line replaces its share.
+    if (existing.type === GENEROSITY_TYPE && allocatedAmount !== undefined && toCents(allocatedAmount) !== existing.allocatedAmount) {
+      await clearGenerosityShare(req.userId!);
+    }
 
     return res.json(serializeMoney({ allocation }));
   } catch (err) {

@@ -76,6 +76,7 @@ const MONEY_KEYS = new Set([
   "monthlyExpenses",
   "emergencyFundSuggested",
   "savedSoFar",
+  "generosityAmount",
 ]);
 
 /**

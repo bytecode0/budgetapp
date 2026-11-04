@@ -8,20 +8,31 @@ import { countedAmounts } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { hiddenLineIds } from "../lib/poolRefs.js";
 import { monthSavings } from "../lib/payYourselfFirst.js";
+import { generosityForMonth } from "../lib/generosity.js";
 
 export const dashboardRouter = Router();
 
 // GET /api/dashboard/month?month=YYYY-MM (LPBETA-07)
 // Home's top card: "Te has pagado X de Y este mes" — set aside for yourself
 // vs the "Págate a ti primero" share of the household's income
-// (server/lib/payYourselfFirst.ts). Pool-level totals only.
+// (server/lib/payYourselfFirst.ts) — and "Das X al mes", the Generosity
+// line's amount this month (LPBETA-10). Pool-level totals only.
 dashboardRouter.get("/month", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const month = typeof req.query.month === "string" ? req.query.month : "";
     if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: "month is required (YYYY-MM)" });
     const cycleStartDay = await getCycleStartDay(req.userId!);
-    const savings = await monthSavings(req.userId!, month, periodBounds(month, cycleStartDay));
-    return res.json({ data: serializeMoney({ month, ...savings }) });
+    const bounds = periodBounds(month, cycleStartDay);
+    const [savings, generosity] = await Promise.all([
+      monthSavings(req.userId!, month, bounds),
+      generosityForMonth(req.userId!, month, bounds),
+    ]);
+    return res.json({ data: serializeMoney({
+      month,
+      ...savings,
+      generosityAmount: generosity.amount,
+      generosityBps: generosity.bps,
+    }) });
   } catch (err) {
     console.error("[dashboard/month]", err);
     return res.status(500).json({ error: "Internal server error" });

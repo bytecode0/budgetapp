@@ -39,6 +39,8 @@ export function useAllocations() {
   // What the partner's private debt lines commit (euros): not listed, but
   // part of the household's budget (server/lib/poolRefs.ts).
   const [hiddenCommitted, setHiddenCommitted] = useState(0);
+  // The Generosity line's share of the household's income (LPBETA-10); null = a fixed amount.
+  const [generosityBps, setGenerosityBps] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,6 +57,7 @@ export function useAllocations() {
       setDbLanguage(data.language ?? 'es');
       setCycleStartDay(data.cycleStartDay ?? 1);
       setHiddenCommitted(data.hiddenCommitted ?? 0);
+      setGenerosityBps(typeof data.generosityBps === 'number' ? data.generosityBps : null);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -213,7 +216,7 @@ export function useAllocations() {
   const unallocated = Math.max(0, monthlyIncome - totalAllocated);
 
   return {
-    allocations, monthlyIncome, ownMonthlyIncome, isCouple, darkMode, dbLanguage, cycleStartDay, loading, error, totalAllocated, unallocated, hiddenCommitted,
+    allocations, monthlyIncome, ownMonthlyIncome, isCouple, darkMode, dbLanguage, cycleStartDay, generosityBps, loading, error, totalAllocated, unallocated, hiddenCommitted,
     fetchAllocations, updateIncome, updateDarkMode, updateLanguage, updatePayday, createAllocation, updateAllocation, deleteAllocation, reorderAllocations,
     fetchSuggestedBudgets, applyBudgets,
   };
