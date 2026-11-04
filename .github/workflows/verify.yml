@@ -24,4 +24,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Fails on critical vulnerabilities in production dependencies (LPBETA-22).
+      - run: npm audit --omit=dev --audit-level=critical
       - run: npm run verify
