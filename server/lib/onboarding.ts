@@ -171,7 +171,10 @@ export function computeOnboardingResult(input: ResultInput): OnboardingResult {
   const active = input.debts.filter(d => d.ledger.debt.status === "active");
 
   // Same inputs as GET /api/debts/timeline: measured at the period's start; a
-  // card paid in full commits exactly what its budget line holds.
+  // card paid in full commits exactly what its budget line holds. Without the
+  // card billing cycle on purpose: `committed` feeds `leftover` next to the
+  // budget lines, where card purchases are already counted in their
+  // categories (and onboarding cards have no statementDay yet).
   const timeline = buildDebtTimeline(
     input.debts.map(({ ledger, name }) => ({
       ...ledger.debt,

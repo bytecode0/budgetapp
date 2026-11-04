@@ -7,7 +7,8 @@ import { buildDebtTimeline } from "../lib/debtTimeline.js";
 import { householdBaselineIncome } from "../lib/householdIncome.js";
 import { simulatePayoff, type PayoffMethod } from "../lib/debtPayoff.js";
 import { debtAccountLinkError, cardDebtKindLocked, creditCardOnNonCardAccount, type DebtAccountLinkError } from "../lib/debtAccountLink.js";
-import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/period.js";
+import { clampCycleStartDay, currentPeriodKey, periodBounds, periodKeyOffset } from "../lib/period.js";
+import { cardCycleSummary, cycleCommitments, isoDay } from "../lib/cardCycle.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import {
   loadDebtLedgers, debtState, owedNow, monthlyCommitment, setLiveValues, syncDebtAllocations, syncDebtStatus, ensureDebtLine,
@@ -39,8 +40,11 @@ async function currentPeriod(userId: string): Promise<{ start: Date; end: Date }
 // `anchorBalance`. `owed` is what the app SHOWS as owed: owedNow(), which also
 // covers a plan entered with only its cuota (see server/lib/debtBalance.ts).
 function withLiveState<T extends { id: string; currentBalance: number }>(debt: T, ledger: DebtLedger | undefined, period: { start: Date; end: Date }) {
-  if (!ledger) return { ...debt, owed: Math.max(0, debt.currentBalance), anchorBalance: debt.currentBalance, previousBalance: debt.currentBalance, purchasesTotal: 0, paymentsTotal: 0, monthlyCommitment: 0 };
+  if (!ledger) return { ...debt, owed: Math.max(0, debt.currentBalance), anchorBalance: debt.currentBalance, previousBalance: debt.currentBalance, purchasesTotal: 0, paymentsTotal: 0, monthlyCommitment: 0, cycle: null };
   const state = debtState(ledger);
+  // A card with a billing cycle: "lo que vence" (dueAmount, on dueOn) vs the
+  // rest of `owed`, due on the following due date (server/lib/cardCycle.ts).
+  const cycle = ledger.debt.status === "active" ? cardCycleSummary(ledger) : null;
   return {
     ...debt,
     currentBalance: state.balance,
@@ -51,6 +55,14 @@ function withLiveState<T extends { id: string; currentBalance: number }>(debt: T
     paymentsTotal: state.paymentsTotal,
     installmentsPaid: state.installmentsPaid,
     monthlyCommitment: monthlyCommitment(ledger, period),
+    cycle: cycle && {
+      dueOn: isoDay(cycle.dueOn),
+      closesOn: isoDay(cycle.closesOn),
+      closed: cycle.closed,
+      dueAmount: cycle.dueAmount,
+      afterCutAmount: cycle.afterCutAmount,
+      afterCutDueOn: isoDay(cycle.afterCutDueOn),
+    },
   };
 }
 
@@ -138,13 +150,15 @@ debtsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
 // none exist on GET today, keep it grouped with the other fixed sub-routes)
 // The "committed future": for each upcoming period, how much is already owed
 // in minimums/installments, and what % of expected income that represents.
+// Only the debts the caller can see (another member's private debt is left
+// out, as in GET /api/debts).
 debtsRouter.get("/timeline", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const periodsCount = Math.min(24, Math.max(1, parseInt(String(req.query.periods ?? "6"), 10) || 6));
 
     const [debts, settings, monthlyIncome] = await Promise.all([
       prisma.debt.findMany({
-        where: { userId: req.userId!, OR: [{ ownerUserId: req.authUserId! }, { visibility: "household" }] },
+        where: { userId: req.userId!, ...visibleToWhere(req.authUserId!) },
         select: { id: true, name: true, kind: true, status: true, paymentMode: true, minimumPayment: true, installmentAmount: true, installmentsTotal: true, installmentsPaid: true },
       }),
       prisma.userSettings.findUnique({ where: { userId: req.userId! }, select: { cycleStartDay: true } }),
@@ -152,18 +166,24 @@ debtsRouter.get("/timeline", requireAuth, async (req: AuthRequest, res: Response
     ]);
 
     const cycleStartDay = clampCycleStartDay(settings?.cycleStartDay ?? 1);
-    const period = periodBounds(currentPeriodKey(cycleStartDay), cycleStartDay);
+    const now = new Date();
+    const currentKey = currentPeriodKey(cycleStartDay, now);
+    const periods = Array.from({ length: periodsCount }, (_, i) => periodBounds(periodKeyOffset(currentKey, i), cycleStartDay));
+    const period = periods[0];
     const ledgers = await ledgersById(req.userId!);
     // Measured at the period's start, like the budget line, so paying during
     // this period doesn't make the commitment vanish from it. A card paid in
-    // full commits exactly what its budget line holds this period.
+    // full without a billing cycle commits exactly what its budget line holds
+    // this period; with one (statementDay + paymentDueDay), what falls due in
+    // each period (server/lib/cardCycle.ts).
     const live = debts.map(d => {
       const ledger = ledgers.get(d.id);
       if (!ledger) return d;
       const atStart = debtState(ledger, period.start);
-      return { ...d, installmentsPaid: atStart.installmentsPaid, previousRemaining: monthlyCommitment(ledger, period) };
+      const cycleAmounts = cycleCommitments(ledger, periods) ?? undefined;
+      return { ...d, installmentsPaid: atStart.installmentsPaid, previousRemaining: monthlyCommitment(ledger, period), cycleAmounts };
     });
-    const timeline = buildDebtTimeline(live, monthlyIncome, cycleStartDay, periodsCount);
+    const timeline = buildDebtTimeline(live, monthlyIncome, cycleStartDay, periodsCount, now);
 
     return res.json(serializeMoney({ timeline }));
   } catch (err) {

@@ -78,6 +78,8 @@ const MONEY_KEYS = new Set([
   "savedSoFar",
   "generosityAmount",
   "remainingAmount",
+  "dueAmount",
+  "afterCutAmount",
 ]);
 
 /**

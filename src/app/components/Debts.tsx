@@ -13,11 +13,13 @@ import { useAuth } from '../context/AuthContext';
 import { useDebts, type Debt, type PayoffSummary } from '../hooks/useDebts';
 import { DebtFormFields, EMPTY_DEBT_FORM, debtFormFromDebt, debtPayloadFromForm, kindIcon, type DebtFormState } from './shared/DebtFormFields';
 import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSheet';
+import { CardCycleLine } from './shared/CardCycleLine';
 import { apiErrorMessage } from '../lib/apiErrors';
 
-// What a payment of this debt usually is, to prefill the payment sheet.
+// What a payment of this debt usually is, to prefill the payment sheet. A card
+// with a billing cycle suggests what's due, not purchases after the cut-off.
 const suggestedPayment = (d: Debt): number =>
-  d.paymentMode === 'full' ? d.owed
+  d.paymentMode === 'full' ? (d.cycle && d.cycle.dueAmount > 0 ? d.cycle.dueAmount : d.owed)
   : d.paymentMode === 'installments' ? d.installmentAmount ?? 0
   : d.minimumPayment ?? 0;
 
@@ -206,6 +208,7 @@ export function Debts() {
               {t('debts.previousAndPurchases', { previous: fmtEuro(d.previousBalance), purchases: fmtEuro(d.purchasesTotal) })}
             </p>
           )}
+          {d.cycle && <CardCycleLine cycle={d.cycle} fmt={fmtEuro} locale={locale} />}
         </div>
         <div className="text-right shrink-0">
           <p className="text-base font-semibold tabular-nums">{fmtEuro(d.owed)}</p>

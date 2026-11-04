@@ -17,6 +17,10 @@ export interface TimelineDebtInput {
   // Optional so callers that predate payment modes keep their behavior.
   paymentMode?: string;
   previousRemaining?: number; // cents — pre-existing debt left (server/lib/debtBalance.ts)
+  // A card with a billing cycle: what each period commits, from what's due on
+  // the due dates falling in it (server/lib/cardCycle.ts, cycleCommitments).
+  // Index 0 is the current period. Overrides the payment-mode rule.
+  cycleAmounts?: number[];
 }
 
 export interface TimelinePeriodItem { debtId: string; name: string; kind: string; amount: number }
@@ -42,8 +46,9 @@ export function buildDebtTimeline(
   monthlyIncomeCents: number,
   cycleStartDay: number,
   periodsCount: number,
+  now: Date = new Date(),
 ): TimelinePeriod[] {
-  const current = currentPeriodKey(cycleStartDay);
+  const current = currentPeriodKey(cycleStartDay, now);
   const active = debts.filter(d => d.status === "active");
 
   const out: TimelinePeriod[] = [];
@@ -51,11 +56,14 @@ export function buildDebtTimeline(
     const period = periodKeyOffset(current, i);
     const items: TimelinePeriodItem[] = [];
     for (const d of active) {
-      // Paid in full: only the pre-existing debt is committed, once, now. New
-      // card purchases are already budgeted spending, not a future commitment.
-      const amount = d.paymentMode === "full"
-        ? (i === 0 ? d.previousRemaining ?? 0 : 0)
-        : d.minimumPayment ?? d.installmentAmount ?? 0;
+      // A card with a billing cycle commits what falls due in each period.
+      // Without one, paid in full: only the pre-existing debt is committed,
+      // once, now — new card purchases are already budgeted spending.
+      const amount = d.cycleAmounts
+        ? d.cycleAmounts[i] ?? 0
+        : d.paymentMode === "full"
+          ? (i === 0 ? d.previousRemaining ?? 0 : 0)
+          : d.minimumPayment ?? d.installmentAmount ?? 0;
       if (amount <= 0) continue;
       if (!stillDueAt(d, i)) continue;
       items.push({ debtId: d.id, name: d.name, kind: d.kind, amount });

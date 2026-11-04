@@ -1185,6 +1185,13 @@
     "aprLabel": "Tasa de interés (TAE)",
     "creditLimitLabel": "Límite de crédito",
     "paymentDueDayLabel": "Día de pago",
+    "statementDayLabel": "Día de corte",
+    "statementDayHint": "El día que cierra el extracto. Las compras de después se pagan el mes siguiente.",
+    "cycle": {
+      "due": "Vence el {{date}}: {{amount}}",
+      "dueOpen": "Vence el {{date}}: {{amount}} por ahora (el corte es el {{closes}})",
+      "afterCut": "Después del corte: {{amount}}, vence el {{date}}"
+    },
     "minimumPaymentLabel": "Pago mínimo",
     "installmentAmountLabel": "Importe de la cuota",
     "installmentsTotalLabel": "Cuotas totales",

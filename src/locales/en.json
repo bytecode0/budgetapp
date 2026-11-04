@@ -1185,6 +1185,13 @@
     "aprLabel": "Interest rate (APR)",
     "creditLimitLabel": "Credit limit",
     "paymentDueDayLabel": "Payment due day",
+    "statementDayLabel": "Statement day",
+    "statementDayHint": "The day the statement closes. Purchases after it are paid the following month.",
+    "cycle": {
+      "due": "Due {{date}}: {{amount}}",
+      "dueOpen": "Due {{date}}: {{amount}} so far (statement closes {{closes}})",
+      "afterCut": "After the statement: {{amount}}, due {{date}}"
+    },
     "minimumPaymentLabel": "Minimum payment",
     "installmentAmountLabel": "Installment amount",
     "installmentsTotalLabel": "Total installments",
