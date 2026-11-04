@@ -7,7 +7,7 @@ import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { loadDebtLedgers } from "../lib/debtBalance.js";
 import { deriveOnboardingStatus, computeOnboardingResult, parseOnboardingGoal } from "../lib/onboarding.js";
 import { pctToBps } from "../../shared/incomeShare.js";
-import { ensureGenerosityLine, syncGenerosity } from "../lib/generosity.js";
+import { ensureGenerosityLine, householdIncomeFor, syncGenerosity } from "../lib/generosity.js";
 import { householdBaselineIncome } from "../lib/householdIncome.js";
 
 export const onboardingRouter = Router();
@@ -108,13 +108,18 @@ onboardingRouter.patch("/preferences", requireAuth, async (req: AuthRequest, res
     if (payYourselfFirstPct === undefined && generosityPct === undefined) {
       return res.status(400).json({ error: "payYourselfFirstPct or generosityPct is required" });
     }
-    const data: { payYourselfFirstBps?: number | null; generosityBps?: number } = {};
+    const data: { payYourselfFirstBps?: number | null; payYourselfFirstSetAt?: Date | null; generosityBps?: number } = {};
     if (payYourselfFirstPct !== undefined) {
       const bps = payYourselfFirstPct === null ? null : pctToBps(payYourselfFirstPct);
       if (payYourselfFirstPct !== null && bps === null) {
         return res.status(400).json({ error: "payYourselfFirstPct must be between 0 and 100" });
       }
       data.payYourselfFirstBps = bps;
+      // Months that ended before the share was chosen (or changed) are not
+      // judged by it. Saving the same share again keeps the date.
+      const current = await prisma.userSettings.findUnique({ where: { userId: req.userId! }, select: { payYourselfFirstBps: true } });
+      if (bps === null) data.payYourselfFirstSetAt = null;
+      else if (current?.payYourselfFirstBps !== bps) data.payYourselfFirstSetAt = new Date();
     }
     if (generosityPct !== undefined) {
       const bps = pctToBps(generosityPct);
@@ -155,9 +160,12 @@ onboardingRouter.get("/result", requireAuth, async (req: AuthRequest, res: Respo
     // The Generosity line's amount for this period first (it may follow the income).
     const cycle = await getCycleStartDay(userId);
     const generosity = await syncGenerosity(userId, periodBounds(currentPeriodKey(cycle), cycle));
+    // The household's income for this period as Home counts it (recorded
+    // when any, else the baseline) — the same figure the Generosity share and
+    // "Págate a ti primero" are measured against, so every number agrees.
     const [settings, monthlyIncome, debts, allocations, savingsAccounts, emergencyPlans] = await Promise.all([
       prisma.userSettings.findUnique({ where: { userId }, select: { cycleStartDay: true, payYourselfFirstBps: true, onboardingGoal: true } }),
-      householdBaselineIncome(userId),
+      householdIncomeFor(userId, periodBounds(currentPeriodKey(cycle), cycle)),
       prisma.debt.findMany({ where: visibleTo(req), select: { id: true, name: true, apr: true } }),
       prisma.allocation.findMany({ where: { userId }, select: { type: true, allocatedAmount: true } }),
       // What the savings step recorded (SavingsStep: a cash/savings account).

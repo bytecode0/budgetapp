@@ -2,7 +2,8 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { toCents, serializeMoney } from "../lib/money.js";
-import { currentPeriodKey } from "../lib/period.js";
+import { currentPeriodKey, periodBounds } from "../lib/period.js";
+import { loadBookedByPlan, planMonthContribution } from "../lib/payYourselfFirst.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 
 export const plansRouter = Router();
@@ -85,7 +86,11 @@ plansRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
 });
 
 // GET /api/plans/monthly-status?month=YYYY-MM
-// Returns contribution status for each plan that has a linked allocation
+// Returns contribution status for each plan that has a linked allocation.
+// The month's contribution is max(deposit, booked on the plan's line)
+// (server/lib/payYourselfFirst.ts): "contributed" once it reaches the expected
+// amount; otherwise "pending" (this month or later) with only the remainder,
+// or "missed" (a past month).
 plansRouter.get("/monthly-status", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { month } = req.query as Record<string, string>;
@@ -107,7 +112,7 @@ plansRouter.get("/monthly-status", requireAuth, async (req: AuthRequest, res: Re
     const planIds = allocations.map(a => a.lifePlanId as string);
     const amountByPlanId = Object.fromEntries(allocations.map(a => [a.lifePlanId, a.allocatedAmount]));
 
-    const [plans, deposits] = await Promise.all([
+    const [plans, deposits, booked] = await Promise.all([
       prisma.lifePlan.findMany({
         where: { id: { in: planIds }, userId: req.userId! },
         select: { id: true, title: true, icon: true, color: true, targetAmount: true, currentAmount: true, monthlyContribution: true },
@@ -115,22 +120,24 @@ plansRouter.get("/monthly-status", requireAuth, async (req: AuthRequest, res: Re
       prisma.planDeposit.findMany({
         where: { planId: { in: planIds }, userId: req.userId!, month },
       }),
+      loadBookedByPlan(prisma, req.userId!, periodBounds(month, cycleStartDay), planIds),
     ]);
 
     const depositByPlanId = Object.fromEntries(deposits.map(d => [d.planId, d.amount]));
 
     const status = plans.map(plan => {
       const expectedAmount = amountByPlanId[plan.id] ?? plan.monthlyContribution;
-      const depositedAmount = depositByPlanId[plan.id] ?? 0;
+      const depositedAmount = planMonthContribution(depositByPlanId[plan.id] ?? 0, booked.get(plan.id) ?? 0);
+      const remainingAmount = Math.max(0, expectedAmount - depositedAmount);
       let contributionStatus: "contributed" | "missed" | "pending";
-      if (depositedAmount > 0) {
+      if (depositedAmount > 0 && remainingAmount === 0) {
         contributionStatus = "contributed";
       } else if (month < currentMonth) {
         contributionStatus = "missed";
       } else {
         contributionStatus = "pending";
       }
-      return { planId: plan.id, title: plan.title, icon: plan.icon, color: plan.color, expectedAmount, depositedAmount, status: contributionStatus };
+      return { planId: plan.id, title: plan.title, icon: plan.icon, color: plan.color, expectedAmount, depositedAmount, remainingAmount, status: contributionStatus };
     });
 
     return res.json(serializeMoney({ status }));

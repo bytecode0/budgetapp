@@ -7,7 +7,7 @@ import { ALLOCATION_NOT_FOUND, allocationsInPool, hiddenCommitted, hiddenLineIds
 import { countedAmounts, debtCommitments } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { householdBaselineIncome, householdMonthIncome } from "../lib/householdIncome.js";
-import { applyGenerosity, generosityBps, householdIncomeFor } from "../lib/generosity.js";
+import { GENEROSITY_TYPE, applyGenerosity, generosityBps, generosityForMonth, householdIncomeFor } from "../lib/generosity.js";
 
 export const monthlyBudgetsRouter = Router();
 
@@ -63,7 +63,21 @@ monthlyBudgetsRouter.get("/", requireAuth, async (req: AuthRequest, res: Respons
       }), hiddenCommitted: hiddenCommittedEuros });
     }
 
-    return res.json({ ...serializeMoney({ budgets: saved.filter(b => !hidden.has(b.allocationId)).map(b => ({ ...b, saved: true })) }), hiddenCommitted: hiddenCommittedEuros });
+    // A saved month without a row for the Generosity line: its amount for
+    // that month as the review and Home count it (the share of that month's
+    // income, else the line's fixed amount), so every screen agrees. The
+    // Generosity line has no debt, so it is never one of the hidden lines.
+    const budgets: unknown[] = saved.filter(b => !hidden.has(b.allocationId)).map(b => ({ ...b, saved: true }));
+    const generosityLine = await prisma.allocation.findFirst({
+      where: { userId: req.userId!, type: GENEROSITY_TYPE, ...notOnHiddenDebt(req.authUserId!) },
+      select: { id: true, name: true, icon: true, type: true, sortOrder: true },
+      orderBy: { sortOrder: "asc" },
+    });
+    if (generosityLine && !saved.some(b => b.allocationId === generosityLine.id)) {
+      const { amount } = await generosityForMonth(req.userId!, month, periodBounds(month, cycleStartDay));
+      budgets.push({ allocationId: generosityLine.id, month, allocatedAmount: amount, allocation: generosityLine, saved: false });
+    }
+    return res.json({ ...serializeMoney({ budgets }), hiddenCommitted: hiddenCommittedEuros });
   } catch (err) {
     console.error("[monthly-budgets/GET]", err);
     return res.status(500).json({ error: "Internal server error" });

@@ -193,8 +193,10 @@ export function planPoolMerge(input: MergeInput): MergePlan {
   }
   const allocationRemap = new Map<string, string>();
   // A budget has one Generosity line (LPBETA-10, server/lib/generosity.ts):
-  // hers always merges into the pool's, used or not — her expenses on it
-  // move to the pool's line. Without one in the pool, hers moves and is it.
+  // hers always merges into the pool's, used or not — her expenses, rules and
+  // recurring commitments on it move to the pool's line, and so do her month
+  // budgets for months the pool has none (mergeMemberIntoPool). Without one
+  // in the pool, hers moves and is it.
   const poolGenerosity = input.poolAllocations.find(a => a.type === "generosity")?.id;
   for (const a of input.memberAllocations) {
     if (a.type === "generosity") {
@@ -367,9 +369,16 @@ export async function mergeMemberIntoPool(
   const mine = { userId: memberId };
   const toPool = { userId: poolId };
 
-  // 1. Untouched default lines merge into the pool's: repoint what uses them,
-  //    then delete them (their 0 € MonthlyBudgets cascade).
+  // 1. Untouched default lines, and her Generosity line, merge into the
+  //    pool's: repoint what uses them, carry her month budgets over to the
+  //    pool's line for the months it has none (a used Generosity line may
+  //    have some; an untouched default line never does), then delete hers
+  //    (any month budget left — a month the pool already set — cascades).
   for (const [from, to] of plan.allocationRemap) {
+    const poolMonths = new Set((await db.monthlyBudget.findMany({ where: { allocationId: to }, select: { month: true } })).map(b => b.month));
+    for (const b of await db.monthlyBudget.findMany({ where: { allocationId: from }, select: { id: true, month: true } })) {
+      if (!poolMonths.has(b.month)) await db.monthlyBudget.update({ where: { id: b.id }, data: { allocationId: to } });
+    }
     await db.expense.updateMany({ where: { ...mine, allocationId: from }, data: { allocationId: to } });
     await db.categorizationRule.updateMany({ where: { ...mine, allocationId: from }, data: { allocationId: to } });
     await db.recurringCommitment.updateMany({ where: { ...mine, allocationId: from }, data: { allocationId: to } });

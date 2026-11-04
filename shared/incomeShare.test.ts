@@ -77,3 +77,12 @@ test("traffic light: good, with or without a share chosen", () => {
   assert.equal(monthLight({ ...base, budgetedCents: 0, paidCents: 30_000, goalCents: 30_000 }).reason, "goalMet");
   assert.equal(monthLight({ ...base, budgetedCents: 0, goalCents: 30_000 }).reason, "goalPending");
 });
+
+test("traffic light: a past month that ended before the share was chosen is not judged by it", () => {
+  const past = { ...base, spentCents: 50_000, paidCents: 0, goalCents: 30_000, closed: true, goalApplies: false };
+  assert.deepEqual(monthLight(past), { light: "good", reason: "onTrack", amountCents: 0 });
+  // Nothing else to measure: neutral.
+  assert.equal(monthLight({ ...past, budgetedCents: 0 }).light, "neutral");
+  // Spending is still judged.
+  assert.equal(monthLight({ ...past, spentCents: 250_000 }).light, "over");
+});

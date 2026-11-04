@@ -116,7 +116,9 @@ export function useAllocations() {
     return {};
   };
 
-  const updateAllocation = async (id: string, payload: Partial<Allocation>) => {
+  /** `month`: the month on screen, so the server can tell a Generosity share
+   *  echoed back from a typed amount (server/lib/generosity.ts). */
+  const updateAllocation = async (id: string, payload: Partial<Allocation> & { month?: string }) => {
     const res = await fetch(`/api/allocations/${id}`, {
       method: 'PATCH',
       credentials: 'include',

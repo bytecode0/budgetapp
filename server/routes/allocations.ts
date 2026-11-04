@@ -10,7 +10,7 @@ import { incomeBaselines } from "../lib/householdIncome.js";
 import { visibleToWhere } from "../lib/ownership.js";
 import { hiddenCommitted, notOnHiddenDebt } from "../lib/poolRefs.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
-import { GENEROSITY_TYPE, clearGenerosityShare, ensureGenerosityLine, syncGenerosity } from "../lib/generosity.js";
+import { GENEROSITY_TYPE, clearGenerosityShare, ensureGenerosityLine, isEchoedGenerosityShare, syncGenerosity } from "../lib/generosity.js";
 
 export const allocationsRouter = Router();
 
@@ -206,14 +206,13 @@ allocationsRouter.patch("/budgets", requireAuth, async (req: AuthRequest, res: R
     );
     if (valid.length === 0) return res.status(400).json({ error: "No valid budgets" });
 
+    // The Generosity line is never set in batch (it is a share the user
+    // chose, not a spending suggestion): it is skipped.
     const owned = await prisma.allocation.findMany({
-      where: { id: { in: valid.map(b => b.id!) }, userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
-      select: { id: true, type: true, allocatedAmount: true },
+      where: { id: { in: valid.map(b => b.id!) }, userId: req.userId!, type: { not: GENEROSITY_TYPE }, ...notOnHiddenDebt(req.authUserId!) },
+      select: { id: true },
     });
     const ownedIds = new Set(owned.map(a => a.id));
-    // A new amount typed for the Generosity line replaces its share.
-    const generosityRetyped = owned.some(a => a.type === GENEROSITY_TYPE
-      && valid.some(b => b.id === a.id && toCents(b.allocatedAmount!) !== a.allocatedAmount));
 
     const updated = await prisma.$transaction(
       valid
@@ -225,8 +224,6 @@ allocationsRouter.patch("/budgets", requireAuth, async (req: AuthRequest, res: R
           }),
         ),
     );
-
-    if (generosityRetyped) await clearGenerosityShare(req.userId!);
 
     return res.json(serializeMoney({ updated: updated.length, allocations: updated }));
   } catch (err) {
@@ -242,7 +239,8 @@ allocationsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respo
     const existing = await prisma.allocation.findFirst({ where: { id, userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) } });
     if (!existing) return res.status(404).json({ error: "Allocation not found" });
 
-    const { name, icon, type, allocatedAmount, actualAmount, sortOrder, lifePlanId } = req.body;
+    const { name, icon, type, actualAmount, sortOrder, lifePlanId, month } = req.body;
+    let { allocatedAmount } = req.body;
 
     // Validate lifePlanId if provided
     if (lifePlanId) {
@@ -263,6 +261,15 @@ allocationsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respo
       return res.status(400).json({ error: "El tipo de la línea de generosidad no se puede cambiar" });
     }
 
+    // The Generosity line with a share: its own derived amount sent back is
+    // ignored; a different amount is typed by the user and replaces the share.
+    let generosityTyped = false;
+    if (existing.type === GENEROSITY_TYPE && allocatedAmount !== undefined) {
+      const { hasShare, echoed } = await isEchoedGenerosityShare(req.userId!, toCents(allocatedAmount), typeof month === "string" ? month : undefined);
+      if (echoed) allocatedAmount = undefined;
+      else generosityTyped = hasShare;
+    }
+
     const newType = type ?? existing.type;
     const allocation = await prisma.allocation.update({
       where: { id },
@@ -280,10 +287,7 @@ allocationsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respo
         ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
       },
     });
-    // A new amount typed for the Generosity line replaces its share.
-    if (existing.type === GENEROSITY_TYPE && allocatedAmount !== undefined && toCents(allocatedAmount) !== existing.allocatedAmount) {
-      await clearGenerosityShare(req.userId!);
-    }
+    if (generosityTyped) await clearGenerosityShare(req.userId!);
 
     return res.json(serializeMoney({ allocation }));
   } catch (err) {

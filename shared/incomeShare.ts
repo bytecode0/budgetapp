@@ -45,8 +45,9 @@ export function emergencyFundTarget(monthlyExpensesCents: number): number {
 // red: CLAUDE.md). Close to the budget (more than 80 % spent), or a past month
 // that ended without paying yourself, is "tight". An open month where you
 // haven't paid yourself yet stays "good" — the sentence reminds you — because
-// the month isn't lost: you can still set it aside. Nothing to measure (no
-// budget and no share chosen) is "neutral".
+// the month isn't lost: you can still set it aside. A month that ended before
+// the share was chosen is not judged by it. Nothing to measure (no budget and
+// no share that applies) is "neutral".
 
 export type MonthLight = "good" | "tight" | "over" | "neutral";
 export type MonthLightReason =
@@ -64,6 +65,9 @@ export interface MonthLightInput {
   paidCents: number;      // set aside for yourself this month
   goalCents: number | null; // pay-yourself-first target; null = no share chosen
   closed: boolean;        // the month is over (a past month)
+  /** False when the share was chosen after this month ended: the month is
+   *  then not judged by it (never "goalMissed"). Default true. */
+  goalApplies?: boolean;
 }
 
 export interface MonthLightResult {
@@ -73,7 +77,8 @@ export interface MonthLightResult {
 }
 
 export function monthLight(input: MonthLightInput): MonthLightResult {
-  const { spentCents, budgetedCents, paidCents, goalCents, closed } = input;
+  const { spentCents, budgetedCents, paidCents, closed } = input;
+  const goalCents = input.goalApplies === false ? null : input.goalCents;
   const hasGoal = goalCents !== null && goalCents > 0;
   const missing = hasGoal ? Math.max(0, goalCents - paidCents) : 0;
 

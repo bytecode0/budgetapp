@@ -8,6 +8,7 @@ export interface MonthSavings {
   paidYourself: number;
   payYourselfFirstBps: number | null;
   payYourselfFirstGoal: number | null;
+  payYourselfFirstApplies: boolean; // false: the share was chosen after this month ended
   generosityAmount: number; // "Das X al mes" (LPBETA-10)
   generosityBps: number | null;
 }

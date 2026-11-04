@@ -82,7 +82,9 @@ export async function suggestBudgets(userId: string, monthsBack = 6): Promise<Bu
     byAllocMonth.set(id, inner);
   }
 
-  const isPlan = new Set(allocations.filter(a => a.type === "plan").map(a => a.id));
+  // Saving and giving aren't spending to fit to history: plan lines and the
+  // Generosity line (a share the user chose, LPBETA-10) are skipped.
+  const isPlan = new Set(allocations.filter(a => a.type === "plan" || a.type === "generosity").map(a => a.id));
 
   const suggestions: BudgetSuggestion[] = [];
   for (const [allocationId, perMonth] of byAllocMonth) {

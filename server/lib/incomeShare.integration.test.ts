@@ -91,12 +91,12 @@ describe("income shares and first goals (integration, real Postgres)", { skip: !
     assert.equal((await ok(A, "GET", "/api/onboarding/status")).data.answers.goal, null);
   });
 
-  it("pay yourself first: X = the month's deposits and plan-line transfers, Y = the share of the income", async () => {
+  it("pay yourself first: X = each plan's max(deposit, plan-line transfers), Y = the share of the income", async () => {
     const B = await signUp("Bea", "bea@example.com");
     await ok(B, "PATCH", "/api/allocations/settings/income", { monthlyIncome: 3000 });
 
     let m = (await ok(B, "GET", `/api/dashboard/month?month=${month()}`)).data;
-    assert.deepEqual(m, { month: month(), householdIncome: 3000, paidYourself: 0, payYourselfFirstBps: null, payYourselfFirstGoal: null, generosityAmount: 0, generosityBps: null });
+    assert.deepEqual(m, { month: month(), householdIncome: 3000, paidYourself: 0, payYourselfFirstBps: null, payYourselfFirstGoal: null, payYourselfFirstApplies: false, generosityAmount: 0, generosityBps: null });
 
     assert.equal((await call(B, "PATCH", "/api/onboarding/preferences", { payYourselfFirstPct: 150 })).status, 400);
     assert.equal((await call(B, "PATCH", "/api/onboarding/preferences", {})).status, 400);
@@ -109,7 +109,7 @@ describe("income shares and first goals (integration, real Postgres)", { skip: !
     await prisma.expense.create({ data: { userId: B, allocationId: line.id, amount: 1000, kind: "refund", description: "Back out", createdByUserId: B, payerUserId: B } });
 
     m = (await ok(B, "GET", `/api/dashboard/month?month=${month()}`)).data;
-    assert.equal(m.paidYourself, 240);           // 200 + 50 − 10
+    assert.equal(m.paidYourself, 200);           // max(deposit 200, booked 50 − 10)
     assert.equal(m.payYourselfFirstGoal, 375);   // 12.5 % of 3,000
     assert.equal((await call(B, "GET", "/api/dashboard/month?month=junk")).status, 400);
 
@@ -222,5 +222,112 @@ describe("income shares and first goals (integration, real Postgres)", { skip: !
     await ok(user.id, "PATCH", "/api/onboarding/preferences", { generosityPct: 5 });
     const types = (await prisma.allocation.findMany({ where: { userId: user.id }, select: { type: true } })).map(a => a.type).sort();
     assert.deepEqual(types, ["fixed", "flexible", "generosity"]);
+  });
+
+  // ── Review fixes ───────────────────────────────────────────────────────
+
+  it("money booked from the bank and registered by hand counts once (max of the two)", async () => {
+    const I = await signUp("Inés", "ines@example.com");
+    await ok(I, "PATCH", "/api/allocations/settings/income", { monthlyIncome: 3000 });
+    const plan = (await ok(I, "POST", "/api/plans", { title: "Colchón", type: "emergency", targetAmount: 6000, monthlyContribution: 200, autoCreateAllocation: true })).plan;
+    const line = await prisma.allocation.findFirstOrThrow({ where: { userId: I, lifePlanId: plan.id } });
+    const status = async () => (await ok(I, "GET", `/api/plans/monthly-status?month=${month()}`)).status[0];
+
+    // Bank booked 150 of the expected 200: pending, only the remainder.
+    await ok(I, "POST", "/api/expenses", { amount: 150, description: "Transferencia", allocationId: line.id });
+    let st = await status();
+    assert.equal(st.status, "pending");
+    assert.equal(st.depositedAmount, 150);
+    assert.equal(st.remainingAmount, 50);
+
+    // Bank books the other 50, and the user also registers 200 by hand.
+    await ok(I, "POST", "/api/expenses", { amount: 50, description: "Transferencia", allocationId: line.id });
+    await ok(I, "POST", "/api/plan-deposits/confirm", { month: month(), deposits: [{ planId: plan.id, amount: 200 }] });
+    st = await status();
+    assert.equal(st.status, "contributed");
+    assert.equal(st.depositedAmount, 200);
+    assert.equal(st.remainingAmount, 0);
+    assert.equal((await ok(I, "GET", `/api/dashboard/month?month=${month()}`)).data.paidYourself, 200);
+    // The plan's balance moved by 200, not 400.
+    assert.equal((await prisma.lifePlan.findUniqueOrThrow({ where: { id: plan.id } })).currentAmount, 20000);
+    // Registering a month total above what was booked adds only the difference.
+    await ok(I, "POST", "/api/plan-deposits/confirm", { month: month(), deposits: [{ planId: plan.id, amount: 260 }] });
+    assert.equal((await prisma.lifePlan.findUniqueOrThrow({ where: { id: plan.id } })).currentAmount, 26000);
+  });
+
+  it("two concurrent confirms of the same deposit move the plan once", async () => {
+    const J = await signUp("Jon", "jon@example.com");
+    const plan = (await ok(J, "POST", "/api/plans", { title: "Fondo", type: "emergency", targetAmount: 6000, currentAmount: 1000 })).plan;
+    const body = { month: month(), deposits: [{ planId: plan.id, amount: 300 }] };
+    await Promise.all([ok(J, "POST", "/api/plan-deposits/confirm", body), ok(J, "POST", "/api/plan-deposits/confirm", body)]);
+    assert.equal((await prisma.lifePlan.findUniqueOrThrow({ where: { id: plan.id } })).currentAmount, 130000);
+  });
+
+  it("the share's own amount echoed back by the budget screen keeps the share; the batch never touches the line", async () => {
+    const K = await signUp("Kai", "kai@example.com");
+    await ok(K, "PATCH", "/api/allocations/settings/income", { monthlyIncome: 3000 });
+    await ok(K, "PATCH", "/api/onboarding/preferences", { generosityPct: 10 });
+    const gen = (await ok(K, "GET", "/api/allocations")).allocations.find((a: any) => a.type === "generosity");
+    // Next month has recorded income: its share is 500, not this month's 300.
+    const next = periodLib.periodKeyOffset(month(), 1);
+    await prisma.income.create({ data: { userId: K, ownerUserId: K, amount: 500000, date: periodLib.periodBounds(next, 1).start } });
+    await ok(K, "PATCH", `/api/allocations/${gen.id}`, { allocatedAmount: 500, month: next });
+    await ok(K, "PATCH", `/api/allocations/${gen.id}`, { allocatedAmount: 300 });
+    assert.equal((await ok(K, "GET", "/api/allocations")).generosityBps, 1000);
+    // The batch (budget suggestions) skips the line.
+    await ok(K, "PATCH", "/api/allocations/budgets", { budgets: [{ id: gen.id, allocatedAmount: 999 }] });
+    const after = await ok(K, "GET", "/api/allocations");
+    assert.equal(after.generosityBps, 1000);
+    assert.equal(after.allocations.find((a: any) => a.type === "generosity").allocatedAmount, 300);
+
+    // A saved month without a Generosity row still returns its derived amount.
+    const fixed = after.allocations.find((a: any) => a.type === "fixed");
+    await ok(K, "POST", "/api/monthly-budgets/save", { month: next, budgets: [{ allocationId: fixed.id, allocatedAmount: 900 }] });
+    const saved = await ok(K, "GET", `/api/monthly-budgets?month=${next}`);
+    assert.equal(saved.budgets.find((b: any) => b.allocationId === gen.id).allocatedAmount, 500);
+    assert.equal(saved.budgets.find((b: any) => b.allocationId === fixed.id).allocatedAmount, 900);
+  });
+
+  it("a share chosen after a month ended doesn't judge that month", async () => {
+    const L = await signUp("Lía", "lia@example.com");
+    await ok(L, "PATCH", "/api/allocations/settings/income", { monthlyIncome: 3000 });
+    await ok(L, "PATCH", "/api/onboarding/preferences", { payYourselfFirstPct: 10 });
+    const prev = periodLib.periodKeyOffset(month(), -1);
+    assert.equal((await ok(L, "GET", `/api/dashboard/month?month=${prev}`)).data.payYourselfFirstApplies, false);
+    assert.equal((await ok(L, "GET", `/api/dashboard/month?month=${month()}`)).data.payYourselfFirstApplies, true);
+    // Saving the same share again keeps its date; changing it moves it.
+    const setAt = (await prisma.userSettings.findUniqueOrThrow({ where: { userId: L } })).payYourselfFirstSetAt;
+    await ok(L, "PATCH", "/api/onboarding/preferences", { payYourselfFirstPct: 10 });
+    assert.deepEqual((await prisma.userSettings.findUniqueOrThrow({ where: { userId: L } })).payYourselfFirstSetAt, setAt);
+    await ok(L, "PATCH", "/api/onboarding/preferences", { payYourselfFirstPct: null });
+    assert.equal((await prisma.userSettings.findUniqueOrThrow({ where: { userId: L } })).payYourselfFirstSetAt, null);
+  });
+
+  it("the onboarding result uses this month's household income, as Home does", async () => {
+    const M = await signUp("Mar", "mar@example.com");
+    await ok(M, "PATCH", "/api/allocations/settings/income", { monthlyIncome: 3000 });
+    await prisma.income.create({ data: { userId: M, ownerUserId: M, amount: 350000, date: new Date() } });
+    const r = (await ok(M, "GET", "/api/onboarding/result")).data;
+    assert.equal(r.monthlyIncome, 3500);
+    assert.equal((await ok(M, "GET", `/api/monthly-budgets/review?month=${month()}`)).householdIncome, 3500);
+  });
+
+  it("when she joins, her Generosity month budgets move to the pool's line for months it has none", async () => {
+    const P = await signUp("Pau", "pau@example.com");
+    const Q = await signUp("Quim", "quim@example.com");
+    const pGen = (await ok(P, "GET", "/api/allocations")).allocations.find((a: any) => a.type === "generosity");
+    const qGen = (await ok(Q, "GET", "/api/allocations")).allocations.find((a: any) => a.type === "generosity");
+    const prev = periodLib.periodKeyOffset(month(), -1);
+    await ok(P, "POST", "/api/monthly-budgets/save", { month: prev, budgets: [{ allocationId: pGen.id, allocatedAmount: 70 }] });
+    await ok(Q, "POST", "/api/monthly-budgets/save", { month: prev, budgets: [{ allocationId: qGen.id, allocatedAmount: 20 }] });
+    await ok(Q, "POST", "/api/monthly-budgets/save", { month: month(), budgets: [{ allocationId: qGen.id, allocatedAmount: 40 }] });
+
+    await ok(P, "POST", "/api/partner/invite", { email: "quim@example.com" });
+    const inv = await prisma.partnerInvite.findFirstOrThrow({ where: { senderId: P, status: "pending" } });
+    await ok(Q, "POST", "/api/partner/accept", { token: inv.token });
+
+    assert.equal(await prisma.allocation.count({ where: { userId: P, type: "generosity" } }), 1);
+    const rows = await prisma.monthlyBudget.findMany({ where: { allocationId: pGen.id }, orderBy: { month: "asc" } });
+    assert.deepEqual(rows.map(r => [r.month, r.allocatedAmount, r.userId]), [[prev, 7000, P], [month(), 4000, P]]);
   });
 });

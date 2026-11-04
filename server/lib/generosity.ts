@@ -13,15 +13,19 @@
 //   householdMonthIncome for the month — the same income Home shows — so if
 //   the income changes the line keeps the same %. The stored column is kept
 //   in step for the current period (syncGenerosity) for readers that use it raw.
-// - Typing an amount for the line on the budget (PATCH /api/allocations…)
-//   replaces the share with that fixed amount (generosityBps = null). A
-//   month's saved budget (MonthlyBudget) still wins for that month, as with
-//   debt lines.
+// - Typing a different amount for the line on the budget (PATCH
+//   /api/allocations/:id) replaces the share with that fixed amount
+//   (generosityBps = null); the share's own amount echoed back is ignored
+//   (isEchoedGenerosityShare). The batch PATCH /api/allocations/budgets and
+//   the budget suggestions never touch the line. A month's saved budget
+//   (MonthlyBudget) still wins for that month, as with debt lines.
 import { prisma } from "./prisma.js";
 import { createDefaultAllocations } from "./defaults.js";
 import { householdBaselineIncome, householdMonthIncome } from "./householdIncome.js";
 import { resolveLocale, type EmailLocale } from "./email/locales/index.js";
 import { shareOfIncome } from "../../shared/incomeShare.js";
+import { getCycleStartDay } from "./getCycleStartDay.js";
+import { currentPeriodKey, periodBounds } from "./period.js";
 
 export const GENEROSITY_TYPE = "generosity";
 
@@ -123,4 +127,20 @@ export async function generosityForMonth(poolUserId: string, month: string, boun
   if (saved) return { bps, amount: saved.allocatedAmount };
   if (bps === null) return { bps, amount: line.allocatedAmount };
   return { bps, amount: shareOfIncome(await householdIncomeFor(poolUserId, bounds), bps) };
+}
+
+/** A budget edit sent `cents` for the Generosity line. With a share set, an
+ *  amount equal to the share of the current period's income, or of the
+ *  month the user is looking at (`month`), is that share echoed back — not a
+ *  new amount — and must be ignored. Anything else is a typed amount. */
+export async function isEchoedGenerosityShare(poolUserId: string, cents: number, month?: string): Promise<{ hasShare: boolean; echoed: boolean }> {
+  const bps = await generosityBps(poolUserId);
+  if (bps === null) return { hasShare: false, echoed: false };
+  const cycle = await getCycleStartDay(poolUserId);
+  const months = new Set([currentPeriodKey(cycle)]);
+  if (month && /^\d{4}-\d{2}$/.test(month)) months.add(month);
+  for (const m of months) {
+    if (shareOfIncome(await householdIncomeFor(poolUserId, periodBounds(m, cycle)), bps) === cents) return { hasShare: true, echoed: true };
+  }
+  return { hasShare: true, echoed: false };
 }

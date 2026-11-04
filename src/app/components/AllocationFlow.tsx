@@ -200,10 +200,12 @@ export function AllocationFlow() {
     setSaving(true);
     const dirty = local.filter(a => a.dirty);
     const results = await Promise.all(
+      // The amount only when it was edited: an untouched amount sent back
+      // would overwrite a derived one (the Generosity share, LPBETA-10).
       dirty.map(a => updateAllocation(a.id, {
-        name: a.name, icon: a.icon, type: a.type, allocatedAmount: a.allocatedAmount,
-        lifePlanId: a.lifePlanId,
-      } as any))
+        name: a.name, icon: a.icon, type: a.type, lifePlanId: a.lifePlanId,
+        ...(a.amountDirty && { allocatedAmount: a.allocatedAmount, month: selectedMonth }),
+      }))
     );
     setSaving(false);
     if (results.some(r => r && 'error' in r && r.error)) {

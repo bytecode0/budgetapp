@@ -4,8 +4,7 @@ import { toast } from 'sonner';
 import { HandHeart, Loader2 } from 'lucide-react';
 import { useAllocations } from '../hooks/useAllocations';
 import { setGenerosityPct } from '../hooks/useOnboardingNeeded';
-import { pctToBps, shareOfIncome } from '../../../shared/incomeShare';
-import { toCents } from '../../../shared/budgetStatus';
+import { pctToBps } from '../../../shared/incomeShare';
 import { PercentPicker } from './PercentPicker';
 import { useMoney } from './useMoney';
 
@@ -19,7 +18,7 @@ const EXAMPLES = [2, 5, 10];
 export function GenerosityStep() {
   const { t } = useTranslation();
   const { fmt } = useMoney();
-  const { monthlyIncome, generosityBps, loading } = useAllocations();
+  const { allocations, monthlyIncome, generosityBps, loading } = useAllocations();
   const [bps, setBps] = useState<number | null>(null);
   const [amount, setAmount] = useState<number | null>(null); // euros, from the server once saved
   const [saving, setSaving] = useState(false);
@@ -44,7 +43,10 @@ export function GenerosityStep() {
     );
   }
 
-  const shown = amount ?? (bps !== null ? shareOfIncome(toCents(monthlyIncome), bps) / 100 : null);
+  // The server's figure (the share of this period's household income, as
+  // Home counts it): the line as read, then what each save answers.
+  const line = allocations.find(a => a.type === 'generosity');
+  const shown = amount ?? (bps !== null && line ? line.allocatedAmount : null);
 
   return (
     <div className="bg-card border border-border rounded-3xl p-6 sm:p-8 space-y-6">

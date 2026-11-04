@@ -122,6 +122,7 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
     paidCents: savings ? toCents(savings.paidYourself) : 0,
     goalCents: savings?.payYourselfFirstGoal != null ? toCents(savings.payYourselfFirstGoal) : null,
     closed: !isCurrentMonth && !isFutureMonth,
+    goalApplies: savings?.payYourselfFirstApplies ?? true,
   });
 
   return (
