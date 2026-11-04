@@ -9,6 +9,7 @@
 // then oldest first), and the FIRST matching rule wins.
 import { prisma } from "./prisma.js";
 import { normalizeMerchant } from "./normalizeMerchant.js";
+import { onHiddenDebt } from "./poolRefs.js";
 
 export interface RuleLike {
   matchType: string; // "contains" | "equals" | "regex"
@@ -68,9 +69,12 @@ export async function categorize(
  * rule. Idempotent: updates the existing (userId, equals, merchant) rule if present
  * (without downgrading a manual rule's source), otherwise creates a learned one.
  * True when the rule is new or now points elsewhere: something was learned.
+ * A rule on a line hidden from `authUserId` (another member's private debt,
+ * server/lib/poolRefs.ts) is left alone: nothing is learned.
  */
 export async function learnFromCorrection(
   userId: string,
+  authUserId: string,
   merchant: string,
   allocationId: string,
 ): Promise<boolean> {
@@ -82,6 +86,8 @@ export async function learnFromCorrection(
   const existing = await prisma.categorizationRule.findUnique({ where });
 
   if (existing) {
+    const hidden = await prisma.allocation.count({ where: { id: existing.allocationId, ...onHiddenDebt(authUserId) } });
+    if (hidden > 0) return false;
     if (existing.allocationId !== allocationId) {
       await prisma.categorizationRule.update({ where, data: { allocationId } });
       return true;

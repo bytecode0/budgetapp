@@ -472,4 +472,85 @@ describe("household security (integration, real Postgres)", { skip: !TEST_DATABA
       assert.ok(!body.includes(secret), `preview leaks ${secret}: ${body}`);
     }
   });
+
+  it("n. B's import of a bank row A already entered by hand as a payment of her private card is a duplicate, redacted", async () => {
+    const c = await privateSetup();
+    // A pays her private card from her (household-shared) main account, by hand: no externalId.
+    const cardLine = (await prisma.allocation.findFirstOrThrow({ where: { debtId: c.cardDebt } })).id;
+    const handPayment = (await ok(c.A, "POST", "/api/expenses", { amount: 200, description: "Pago Visa", allocationId: cardLine, accountId: c.aMain })).expense.id;
+    const r = await ok(c.B, "POST", "/api/expenses/import/preview", {
+      accountId: c.aMain,
+      rows: [{ rowIndex: 0, date: today(), amountCents: -20000, description: "RECIBO VISA" }],
+    });
+    assert.equal(r.rows[0].status, "duplicate", JSON.stringify(r.rows[0]));
+    assert.equal(r.rows[0].debtId, null);
+    assert.equal(r.newCount, 0);
+    const body = JSON.stringify(r);
+    for (const secret of [handPayment, c.cardDebt, cardLine, "Pago Visa", "Visa secreta"]) assert.ok(!body.includes(secret), `preview leaks ${secret}`);
+    // What the screen would send (only new rows): nothing, so nothing is inserted twice.
+    const before = await prisma.expense.count({ where: { accountId: c.aMain } });
+    const newRows = (r.rows as any[]).filter(x => x.status === "new");
+    assert.equal(newRows.length, 0);
+    assert.equal(await prisma.expense.count({ where: { accountId: c.aMain } }), before);
+  });
+
+  it("o. B never re-points A's rule on her hidden line, by correction or import, and creating it reveals nothing", async () => {
+    const c = await privateSetup();
+    const rule = (await ok(c.A, "POST", "/api/rules", { matchType: "equals", pattern: "cofidis", allocationId: c.line })).rule.id;
+    const bLines = (await ok(c.B, "GET", "/api/allocations")).allocations as any[];
+    const groceries = bLines.find(l => l.isDefault && l.type === "flexible").id;
+    const fixed = bLines.find(l => l.isDefault && l.type === "fixed").id;
+
+    // A manual correction by B of her own "Cofidis" expense.
+    const mine = (await ok(c.B, "POST", "/api/expenses", { amount: 15, description: "Cofidis", allocationId: fixed })).expense.id;
+    await ok(c.B, "PATCH", `/api/expenses/${mine}`, { allocationId: groceries });
+    // An import by B that would teach "cofidis" → groceries.
+    const imported = await ok(c.B, "POST", "/api/expenses/import/confirm", {
+      rows: [{ kind: "expense", externalId: "o-1", date: today(), description: "Cofidis", merchant: "cofidis", amount: 15, allocationId: groceries }],
+    });
+    assert.ok(!(imported.learned as any[]).some(l => l.merchant === "cofidis"));
+    assert.equal((await prisma.categorizationRule.findUniqueOrThrow({ where: { id: rule } })).allocationId, c.line, "A's rule untouched");
+
+    const clash = await call(c.B, "POST", "/api/rules", { matchType: "equals", pattern: "cofidis", allocationId: groceries });
+    assert.equal(clash.status, 404, JSON.stringify(clash.body));
+    assert.equal(clash.body.code, "rule_unavailable");
+    assert.ok(!JSON.stringify(clash.body).includes(c.line));
+    // A clash with a rule B can see is still the plain 409.
+    await ok(c.B, "POST", "/api/rules", { matchType: "equals", pattern: "mercadona", allocationId: groceries });
+    assert.equal((await call(c.B, "POST", "/api/rules", { matchType: "equals", pattern: "mercadona", allocationId: fixed })).status, 409);
+    assert.equal((await prisma.categorizationRule.findUniqueOrThrow({ where: { id: rule } })).allocationId, c.line);
+  });
+
+  it("p. recurring: B's figures come only from what B sees; a person alone keeps every commitment", async () => {
+    const c = await privateSetup();
+    const monthAgo = (m: number) => new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - m, 5));
+    // The same merchant: B's own 10 € charges, and A's 12 € ones on her private card.
+    for (let m = 1; m <= 3; m++) {
+      await prisma.expense.create({ data: { userId: c.A, amount: 1000, description: "Netflix", merchant: "netflix", date: monthAgo(m), payerUserId: c.B, createdByUserId: c.B } });
+      await prisma.expense.create({ data: { userId: c.A, amount: 1200, description: "Netflix", merchant: "netflix", date: monthAgo(m), accountId: c.card, payerUserId: c.A, createdByUserId: c.A } });
+    }
+    // A merchant B has one movement of, the rest on A's private card.
+    await prisma.expense.create({ data: { userId: c.A, amount: 4000, description: "Gym", merchant: "gym", date: monthAgo(1), payerUserId: c.B, createdByUserId: c.B } });
+    for (let m = 1; m <= 3; m++) {
+      await prisma.expense.create({ data: { userId: c.A, amount: 4000, description: "Gym", merchant: "gym", date: monthAgo(m), accountId: c.card, payerUserId: c.A, createdByUserId: c.A } });
+    }
+    const find = async (u: string, merchant: string) =>
+      ((await ok(u, "GET", "/api/recurring")).commitments as any[]).find(x => x.merchant === merchant);
+    assert.equal((await find(c.A, "netflix")).avgAmount, 11, "the pool's figure for A");
+    assert.equal((await find(c.B, "netflix")).avgAmount, 10, "B's figure only from B's rows");
+    assert.ok(await find(c.A, "gym"));
+    assert.equal(await find(c.B, "gym"), undefined, "B can't detect it from what she sees");
+
+    // A commitment whose movements are gone stays, for a person alone and for A.
+    const solo = await signUp("Sol");
+    for (let m = 1; m <= 3; m++) {
+      await prisma.expense.create({ data: { userId: solo.id, amount: 900, description: "Spotify", merchant: "spotify", date: monthAgo(m), payerUserId: solo.id, createdByUserId: solo.id } });
+      await prisma.expense.create({ data: { userId: c.A, amount: 900, description: "Spotify", merchant: "spotify", date: monthAgo(m), accountId: c.aMain, payerUserId: c.A, createdByUserId: c.A } });
+    }
+    assert.ok(await find(solo.id, "spotify"));
+    assert.ok(await find(c.A, "spotify"));
+    await prisma.expense.deleteMany({ where: { merchant: "spotify" } });
+    assert.ok(await find(solo.id, "spotify"), "alone: still listed");
+    assert.ok(await find(c.A, "spotify"), "A: still listed");
+  });
 });

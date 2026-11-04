@@ -5,7 +5,6 @@
 // code the client translates (src/app/lib/apiErrors.ts), never a 500.
 import { prisma } from "./prisma.js";
 import { visibleToWhere } from "./ownership.js";
-import { debtCommitments } from "./debtBalance.js";
 
 export const ALLOCATION_NOT_FOUND = { error: "Category not found", code: "allocation_not_found" };
 export const ACCOUNT_NOT_FOUND = { error: "Account not found", code: "account_not_found" };
@@ -26,8 +25,11 @@ export function notOnHiddenDebt(authUserId: string) {
 
 /** Rows (CategorizationRule, RecurringCommitment) not pointing at the budget
  *  line of a debt hidden from the caller. */
+export function onHiddenLine(authUserId: string) {
+  return { allocation: { is: onHiddenDebt(authUserId) } };
+}
 export function notOnHiddenLine(authUserId: string) {
-  return { NOT: { allocation: { is: onHiddenDebt(authUserId) } } };
+  return { NOT: onHiddenLine(authUserId) };
 }
 
 // A private account is hidden from the other member in every visibility
@@ -36,11 +38,17 @@ export function notOnHiddenLine(authUserId: string) {
 // on a hidden debt's line or on a hidden account; an income when it sits on a
 // hidden account. `NOT` matches rows with no account/debt/line too.
 const onHiddenAccount = (authUserId: string) => ({ account: { is: { NOT: visibleToWhere(authUserId) } } });
+export function hiddenExpenseWhere(authUserId: string) {
+  return { OR: [onHiddenDebt(authUserId), onHiddenLine(authUserId), onHiddenAccount(authUserId)] };
+}
 export function visibleExpenseWhere(authUserId: string) {
-  return { NOT: { OR: [onHiddenDebt(authUserId), { allocation: { is: onHiddenDebt(authUserId) } }, onHiddenAccount(authUserId)] } };
+  return { NOT: hiddenExpenseWhere(authUserId) };
+}
+export function hiddenIncomeWhere(authUserId: string) {
+  return onHiddenAccount(authUserId);
 }
 export function visibleIncomeWhere(authUserId: string) {
-  return { NOT: onHiddenAccount(authUserId) };
+  return { NOT: hiddenIncomeWhere(authUserId) };
 }
 
 /** Ids of pool `userId`'s budget lines hidden from `authUserId`, for the read
@@ -50,24 +58,22 @@ export async function hiddenLineIds(userId: string, authUserId: string): Promise
   return new Set(lines.map(l => l.id));
 }
 
-/** What the lines hidden from the caller commit in `period`, in cents: one
- *  figure, never their names or ids, so budget totals listed without them
- *  still add up to the household's (/review). A line's budget for `month`
- *  when saved, else its debt's commitment for the period. */
+/** What the lines hidden from the caller commit, in cents: one figure, never
+ *  their names or ids, so budget totals listed without them still add up to
+ *  the household's (/review). A line's budget for `month` when saved, else
+ *  its debt's commitment for the period (`commitments`, from debtCommitments,
+ *  which the caller has already computed). */
 export async function hiddenCommitted(
-  userId: string, authUserId: string, period: { start: Date; end: Date }, month?: string,
+  userId: string, authUserId: string, commitments: ReadonlyMap<string, number>, month?: string,
 ): Promise<number> {
   const lines = await prisma.allocation.findMany({
     where: { userId, ...onHiddenDebt(authUserId) },
     select: { id: true, debtId: true, allocatedAmount: true },
   });
   if (lines.length === 0) return 0;
-  const [commitments, saved] = await Promise.all([
-    debtCommitments(userId, period),
-    month
-      ? prisma.monthlyBudget.findMany({ where: { month, allocationId: { in: lines.map(l => l.id) } }, select: { allocationId: true, allocatedAmount: true } })
-      : Promise.resolve([]),
-  ]);
+  const saved = month
+    ? await prisma.monthlyBudget.findMany({ where: { month, allocationId: { in: lines.map(l => l.id) } }, select: { allocationId: true, allocatedAmount: true } })
+    : [];
   const savedBy = new Map(saved.map(b => [b.allocationId, b.allocatedAmount]));
   return lines.reduce((s, l) => s + (savedBy.get(l.id) ?? (l.debtId ? commitments.get(l.debtId) : undefined) ?? l.allocatedAmount), 0);
 }

@@ -1,11 +1,27 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
-import { ALLOCATION_NOT_FOUND, allocationsInPool, notOnHiddenLine } from "../lib/poolRefs.js";
+import { ALLOCATION_NOT_FOUND, allocationsInPool, notOnHiddenLine, onHiddenLine } from "../lib/poolRefs.js";
 
 export const rulesRouter = Router();
 
 const MATCH_TYPES = new Set(["contains", "equals", "regex"]);
+
+// Rules are unique per pool by (matchType, pattern). When the clash is with
+// a rule the caller can't see (on the line of another member's private debt),
+// "already exists" would reveal that rule's pattern: the caller gets a
+// neutral "this pattern isn't available" instead, and that rule is never
+// overwritten. It still tells them the pattern is taken, but not by what
+// rule, line or person.
+const RULE_UNAVAILABLE = { error: "This pattern can't be used for a rule", code: "rule_unavailable" };
+const RULE_EXISTS = { error: "A rule with this match type and pattern already exists" };
+
+async function clashBody(req: AuthRequest, matchType: string, pattern: string) {
+  const hidden = await prisma.categorizationRule.count({
+    where: { userId: req.userId!, matchType, pattern, ...onHiddenLine(req.authUserId!) },
+  });
+  return hidden > 0 ? { status: 404, body: RULE_UNAVAILABLE } : { status: 409, body: RULE_EXISTS };
+}
 
 function validRegex(pattern: string): boolean {
   try {
@@ -60,7 +76,9 @@ rulesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     return res.json({ rule });
   } catch (err: any) {
     if (err?.code === "P2002") {
-      return res.status(409).json({ error: "A rule with this match type and pattern already exists" });
+      const { matchType, pattern } = req.body;
+      const clash = await clashBody(req, matchType ?? "contains", String(pattern).trim());
+      return res.status(clash.status).json(clash.body);
     }
     console.error("[rules/POST]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -106,7 +124,10 @@ rulesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
     return res.json({ rule });
   } catch (err: any) {
     if (err?.code === "P2002") {
-      return res.status(409).json({ error: "A rule with this match type and pattern already exists" });
+      const existing = await prisma.categorizationRule.findUnique({ where: { id: req.params.id }, select: { matchType: true, pattern: true } });
+      const { matchType, pattern } = req.body;
+      const clash = await clashBody(req, matchType ?? existing?.matchType ?? "contains", pattern !== undefined ? String(pattern).trim() : existing?.pattern ?? "");
+      return res.status(clash.status).json(clash.body);
     }
     console.error("[rules/PATCH]", err);
     return res.status(500).json({ error: "Internal server error" });

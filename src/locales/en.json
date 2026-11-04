@@ -648,6 +648,7 @@
     "splitMustSum": "Split ({{total}}) must equal the amount ({{amount}})"
   },
   "rules": {
+    "unavailableError": "That text can't be used for a rule. Try another one.",
     "title": "Categorization rules",
     "subtitle": "Auto-assign expenses by description",
     "manageButton": "Rules",

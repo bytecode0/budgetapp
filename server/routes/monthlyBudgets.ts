@@ -27,12 +27,17 @@ monthlyBudgetsRouter.get("/", requireAuth, async (req: AuthRequest, res: Respons
     });
     // The line of a debt hidden from the caller is never listed (poolRefs.ts);
     // what it commits this month comes as one figure (euros), as /review sums it.
+    // A debt line's amount is its commitment for THIS month, not the stored
+    // column (which is only refreshed when the debt itself is edited) —
+    // computed once, and only when a line needs it.
     const cycleStartDay = await getCycleStartDay(req.userId!);
-    const [hidden, hiddenCents] = await Promise.all([
-      hiddenLineIds(req.userId!, req.authUserId!),
-      hiddenCommitted(req.userId!, req.authUserId!, periodBounds(month, cycleStartDay), month),
-    ]);
-    const hiddenCommittedEuros = toEuros(hiddenCents);
+    const hidden = await hiddenLineIds(req.userId!, req.authUserId!);
+    const commitments = saved.length === 0 || hidden.size > 0
+      ? await debtCommitments(req.userId!, periodBounds(month, cycleStartDay))
+      : new Map<string, number>();
+    const hiddenCommittedEuros = hidden.size > 0
+      ? toEuros(await hiddenCommitted(req.userId!, req.authUserId!, commitments, month))
+      : 0;
 
     // If nothing saved, fall back to current allocation settings
     if (saved.length === 0) {
@@ -40,9 +45,6 @@ monthlyBudgetsRouter.get("/", requireAuth, async (req: AuthRequest, res: Respons
         where: { userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
         orderBy: { sortOrder: "asc" },
       });
-      // A debt line's amount is its commitment for THIS month, not the stored
-      // column (which is only refreshed when the debt itself is edited).
-      const commitments = await debtCommitments(req.userId!, periodBounds(month, cycleStartDay));
       return res.json({ ...serializeMoney({
         budgets: allocations.map(a => ({
           allocationId: a.id,

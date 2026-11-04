@@ -648,6 +648,7 @@
     "splitMustSum": "El reparto ({{total}}) debe igualar el importe ({{amount}})"
   },
   "rules": {
+    "unavailableError": "Ese texto no se puede usar en una regla. Prueba con otro.",
     "title": "Reglas de categorización",
     "subtitle": "Asigna gastos automáticamente por su descripción",
     "manageButton": "Reglas",

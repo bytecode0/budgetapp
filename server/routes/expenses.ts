@@ -637,7 +637,7 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     if (allocationId !== undefined && newAllocId && newAllocId !== existing.allocationId) {
       const effectiveMerchant = description !== undefined ? normalizeMerchant(description) : existing.merchant;
       if (!(paidDebt && isGenericMerchant(effectiveMerchant))) {
-        await learnFromCorrection(req.userId!, effectiveMerchant, newAllocId);
+        await learnFromCorrection(req.userId!, req.authUserId!, effectiveMerchant, newAllocId);
       }
     }
 

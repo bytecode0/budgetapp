@@ -8,8 +8,8 @@
 // keeps. Amounts are cents until the preview is built, where they become euros
 // (the API speaks euros; the confirm route converts back with toCents).
 import { prisma } from "./prisma.js";
-import { visibleToWhere } from "./ownership.js";
-import { notOnHiddenDebt, visibleExpenseWhere, visibleIncomeWhere } from "./poolRefs.js";
+import { mutationAccess } from "./ownership.js";
+import { hiddenExpenseWhere, hiddenIncomeWhere, notOnHiddenDebt } from "./poolRefs.js";
 import { pickAllocationId } from "./categorize.js";
 import { normalizeMerchant } from "./normalizeMerchant.js";
 import { classifyRows, LATE_PAYMENT_DAYS, statementIds, type ExistingMovement, type PlannedKind, type PossibleDuplicate, type PurchasesSign, type StoredPayment, type PurchasesSignGuess, type RowWarning } from "./ingest/classify.js";
@@ -94,23 +94,30 @@ const WINDOW_DAYS = LATE_PAYMENT_DAYS + 1;
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 const euros = (cents: number) => cents / 100;
 
-// Only the movements the importer can see: another member's rows on a
-// private debt or account never come back as duplicates or stored payments.
-async function loadExisting(userId: string, authUserId: string, where: object): Promise<ExistingMovement[]> {
-  const [expenses, incomes] = await Promise.all([
+// Every stored movement of the pool, so a row is still recognised as the same
+// movement or payment when it is another member's on a private debt or account
+// (else a re-import would count it twice); `hiddenIds` names those, for
+// prepareImport to redact them from what it returns.
+async function loadExisting(userId: string, authUserId: string, where: object): Promise<{ existing: ExistingMovement[]; hiddenIds: Set<string> }> {
+  const [expenses, incomes, hiddenExpenses, hiddenIncomes] = await Promise.all([
     prisma.expense.findMany({
-      where: { userId, ...where, ...visibleExpenseWhere(authUserId) },
+      where: { userId, ...where },
       select: { id: true, externalId: true, accountId: true, debtId: true, kind: true, amount: true, date: true, description: true, source: true },
     }),
     prisma.income.findMany({
-      where: { userId, ...where, ...visibleIncomeWhere(authUserId) },
+      where: { userId, ...where },
       select: { id: true, externalId: true, accountId: true, amount: true, date: true, description: true, source: true },
     }),
+    prisma.expense.findMany({ where: { userId, AND: [where, hiddenExpenseWhere(authUserId)] }, select: { id: true } }),
+    prisma.income.findMany({ where: { userId, AND: [where, hiddenIncomeWhere(authUserId)] }, select: { id: true } }),
   ]);
-  return [
-    ...expenses.map(e => ({ ...e, table: "expense" as const, amountCents: e.amount, date: isoDay(e.date) })),
-    ...incomes.map(i => ({ ...i, table: "income" as const, debtId: null, kind: "income", amountCents: i.amount, date: isoDay(i.date) })),
-  ];
+  return {
+    existing: [
+      ...expenses.map(e => ({ ...e, table: "expense" as const, amountCents: e.amount, date: isoDay(e.date) })),
+      ...incomes.map(i => ({ ...i, table: "income" as const, debtId: null, kind: "income", amountCents: i.amount, date: isoDay(i.date) })),
+    ],
+    hiddenIds: new Set([...hiddenExpenses, ...hiddenIncomes].map(r => r.id)),
+  };
 }
 
 export async function prepareImport(userId: string, input: PrepareImportInput): Promise<ImportPreview> {
@@ -128,17 +135,19 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
   assertRowCount(read.rows.length);
 
   const [debts, debtLines, rules, allocations] = await Promise.all([
+    // Every debt, hidden ones too, so matching sees the pool as it is; what is
+    // proposed or returned is limited to the visible ones below.
     prisma.debt.findMany({
-      where: { userId, ...visibleToWhere(input.authUserId) },
-      select: { id: true, name: true, kind: true, accountId: true, status: true, installmentAmount: true, minimumPayment: true },
+      where: { userId },
+      select: { id: true, name: true, kind: true, accountId: true, status: true, installmentAmount: true, minimumPayment: true, ownerUserId: true, visibility: true },
     }),
     // Every debt line, hidden ones too: a rule on one must still never make it
-    // a purchase's category (below); its debt isn't in `debts`, so it is
-    // never proposed as a payment either.
+    // a purchase's category (below).
     prisma.allocation.findMany({ where: { userId, type: "debt", debtId: { not: null } }, select: { id: true, debtId: true } }),
     prisma.categorizationRule.findMany({ where: { userId }, orderBy: [{ priority: "desc" }, { createdAt: "asc" }] }),
     prisma.allocation.findMany({ where: { userId, ...notOnHiddenDebt(input.authUserId) }, select: { id: true, name: true } }),
   ]);
+  const visibleDebtIds = new Set(debts.filter(d => mutationAccess(d, input.authUserId) !== "hidden").map(d => d.id));
   const lineByDebt = new Map(debtLines.map(a => [a.debtId!, a.id]));
   const debtByLine = new Map(debtLines.map(a => [a.id, a.debtId!]));
   const cardDebt = account?.type === "card"
@@ -168,7 +177,7 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
   // classification.
   const days = read.rows.map(r => r.date).sort();
   const ids = statementIds({ ...context, rows: read.rows });
-  const existing = days.length
+  const { existing, hiddenIds } = days.length
     ? await loadExisting(userId, input.authUserId, {
       OR: [
         {
@@ -180,7 +189,7 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
         { externalId: { in: ids } },
       ],
     })
-    : [];
+    : { existing: [], hiddenIds: new Set<string>() };
 
   // Rule-learned payments (bank accounts only: a card can't pay itself): the
   // money-out rows, by the merchant key classify gives them.
@@ -188,9 +197,29 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
     read.rows
       .filter(r => r.amountCents < 0)
       .map(r => ({ rowIndex: r.rowIndex, description: r.description, merchant: normalizeMerchant(r.description), amountCents: -r.amountCents })),
-    { accountId: account?.id ?? null, ruleFor, debtByLine, debts: new Map(context.debts.map(d => [d.id, d])) },
+    // Never a payment of a debt hidden from the importer.
+    { accountId: account?.id ?? null, ruleFor, debtByLine, debts: new Map(context.debts.filter(d => visibleDebtIds.has(d.id)).map(d => [d.id, d])) },
   );
   const result = classifyRows({ ...context, rows: read.rows, existing, learnedPayments });
+
+  // Redact what is hidden from the importer, after matching: a row that is a
+  // payment of a hidden debt stays a duplicate (or new) but as a plain
+  // movement with no debt; a match with a hidden stored movement says only
+  // that one exists (no id, description or source); hidden stored payments
+  // aren't offered. Nothing of another member's private debt or account goes out.
+  for (const p of result.rows) {
+    if (p.debtId && !visibleDebtIds.has(p.debtId)) {
+      if (p.kind === "payment") p.kind = "expense";
+      p.debtId = null;
+    }
+    if (p.possibleDuplicate && hiddenIds.has(p.possibleDuplicate.id)) {
+      p.possibleDuplicate = { id: "", table: p.possibleDuplicate.table, date: p.date, description: "", source: "" };
+    }
+    if (p.storedPayments) {
+      const shown = p.storedPayments.filter(s => !hiddenIds.has(s.id) && visibleDebtIds.has(s.debtId));
+      if (shown.length) p.storedPayments = shown; else delete p.storedPayments;
+    }
+  }
 
   const nameById = new Map(allocations.map(a => [a.id, a.name]));
   const rows: ImportRow[] = result.rows.map(p => {
@@ -235,7 +264,7 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
     possibleDuplicateCount: count(r => r.status === "new" && !!r.possibleDuplicate),
     skipped: read.skipped,
     source: read.source,
-    debts: context.debts.filter(d => !(account && d.accountId === account.id)).map(d => ({ id: d.id, name: d.name })),
+    debts: context.debts.filter(d => visibleDebtIds.has(d.id) && !(account && d.accountId === account.id)).map(d => ({ id: d.id, name: d.name })),
     mode: result.mode,
     ...(result.purchasesSign ? { purchasesSign: result.purchasesSign, purchasesSignDetected: result.purchasesSignDetected } : {}),
   };

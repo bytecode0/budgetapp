@@ -45,7 +45,7 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
         : a);
 
     // The lines left out above, as one figure (euros) for the client totals.
-    const hidden = await hiddenCommitted(req.userId!, req.authUserId!, period);
+    const hidden = await hiddenCommitted(req.userId!, req.authUserId!, commitments);
 
     return res.json({
       ...serializeMoney({

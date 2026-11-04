@@ -118,7 +118,7 @@ export async function confirmImport(ctx: ConfirmImportContext, rows: ConfirmRow[
   const learned: LearnedRule[] = [];
   try {
     for (const [merchant, { allocationId, label }] of learnablePairs(plan.expenses)) {
-      if (await learnFromCorrection(userId, merchant, allocationId)) learned.push({ merchant, label, allocationId, allocationName: null });
+      if (await learnFromCorrection(userId, authUserId, merchant, allocationId)) learned.push({ merchant, label, allocationId, allocationName: null });
     }
     if (learned.length > 0) {
       const names = await prisma.allocation.findMany({
