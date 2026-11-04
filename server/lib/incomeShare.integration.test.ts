@@ -330,4 +330,27 @@ describe("income shares and first goals (integration, real Postgres)", { skip: !
     const rows = await prisma.monthlyBudget.findMany({ where: { allocationId: pGen.id }, orderBy: { month: "asc" } });
     assert.deepEqual(rows.map(r => [r.month, r.allocatedAmount, r.userId]), [[prev, 7000, P], [month(), 4000, P]]);
   });
+
+  it("in a couple the Generosity line is never hidden and never in hiddenCommitted", async () => {
+    const R = await signUp("Rut", "rut@example.com");
+    const S = await signUp("Sol", "sol@example.com");
+    await ok(R, "PATCH", "/api/allocations/settings/income", { monthlyIncome: 3000 });
+    await ok(R, "POST", "/api/partner/invite", { email: "sol@example.com" });
+    const inv = await prisma.partnerInvite.findFirstOrThrow({ where: { senderId: R, status: "pending" } });
+    await ok(S, "POST", "/api/partner/accept", { token: inv.token });
+    await ok(R, "PATCH", "/api/onboarding/preferences", { generosityPct: 10 });
+    // R's private loan: its line is hidden from S, its 10 € a month comes as one figure.
+    await ok(R, "POST", "/api/debts", {
+      name: "Privada", kind: "installment", paymentMode: "installments",
+      installmentAmount: 10, installmentsTotal: 3, installmentsPaid: 0, visibility: "private",
+    });
+    const asS = await ok(S, "GET", "/api/allocations");
+    const gen = (asS.allocations as any[]).filter(a => a.type === "generosity");
+    assert.equal(gen.length, 1);
+    assert.equal(gen[0].allocatedAmount, 300);
+    assert.equal(asS.hiddenCommitted, 10);
+    const budgets = await ok(S, "GET", `/api/monthly-budgets?month=${month()}`);
+    assert.equal(budgets.hiddenCommitted, 10);
+    assert.equal(budgets.budgets.find((b: any) => b.allocation.type === "generosity").allocatedAmount, 300);
+  });
 });

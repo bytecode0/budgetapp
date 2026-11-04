@@ -330,8 +330,9 @@ describe("household security (integration, real Postgres)", { skip: !TEST_DATABA
     const bareIncome = await prisma.income.create({ data: { userId: c.A, ownerUserId: c.A, amount: 800, description: "Sin cuenta", merchant: "sin cuenta", category: "other", source: "manual" } });
     assert.ok((await listIds(c.B, "/api/expenses", "expenses")).has(bare.id));
     assert.ok((await listIds(c.B, "/api/income", "incomes")).has(bareIncome.id));
-    const plainLines = await prisma.allocation.count({ where: { userId: c.A, debtId: null } });
     const bLines = (await ok(c.B, "GET", "/api/allocations")).allocations as any[];
+    // Counted after the read: it creates the Generosity line if missing (LPBETA-10).
+    const plainLines = await prisma.allocation.count({ where: { userId: c.A, debtId: null } });
     assert.equal(bLines.filter(l => !l.debtId).length, plainLines, "every line without a debt is listed");
   });
 
