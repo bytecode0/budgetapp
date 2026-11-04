@@ -933,7 +933,8 @@
   },
   "partnerInvite": {
     "title": "Shared finances invite",
-    "invited": "{{name}} ({{email}}) has invited you to share their financial data on Remanso.",
+    "invited": "{{name}} has invited you to share their financial data on Remanso.",
+    "wrongEmailError": "This invite is for another email. Ask whoever invited you to send a new one to your Remanso email.",
     "onceLinked": "Once linked, you'll share",
     "shareExpenses": "All expenses and spending history",
     "sharePlans": "Life plans and savings goals",

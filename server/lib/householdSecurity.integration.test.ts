@@ -273,4 +273,29 @@ describe("household security (integration, real Postgres)", { skip: !TEST_DATABA
     // Its owner can use her private one.
     assert.equal((await ok(c.A, "POST", "/api/income", { amount: 10, description: "z", accountId: secret })).income.accountId, secret);
   });
+
+  // ── LPBETA-20: the invite is for the invited email ─────────────────────
+
+  it("g. only the invited email accepts; the public invite shows only the inviter's name", async () => {
+    const A = await signUp("Ana");
+    const B = await signUp("Bea");
+    const C = await signUp("Carla");
+    // Typed with capitals and spaces: still B's.
+    const token = await invite(A.id, `  ${B.email.toUpperCase()} `);
+
+    const shown = await call(null, "GET", `/api/partner/invite/${token}`);
+    assert.equal(shown.status, 200);
+    assert.deepEqual(shown.body, { invite: { senderName: "Ana" } });
+
+    const wrong = await call(C.id, "POST", "/api/partner/accept", { token });
+    assert.equal(wrong.status, 403, JSON.stringify(wrong.body));
+    assert.equal(wrong.body.code, "invite_wrong_email");
+    assert.ok(!JSON.stringify(wrong.body).toLowerCase().includes(B.email), "the invited email is never revealed");
+    assert.equal((await prisma.partnerInvite.findUniqueOrThrow({ where: { token } })).status, "pending");
+    assert.equal((await prisma.userSettings.findUnique({ where: { userId: C.id } }))?.linkedUserId ?? null, null);
+
+    const accepted = await ok(B.id, "POST", "/api/partner/accept", { token });
+    assert.equal(accepted.success, true);
+    assert.equal((await prisma.userSettings.findUniqueOrThrow({ where: { userId: B.id } })).linkedUserId, A.id);
+  });
 });

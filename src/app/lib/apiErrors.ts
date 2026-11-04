@@ -44,6 +44,8 @@ const ERROR_KEYS: Record<string, string> = {
   banking_type_mismatch: 'banking.errors.typeMismatch',
   banking_duplicate_target: 'banking.errors.duplicateTarget',
   banking_account_not_linked: 'banking.errors.notLinked',
+  // Partner invite (server/routes/partner.ts)
+  invite_wrong_email: 'partnerInvite.wrongEmailError',
   // Email codes (server/routes/auth.ts)
   otp_incorrect: 'auth.otp.incorrect',
   otp_invalid: 'auth.otp.invalid',

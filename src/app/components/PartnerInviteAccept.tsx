@@ -3,11 +3,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Heart, X, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { InviteDetails } from '../hooks/usePartner';
+import { apiErrorMessage } from '../lib/apiErrors';
 
 interface Props {
   token: string;
   invite: InviteDetails;
-  onAccept: (token: string) => Promise<{ error?: string; linkedTo?: { name: string; email: string } }>;
+  onAccept: (token: string) => Promise<{ error?: string; code?: string; linkedTo?: { name: string; email: string } }>;
   onDismiss: () => void;
 }
 
@@ -24,7 +25,7 @@ export function PartnerInviteAccept({ token, invite, onAccept, onDismiss }: Prop
     const result = await onAccept(token);
     setAccepting(false);
     if (result.error) {
-      setError(result.error);
+      setError(apiErrorMessage(t, result));
     } else {
       setLinkedName(result.linkedTo?.name ?? invite.senderName);
       setDone(true);
@@ -87,7 +88,7 @@ export function PartnerInviteAccept({ token, invite, onAccept, onDismiss }: Prop
               <div>
                 <h2 className="font-display text-2xl mb-2">{t('partnerInvite.title')}</h2>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  {t('partnerInvite.invited', { name: invite.senderName, email: invite.senderEmail })}
+                  {t('partnerInvite.invited', { name: invite.senderName })}
                 </p>
               </div>
 

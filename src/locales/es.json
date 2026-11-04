@@ -933,7 +933,8 @@
   },
   "partnerInvite": {
     "title": "Invitación a finanzas compartidas",
-    "invited": "{{name}} ({{email}}) te ha invitado a compartir sus datos financieros en Remanso.",
+    "invited": "{{name}} te ha invitado a compartir sus datos financieros en Remanso.",
+    "wrongEmailError": "Esta invitación es para otro email. Pide a quien te invitó que te envíe una nueva a tu email de Remanso.",
     "onceLinked": "Una vez vinculados, compartiréis",
     "shareExpenses": "Todos los gastos e historial de compras",
     "sharePlans": "Planes de vida y objetivos de ahorro",

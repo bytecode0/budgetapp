@@ -13,10 +13,9 @@ export interface PartnerStatus {
   pendingInvite?: { email: string; expiresAt: string }; // invite_pending
 }
 
+// What the public invite endpoint shares with whoever holds the link.
 export interface InviteDetails {
-  invitedEmail: string;
   senderName: string;
-  senderEmail: string;
 }
 
 export function usePartner() {
@@ -81,7 +80,7 @@ export function usePartner() {
       body: JSON.stringify({ token }),
     });
     const data = await res.json();
-    if (!res.ok) return { error: data.error || 'Failed to accept invite' };
+    if (!res.ok) return { error: data.error || 'Failed to accept invite', code: data.code as string | undefined };
     await fetchStatus();
     return { linkedTo: data.linkedTo };
   };

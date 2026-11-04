@@ -24,7 +24,7 @@ interface AuthFlowProps {
   onAuthenticated: () => void;
   /** A partner invite is pending: go straight to sign-in, as the banner asks. */
   hasInvite?: boolean;
-  inviteBanner?: { senderName: string; senderEmail: string } | null;
+  inviteBanner?: { senderName: string } | null;
 }
 
 export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: AuthFlowProps) {
