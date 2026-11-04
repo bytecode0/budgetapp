@@ -181,15 +181,14 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
               {/* Safety Plan */}
               <motion.button
                 onClick={() => { setGoalClass('safety'); setIcon('🛡️'); setColor('#10B981'); setStep(2); }}
-                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                className="bg-card border-2 border-border hover:border-emerald-500 rounded-2xl p-6 text-left transition-all group space-y-3"
+                className="bg-card border border-line-strong hover:border-reed rounded-3xl p-6 text-left transition-colors group space-y-3"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
-                    <Shield className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                  <div className="w-12 h-12 rounded-xl bg-reed-soft flex items-center justify-center">
+                    <Shield className="w-6 h-6 text-reed" />
                   </div>
                   <div>
-                    <h3 className="font-display text-lg group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{t('createPlan.typeSafety')}</h3>
+                    <h3 className="font-display text-lg group-hover:text-reed transition-colors">{t('createPlan.typeSafety')}</h3>
                     <p className="text-xs text-muted-foreground">{t('createPlan.typeSafetyRisk')}</p>
                   </div>
                 </div>
@@ -197,7 +196,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                 <ul className="space-y-1 text-sm text-muted-foreground">
                   {[t('createPlan.safetyEx1'), t('createPlan.safetyEx2'), t('createPlan.safetyEx3')].map(ex => (
                     <li key={ex} className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-reed shrink-0" />
                       {ex}
                     </li>
                   ))}
@@ -207,8 +206,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
               {/* Savings Goal */}
               <motion.button
                 onClick={() => { setGoalClass('savings'); setIcon('🎯'); setColor('#1E3A8A'); setStep(2); }}
-                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                className="bg-card border-2 border-border hover:border-primary rounded-2xl p-6 text-left transition-all group space-y-3"
+                className="bg-card border border-line-strong hover:border-primary rounded-3xl p-6 text-left transition-colors group space-y-3"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -233,8 +231,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
               {/* Investment Plan */}
               <motion.button
                 onClick={() => { setGoalClass('investment'); setIcon('📈'); setColor('#10B981'); setStep(2); }}
-                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                className="bg-card border-2 border-border hover:border-secondary rounded-2xl p-6 text-left transition-all group space-y-3"
+                className="bg-card border border-line-strong hover:border-secondary rounded-3xl p-6 text-left transition-colors group space-y-3"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center">
@@ -259,15 +256,14 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
               {/* Wealth Strategy */}
               <motion.button
                 onClick={() => { setGoalClass('wealth'); setIcon('🚀'); setColor('#F59E0B'); setStep(2); }}
-                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                className="bg-card border-2 border-border hover:border-amber-500 rounded-2xl p-6 text-left transition-all group space-y-3"
+                className="bg-card border border-line-strong hover:border-sun-ink rounded-3xl p-6 text-left transition-colors group space-y-3"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center">
-                    <Rocket className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                  <div className="w-12 h-12 rounded-xl bg-sun-soft flex items-center justify-center">
+                    <Rocket className="w-6 h-6 text-sun-ink" />
                   </div>
                   <div>
-                    <h3 className="font-display text-lg group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">{t('createPlan.typeWealth')}</h3>
+                    <h3 className="font-display text-lg group-hover:text-sun-ink transition-colors">{t('createPlan.typeWealth')}</h3>
                     <p className="text-xs text-muted-foreground">{t('createPlan.typeWealthRisk')}</p>
                   </div>
                 </div>
@@ -275,7 +271,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                 <ul className="space-y-1 text-sm text-muted-foreground">
                   {[t('createPlan.wealthEx1'), t('createPlan.wealthEx2'), t('createPlan.wealthEx3')].map(ex => (
                     <li key={ex} className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-sun shrink-0" />
                       {ex}
                     </li>
                   ))}
@@ -298,13 +294,12 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                 <motion.button
                   key={cat.id}
                   onClick={() => { setSavingsCategory(cat.id); setIcon(cat.icon); setColor(cat.color); setStep(3); }}
-                  whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                  className="bg-card border-2 border-border hover:border-emerald-500 rounded-2xl p-5 text-left transition-all group"
+                  className="bg-card border border-line-strong hover:border-reed rounded-3xl p-5 text-left transition-colors group"
                 >
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl mb-3" style={{ background: `${cat.color}18` }}>
                     {cat.icon}
                   </div>
-                  <p className="font-display text-sm group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{t(cat.labelKey)}</p>
+                  <p className="font-display text-sm group-hover:text-reed transition-colors">{t(cat.labelKey)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{t(cat.descKey)}</p>
                 </motion.button>
               ))}
@@ -324,8 +319,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                 <motion.button
                   key={cat.id}
                   onClick={() => { setSavingsCategory(cat.id); setIcon(cat.icon); setColor(cat.color); setStep(3); }}
-                  whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                  className="bg-card border-2 border-border hover:border-primary rounded-2xl p-5 text-left transition-all group"
+                  className="bg-card border border-line-strong hover:border-primary rounded-3xl p-5 text-left transition-colors group"
                 >
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl mb-3" style={{ background: `${cat.color}18` }}>
                     {cat.icon}
@@ -475,7 +469,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                 <button
                   onClick={() => setStep(3)}
                   disabled={!title || !invMonthly}
-                  className={`flex-1 px-6 py-3 text-white rounded-xl hover:opacity-90 transition-colors disabled:opacity-50 ${goalClass === 'wealth' ? 'bg-amber-500' : 'bg-primary'}`}
+                  className="flex-1 px-6 h-12 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors font-medium disabled:opacity-50"
                 >
                   {t('createPlan.reviewPlan')}
                 </button>
@@ -583,7 +577,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
               {/* Suggested monthly */}
               {monthlyContrib && (
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                  className="bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 rounded-xl p-4"
+                  className="bg-pool-soft rounded-2xl p-4"
                 >
                   <p className="text-sm text-muted-foreground mb-1">{t('createPlan.suggestedContribution')}</p>
                   <p className="text-3xl font-display text-primary">{fmt(parseInt(monthlyContrib))}<span className="text-base text-muted-foreground font-normal">{t('currency.perMonthSuffix')}</span></p>
@@ -625,9 +619,9 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                   <h3 className="text-2xl font-display mb-1">{title}</h3>
                   {description && <p className="text-muted-foreground text-sm">{description}</p>}
                   <span className={`inline-flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full text-xs font-medium ${
-                    goalClass === 'investment' ? 'bg-secondary/10 text-secondary'
-                    : goalClass === 'wealth' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400'
-                    : goalClass === 'safety' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
+                    goalClass === 'investment' ? 'bg-pool-soft text-pool'
+                    : goalClass === 'wealth' ? 'bg-sun-soft text-sun-ink'
+                    : goalClass === 'safety' ? 'bg-reed-soft text-reed'
                     : 'bg-primary/10 text-primary'
                   }`}>
                     {goalClass === 'investment' && <><TrendingUp className="w-3 h-3" /> {t('createPlan.typeInvestment')}</>}
@@ -774,7 +768,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                 </button>
                 <button
                   onClick={handleCreate} disabled={saving}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 px-6 py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('createPlan.creating')}</> : `${icon} ${t('createPlan.createPlan')}`}
                 </button>

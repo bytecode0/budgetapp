@@ -210,22 +210,22 @@
     "budgetedNoIncome": "You have {{amount}} budgeted but no income recorded."
   },
   "dashboard": {
-    "title": "Your Financial Life Plan",
+    "title": "Your plans",
     "taglineGetStarted": "Let's get started",
     "taglineLookingGreat": "Looking great!",
     "taglineMakingProgress": "Making progress",
     "taglineBuildingMomentum": "Building momentum",
-    "plansProgressing_one": "{{count}} of {{total}} life plan is progressing as expected. Keep going!",
-    "plansProgressing_other": "{{count}} of {{total}} life plans are progressing as expected. Keep going!",
+    "plansProgressing_one": "{{count}} of {{total}} plan is on track.",
+    "plansProgressing_other": "{{count}} of {{total}} plans are on track.",
     "emptyStateDesc": "Create your first life plan to start tracking what matters most to you — a home, a trip, retirement, anything.",
     "createFirstPlan": "Create My First Plan",
     "activePlans": "Active Plans",
-    "totalSaved": "Total Saved",
+    "totalSaved": "Saved for you",
     "monthlyContributions": "Monthly Contributions",
     "acrossAllPlans": "across all life plans",
     "committedToPlans": "committed to your plans",
     "noPlansYet": "No plans yet",
-    "yourLifePlans": "Your Life Plans",
+    "yourLifePlans": "Each plan",
     "activeGoals": "Active goals shaping your financial future",
     "onTrackCount_one": "{{count}} on track or ahead",
     "onTrackCount_other": "{{count}} on track or ahead",
@@ -243,7 +243,9 @@
     "noDeadline": "No deadline",
     "currentLabel": "(current)",
     "savedAmount": "€{{amount}} saved",
-    "ofTarget": "of {{amount}}"
+    "ofTarget": "of {{amount}}",
+    "activePlansCount_one": "{{count}} active plan",
+    "activePlansCount_other": "{{count}} active plans"
   },
   "planDetail": {
     "notFound": "Plan not found",

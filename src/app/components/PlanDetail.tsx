@@ -455,7 +455,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
         {editing && (
           <motion.div
             initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-            className="bg-card border border-primary/30 rounded-2xl p-6 space-y-5"
+            className="bg-card border border-line-strong rounded-3xl p-6 space-y-5"
           >
             <div className="flex items-center justify-between">
               <h3 className="font-display text-lg">{t('planDetail.editPlan')}</h3>
@@ -485,10 +485,10 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                 <label className="text-sm text-muted-foreground mb-1.5 block">{t('planDetail.planType')}</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { value: 'safety',     labelKey: 'planDetail.typeSafety',      icon: '🛡️', active: 'bg-emerald-500 text-white border-emerald-500' },
+                    { value: 'safety',     labelKey: 'planDetail.typeSafety',      icon: '🛡️', active: 'bg-primary text-primary-foreground border-primary' },
                     { value: 'savings',    labelKey: 'planDetail.typeSavings',     icon: '🎯', active: 'bg-primary text-primary-foreground border-primary' },
                     { value: 'investment', labelKey: 'planDetail.typeInvestment',  icon: '📈', active: 'bg-secondary text-primary-foreground border-secondary' },
-                    { value: 'wealth',     labelKey: 'planDetail.typeWealth',      icon: '🚀', active: 'bg-amber-500 text-white border-amber-500' },
+                    { value: 'wealth',     labelKey: 'planDetail.typeWealth',      icon: '🚀', active: 'bg-primary text-primary-foreground border-primary' },
                   ].map(opt => (
                     <button
                       key={opt.value}
@@ -565,7 +565,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
               </button>
               <button
                 onClick={handleSave} disabled={saving || !form.title}
-                className="flex-1 py-2.5 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl hover:shadow-md transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                className="flex-1 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50"
               >
                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('planDetail.saving')}</> : <><CheckCircle2 className="w-4 h-4" /> {t('planDetail.saveChanges')}</>}
               </button>
@@ -579,155 +579,157 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
         {syncAllocationId && plan && (
           <motion.div
             initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-            className="flex items-center gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700 rounded-xl px-4 py-3"
+            className="flex items-center gap-3 bg-sun-soft text-sun-ink rounded-2xl px-4 py-3"
           >
-            <RefreshCw className="w-4 h-4 text-amber-600 shrink-0" />
-            <p className="text-sm text-amber-700 dark:text-amber-400 flex-1">
+            <RefreshCw className="w-4 h-4 shrink-0" />
+            <p className="text-sm flex-1">
               {t('planDetail.syncAllocationBanner', { current: fmt(plan.monthlyContribution) })}
             </p>
             <button
               onClick={handleSyncAllocation}
               disabled={syncingAllocation}
-              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+              className="px-3 py-1.5 bg-card text-foreground border border-line-strong hover:bg-muted rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 shrink-0"
             >
               {syncingAllocation ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
               {t('planDetail.syncAllocationBtn')}
             </button>
-            <button onClick={() => setSyncAllocationId(null)} className="w-7 h-7 flex items-center justify-center text-amber-500 hover:text-amber-700 shrink-0">
+            <button onClick={() => setSyncAllocationId(null)} className="w-9 h-9 flex items-center justify-center hover:bg-card rounded-lg shrink-0">
               <X className="w-4 h-4" />
             </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Hero Card ── */}
+      {/* ── Hero Card (LPBETA-27): calm card, the plan's colour as an accent ── */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-        className="text-primary-foreground rounded-3xl p-8 md:p-10 shadow-2xl relative overflow-hidden"
-        style={{ background: `linear-gradient(135deg, ${plan.color}, ${plan.color}cc)` }}
+        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05, duration: 0.2, ease: 'easeOut' }}
+        className="bg-card border border-border rounded-3xl p-6 md:p-8 space-y-6"
       >
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-32 -mt-32" />
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full blur-3xl -ml-24 -mb-24" />
-        <div className="relative z-10">
-          <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
-            <div className="text-7xl">{plan.icon}</div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="px-4 py-2 rounded-full text-sm bg-white/20 text-white">
-                {status === 'completed' && t('planDetail.statusCompleted')}
-                {status === 'on-track'  && t('planDetail.statusOnTrack')}
-                {status === 'ahead'     && t('planDetail.statusAhead')}
-                {status === 'behind'    && t('planDetail.statusBehind')}
-              </div>
-              {plan.currentAmount < plan.targetAmount && (
-                <button
-                  onClick={() => setShowContribute(v => !v)}
-                  className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-full text-sm text-white transition-colors flex items-center gap-2"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  {t('planDetail.addContribution')}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Contribution inline panel */}
-          <AnimatePresence>
-            {showContribute && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                className="mb-6 overflow-hidden"
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          <div className="w-16 h-16 rounded-3xl flex items-center justify-center text-4xl" style={{ backgroundColor: plan.color + '26' }}>{plan.icon}</div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className={`px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1.5 ${
+              status === 'completed' || status === 'behind' ? 'bg-sun-soft text-sun-ink' : 'bg-reed-soft text-reed'
+            }`}>
+              {status === 'behind' ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+              {status === 'completed' && t('planDetail.statusCompleted')}
+              {status === 'on-track'  && t('planDetail.statusOnTrack')}
+              {status === 'ahead'     && t('planDetail.statusAhead')}
+              {status === 'behind'    && t('planDetail.statusBehind')}
+            </span>
+            {plan.currentAmount < plan.targetAmount && (
+              <button
+                onClick={() => setShowContribute(v => !v)}
+                className="h-11 px-5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
               >
-                <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-5 space-y-3">
-                  <p className="text-sm font-medium opacity-90">{t('planDetail.howMuchAdding')}</p>
-                  <div className="flex gap-3">
-                    <div className="flex items-center gap-2 bg-white/20 rounded-xl px-4 py-2.5 flex-1">
-                      <span className="text-white/70 text-sm">{currency}</span>
-                      <input
-                        type="number" min="0" step="50"
-                        placeholder={String(plan.monthlyContribution || 100)}
-                        className="flex-1 bg-transparent outline-none text-white placeholder:text-white/50 text-lg font-display"
-                        value={contribAmount}
-                        onChange={e => setContribAmount(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleContribute(); if (e.key === 'Escape') setShowContribute(false); }}
-                        autoFocus
-                      />
-                    </div>
-                    <button
-                      onClick={handleContribute} disabled={contributing}
-                      className="px-5 py-2.5 bg-white text-primary rounded-xl font-medium text-sm hover:bg-white/90 transition-colors flex items-center gap-2 disabled:opacity-60"
-                      style={{ color: plan.color }}
-                    >
-                      {contributing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                      {t('planDetail.confirm')}
-                    </button>
-                    <button
-                      onClick={() => setShowContribute(false)}
-                      className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-colors shrink-0"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="flex gap-2 flex-wrap">
-                    {[50, 100, 200, 500].map(v => (
-                      <button
-                        key={v}
-                        onClick={() => setContribAmount(String(v))}
-                        className="px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-lg text-xs text-white transition-colors"
-                      >
-                        +{currency}{v}
-                      </button>
-                    ))}
-                    {plan.monthlyContribution > 0 && ![50, 100, 200, 500].includes(plan.monthlyContribution) && (
-                      <button
-                        onClick={() => setContribAmount(String(plan.monthlyContribution))}
-                        className="px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-lg text-xs text-white transition-colors"
-                      >
-                        +{currency}{plan.monthlyContribution} {t('planDetail.planned')}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
+                <PlusCircle className="w-4 h-4" />
+                {t('planDetail.addContribution')}
+              </button>
             )}
-          </AnimatePresence>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div>
-              <p className="text-sm opacity-75 mb-2">{t('planDetail.currentProgress')}</p>
-              <p className="text-4xl font-display mb-1">{fmt(plan.currentAmount)}</p>
-              <p className="text-sm opacity-75">{t('planDetail.of')} {fmt(plan.targetAmount)}</p>
-            </div>
-            <div>
-              <p className="text-sm opacity-75 mb-2">{t('planDetail.remaining')}</p>
-              <p className="text-4xl font-display mb-1">{fmt(remaining)}</p>
-              <p className="text-sm opacity-75">
-                {monthsLeft !== null
-                  ? t('planDetail.monthsLeft', { count: monthsLeft })
-                  : t('planDetail.noDeadline')}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm opacity-75 mb-2">{t('planDetail.monthlyContribution')}</p>
-              <p className="text-4xl font-display mb-1">{fmt(plan.monthlyContribution)}</p>
-              <p className="text-sm opacity-75">{t('planDetail.perMonth')}</p>
-            </div>
           </div>
+        </div>
 
-          <div className="relative h-4 bg-white/20 rounded-full overflow-hidden">
+        {/* Contribution inline panel */}
+        <AnimatePresence>
+          {showContribute && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="overflow-hidden"
+            >
+              <div className="bg-surface-sunk rounded-2xl p-5 space-y-3">
+                <label htmlFor="plan-contribution" className="text-sm font-medium block">{t('planDetail.howMuchAdding')}</label>
+                <div className="flex gap-3">
+                  <div className="flex items-center gap-2 bg-card border border-line-strong rounded-xl px-4 h-12 flex-1 focus-within:border-primary">
+                    <span className="text-muted-foreground text-sm">{currency}</span>
+                    <input
+                      id="plan-contribution"
+                      type="number" min="0" step="50" inputMode="decimal"
+                      placeholder={String(plan.monthlyContribution || 100)}
+                      className="flex-1 min-w-0 bg-transparent outline-none text-lg font-display tabular-nums"
+                      value={contribAmount}
+                      onChange={e => setContribAmount(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleContribute(); if (e.key === 'Escape') setShowContribute(false); }}
+                      autoFocus
+                    />
+                  </div>
+                  <button
+                    onClick={handleContribute} disabled={contributing}
+                    className="h-12 px-5 bg-primary text-primary-foreground rounded-xl font-medium text-sm hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-60"
+                  >
+                    {contributing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    {t('planDetail.confirm')}
+                  </button>
+                  <button
+                    onClick={() => setShowContribute(false)}
+                    aria-label={t('planDetail.cancel')}
+                    className="w-12 h-12 hover:bg-muted rounded-xl flex items-center justify-center transition-colors shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {[50, 100, 200, 500].map(v => (
+                    <button
+                      key={v}
+                      onClick={() => setContribAmount(String(v))}
+                      className="h-9 px-3 bg-card border border-line-strong hover:bg-muted rounded-full text-xs font-medium transition-colors tabular-nums"
+                    >
+                      +{fmt(v)}
+                    </button>
+                  ))}
+                  {plan.monthlyContribution > 0 && ![50, 100, 200, 500].includes(plan.monthlyContribution) && (
+                    <button
+                      onClick={() => setContribAmount(String(plan.monthlyContribution))}
+                      className="h-9 px-3 bg-card border border-line-strong hover:bg-muted rounded-full text-xs font-medium transition-colors tabular-nums"
+                    >
+                      +{fmt(plan.monthlyContribution)} {t('planDetail.planned')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('planDetail.currentProgress')}</p>
+          <p className="text-5xl font-display tabular-nums">{fmt(plan.currentAmount)}</p>
+          <p className="text-sm text-muted-foreground tabular-nums">{t('planDetail.of')} {fmt(plan.targetAmount)}</p>
+        </div>
+
+        <div className="space-y-2">
+          <div className="h-3 bg-surface-sunk rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(Math.min(progress, 100))} aria-valuemin={0} aria-valuemax={100} aria-label={plan.title}>
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${Math.min(progress, 100)}%` }}
-              transition={{ duration: 1.5, ease: 'easeOut' }}
-              className="absolute top-0 left-0 h-full bg-white/70 rounded-full"
+              transition={{ duration: 0.6, ease: 'easeOut' }}
+              className="h-full rounded-full"
+              style={{ backgroundColor: plan.color }}
             />
           </div>
-          <p className="text-sm opacity-75 mt-2">{t('planDetail.progressPct', { progress: progress.toFixed(1) })}</p>
+          <p className="text-sm text-muted-foreground">{t('planDetail.progressPct', { progress: progress.toFixed(1) })}</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-6 pt-6 border-t border-border">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('planDetail.remaining')}</p>
+            <p className="text-2xl font-display tabular-nums">{fmt(remaining)}</p>
+            <p className="text-sm text-muted-foreground">
+              {monthsLeft !== null ? t('planDetail.monthsLeft', { count: monthsLeft }) : t('planDetail.noDeadline')}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('planDetail.monthlyContribution')}</p>
+            <p className="text-2xl font-display tabular-nums">{fmt(plan.monthlyContribution)}</p>
+            <p className="text-sm text-muted-foreground">{t('planDetail.perMonth')}</p>
+          </div>
         </div>
       </motion.div>
 
       {/* ── Stats Grid ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-card border border-border rounded-2xl p-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-card border border-border rounded-3xl p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
               <Calendar className="w-5 h-5 text-primary" />
@@ -751,7 +753,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
           )}
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="bg-card border border-border rounded-2xl p-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="bg-card border border-border rounded-3xl p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-secondary" />
@@ -775,7 +777,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
           )}
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-card border border-border rounded-2xl p-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-card border border-border rounded-3xl p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center">
               <DollarSign className="w-5 h-5 text-accent" />
@@ -791,7 +793,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
           </button>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="bg-card border border-border rounded-2xl p-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="bg-card border border-border rounded-3xl p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
               <Target className="w-5 h-5 text-primary" />
@@ -808,15 +810,15 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.38 }}>
           <div className={`rounded-2xl border-2 p-5 transition-colors ${
             monthlyStatus.status === 'contributed'
-              ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800'
+              ? 'bg-reed-soft border-transparent'
               : monthlyStatus.status === 'missed'
-              ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
+              ? 'bg-sun-soft border-transparent'
               : 'bg-card border-border'
           }`}>
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-3">
-                {monthlyStatus.status === 'contributed' && <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />}
-                {monthlyStatus.status === 'missed'      && <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />}
+                {monthlyStatus.status === 'contributed' && <CheckCircle2 className="w-5 h-5 text-reed shrink-0" />}
+                {monthlyStatus.status === 'missed'      && <AlertTriangle className="w-5 h-5 text-sun-ink shrink-0" />}
                 {monthlyStatus.status === 'pending'     && <div className="w-5 h-5 rounded-full border-2 border-primary/40 shrink-0" />}
                 <div>
                   <p className="font-medium text-sm">
@@ -893,19 +895,19 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
       {status === 'behind' && plan.deadline && monthlyStatus !== null && plan.currentAmount < plan.targetAmount && (
         <motion.div
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.42 }}
-          className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 space-y-4"
+          className="bg-sun-soft rounded-3xl p-5 space-y-4"
         >
           <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="w-5 h-5 text-sun-ink shrink-0 mt-0.5" />
             <div>
-              <p className="font-display text-sm text-amber-800 dark:text-amber-300">{t('planDetail.recoveryTitle')}</p>
-              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">{t('planDetail.recoverySubtitle')}</p>
+              <p className="font-semibold text-sm text-sun-ink">{t('planDetail.recoveryTitle')}</p>
+              <p className="text-xs text-foreground/80 mt-0.5">{t('planDetail.recoverySubtitle')}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Option A: Catch up */}
-            <div className="bg-white dark:bg-amber-950/30 rounded-xl p-4 border border-amber-200 dark:border-amber-700">
+            <div className="bg-card rounded-2xl p-4 border border-border">
               <p className="font-medium text-sm mb-1">{t('planDetail.optionCatchUp')}</p>
               <p className="text-xs text-muted-foreground mb-3">{t('planDetail.optionCatchUpDesc')}</p>
               <button
@@ -916,7 +918,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                   setDepositAmount(String(plan.monthlyContribution));
                   setShowDepositPanel(true);
                 }}
-                className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-medium transition-colors"
+                className="w-full py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg text-xs font-medium transition-colors"
               >
                 {t('planDetail.registerContrib')}
               </button>
@@ -928,10 +930,10 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
               const remaining = Math.max(0, plan.targetAmount - plan.currentAmount);
               const newQuota = Math.ceil(remaining / monthsLeft);
               return newQuota > plan.monthlyContribution ? (
-                <div className="bg-white dark:bg-amber-950/30 rounded-xl p-4 border border-amber-200 dark:border-amber-700">
+                <div className="bg-card rounded-2xl p-4 border border-border">
                   <p className="font-medium text-sm mb-1">{t('planDetail.optionAdjustQuota')}</p>
                   <p className="text-xs text-muted-foreground mb-1">{t('planDetail.optionAdjustQuotaDesc')}</p>
-                  <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
+                  <p className="text-xs text-muted-foreground mb-3">
                     {t('planDetail.newQuotaLabel')}: <strong>{fmt(newQuota)}{t('currency.perMonthSuffix')}</strong>
                   </p>
                   <button
@@ -1028,7 +1030,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                       }}
                     />
                     {simMonthly !== null && simMonthly !== plan.monthlyContribution && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                      <p className="text-xs text-sun-ink">
                         {t('planDetail.simulationNote', { amount: fmt(plan.monthlyContribution) })}
                         {' '}<button onClick={openEdit} className="underline hover:no-underline">{t('planDetail.saveChanges')} →</button>
                       </p>
@@ -1242,7 +1244,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
       )}
 
       {/* ── Milestones ── */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="bg-card border border-border rounded-2xl p-6">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="bg-card border border-border rounded-3xl p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="font-display text-xl">{t('planDetail.milestones')}</h3>
           {isInvestment && (
@@ -1300,8 +1302,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                 return (
                   <div key={amount} className="flex items-center gap-4">
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-sm font-medium transition-colors ${reached ? 'text-white' : 'bg-muted text-muted-foreground'}`}
-                      style={reached ? { backgroundColor: plan.color } : {}}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-sm font-medium transition-colors ${reached ? 'bg-sun text-on-sun' : 'bg-muted text-muted-foreground'}`}
                     >
                       {reached ? <CheckCircle2 className="w-5 h-5" /> : i + 1}
                     </div>
@@ -1310,7 +1311,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                         <span className="font-display text-sm">{fmt(amount)}</span>
                         <div className="flex items-center gap-2">
                           {reached ? (
-                            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{t('planDetail.reached')}</span>
+                            <span className="text-xs text-reed font-medium">{t('planDetail.reached')}</span>
                           ) : goalDate ? (
                             <span className="text-xs text-muted-foreground">{t('planDetail.milestoneEta', { date: format(goalDate, 'MMM yyyy', { locale: dateLocale }), rate: PROJECTION_RATE_PCTS.medium.toLocaleString(locale) })}</span>
                           ) : null}
@@ -1399,8 +1400,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
             {savingsMilestones.map((m, i) => (
               <div key={m.pct} className="flex items-center gap-4">
                 <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors ${m.reached ? 'text-white' : 'bg-muted text-muted-foreground'}`}
-                  style={m.reached ? { backgroundColor: plan.color } : {}}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors ${m.reached ? 'bg-sun text-on-sun' : 'bg-muted text-muted-foreground'}`}
                 >
                   {m.reached ? <CheckCircle2 className="w-5 h-5" /> : i + 1}
                 </div>

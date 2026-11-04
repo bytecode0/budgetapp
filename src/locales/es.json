@@ -210,22 +210,22 @@
     "budgetedNoIncome": "Tienes presupuestado {{amount}} pero no hay ingresos registrados."
   },
   "dashboard": {
-    "title": "Tu Plan Financiero de Vida",
+    "title": "Tus planes",
     "taglineGetStarted": "¡Comencemos!",
     "taglineLookingGreat": "¡Muy bien!",
     "taglineMakingProgress": "Haciendo progreso",
     "taglineBuildingMomentum": "Tomando impulso",
-    "plansProgressing_one": "{{count}} de {{total}} plan de vida está progresando como se esperaba. ¡Sigue adelante!",
-    "plansProgressing_other": "{{count}} de {{total}} planes de vida están progresando como se esperaba. ¡Sigue adelante!",
+    "plansProgressing_one": "{{count}} de {{total}} plan va como esperabas.",
+    "plansProgressing_other": "{{count}} de {{total}} planes van como esperabas.",
     "emptyStateDesc": "Crea tu primer plan de vida para empezar a seguir lo que más te importa — una casa, un viaje, la jubilación, lo que sea.",
     "createFirstPlan": "Crear Mi Primer Plan",
     "activePlans": "Planes Activos",
-    "totalSaved": "Total Ahorrado",
+    "totalSaved": "Ahorrado para ti",
     "monthlyContributions": "Contribuciones Mensuales",
     "acrossAllPlans": "en todos los planes de vida",
     "committedToPlans": "comprometido con tus planes",
     "noPlansYet": "Sin planes todavía",
-    "yourLifePlans": "Tus Planes de Vida",
+    "yourLifePlans": "Cada plan",
     "activeGoals": "Objetivos activos que dan forma a tu futuro financiero",
     "onTrackCount_one": "{{count}} en seguimiento o adelantado",
     "onTrackCount_other": "{{count}} en seguimiento o adelantados",
@@ -243,7 +243,9 @@
     "noDeadline": "Sin fecha límite",
     "currentLabel": "(actual)",
     "savedAmount": "€{{amount}} ahorrado",
-    "ofTarget": "de {{amount}}"
+    "ofTarget": "de {{amount}}",
+    "activePlansCount_one": "{{count}} plan activo",
+    "activePlansCount_other": "{{count}} planes activos"
   },
   "planDetail": {
     "notFound": "Plan no encontrado",
