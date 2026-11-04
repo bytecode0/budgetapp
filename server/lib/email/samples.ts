@@ -3,6 +3,9 @@
 import type { RenderedEmail } from "./components.js";
 import type { EmailLocale } from "./locales/index.js";
 import {
+  accountDeletedEmail,
+  accountDeletionCodeEmail,
+  accountDeletionRequestedEmail,
   bankConsentExpiringEmail,
   partnerInviteEmail,
   passwordChangedEmail,
@@ -79,5 +82,23 @@ export const EMAIL_SAMPLES: EmailSample[] = [
       es: ["BBVA", "23 de noviembre de 2026", "http://localhost:5173/?open=accounts", "Ana"],
       en: ["BBVA", "23 November 2026", "http://localhost:5173/?open=accounts", "Ana"],
     },
+  },
+  {
+    name: "account-deletion-code",
+    render: (l) => accountDeletionCodeEmail({ otp: SAMPLE_OTP }, l),
+    mustContain: both(SAMPLE_OTP, "contact@luisvespa.com"),
+  },
+  {
+    name: "account-deletion-requested",
+    render: (l) => accountDeletionRequestedEmail({ name: "Ana García", deleteAfter: RENEWAL }, l),
+    mustContain: {
+      es: ["23 de noviembre de 2026", "http://localhost:5173/?open=settings", "Ana", "contact@luisvespa.com"],
+      en: ["23 November 2026", "http://localhost:5173/?open=settings", "Ana", "contact@luisvespa.com"],
+    },
+  },
+  {
+    name: "account-deleted",
+    render: (l) => accountDeletedEmail({ name: "Ana García" }, l),
+    mustContain: both("Ana"),
   },
 ];
