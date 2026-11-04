@@ -25,7 +25,7 @@
     "netWorth": "Patrimonio neto",
     "savingsRate": "Tasa de ahorro",
     "byPerson": "Por persona",
-    "personLine": "€{{income}} entran · €{{spent}} gastados",
+    "personLine": "{{income}} entran · {{spent}} gastados",
     "contribution": "{{pct}}% de los ingresos",
     "byCategory": "Por categoría",
     "unassigned": "Sin asignar",
@@ -642,8 +642,8 @@
     "payer": "Pagado por",
     "splitModel": "Según modelo",
     "splitCustom": "Personalizado",
-    "splitTotal": "Total €{{total}} de €{{amount}}",
-    "splitMustSum": "El reparto (€{{total}}) debe igualar el importe (€{{amount}})"
+    "splitTotal": "Total {{total}} de {{amount}}",
+    "splitMustSum": "El reparto ({{total}}) debe igualar el importe ({{amount}})"
   },
   "rules": {
     "title": "Reglas de categorización",
@@ -670,7 +670,7 @@
     "title": "Actividad",
     "subtitle": "Sigue tus gastos según tu plan",
     "totalSpent": "Total Gastado",
-    "avgPerDay": "promedio €{{amount}}/día",
+    "avgPerDay": "promedio {{amount}}/día",
     "pctOfIncome": "% de ingresos mensuales",
     "transactions": "Transacciones",
     "topCategory": "Categoría Principal",
@@ -683,7 +683,7 @@
     "addIncome": "Añadir Ingreso",
     "noMovements": "Sin movimientos todavía",
     "addFirstMovement": "Añade tu primer gasto o ingreso de este mes",
-    "incomeThisMonth": "+€{{amount}} ingresos",
+    "incomeThisMonth": "+{{amount}} ingresos",
     "expenseRemoved": "Gasto eliminado",
     "incomeRemoved": "Ingreso eliminado",
     "today": "Hoy",
@@ -907,7 +907,7 @@
     "apply": "Aplicar a {{count}}",
     "applied": "Actualizados {{count}} presupuestos",
     "none": "Aún no hay suficiente historial para sugerir presupuestos",
-    "overIncome": "Los presupuestos seleccionados (€{{total}}) superan tu ingreso mensual (€{{income}})"
+    "overIncome": "Los presupuestos seleccionados ({{total}}) superan tu ingreso mensual ({{income}})"
   },
   "monthlyReview": {
     "title": "Revisión del Presupuesto",

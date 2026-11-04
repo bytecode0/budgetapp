@@ -87,7 +87,7 @@ export function FamilyDashboard() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">{p.name ?? '—'}</p>
                 <p className="text-xs text-muted-foreground">
-                  {t('familyDashboard.personLine', { income: p.income.toLocaleString(), spent: p.spent.toLocaleString() })}
+                  {t('familyDashboard.personLine', { income: fmt(p.income), spent: fmt(p.spent) })}
                 </p>
               </div>
               <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">

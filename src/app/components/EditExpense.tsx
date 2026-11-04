@@ -21,7 +21,7 @@ interface EditExpenseProps {
 
 export function EditExpense({ isOpen, expense, allocations, onClose, onSave, onSaveAttribution }: EditExpenseProps) {
   const { t } = useTranslation();
-  const { currency } = useMoney();
+  const { currency, fmt } = useMoney();
   const { household } = useHousehold();
   const members = household?.members ?? [];
   const showAttribution = members.length > 1;
@@ -70,7 +70,7 @@ export function EditExpense({ isOpen, expense, allocations, onClose, onSave, onS
     // Validate a custom split before saving anything.
     if (showAttribution && scope === 'shared' && splitMode === 'custom') {
       if (Math.abs(customTotal - parsed) > 0.005) {
-        toast.error(t('editExpense.splitMustSum', { total: customTotal.toFixed(2), amount: parsed.toFixed(2) }));
+        toast.error(t('editExpense.splitMustSum', { total: fmt(customTotal), amount: fmt(parsed) }));
         return;
       }
     }
@@ -249,7 +249,7 @@ export function EditExpense({ isOpen, expense, allocations, onClose, onSave, onS
                             </div>
                           ))}
                           <p className={`text-xs text-right ${Math.abs(customTotal - (parseFloat(amount) || 0)) > 0.005 ? 'text-red-500' : 'text-muted-foreground'}`}>
-                            {t('editExpense.splitTotal', { total: customTotal.toFixed(2), amount: (parseFloat(amount) || 0).toFixed(2) })}
+                            {t('editExpense.splitTotal', { total: fmt(customTotal), amount: fmt(parseFloat(amount) || 0) })}
                           </p>
                         </div>
                       )}
