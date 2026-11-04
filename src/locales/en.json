@@ -1294,7 +1294,8 @@
       "card2Title": "What goes out",
       "card2Desc": "A budget where every euro has a job: fixed, variable and what's already committed.",
       "card3Title": "What you keep",
-      "card3Desc": "An emergency fund and a percentage you pay yourself first, the one you choose."
+      "card3Desc": "An emergency fund and a percentage you pay yourself first, the one you choose.",
+      "privacyPromise": "Who sees your numbers? Our privacy promise"
     },
     "income": {
       "title": "Set up your income",
@@ -1508,11 +1509,103 @@
     "symbol": "€",
     "perMonthSuffix": "/mo"
   },
+  "account": {
+    "sectionTitle": "Your data and your account",
+    "close": "Close",
+    "genericError": "Something went wrong. Please try again.",
+    "promise": {
+      "title": "Privacy promise",
+      "subtitle": "Who sees your numbers and what we do with them"
+    },
+    "export": {
+      "title": "Export my data",
+      "subtitle": "Download a copy of what is yours",
+      "json": "My data (JSON)",
+      "csv": "My transactions (CSV)",
+      "onlyMine": "Only what is yours: if you share your finances, your partner's data is not included.",
+      "tooLarge": "Your copy is too large to download here. Write to contact@luisvespa.com and we'll send it to you."
+    },
+    "delete": {
+      "title": "Delete my account",
+      "subtitle": "With 24 hours to change your mind",
+      "modalTitle": "Delete your account",
+      "what1": "Your account and your data are deleted: transactions, accounts, debts, goals and budget.",
+      "what2": "If you share your finances, they are separated first: your partner keeps theirs.",
+      "what3": "Your banks are disconnected and, if you have a subscription, it is cancelled.",
+      "what4": "You have 24 hours to cancel. Deletion runs once a day: between 24 and 48 hours after your request.",
+      "exportFirst": "If you want to keep a copy, export it first.",
+      "sendCode": "Email me a code",
+      "codeSent": "We've emailed you a code",
+      "enterCode": "Enter the 6-digit code we emailed you.",
+      "codeLabel": "Code",
+      "confirm": "Delete my account",
+      "resend": "Send another code",
+      "wait": "Wait a minute before asking for another code.",
+      "requested": "Done. Your account will be deleted in 24–48 hours; you can cancel until then.",
+      "pendingTitle": "Your account will be deleted from {{date}}.",
+      "pendingBody": "If you've changed your mind, cancel before then.",
+      "cancel": "Cancel deletion",
+      "cancelled": "Deletion cancelled. Your account is still here."
+    }
+  },
   "legal": {
     "lastUpdated": "Last updated: 4 November 2026",
     "backToApp": "Back to Remanso",
     "privacyLink": "Privacy policy",
     "termsLink": "Terms of service",
+    "promiseLink": "Privacy promise",
+    "promise": {
+      "title": "Our privacy promise",
+      "intro": "What matters about your data in Remanso, in a few words. The legal details are in the privacy policy.",
+      "sections": [
+        {
+          "title": "Who sees your numbers",
+          "paragraphs": [
+            "You. Nobody from your church, your community or your group of friends can see your data: Remanso has no dashboards for leaders, groups or organisers.",
+            "If you share your finances with your partner (a household), your partner sees what you share in the household, depending on the privacy level you choose. Nobody else.",
+            "To know whether the app helps, Luis, who makes Remanso, only counts how many people use it, with no names or amounts."
+          ]
+        },
+        {
+          "title": "What we don't do",
+          "paragraphs": [],
+          "items": [
+            "We don't sell your data or share it with anyone for their own purposes.",
+            "There are no ads, and no advertising or analytics cookies.",
+            "We don't move your money: if you connect your bank, it is read-only."
+          ]
+        },
+        {
+          "title": "Who helps us run it",
+          "paragraphs": [
+            "Only these providers process data, and only to provide their service to us:"
+          ],
+          "items": [
+            "Neon stores the database, in the European Union (Frankfurt).",
+            "Vercel hosts the website and the server, which runs in Frankfurt.",
+            "Resend sends the app's emails (your email address and the message).",
+            "Enable Banking, only if you connect your bank: it reads your accounts, balances and transactions with the permission you give at your bank.",
+            "Anthropic (Claude), only if you press a button to classify with AI when importing a statement: it receives the uncategorised merchant descriptions (up to 40 at a time) and the names of your categories. Never amounts, dates, your name, your email or account numbers. Your expense descriptions never go to free models or to other AI providers, and transactions from your connected bank are not sent to any AI.",
+            "OpenRouter, only if you ask AI to suggest a statement's columns: it receives the column titles and the format of the values, never your transactions.",
+            "Google, only if you sign in with Google. The website also loads its fonts from Google Fonts."
+          ]
+        },
+        {
+          "title": "Take your data with you, or delete it",
+          "paragraphs": [
+            "Export: in Settings → Your data and your account you download one file with your data and another (CSV, opens in Excel) with your transactions. Only what is yours: your partner's data is not included.",
+            "Delete: in the same place you ask to delete your account and confirm it with a code we email you. You have 24 hours to change your mind. Deletion runs once a day, so your account is gone between 24 and 48 hours after your request, and we email you.",
+            "If you are in a household, the data is separated first: your partner keeps theirs and yours is deleted. We disconnect your banks and, if you had a subscription, we cancel it. The database provider's backups may keep your data for a limited time before they delete themselves."
+          ]
+        },
+        {
+          "title": "Questions?",
+          "paragraphs": [
+            "Write to us at contact@luisvespa.com."
+          ]
+        }
+      ]
+    },
     "privacy": {
       "title": "Privacy policy",
       "intro": "This policy explains what data Remanso (budget.luisvespa.com) processes, what it is used for and who it is shared with. Remanso is a free app, in beta, for organising your budget and your debts.",
@@ -1530,7 +1623,7 @@
           ],
           "items": [
             "Your account: name, email and password. For the password we store only a hash (bcrypt), never the password itself. If you sign in with Google, we store the name, email and profile picture address that Google provides.",
-            "One-time verification codes we email you to confirm your account or reset your password. They expire after 15 minutes.",
+            "One-time verification codes we email you to confirm your account, reset your password or confirm the deletion of your account. They expire after 15 minutes.",
             "Your financial data: income, expenses (amount, date, description and category), budget and categories, accounts and balances, cards, loans, installment plans and debts with their payments, savings goals, rules for categorising expenses and your preferences (language, theme, payday).",
             "Bank statements you import: the file (CSV, Excel, Norma 43 or OFX) is read in your browser and only the transactions it contains reach the server (date, amount, description and, if present, balance and status). If your browser can't read it and the file is small, it is sent to the server to be read there, without storing it. We store the transactions you confirm, not the file. If you tell us which column is which, we store that mapping (the column titles) on the account for the next statement.",
             "If you connect your bank (optional): through Enable Banking we read, with the read-only permission you give on your bank's website, the name and type of the accounts and cards you share, their currency, the last four characters of the IBAN, balances and booked transactions (date, amount, description and, when provided, the merchant's or other party's name and the balance after the transaction). Transactions are classified with your own rules; the bank's descriptions are not sent to any AI. We store the transactions you confirm, the balances, the date the permission expires and an identifier of the session with the bank, encrypted. We do not store the full IBAN or your bank credentials: we never see them.",
@@ -1547,7 +1640,7 @@
         {
           "title": "What we use it for, and on what basis",
           "paragraphs": [
-            "We use your data to provide the service you ask for when you sign up: storing your information, calculating your budget, your committed future and your debt payoff plan, and sending you the necessary emails (verification, password reset, welcome and household invitations). The legal basis is the performance of the contract you accept when creating your account (Article 6(1)(b) GDPR).",
+            "We use your data to provide the service you ask for when you sign up: storing your information, calculating your budget, your committed future and your debt payoff plan, and sending you the necessary emails (verification, password reset, welcome, household invitations and notices about deleting your account). The legal basis is the performance of the contract you accept when creating your account (Article 6(1)(b) GDPR).",
             "Technical logs are used to keep the service running and secure, on the basis of legitimate interest (Article 6(1)(f) GDPR)."
           ]
         },
@@ -1586,7 +1679,7 @@
           "paragraphs": [
             "We keep your data while you have an account. You can delete the transactions, accounts, debts and other items you created at any time from within the app. Verification codes expire after 15 minutes and household invitations after 7 days.",
             "If you disconnect a bank, we withdraw the permission at the provider and stop reading it; the transactions you already imported stay until you delete them.",
-            "The app does not yet have a button to delete your account. To do so, write to contact@luisvespa.com from your account's email address and we will delete it together with all its data. The database provider's backups may keep it for a limited period before it is erased."
+            "You can delete your account from Settings → Your data and your account, confirming it with a code we email you. You have 24 hours to cancel; after that we delete it, together with all your data, in the next daily run, that is, between 24 and 48 hours after your request. If you share your finances with someone, we first separate each person's data and they keep theirs. We disconnect your banks and email you when it is done. The database provider's backups may keep it for a limited period before it is erased."
           ]
         },
         {
@@ -1598,7 +1691,7 @@
         {
           "title": "Your rights",
           "paragraphs": [
-            "You can ask to access, correct or erase your data, object to or restrict its processing, and ask for a copy in a commonly used format (portability). Write to contact@luisvespa.com and we will reply within one month. If you believe we have not handled your data properly, you can complain to the Spanish Data Protection Agency (www.aepd.es)."
+            "You can ask to access, correct or erase your data, object to or restrict its processing, and ask for a copy in a commonly used format (portability). From Settings → Your data and your account you can download a copy of your data (JSON) and your transactions (CSV) yourself, and delete your account. For anything else, write to contact@luisvespa.com and we will reply within one month. If you believe we have not handled your data properly, you can complain to the Spanish Data Protection Agency (www.aepd.es)."
           ]
         },
         {

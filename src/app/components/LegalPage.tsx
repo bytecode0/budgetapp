@@ -3,7 +3,10 @@ import { motion } from 'motion/react';
 import { ArrowLeft } from 'lucide-react';
 import { RemansoMark } from './shared/RemansoMark';
 
-export type LegalPageKind = 'privacy' | 'terms';
+export type LegalPageKind = 'privacy' | 'terms' | 'promise';
+
+const PATHS: Record<LegalPageKind, string> = { privacy: '/privacy', terms: '/terms', promise: '/privacy-promise' };
+const KINDS: LegalPageKind[] = ['promise', 'privacy', 'terms'];
 
 interface LegalSection {
   title: string;
@@ -12,14 +15,19 @@ interface LegalSection {
   after?: string;
 }
 
-// Public pages (no session) at /privacy and /terms, rendered by App.tsx from
-// the URL path. The text lives in the locales under `legal.*`; Spanish is the
-// source of truth.
+// Public pages (no session) at /privacy, /terms and /privacy-promise (the
+// plain-language privacy promise, LPBETA-09), rendered by App.tsx from the URL
+// path. The text lives in the locales under `legal.*`; Spanish is the source
+// of truth.
+//
+// TODO(LPBETA-24): when the monthly "¿Cómo te sientes hoy con tu dinero?"
+// question exists, add it to legal.promise ("solo tú ves tu respuesta; Luis
+// solo ve medias de grupos de 5 o más"). It is left out until then: the
+// promise only describes what the app really does.
 export function LegalPage({ page }: { page: LegalPageKind }) {
   const { t } = useTranslation();
   const raw: unknown = t(`legal.${page}.sections`, { returnObjects: true });
   const sections: LegalSection[] = Array.isArray(raw) ? raw : [];
-  const other: LegalPageKind = page === 'privacy' ? 'terms' : 'privacy';
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -58,8 +66,10 @@ export function LegalPage({ page }: { page: LegalPageKind }) {
           ))}
         </motion.div>
 
-        <p className="text-sm text-center">
-          <a href={`/${other}`} className="text-primary hover:underline">{t(`legal.${other}Link`)}</a>
+        <p className="text-sm text-center flex flex-wrap justify-center gap-x-6 gap-y-2">
+          {KINDS.filter(k => k !== page).map(k => (
+            <a key={k} href={PATHS[k]} className="text-primary hover:underline">{t(`legal.${k}Link`)}</a>
+          ))}
         </p>
       </main>
     </div>

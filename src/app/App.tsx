@@ -6,7 +6,7 @@ const LegalPage = lazy(() => import('./components/LegalPage').then((m) => ({ def
 
 // Public pages served by path (vercel.json rewrites every path to index.html;
 // there is no router). Everything else is the authenticated app.
-const LEGAL_PATHS: Record<string, LegalPageKind> = { '/privacy': 'privacy', '/terms': 'terms' };
+const LEGAL_PATHS: Record<string, LegalPageKind> = { '/privacy': 'privacy', '/terms': 'terms', '/privacy-promise': 'promise' };
 
 function LoadingSpinner() {
   return (

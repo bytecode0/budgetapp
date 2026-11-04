@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePlans } from '../hooks/usePlans';
 import { usePartner } from '../hooks/usePartner';
 import { HouseholdPanel } from './HouseholdPanel';
+import { AccountDataPanel } from './AccountDataPanel';
 import { useLanguage } from '../context/LanguageContext';
 import { useBillingEnabled } from '../hooks/useBillingEnabled';
 import {
@@ -761,6 +762,9 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
         </div>
       </motion.div>
       )}
+
+      {/* Privacy promise, export my data, delete my account (LPBETA-09) */}
+      <AccountDataPanel />
 
       {/* Sign Out */}
       <motion.div
