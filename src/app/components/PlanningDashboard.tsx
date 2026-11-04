@@ -1,32 +1,31 @@
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, TrendingUp, AlertCircle, Sparkles, Target, TrendingDown, Loader2, Plus } from 'lucide-react';
+import { CheckCircle2, TrendingUp, Clock, Target, Loader2, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 import { differenceInDays } from 'date-fns';
 import { usePlans, getPlanStatus } from '../hooks/usePlans';
 import { useMoney } from '../onboarding/useMoney';
 
+// Plan status, always icon + word (LPBETA-27). Behind schedule is a "watch"
+// state, not an error; a completed plan is the warm sun.
 function StatusBadge({ status, t }: { status: string; t: (key: string) => string }) {
-  if (status === 'completed') return (
-    <div className="px-3 py-1 rounded-full text-xs flex items-center gap-1 bg-secondary/10 text-secondary">
-      <CheckCircle2 className="w-3 h-3" /> {t('dashboard.statusCompleted')}
-    </div>
-  );
-  if (status === 'ahead') return (
-    <div className="px-3 py-1 rounded-full text-xs flex items-center gap-1 bg-accent/10 text-accent">
-      <TrendingUp className="w-3 h-3" /> {t('dashboard.statusAhead')}
-    </div>
-  );
-  if (status === 'behind') return (
-    <div className="px-3 py-1 rounded-full text-xs flex items-center gap-1 bg-destructive/10 text-destructive">
-      <TrendingDown className="w-3 h-3" /> {t('dashboard.statusBehind')}
-    </div>
-  );
+  const cfg = status === 'completed' ? { cls: 'bg-sun-soft text-sun-ink', Icon: CheckCircle2, key: 'dashboard.statusCompleted' }
+    : status === 'ahead' ? { cls: 'bg-reed-soft text-reed', Icon: TrendingUp, key: 'dashboard.statusAhead' }
+    : status === 'behind' ? { cls: 'bg-sun-soft text-sun-ink', Icon: Clock, key: 'dashboard.statusBehind' }
+    : { cls: 'bg-reed-soft text-reed', Icon: CheckCircle2, key: 'dashboard.statusOnTrack' };
+  const { cls, Icon, key } = cfg;
   return (
-    <div className="px-3 py-1 rounded-full text-xs flex items-center gap-1 bg-secondary/10 text-secondary">
-      <CheckCircle2 className="w-3 h-3" /> {t('dashboard.statusOnTrack')}
+    <div className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 shrink-0 ${cls}`}>
+      <Icon className="w-3.5 h-3.5" /> {t(key)}
     </div>
   );
 }
+
+const GOAL_CLASS_KEY: Record<string, string> = {
+  safety: 'planDetail.typeSafety',
+  savings: 'planDetail.typeSavings',
+  investment: 'planDetail.typeInvestment',
+  wealth: 'planDetail.typeWealth',
+};
 
 export function PlanningDashboard({ onNavigate, onViewPlan }: { onNavigate?: (screen: string) => void; onViewPlan?: (planId: string) => void }) {
   const { t } = useTranslation();
@@ -54,161 +53,69 @@ export function PlanningDashboard({ onNavigate, onViewPlan }: { onNavigate?: (sc
     );
   }
 
+  const ring = 2 * Math.PI * 34;
+
   return (
-    <div className="space-y-8 pb-12">
-      {/* Hero Section */}
-      <motion.div
-        initial={{ opacity: 0, y: -30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="relative overflow-hidden bg-gradient-to-br from-primary via-primary to-primary/90 text-primary-foreground rounded-3xl p-8 md:p-12 shadow-2xl"
-      >
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl -mr-48 -mt-48" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-secondary/20 rounded-full blur-3xl -ml-32 -mb-32" />
+    <div className="space-y-6 pb-24">
+      {/* Title */}
+      <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: 'easeOut' }} className="space-y-2">
+        <h1 className="text-4xl tracking-tight font-display">{t('dashboard.title')}</h1>
+        <p className="text-muted-foreground">
+          {totalPlans > 0 ? t('dashboard.plansProgressing', { count: plansOnTrack, total: totalPlans }) : t('dashboard.emptyStateDesc')}
+        </p>
+      </motion.div>
 
-        <div className="relative z-10">
-          <div className="flex items-start justify-between mb-8">
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                  <CheckCircle2 className="w-7 h-7" />
-                </div>
-                <div>
-                  <p className="text-sm opacity-90 mb-1">{t('dashboard.title')}</p>
-                  <h1 className="text-4xl md:text-5xl font-display tracking-tight">
-                    {totalPlans === 0
-                      ? t('dashboard.taglineGetStarted')
-                      : overallProgress >= 80
-                      ? t('dashboard.taglineLookingGreat')
-                      : overallProgress >= 40
-                      ? t('dashboard.taglineMakingProgress')
-                      : t('dashboard.taglineBuildingMomentum')}
-                  </h1>
-                </div>
-              </div>
-              {totalPlans > 0 ? (
-                <p className="text-lg opacity-90 max-w-2xl">
-                  {t('dashboard.plansProgressing', { count: plansOnTrack, total: totalPlans })}
-                </p>
-              ) : (
-                <p className="text-lg opacity-90 max-w-2xl">
-                  {t('dashboard.emptyStateDesc')}
-                </p>
-              )}
-            </div>
+      {/* Summary: the money you have set aside for yourself */}
+      {totalPlans > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05, duration: 0.2, ease: 'easeOut' }}
+          className="bg-card border border-border rounded-3xl p-6 md:p-8 flex flex-wrap items-center justify-between gap-6"
+        >
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('dashboard.totalSaved')}</p>
+            <p className="text-5xl font-display tabular-nums">{fmt(totalSaved)}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('dashboard.activePlansCount', { count: totalPlans })}
+              {totalMonthlyContributions > 0 && <> · {fmt(totalMonthlyContributions)}{t('currency.perMonthSuffix')}</>}
+            </p>
           </div>
-
-          <div className="flex items-center gap-8 flex-wrap">
-            <div className="relative w-32 h-32">
-              <svg className="w-32 h-32 transform -rotate-90">
-                <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="8" fill="none" className="opacity-20" />
+          <div className="flex items-center gap-4">
+            <div className="relative w-20 h-20" role="img" aria-label={`${t('dashboard.overallCompletion')}: ${overallProgress}%`}>
+              <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
+                <circle cx="40" cy="40" r="34" strokeWidth="8" fill="none" className="stroke-surface-sunk" />
                 <motion.circle
-                  cx="64" cy="64" r="56"
-                  stroke="currentColor" strokeWidth="8" fill="none"
-                  strokeDasharray={`${2 * Math.PI * 56}`}
-                  initial={{ strokeDashoffset: 2 * Math.PI * 56 }}
-                  animate={{ strokeDashoffset: 2 * Math.PI * 56 * (1 - overallProgress / 100) }}
-                  transition={{ duration: 1.5, ease: 'easeOut' }}
-                  strokeLinecap="round"
-                  className="text-white drop-shadow-lg"
+                  cx="40" cy="40" r="34" strokeWidth="8" fill="none" strokeLinecap="round"
+                  className="stroke-primary"
+                  strokeDasharray={ring}
+                  initial={{ strokeDashoffset: ring }}
+                  animate={{ strokeDashoffset: ring * (1 - overallProgress / 100) }}
+                  transition={{ duration: 0.6, ease: 'easeOut' }}
                 />
               </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-3xl font-display">{overallProgress}%</span>
-              </div>
+              <span className="absolute inset-0 flex items-center justify-center font-display text-lg tabular-nums">{overallProgress}%</span>
             </div>
-            <div className="space-y-2 flex-1">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-secondary rounded-full animate-pulse" />
-                <span className="text-sm opacity-90">{t('dashboard.overallCompletion')}</span>
-              </div>
-              <p className="text-sm opacity-75">{t('dashboard.overallCompletionSubtitle')}</p>
-            </div>
+            <p className="text-sm text-muted-foreground max-w-[10rem]">{t('dashboard.overallCompletion')}</p>
           </div>
-        </div>
-      </motion.div>
-
-      {/* Stats Row */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-4"
-      >
-        <div className="bg-card border border-border rounded-2xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center">
-              <CheckCircle2 className="w-5 h-5 text-secondary" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">{t('dashboard.activePlans')}</p>
-              <p className="font-display text-2xl">{totalPlans}</p>
-            </div>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {totalPlans === 0
-              ? t('dashboard.noPlansYet')
-              : t('dashboard.onTrackCount', { count: plansOnTrack })}
-          </p>
-        </div>
-
-        <div className="bg-card border border-border rounded-2xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-              <Target className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">{t('dashboard.totalSaved')}</p>
-              <p className="font-display text-2xl">{fmt(totalSaved)}</p>
-            </div>
-          </div>
-          <p className="text-sm text-muted-foreground">{t('dashboard.acrossAllPlans')}</p>
-        </div>
-
-        <div className="bg-card border border-border rounded-2xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-accent" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">{t('dashboard.monthlyContributions')}</p>
-              <p className="font-display text-2xl">{fmt(totalMonthlyContributions)}</p>
-            </div>
-          </div>
-          <p className="text-sm text-muted-foreground">{t('dashboard.committedToPlans')}</p>
-        </div>
-      </motion.div>
-
-
-      {/* Life Plans Grid */}
-      <div>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="mb-4"
-        >
-          <h2 className="text-2xl font-display mb-1">{t('dashboard.yourLifePlans')}</h2>
-          <p className="text-muted-foreground">{t('dashboard.activeGoals')}</p>
         </motion.div>
+      )}
+
+      {/* Plans */}
+      <div className="space-y-4">
+        {totalPlans > 0 && <h2 className="text-2xl font-display">{t('dashboard.yourLifePlans')}</h2>}
 
         {plans.length === 0 ? (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35 }}
-            className="bg-card border border-dashed border-border rounded-2xl p-12 text-center"
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="text-center py-16 px-6 space-y-3"
           >
-            <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Target className="w-8 h-8 text-primary" />
+            <div className="w-16 h-16 bg-pool-soft text-pool rounded-3xl flex items-center justify-center mx-auto">
+              <Target className="w-8 h-8" />
             </div>
-            <h3 className="font-display text-xl mb-2">{t('dashboard.noPlansYet')}</h3>
-            <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-              {t('dashboard.emptyStateDesc')}
-            </p>
+            <p className="font-display text-lg">{t('dashboard.noPlansYet')}</p>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto">{t('dashboard.emptyStateDesc')}</p>
             <button
               onClick={() => onNavigate?.('create-plan')}
-              className="px-6 py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl hover:shadow-md transition-all"
+              className="h-11 px-6 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors font-medium"
             >
               {t('dashboard.createFirstPlan')}
             </button>
@@ -220,94 +127,68 @@ export function PlanningDashboard({ onNavigate, onViewPlan }: { onNavigate?: (sc
               const status = getPlanStatus(plan);
               const daysLeft = plan.deadline ? differenceInDays(new Date(plan.deadline), new Date()) : null;
               const monthsLeft = daysLeft !== null ? Math.max(0, Math.ceil(daysLeft / 30)) : null;
+              const classKey = GOAL_CLASS_KEY[plan.goalClass || 'savings'] ?? GOAL_CLASS_KEY.savings;
 
               return (
-                <motion.div
+                <motion.button
+                  type="button"
                   key={plan.id}
-                  initial={{ opacity: 0, y: 30 }}
+                  initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.4 + index * 0.1 }}
-                  whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                  transition={{ duration: 0.2, delay: Math.min(0.1 + index * 0.05, 0.4), ease: 'easeOut' }}
                   onClick={() => onViewPlan?.(plan.id)}
-                  className="bg-card border border-border rounded-2xl p-6 shadow-md hover:shadow-xl transition-all cursor-pointer group"
+                  className="text-left bg-card border border-border rounded-3xl p-6 hover:border-line-strong transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
+                  <div className="flex items-start justify-between gap-3 mb-5">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div
-                        className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
-                        style={{ backgroundColor: plan.color + '20' }}
+                        className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0"
+                        style={{ backgroundColor: plan.color + '26' }}
                       >
                         {plan.icon}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-display text-lg group-hover:text-primary transition-colors">{plan.title}</h3>
-                          {(() => {
-                            const gc = plan.goalClass || 'savings';
-                            const cfg: Record<string, { cls: string; label: string }> = {
-                              safety:     { cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400', label: '🛡️ Safety' },
-                              savings:    { cls: 'bg-primary/10 text-primary', label: '🎯 Savings' },
-                              investment: { cls: 'bg-secondary/10 text-secondary', label: '📈 Investment' },
-                              wealth:     { cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400', label: '🚀 Wealth' },
-                            };
-                            const { cls, label } = cfg[gc] ?? cfg.savings;
-                            return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{label}</span>;
-                          })()}
-                        </div>
-                        {plan.description && (
-                          <p className="text-sm text-muted-foreground line-clamp-1">{plan.description}</p>
-                        )}
+                      <div className="min-w-0">
+                        <p className="font-semibold text-lg truncate">{plan.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">{plan.description || t(classKey)}</p>
                       </div>
                     </div>
                     <StatusBadge status={status} t={t} />
                   </div>
 
                   <div className="space-y-3">
-                    <div className="relative h-3 bg-muted rounded-full overflow-hidden">
+                    <div className="h-2 bg-surface-sunk rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(Math.min(progress, 100))} aria-valuemin={0} aria-valuemax={100} aria-label={plan.title}>
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${Math.min(progress, 100)}%` }}
-                        transition={{ duration: 1.2, delay: 0.5 + index * 0.1, ease: 'easeOut' }}
-                        className="absolute top-0 left-0 h-full rounded-full"
-                        style={{
-                          background: `linear-gradient(to right, ${plan.color}, ${plan.color}aa)`,
-                        }}
+                        transition={{ duration: 0.6, ease: 'easeOut' }}
+                        className="h-full rounded-full"
+                        style={{ backgroundColor: plan.color }}
                       />
                     </div>
 
-                    <div className="flex items-end justify-between">
+                    <div className="flex items-end justify-between gap-4">
                       <div>
-                        <p className="text-sm text-muted-foreground mb-1">{progress.toFixed(0)}{t('dashboard.pctComplete')}</p>
-                        <p className="text-2xl font-display" style={{ color: plan.color }}>{fmt(plan.currentAmount)}</p>
-                        <p className="text-xs text-muted-foreground">{t('dashboard.ofTarget', { amount: fmt(plan.targetAmount) })}</p>
+                        <p className="text-2xl font-display tabular-nums">{fmt(plan.currentAmount)}</p>
+                        <p className="text-xs text-muted-foreground tabular-nums">
+                          {t('dashboard.ofTarget', { amount: fmt(plan.targetAmount) })} · {progress.toFixed(0)}{t('dashboard.pctComplete')}
+                        </p>
                       </div>
-                      <div className="text-right">
-                        {monthsLeft !== null ? (
-                          <>
-                            <p className="text-sm text-muted-foreground mb-1">{t('dashboard.timeline')}</p>
-                            <p className="font-display">{t('dashboard.months', { count: monthsLeft })}</p>
-                          </>
-                        ) : (
-                          <>
-                            <p className="text-sm text-muted-foreground mb-1">{t('dashboard.noDeadline')}</p>
-                          </>
-                        )}
+                      <div className="text-right text-xs text-muted-foreground space-y-0.5">
+                        <p>{monthsLeft !== null ? t('dashboard.months', { count: monthsLeft }) : t('dashboard.noDeadline')}</p>
                         {plan.monthlyContribution > 0 && (
-                          <p className="text-xs text-muted-foreground">{fmt(plan.monthlyContribution)}{t('currency.perMonthSuffix')}</p>
+                          <p className="tabular-nums">{fmt(plan.monthlyContribution)}{t('currency.perMonthSuffix')}</p>
                         )}
                       </div>
                     </div>
                   </div>
 
                   {status === 'behind' && (
-                    <div className="mt-4 pt-4 border-t border-border">
-                      <div className="flex items-center gap-2 text-sm text-destructive">
-                        <AlertCircle className="w-4 h-4" />
-                        <span>{t('dashboard.behindSchedule')}</span>
-                      </div>
-                    </div>
+                    <p className="mt-4 pt-4 border-t border-border flex items-center gap-2 text-sm text-sun-ink">
+                      <Clock className="w-4 h-4 shrink-0" />
+                      {t('dashboard.behindSchedule')}
+                    </p>
                   )}
-                </motion.div>
+                </motion.button>
               );
             })}
           </div>
@@ -316,12 +197,13 @@ export function PlanningDashboard({ onNavigate, onViewPlan }: { onNavigate?: (sc
 
       {/* FAB */}
       <motion.button
-        initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
+        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.2, ease: 'easeOut' }}
         onClick={() => onNavigate?.('create-plan')}
-        whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-        className="fixed right-6 bottom-6 w-16 h-16 bg-gradient-to-br from-primary to-secondary text-primary-foreground rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center z-40 group"
+        aria-label={t('dashboard.createFirstPlan')}
+        style={{ right: 'calc(1.5rem + env(safe-area-inset-right, 0px))', bottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }}
+        className="fixed w-16 h-16 bg-primary text-primary-foreground rounded-full shadow-soft hover:-translate-y-0.5 transition-transform flex items-center justify-center z-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
-        <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform" />
+        <Plus className="w-7 h-7" />
       </motion.button>
     </div>
   );
