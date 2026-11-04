@@ -1,7 +1,7 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
-import { mutationAccess } from "../lib/ownership.js";
+import { mutationAccess, visibleToWhere } from "../lib/ownership.js";
 import { normalizeMerchant } from "../lib/normalizeMerchant.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { incomeListingFilter } from "../lib/visibility.js";
@@ -12,11 +12,13 @@ export const incomeRouter = Router();
 
 const CATEGORIES = new Set(["salary", "freelance", "transfer_in", "other"]);
 
-// Validate a requested accountId belongs to the user; null when not owned/none.
-async function ownedAccountId(userId: string, accountId?: string | null): Promise<string | null> {
+// Validate a requested accountId is in the pool and visible to the caller
+// (their own or a household-shared one, as expenses' resolveAccountId); null
+// when not visible/none — a partner's private account doesn't exist for them.
+async function ownedAccountId(userId: string, authUserId: string, accountId?: string | null): Promise<string | null> {
   if (!accountId) return null;
   const owned = await prisma.account.findFirst({
-    where: { id: accountId, userId },
+    where: { id: accountId, userId, ...visibleToWhere(authUserId) },
     select: { id: true },
   });
   return owned?.id ?? null;
@@ -72,7 +74,7 @@ incomeRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
         merchant: normalizeMerchant(description),
         category: category ?? "salary",
         source: "manual",
-        accountId: await ownedAccountId(req.userId!, accountId),
+        accountId: await ownedAccountId(req.userId!, req.authUserId!, accountId),
         date: date ? new Date(date) : new Date(),
       },
       include: { account: { select: { id: true, name: true, type: true } } },
@@ -103,7 +105,7 @@ incomeRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) 
     // Only override the account when a (valid, owned) id is supplied.
     let accountUpdate: { accountId: string } | undefined;
     if (accountId !== undefined && accountId) {
-      const owned = await ownedAccountId(req.userId!, accountId);
+      const owned = await ownedAccountId(req.userId!, req.authUserId!, accountId);
       if (owned) accountUpdate = { accountId: owned };
     }
 

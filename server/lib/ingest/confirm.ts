@@ -11,6 +11,7 @@ import { rebuildExpenseShares } from "../expenseShares.js";
 import { syncDebtStatus } from "../debtBalance.js";
 import { isGenericMerchant } from "./learnedPayments.js";
 import { planImportWrites, type ConfirmRow, type ExpenseWrite } from "./writes.js";
+import { visibleToWhere } from "../ownership.js";
 
 export interface ConfirmImportContext {
   /** The pool (req.userId). */
@@ -65,7 +66,9 @@ export async function confirmImport(ctx: ConfirmImportContext, rows: ConfirmRow[
       where: { userId, type: "debt", debtId: { not: null } },
       select: { id: true, debtId: true, debt: { select: { accountId: true } } },
     }),
-    prisma.debt.findMany({ where: { userId }, select: { id: true, accountId: true, name: true } }),
+    // A payment names its debt: only one the importer can see (another
+    // member's private debt is debt_not_found, and its name never returns).
+    prisma.debt.findMany({ where: { userId, ...visibleToWhere(authUserId) }, select: { id: true, accountId: true, name: true } }),
   ]);
   const plan = planImportWrites(rows, {
     today: new Date().toISOString().slice(0, 10),

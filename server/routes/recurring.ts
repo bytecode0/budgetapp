@@ -61,7 +61,7 @@ recurringRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respons
     }
 
     // Validate a linked allocation belongs to the user.
-    if (!(await allocationsInPool(req.userId!, [allocationId]))) return res.status(404).json(ALLOCATION_NOT_FOUND);
+    if (!(await allocationsInPool(req.userId!, req.authUserId!, [allocationId]))) return res.status(404).json(ALLOCATION_NOT_FOUND);
 
     const commitment = await prisma.recurringCommitment.update({
       where: { id },

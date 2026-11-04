@@ -42,7 +42,7 @@ rulesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     if (type === "regex" && !validRegex(pattern)) return res.status(400).json({ error: "Invalid regular expression" });
     if (!allocationId) return res.status(400).json({ error: "allocationId is required" });
 
-    if (!(await allocationsInPool(req.userId!, [allocationId]))) return res.status(404).json(ALLOCATION_NOT_FOUND);
+    if (!(await allocationsInPool(req.userId!, req.authUserId!, [allocationId]))) return res.status(404).json(ALLOCATION_NOT_FOUND);
 
     const rule = await prisma.categorizationRule.create({
       data: {
@@ -88,7 +88,7 @@ rulesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
     }
     if (allocationId !== undefined) {
       if (!allocationId) return res.status(400).json({ error: "allocationId is required" });
-      if (!(await allocationsInPool(req.userId!, [allocationId]))) return res.status(404).json(ALLOCATION_NOT_FOUND);
+      if (!(await allocationsInPool(req.userId!, req.authUserId!, [allocationId]))) return res.status(404).json(ALLOCATION_NOT_FOUND);
     }
 
     const rule = await prisma.categorizationRule.update({

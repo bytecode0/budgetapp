@@ -8,6 +8,8 @@
 // keeps. Amounts are cents until the preview is built, where they become euros
 // (the API speaks euros; the confirm route converts back with toCents).
 import { prisma } from "./prisma.js";
+import { visibleToWhere } from "./ownership.js";
+import { notOnHiddenDebt } from "./poolRefs.js";
 import { pickAllocationId } from "./categorize.js";
 import { normalizeMerchant } from "./normalizeMerchant.js";
 import { classifyRows, LATE_PAYMENT_DAYS, statementIds, type ExistingMovement, type PlannedKind, type PossibleDuplicate, type PurchasesSign, type StoredPayment, type PurchasesSignGuess, type RowWarning } from "./ingest/classify.js";
@@ -71,6 +73,10 @@ export interface ImportPreview {
 
 export interface PrepareImportInput {
   accountId: string | null;
+  /** Who imports (req.authUserId; a bank connection's owner): payments are
+   *  proposed, and debts and lines named, only among those visible to them —
+   *  never another member's private debt (server/lib/poolRefs.ts). */
+  authUserId: string;
   /** A statement file… */
   file?: { bytes: Uint8Array; filename: string };
   /** …or rows already read in the browser (decision O), with what its
@@ -121,12 +127,15 @@ export async function prepareImport(userId: string, input: PrepareImportInput): 
 
   const [debts, debtLines, rules, allocations] = await Promise.all([
     prisma.debt.findMany({
-      where: { userId },
+      where: { userId, ...visibleToWhere(input.authUserId) },
       select: { id: true, name: true, kind: true, accountId: true, status: true, installmentAmount: true, minimumPayment: true },
     }),
+    // Every debt line, hidden ones too: a rule on one must still never make it
+    // a purchase's category (below); its debt isn't in `debts`, so it is
+    // never proposed as a payment either.
     prisma.allocation.findMany({ where: { userId, type: "debt", debtId: { not: null } }, select: { id: true, debtId: true } }),
     prisma.categorizationRule.findMany({ where: { userId }, orderBy: [{ priority: "desc" }, { createdAt: "asc" }] }),
-    prisma.allocation.findMany({ where: { userId }, select: { id: true, name: true } }),
+    prisma.allocation.findMany({ where: { userId, ...notOnHiddenDebt(input.authUserId) }, select: { id: true, name: true } }),
   ]);
   const lineByDebt = new Map(debtLines.map(a => [a.debtId!, a.id]));
   const debtByLine = new Map(debtLines.map(a => [a.id, a.debtId!]));
