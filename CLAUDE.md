@@ -2,7 +2,16 @@
 
 ## What this is
 
-LifePlan is an authenticated budgeting app (every API route behind `requireAuth`) for people getting out of over-indebtedness from fragmented installments — cards, BNPL, quick loans. Its core metric is the **"futuro comprometido"**: the share of income already committed to debt before spending anything. Current plan: `docs/plan-deudas-y-onboarding.md`.
+LifePlan is an authenticated budgeting app (every API route behind `requireAuth`) for **families who earn well, get to the end of the month just barely, and never learned a system to save**. They may have debts (cards, car, installments), but debt does not drown them; what they lack is a method, not money (decided 4 Nov 2026, `docs/vision-y-plan-beta.md`).
+
+The app is the tool of a system: **see** where the money goes and how much of the next paycheck is already committed; **order** a monthly budget where every euro has a destination; **get out of debt** with a dated plan (snowball/avalanche); **save with purpose** (named plans, always an emergency fund, a fixed "pay yourself first" % that each user chooses); and **save to invest**. The **"futuro comprometido"** (share of income already committed to debt) stays as the entry diagnosis, not the headline.
+
+- **The app does not teach.** The company teaches, through workshops and social media; the app is where people apply it. Don't add lessons, courses or content screens.
+- **It is moldable to each user's method**, not tied to the workshop's: users choose their own percentages.
+- **It does not give investment advice**: no products, no managing money. Projections are labelled as simulations, not promises (LPBETA-06).
+- Generosity is a budget line type (`generosity`) that cannot be deleted, only set to 0.
+
+Plans: `docs/vision-y-plan-beta.md` (client, beta, growth), `docs/plan-deudas-y-onboarding.md` (epics done), backlog in `docs/tickets.md`.
 
 The Radiografía Financiera (a public lead magnet) was abandoned and deleted on 21 Oct 2026; it lives only in git history.
 
