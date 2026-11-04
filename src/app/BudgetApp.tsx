@@ -389,11 +389,11 @@ function AppInner() {
               <h1 className="text-2xl font-display text-primary">LifePlan</h1>
               <p className="text-xs text-muted-foreground">{t('sidebar.tagline')}</p>
             </div>
-            <ThemeToggle darkMode={darkMode} onToggle={toggleDarkMode} />
           </div>
           <p className="text-sm text-muted-foreground mt-3">
             {t('sidebar.planTagline')}
           </p>
+          <ThemeToggle darkMode={darkMode} onToggle={toggleDarkMode} showLabel className="mt-4" />
         </div>
         {/* Global month selector */}
         <div className="px-4 py-3 border-b border-border">
