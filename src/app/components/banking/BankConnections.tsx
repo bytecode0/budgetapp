@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Loader2, Landmark, Link2, RefreshCw, AlertTriangle, Trash2, ListChecks, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,13 +18,16 @@ interface BankConnectionsProps {
   /** The post-consent hand-off token (?bankToken=). */
   pendingBankToken?: string | null;
   onConsumedBankToken?: () => void;
+  /** The flow that began with pendingBankToken is over (linked and reviewed,
+   *  renewed, cancelled or failed). */
+  onBankFlowDone?: () => void;
   /** Accounts, balances or movements changed. */
   onChanged: () => void;
 }
 
 /** "Connect your bank" in Accounts (§5.6): hidden entirely unless the server
  *  says this user may use it. */
-export function BankConnections({ accounts, pendingBankToken, onConsumedBankToken, onChanged }: BankConnectionsProps) {
+export function BankConnections({ accounts, pendingBankToken, onConsumedBankToken, onBankFlowDone, onChanged }: BankConnectionsProps) {
   const { t } = useTranslation();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
@@ -40,6 +43,13 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
   const [linking, setLinking] = useState(false);
   const [review, setReview] = useState<BankReviewTarget[] | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<BankConnection | null>(null);
+  // True while the post-consent flow (mapping, then the first review) runs.
+  const tokenFlow = useRef(false);
+  const endTokenFlow = () => {
+    if (!tokenFlow.current) return;
+    tokenFlow.current = false;
+    onBankFlowDone?.();
+  };
 
   const openMapping = (connectionId: string, institutionName: string, bankAccounts: BankAccount[]) => {
     setMapping({ connectionId, institutionName, accounts: bankAccounts });
@@ -52,12 +62,14 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
   // a renewed consent already re-linked every one of them.
   useEffect(() => {
     if (!pendingBankToken || !enabled) return;
+    tokenFlow.current = true;
     banking.exchange(pendingBankToken).then(res => {
       onConsumedBankToken?.();
       banking.fetchConnections();
-      if (!res.ok) { fail(res, 'banking.errors.failed'); return; }
+      if (!res.ok) { fail(res, 'banking.errors.failed'); endTokenFlow(); return; }
       if (res.accounts.length > 0 && res.accounts.every(a => a.linkedAccountId)) {
         toast.success(t('banking.renewedOk', { bank: res.institutionName }));
+        endTokenFlow();
         return;
       }
       openMapping(res.connectionId, res.institutionName, res.accounts);
@@ -92,7 +104,7 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
       }
       return [{ externalAccountId: a.id, accountId: choice }];
     });
-    if (mappings.length === 0) { setMapping(null); return; }
+    if (mappings.length === 0) { setMapping(null); endTokenFlow(); return; }
     setLinking(true);
     const res = await banking.linkAccounts(mapping.connectionId, mappings);
     setLinking(false);
@@ -107,6 +119,7 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
     const firstMapping = mappings[0];
     const name = firstMapping.create?.name ?? accounts.find(a => a.id === firstMapping.accountId)?.name ?? mapping.institutionName;
     if (first) setReview([{ connectionId, accountId: first, accountName: name, firstTime: true }]);
+    else endTokenFlow();
   };
 
   const handleDisconnect = async (c: BankConnection) => {
@@ -250,7 +263,7 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-4"
-            onClick={e => { if (e.target === e.currentTarget && !linking) setMapping(null); }}
+            onClick={e => { if (e.target === e.currentTarget && !linking) { setMapping(null); endTokenFlow(); } }}
           >
             <motion.div
               initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }}
@@ -261,7 +274,7 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
                   <h2 className="text-2xl font-display">{t('banking.mapTitle')}</h2>
                   <p className="text-sm text-muted-foreground mt-1">{t('banking.mapSubtitle', { bank: mapping.institutionName })}</p>
                 </div>
-                <button onClick={() => setMapping(null)} disabled={linking} aria-label={t('banking.close')} className="p-2 rounded-lg hover:bg-muted transition-colors">
+                <button onClick={() => { setMapping(null); endTokenFlow(); }} disabled={linking} aria-label={t('banking.close')} className="p-2 rounded-lg hover:bg-muted transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -347,7 +360,7 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
 
       <BankReview
         queue={review}
-        onClose={() => setReview(null)}
+        onClose={() => { setReview(null); endTokenFlow(); }}
         onDone={() => { onChanged(); banking.fetchConnections(); }}
         preview={banking.preview}
         confirm={banking.confirm}

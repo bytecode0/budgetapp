@@ -32,6 +32,7 @@ import { apiErrorMessage } from './lib/apiErrors';
 import { applyDarkMode } from './lib/theme';
 import { ThemeToggle } from './components/shared/ThemeToggle';
 import { RemansoMark } from './components/shared/RemansoMark';
+import { takeBankReturn, type BankReturnScreen } from './components/banking/bankReturn';
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
 
@@ -94,6 +95,9 @@ function AppInner() {
 
   // Open Banking: detect ?bankToken=TOKEN in URL (post-consent redirect hand-off)
   const [pendingBankToken, setPendingBankToken] = useState<string | null>(null);
+  // The screen the bank flow started from (Activity's strip): linking and the
+  // first review happen in Accounts, then the user is taken back there.
+  const [bankReturn, setBankReturn] = useState<BankReturnScreen | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -126,8 +130,15 @@ function AppInner() {
     const isBankError = !!bankError && bankError.startsWith('banking_');
     if (bankToken) setPendingBankToken(bankToken);
     if (isBankError) toast.error(apiErrorMessage(t, { code: bankError ?? undefined, error: t('banking.errors.failed') }));
-    if (bankToken || isBankError || params.get('open') === 'accounts') {
+    const back = bankToken || isBankError ? takeBankReturn() : null;
+    if (isBankError && back) {
+      // Nothing to link: straight back to where the user started.
+      setCurrentScreen(back);
+    } else if (bankToken || isBankError || params.get('open') === 'accounts') {
       setCurrentScreen('accounts');
+      if (bankToken) setBankReturn(back);
+    }
+    if (bankToken || isBankError || params.get('open') === 'accounts') {
       const url = new URL(window.location.href);
       url.searchParams.delete('bankToken');
       url.searchParams.delete('open');
@@ -196,7 +207,13 @@ function AppInner() {
       case 'allocation':
         return <AllocationFlow />;
       case 'accounts':
-        return <Accounts pendingBankToken={pendingBankToken} onConsumedBankToken={() => setPendingBankToken(null)} />;
+        return (
+          <Accounts
+            pendingBankToken={pendingBankToken}
+            onConsumedBankToken={() => setPendingBankToken(null)}
+            onBankFlowDone={() => { if (bankReturn) { setCurrentScreen(bankReturn); setBankReturn(null); } }}
+          />
+        );
       case 'debts':
         return <Debts />;
       case 'household':

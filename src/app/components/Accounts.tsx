@@ -91,7 +91,7 @@ const EMPTY_FORM: FormState = {
   ...EMPTY_CARD_FIELDS, id: null, name: '', type: 'checking', visibility: 'household', loadedBalance: '', loadedType: null,
 };
 
-export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBankToken?: string | null; onConsumedBankToken?: () => void } = {}) {
+export function Accounts({ pendingBankToken, onConsumedBankToken, onBankFlowDone }: { pendingBankToken?: string | null; onConsumedBankToken?: () => void; onBankFlowDone?: () => void } = {}) {
   const { t } = useTranslation();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
@@ -287,6 +287,7 @@ export function Accounts({ pendingBankToken, onConsumedBankToken }: { pendingBan
         accounts={accounts}
         pendingBankToken={pendingBankToken}
         onConsumedBankToken={onConsumedBankToken}
+        onBankFlowDone={onBankFlowDone}
         onChanged={fetchAccounts}
       />
 
