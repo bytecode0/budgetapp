@@ -388,7 +388,7 @@ export function AllocationFlow() {
                   <span className="text-3xl opacity-75">{currency}</span>
                   <input
                     type="number"
-                    className="text-4xl bg-white/20 rounded-xl px-3 py-1 w-40 outline-none text-white"
+                    className="text-4xl bg-white/20 rounded-xl px-3 py-1 w-40 outline-none text-primary-foreground"
                     value={incomeInput}
                     onChange={e => setIncomeInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleSaveIncome(); if (e.key === 'Escape') setEditingIncome(false); }}
@@ -696,7 +696,7 @@ export function AllocationFlow() {
             {/* Primary: save the edited amounts for THIS month only */}
             <button
               onClick={handleSaveMonthlyBudget} disabled={savingMonthlyBudget}
-              className="w-full py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+              className="w-full py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50"
             >
               {savingMonthlyBudget
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('allocation.saving')}</>
@@ -826,8 +826,8 @@ export function AllocationFlow() {
               <button
                 onClick={handleAddAllocation}
                 disabled={adding || !newName.trim() || (newType === 'plan' && !newLifePlanId)}
-                className={`w-full py-3 text-white rounded-xl hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 ${
-                  newType === 'plan' ? 'bg-violet-600 hover:bg-violet-700' : 'bg-gradient-to-r from-primary to-secondary'
+                className={`w-full py-3 rounded-xl hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 ${
+                  newType === 'plan' ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-gradient-to-r from-primary to-secondary text-primary-foreground'
                 }`}
               >
                 {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -843,7 +843,7 @@ export function AllocationFlow() {
         initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
         onClick={() => setShowAdd(true)}
         whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-        className="fixed right-6 bottom-6 w-16 h-16 bg-gradient-to-br from-primary to-secondary text-white rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center z-40 group"
+        className="fixed right-6 bottom-6 w-16 h-16 bg-gradient-to-br from-primary to-secondary text-primary-foreground rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center z-40 group"
       >
         <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform" />
       </motion.button>

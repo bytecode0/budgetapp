@@ -63,7 +63,7 @@ export function Login({ onLogin, onSwitchToSignup, onForgotPassword, onNeedVerif
         >
           <div className="flex justify-center mb-4">
             <div className="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center shadow-lg">
-              <Target className="w-9 h-9 text-white" />
+              <Target className="w-9 h-9 text-primary-foreground" />
             </div>
           </div>
           <h1 className="text-3xl font-display text-primary mb-2">{t('auth.login.title')}</h1>
@@ -149,7 +149,7 @@ export function Login({ onLogin, onSwitchToSignup, onForgotPassword, onNeedVerif
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-display hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl font-display hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? t('auth.login.signingIn') : t('auth.login.signIn')}
             </button>

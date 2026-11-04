@@ -119,7 +119,7 @@ export function Welcome({ onContinue }: WelcomeProps) {
         >
           <div className="flex justify-center mb-6">
             <div className="w-20 h-20 bg-gradient-to-br from-primary to-secondary rounded-3xl flex items-center justify-center shadow-2xl">
-              <Target className="w-11 h-11 text-white" />
+              <Target className="w-11 h-11 text-primary-foreground" />
             </div>
           </div>
           <h1 className="text-4xl md:text-5xl font-display text-primary mb-4">
@@ -176,25 +176,25 @@ export function Welcome({ onContinue }: WelcomeProps) {
             <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16" />
 
             <div className="absolute top-4 right-4">
-              <span className="bg-secondary text-white text-xs font-display px-3 py-1 rounded-full">
+              <span className="bg-secondary text-primary-foreground text-xs font-display px-3 py-1 rounded-full">
                 {t('auth.welcome.mostPopular')}
               </span>
             </div>
 
             <div className="mb-6 relative z-10">
               <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-4">
-                <Crown className="w-6 h-6 text-white" />
+                <Crown className="w-6 h-6 text-primary-foreground" />
               </div>
-              <h2 className="text-2xl font-display text-white mb-1">{t('auth.welcome.premiumPlan')}</h2>
+              <h2 className="text-2xl font-display text-primary-foreground mb-1">{t('auth.welcome.premiumPlan')}</h2>
               <div className="flex items-baseline gap-1">
-                <span className="text-4xl font-display text-white">{t('auth.welcome.premiumPlanPrice')}</span>
-                <span className="text-white/70">{t('auth.welcome.perMonth')}</span>
+                <span className="text-4xl font-display text-primary-foreground">{t('auth.welcome.premiumPlanPrice')}</span>
+                <span className="text-primary-foreground/70">{t('auth.welcome.perMonth')}</span>
               </div>
             </div>
 
             <ul className="space-y-3 flex-1 mb-8 relative z-10">
               {premiumFeatures.map((f) => (
-                <li key={f} className="flex items-center gap-2 text-sm text-white/90">
+                <li key={f} className="flex items-center gap-2 text-sm text-primary-foreground/90">
                   <CheckCircle2 className="w-4 h-4 text-secondary shrink-0" />
                   <span>{f}</span>
                 </li>

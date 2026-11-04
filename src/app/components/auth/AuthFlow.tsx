@@ -109,7 +109,7 @@ export function AuthFlow({ onAuthenticated, inviteBanner }: AuthFlowProps) {
   return (
     <>
       {inviteBanner && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gradient-to-r from-primary to-secondary text-white px-5 py-3 rounded-2xl shadow-xl text-sm flex items-center gap-2 max-w-sm mx-4">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gradient-to-r from-primary to-secondary text-primary-foreground px-5 py-3 rounded-2xl shadow-xl text-sm flex items-center gap-2 max-w-sm mx-4">
           <span>💑</span>
           <span><strong>{inviteBanner.senderName}</strong> {t('auth.authFlow.inviteBannerSuffix')}</span>
         </div>

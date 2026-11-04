@@ -350,7 +350,7 @@ export function ImportPreviewStep({ data, accountId, aiEnabled, onSignChange, si
                 <button
                   onClick={handleClassifyAI}
                   disabled={classifying}
-                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gradient-to-br from-primary to-secondary text-white hover:shadow-md transition-all disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gradient-to-br from-primary to-secondary text-primary-foreground hover:shadow-md transition-all disabled:opacity-50"
                 >
                   {classifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                   {classifying ? t('import.aiClassifying') : t('import.aiClassify')}

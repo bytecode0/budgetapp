@@ -65,7 +65,7 @@ export function PartnerInviteAccept({ token, invite, onAccept, onDismiss }: Prop
               </div>
               <button
                 onClick={onDismiss}
-                className="w-full py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
+                className="w-full py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors"
               >
                 {t('partnerInvite.startExploring')}
               </button>
@@ -120,7 +120,7 @@ export function PartnerInviteAccept({ token, invite, onAccept, onDismiss }: Prop
                 <button
                   onClick={handleAccept}
                   disabled={accepting}
-                  className="flex-1 py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl hover:shadow-md transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                  className="flex-1 py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl hover:shadow-md transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
                 >
                   {accepting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Heart className="w-4 h-4" />}
                   {t('partnerInvite.accept')}

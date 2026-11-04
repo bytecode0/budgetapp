@@ -615,7 +615,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                     />
                     <button
                       onClick={handleCopyUrl}
-                      className="px-3 py-2 bg-primary text-white rounded-lg text-xs hover:bg-primary/90 transition-colors shrink-0"
+                      className="px-3 py-2 bg-primary text-primary-foreground rounded-lg text-xs hover:bg-primary/90 transition-colors shrink-0"
                     >
                       {copied ? t('settings.sharedFinances.copied') : t('settings.sharedFinances.copy')}
                     </button>
@@ -640,7 +640,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                 <button
                   onClick={handleSendInvite}
                   disabled={sendingInvite || !inviteEmail.trim()}
-                  className="px-4 py-2.5 bg-gradient-to-r from-primary to-secondary text-white rounded-xl text-sm flex items-center gap-2 disabled:opacity-50 hover:shadow-md transition-all"
+                  className="px-4 py-2.5 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl text-sm flex items-center gap-2 disabled:opacity-50 hover:shadow-md transition-all"
                 >
                   {sendingInvite ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 </button>
@@ -720,7 +720,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                     <button
                       onClick={handleReactivate}
                       disabled={reactivateLoading}
-                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-primary to-secondary text-white text-sm font-display flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-primary to-secondary text-primary-foreground text-sm font-display flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {reactivateLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                       {t('billing.reactivate')}
@@ -754,7 +754,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
                 <button
                   onClick={handleUpgrade}
                   disabled={upgradeLoading}
-                  className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-display text-sm flex items-center justify-center gap-2 hover:shadow-lg transition-all disabled:opacity-70"
+                  className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl font-display text-sm flex items-center justify-center gap-2 hover:shadow-lg transition-all disabled:opacity-70"
                 >
                   {upgradeLoading ? (
                     <Loader2 className="w-4 h-4 animate-spin" />

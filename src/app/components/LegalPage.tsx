@@ -25,7 +25,7 @@ export function LegalPage({ page }: { page: LegalPageKind }) {
       <header className="w-full bg-card border-b border-border py-4 px-4 sm:px-8 flex items-center justify-between gap-3">
         <a href="/" className="flex items-center gap-2">
           <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
-            <Target className="w-5 h-5 text-white" />
+            <Target className="w-5 h-5 text-primary-foreground" />
           </div>
           <span className="font-display text-lg">LifePlan</span>
         </a>

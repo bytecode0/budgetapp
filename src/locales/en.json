@@ -1,4 +1,11 @@
 {
+  "theme": {
+    "switchToDark": "Switch to dark mode",
+    "switchToLight": "Switch to light mode",
+    "darkLabel": "Dark mode",
+    "lightLabel": "Light mode",
+    "saveFailed": "Couldn't save the theme. Try again."
+  },
   "nav": {
     "home": "Home",
     "lifePlans": "Life Plans",

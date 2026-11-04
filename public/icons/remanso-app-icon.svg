@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Remanso">
+  <rect width="512" height="512" fill="#1E5B55"/>
+  <circle cx="318" cy="170" r="40" fill="#E3A63A"/>
+  <g fill="none" stroke="#DCEBE7" stroke-linecap="round" stroke-width="24">
+    <path d="M116 262 q35 -33 70 0 t70 0 t70 0 t70 0"/>
+    <path d="M136 326 q30 -16 60 0 t60 0 t60 0 t60 0"/>
+    <path d="M176 390 H336"/>
+  </g>
+</svg>

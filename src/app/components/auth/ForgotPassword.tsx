@@ -193,7 +193,7 @@ export function ForgotPassword({ onBack }: ForgotPasswordProps) {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-display hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl font-display hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? t('auth.forgotPassword.sending') : t('auth.forgotPassword.sendCode')}
                 </button>
@@ -247,7 +247,7 @@ export function ForgotPassword({ onBack }: ForgotPasswordProps) {
                 <button
                   type="submit"
                   disabled={isLoading || otp.join('').length < OTP_LENGTH}
-                  className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-display hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl font-display hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? t('auth.forgotPassword.verifying') : t('auth.forgotPassword.verifyCode')}
                 </button>
@@ -330,7 +330,7 @@ export function ForgotPassword({ onBack }: ForgotPasswordProps) {
                 <button
                   type="submit"
                   disabled={isLoading || !passwordsMatch || newPassword.length < 8}
-                  className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-display hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl font-display hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? t('auth.forgotPassword.updating') : t('auth.forgotPassword.resetPassword')}
                 </button>
@@ -356,7 +356,7 @@ export function ForgotPassword({ onBack }: ForgotPasswordProps) {
             </p>
             <button
               onClick={onBack}
-              className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-display hover:shadow-lg transition-all"
+              className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl font-display hover:shadow-lg transition-all"
             >
               {t('auth.forgotPassword.goToLogin')}
             </button>

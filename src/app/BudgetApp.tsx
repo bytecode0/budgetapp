@@ -29,6 +29,8 @@ import { useOnboardingNeeded, type OnboardingStep } from './hooks/useOnboardingN
 import { useBillingEnabled } from './hooks/useBillingEnabled';
 import { fetchInviteDetails, usePartner, type InviteDetails } from './hooks/usePartner';
 import { apiErrorMessage } from './lib/apiErrors';
+import { applyDarkMode } from './lib/theme';
+import { ThemeToggle } from './components/shared/ThemeToggle';
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
 
@@ -150,14 +152,13 @@ function AppInner() {
     if (dbLanguage) setLanguage(dbLanguage as 'en' | 'es');
   }, [dbLanguage]);
 
-  // Sync dark mode class
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [darkMode]);
+  // Apply the person's theme (saved on the server, cached on this device).
+  useEffect(() => { applyDarkMode(darkMode); }, [darkMode]);
+
+  const toggleDarkMode = async () => {
+    const result = await updateDarkMode(!darkMode);
+    if (result.error) toast.error(t('theme.saveFailed'));
+  };
 
   const navigation = [
     { id: 'home' as Screen,       label: t('nav.home'),      icon: LayoutDashboard },
@@ -203,7 +204,7 @@ function AppInner() {
         return (
           <PlanningSettings
             darkMode={darkMode}
-            onToggleDarkMode={() => updateDarkMode(!darkMode)}
+            onToggleDarkMode={toggleDarkMode}
             onLanguageChange={updateLanguage}
             onLogout={() => logout()}
             cycleStartDay={cycleStartDay}
@@ -226,7 +227,7 @@ function AppInner() {
           className="text-center"
         >
           <div className="w-20 h-20 bg-gradient-to-br from-primary to-secondary rounded-3xl flex items-center justify-center shadow-2xl mx-auto mb-4">
-            <Target className="w-11 h-11 text-white" />
+            <Target className="w-11 h-11 text-primary-foreground" />
           </div>
           <h2 className="text-2xl font-display text-primary mb-2">LifePlan</h2>
           <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto" />
@@ -294,7 +295,7 @@ function AppInner() {
       setResumeStep(null);
       await Promise.all([refreshOnboardingStatus(), refreshCycleStartDay()]);
     };
-    return <BudgetOnboarding initialStep={resumeStep ?? 'welcome'} onDone={finishOnboarding} />;
+    return <BudgetOnboarding initialStep={resumeStep ?? 'welcome'} onDone={finishOnboarding} themeToggle={<ThemeToggle darkMode={darkMode} onToggle={toggleDarkMode} />} />;
   }
 
   return (
@@ -303,16 +304,19 @@ function AppInner() {
       <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-card/80 backdrop-blur-xl border-b border-border z-50 flex items-center justify-between px-4">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
-            <Target className="w-5 h-5 text-white" />
+            <Target className="w-5 h-5 text-primary-foreground" />
           </div>
           <h2 className="font-display text-xl text-primary">LifePlan</h2>
         </div>
+        <div className="flex items-center gap-1">
+        <ThemeToggle darkMode={darkMode} onToggle={toggleDarkMode} />
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           className="p-2 hover:bg-muted rounded-lg transition-colors"
         >
           {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
+        </div>
       </div>
 
       {/* Mobile Menu Overlay */}
@@ -379,9 +383,9 @@ function AppInner() {
         <div className="p-6 border-b border-border">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center shadow-lg">
-              <Target className="w-7 h-7 text-white" />
+              <Target className="w-7 h-7 text-primary-foreground" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <h1 className="text-2xl font-display text-primary">LifePlan</h1>
               <p className="text-xs text-muted-foreground">{t('sidebar.tagline')}</p>
             </div>
@@ -389,6 +393,7 @@ function AppInner() {
           <p className="text-sm text-muted-foreground mt-3">
             {t('sidebar.planTagline')}
           </p>
+          <ThemeToggle darkMode={darkMode} onToggle={toggleDarkMode} showLabel className="mt-4" />
         </div>
         {/* Global month selector */}
         <div className="px-4 py-3 border-b border-border">
@@ -443,7 +448,7 @@ function AppInner() {
           ) : billingEnabled ? (
             <button
               onClick={() => setCurrentScreen('settings')}
-              className="w-full bg-gradient-to-r from-primary to-secondary text-white rounded-xl p-3 flex items-center gap-2 hover:shadow-lg transition-all"
+              className="w-full bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl p-3 flex items-center gap-2 hover:shadow-lg transition-all"
             >
               <Zap className="w-4 h-4 shrink-0" />
               <span className="text-sm font-display">{t('billing.upgradeNow')}</span>

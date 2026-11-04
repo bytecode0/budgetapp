@@ -774,7 +774,7 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                 </button>
                 <button
                   onClick={handleCreate} disabled={saving}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('createPlan.creating')}</> : `${icon} ${t('createPlan.createPlan')}`}
                 </button>

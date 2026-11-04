@@ -356,7 +356,7 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
         className="bg-gradient-to-br from-secondary/5 via-primary/5 to-accent/5 border border-primary/10 rounded-2xl p-6 md:p-8"
       >
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center text-white">
+          <div className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center text-primary-foreground">
             <Sparkles className="w-6 h-6" />
           </div>
           <div>

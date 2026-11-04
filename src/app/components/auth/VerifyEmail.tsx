@@ -161,7 +161,7 @@ export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
             <button
               type="submit"
               disabled={isLoading || otp.join('').length < OTP_LENGTH}
-              className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-display hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl font-display hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? t('auth.verifyEmail.verifying') : t('auth.verifyEmail.verifyEmail')}
             </button>
@@ -194,7 +194,7 @@ export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
           className="mt-6 bg-gradient-to-br from-secondary/10 to-primary/10 border border-primary/20 rounded-2xl p-4 flex items-center gap-3"
         >
           <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center flex-shrink-0">
-            <Target className="w-5 h-5 text-white" />
+            <Target className="w-5 h-5 text-primary-foreground" />
           </div>
           <p className="text-sm text-muted-foreground">
             {t('auth.verifyEmail.tagline')}

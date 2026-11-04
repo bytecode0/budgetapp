@@ -1,3 +1,4 @@
+import { cachedDarkMode } from '../lib/theme';
 import { useState, useEffect, useCallback } from 'react';
 
 export interface Allocation {
@@ -31,7 +32,8 @@ export function useAllocations() {
   const [monthlyIncome, setMonthlyIncome] = useState(0);
   const [ownMonthlyIncome, setOwnMonthlyIncome] = useState(0);
   const [isCouple, setIsCouple] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  // Start from this device's copy so the theme doesn't flash before the server answers.
+  const [darkMode, setDarkMode] = useState(cachedDarkMode);
   const [dbLanguage, setDbLanguage] = useState<string>('es');
   const [cycleStartDay, setCycleStartDay] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -143,17 +145,28 @@ export function useAllocations() {
     return {};
   };
 
+  // Optimistic: the theme changes on tap; if the server refuses, it goes back.
   const updateDarkMode = async (value: boolean) => {
-    const res = await fetch('/api/allocations/settings/display', {
-      method: 'PATCH',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ darkMode: value }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { error: data.error || 'Failed to update display settings' };
-    setDarkMode(data.darkMode);
-    return {};
+    const previous = darkMode;
+    setDarkMode(value);
+    try {
+      const res = await fetch('/api/allocations/settings/display', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ darkMode: value }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDarkMode(previous);
+        return { error: data.error || 'Failed to update display settings' };
+      }
+      setDarkMode(data.darkMode);
+      return {};
+    } catch {
+      setDarkMode(previous);
+      return { error: 'Failed to update display settings' };
+    }
   };
 
   const reorderAllocations = async (order: { id: string; sortOrder: number }[]) => {

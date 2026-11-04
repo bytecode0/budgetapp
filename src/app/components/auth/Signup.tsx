@@ -52,7 +52,7 @@ export function Signup({ onSignupSuccess, onSwitchToLogin }: SignupProps) {
         >
           <div className="flex justify-center mb-4">
             <div className="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center shadow-lg">
-              <Target className="w-9 h-9 text-white" />
+              <Target className="w-9 h-9 text-primary-foreground" />
             </div>
           </div>
           <h1 className="text-3xl font-display text-primary mb-2">{t('auth.signup.title')}</h1>
@@ -165,7 +165,7 @@ export function Signup({ onSignupSuccess, onSwitchToLogin }: SignupProps) {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-display hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl font-display hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? t('auth.signup.creatingAccount') : t('auth.signup.createAccount')}
             </button>
@@ -187,7 +187,7 @@ export function Signup({ onSignupSuccess, onSwitchToLogin }: SignupProps) {
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
-              <span className="text-white text-xl">✓</span>
+              <span className="text-primary-foreground text-xl">✓</span>
             </div>
             <div>
               <p className="text-sm font-display text-primary">{t('auth.signup.freeIncludes')}</p>

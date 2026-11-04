@@ -9,7 +9,20 @@
       name="description"
       content="Ve todas tus cuotas y tarjetas juntas, cuánto de tu sueldo ya está comprometido y cuándo serás libre de deudas."
     />
+    <meta name="theme-color" content="#F3F6F4" />
+    <link rel="icon" type="image/svg+xml" href="/icons/remanso-mark.svg" />
     <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+    <script>
+      // Paint the last theme chosen on this device before the app loads, so a
+      // dark-mode user never sees a white flash. The server's value (per
+      // person, src/app/lib/theme.ts) replaces it after sign-in.
+      try {
+        if (localStorage.getItem('remanso-theme') === 'dark') {
+          document.documentElement.classList.add('dark');
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0E1B19');
+        }
+      } catch (e) {}
+    </script>
   </head>
 
   <body>

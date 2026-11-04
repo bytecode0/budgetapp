@@ -69,7 +69,7 @@ export function Analytics() {
       className="space-y-6"
     >
       <div className="flex items-center gap-3">
-        <div className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center text-white">
+        <div className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center text-primary-foreground">
           <TrendingUp className="w-6 h-6" />
         </div>
         <div>

@@ -1,4 +1,11 @@
 {
+  "theme": {
+    "switchToDark": "Cambiar a modo oscuro",
+    "switchToLight": "Cambiar a modo claro",
+    "darkLabel": "Modo oscuro",
+    "lightLabel": "Modo claro",
+    "saveFailed": "No se ha podido guardar el tema. Inténtalo de nuevo."
+  },
   "nav": {
     "home": "Inicio",
     "lifePlans": "Planes de Vida",

@@ -244,7 +244,7 @@ export function Debts() {
       {/* Consolidated hero — the differentiator: everything owed, in one place */}
       <motion.div
         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-        className="bg-gradient-to-br from-destructive to-destructive/80 text-white rounded-3xl p-8 shadow-2xl relative overflow-hidden"
+        className="bg-gradient-to-br from-destructive to-destructive/80 text-destructive-foreground rounded-3xl p-8 shadow-2xl relative overflow-hidden"
       >
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-32 -mt-32" />
         <div className="relative z-10 grid grid-cols-2 gap-6">
@@ -378,7 +378,7 @@ export function Debts() {
         onClick={openCreate}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
-        className="fixed right-6 bottom-6 w-16 h-16 bg-gradient-to-br from-primary to-secondary text-white rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center z-40 group"
+        className="fixed right-6 bottom-6 w-16 h-16 bg-gradient-to-br from-primary to-secondary text-primary-foreground rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center z-40 group"
       >
         <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform" />
       </motion.button>
