@@ -944,7 +944,12 @@
     "startExploring": "Start exploring"
   },
   "auth": {
+    "otp": {
+      "incorrect": "Incorrect code. Check it and try again.",
+      "invalid": "This code has expired or was tried too many times. Request a new one."
+    },
     "login": {
+      "tooManyAttempts": "Too many failed attempts. Wait 15 minutes or reset your password.",
       "title": "Welcome back",
       "subtitle": "Sign in to continue your financial journey",
       "continueGoogle": "Continue with Google",
@@ -993,7 +998,7 @@
       "rememberIt": "Remember it after all?",
       "signIn": "Sign in",
       "checkInbox": "Check your inbox",
-      "sentCodeTo": "We sent a 5-digit code to",
+      "sentCodeTo": "We sent a 6-digit code to",
       "verifyCode": "Verify code",
       "verifying": "Verifying...",
       "didntReceive": "Didn't receive it?",
@@ -1013,7 +1018,7 @@
     "verifyEmail": {
       "back": "Back",
       "title": "Check your inbox",
-      "sentCodeTo": "We sent a 5-digit code to",
+      "sentCodeTo": "We sent a 6-digit code to",
       "enterCode": "Enter your verification code",
       "verifyEmail": "Verify email",
       "verifying": "Verifying...",

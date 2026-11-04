@@ -44,6 +44,9 @@ const ERROR_KEYS: Record<string, string> = {
   banking_type_mismatch: 'banking.errors.typeMismatch',
   banking_duplicate_target: 'banking.errors.duplicateTarget',
   banking_account_not_linked: 'banking.errors.notLinked',
+  // Email codes (server/routes/auth.ts)
+  otp_incorrect: 'auth.otp.incorrect',
+  otp_invalid: 'auth.otp.invalid',
 };
 
 /** The message to show for a failed debt/account request (call it only once

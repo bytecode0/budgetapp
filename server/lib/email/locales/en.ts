@@ -40,6 +40,15 @@ export const en: EmailDictionary = {
     notYouTitle: "Didn't request this?",
     notYouBody: "Someone may have entered your email by mistake. No changes have been made to your account.",
   },
+  passwordChanged: {
+    subject: "Your {product} password has changed",
+    preheader: "If this was you, there's nothing else to do.",
+    heading: "Your password has changed",
+    introNamed: "Hi {name}, we've just changed the password of your {product} account. If this was you, there's nothing else to do.",
+    intro: "We've just changed the password of your {product} account. If this was you, there's nothing else to do.",
+    notYouTitle: "Wasn't you?",
+    notYouBody: "Reply to this email or write to {supportEmail} as soon as possible and we'll help you recover your account.",
+  },
   welcome: {
     subjectNamed: "Welcome to {product}, {name}! Your account is ready",
     subject: "Welcome to {product}! Your account is ready",

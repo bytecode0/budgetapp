@@ -944,7 +944,12 @@
     "startExploring": "Empezar a explorar"
   },
   "auth": {
+    "otp": {
+      "incorrect": "Código incorrecto. Revísalo e inténtalo de nuevo.",
+      "invalid": "Este código ha caducado o se ha intentado demasiadas veces. Pide uno nuevo."
+    },
     "login": {
+      "tooManyAttempts": "Demasiados intentos fallidos. Espera 15 minutos o restablece tu contraseña.",
       "title": "Bienvenido de vuelta",
       "subtitle": "Inicia sesión para continuar tu viaje financiero",
       "continueGoogle": "Continuar con Google",
@@ -993,7 +998,7 @@
       "rememberIt": "¿Lo recordaste después de todo?",
       "signIn": "Iniciar sesión",
       "checkInbox": "Revisa tu bandeja de entrada",
-      "sentCodeTo": "Te enviamos un código de 5 dígitos a",
+      "sentCodeTo": "Te enviamos un código de 6 dígitos a",
       "verifyCode": "Verificar código",
       "verifying": "Verificando...",
       "didntReceive": "¿No lo recibiste?",
@@ -1013,7 +1018,7 @@
     "verifyEmail": {
       "back": "Atrás",
       "title": "Revisa tu bandeja de entrada",
-      "sentCodeTo": "Te enviamos un código de 5 dígitos a",
+      "sentCodeTo": "Te enviamos un código de 6 dígitos a",
       "enterCode": "Introduce tu código de verificación",
       "verifyEmail": "Verificar email",
       "verifying": "Verificando...",

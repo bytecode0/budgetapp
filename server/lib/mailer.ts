@@ -6,6 +6,7 @@ import type { EmailLocale } from "./email/locales/index.js";
 import {
   bankConsentExpiringEmail,
   partnerInviteEmail,
+  passwordChangedEmail,
   passwordResetEmail,
   verificationEmail,
   welcomeEmail,
@@ -18,6 +19,10 @@ export async function sendVerificationEmail(email: string, name: string, otp: st
 
 export async function sendPasswordResetEmail(email: string, otp: string, locale: EmailLocale = "es") {
   await sendEmail({ to: email, ...passwordResetEmail({ otp }, locale) });
+}
+
+export async function sendPasswordChangedEmail(email: string, name: string, locale: EmailLocale = "es") {
+  await sendEmail({ to: email, ...passwordChangedEmail({ name }, locale) });
 }
 
 export async function sendWelcomeEmail(email: string, name: string, locale: EmailLocale = "es") {

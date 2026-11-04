@@ -36,6 +36,8 @@ export function Login({ onLogin, onSwitchToSignup, onForgotPassword, onNeedVerif
       if (result.code === 'EMAIL_NOT_VERIFIED') {
         toast.info(t('auth.login.verifyEmailFirst'));
         onNeedVerification(email);
+      } else if (result.code === 'LOGIN_LOCKED') {
+        toast.error(t('auth.login.tooManyAttempts'));
       } else {
         toast.error(result.error);
       }

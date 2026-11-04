@@ -14,6 +14,10 @@ model User {
   emailVerified DateTime?
   image         String?
   passwordHash  String?
+  // Login throttling (LPBETA-14): failed password attempts since the last
+  // success or lock, and until when password sign-in is locked.
+  failedLogins     Int       @default(0)
+  loginLockedUntil DateTime?
 
   settings       UserSettings?
   subscription   Subscription?
@@ -501,6 +505,7 @@ model OtpToken {
   type      String
   expiresAt DateTime
   used      Boolean  @default(false)
+  attempts  Int      @default(0) // verification tries; the code dies at OTP_MAX_ATTEMPTS (LPBETA-14)
   createdAt DateTime @default(now())
 
   @@index([email, type])

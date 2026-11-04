@@ -46,6 +46,15 @@ export const es = {
     notYouTitle: "¿No lo has pedido tú?",
     notYouBody: "Puede que alguien haya escrito tu correo por error. No se ha hecho ningún cambio en tu cuenta.",
   },
+  passwordChanged: {
+    subject: "Tu contraseña de {product} ha cambiado",
+    preheader: "Si has sido tú, no tienes que hacer nada.",
+    heading: "Tu contraseña ha cambiado",
+    introNamed: "Hola, {name}: acabamos de cambiar la contraseña de tu cuenta de {product}. Si has sido tú, no tienes que hacer nada.",
+    intro: "Acabamos de cambiar la contraseña de tu cuenta de {product}. Si has sido tú, no tienes que hacer nada.",
+    notYouTitle: "¿No has sido tú?",
+    notYouBody: "Responde a este correo o escríbenos a {supportEmail} cuanto antes y te ayudamos a recuperar tu cuenta.",
+  },
   welcome: {
     subjectNamed: "¡Te damos la bienvenida a {product}, {name}! Tu cuenta está lista",
     subject: "¡Te damos la bienvenida a {product}! Tu cuenta está lista",

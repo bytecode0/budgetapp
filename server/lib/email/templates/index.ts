@@ -3,6 +3,7 @@
 // sample in ../samples.ts, and a thin sender in mailer.ts or subscriptionEmails.ts.
 export { verificationEmail, type VerificationData } from "./verification.js";
 export { passwordResetEmail, type PasswordResetData } from "./passwordReset.js";
+export { passwordChangedEmail, type PasswordChangedData } from "./passwordChanged.js";
 export { welcomeEmail, type WelcomeData } from "./welcome.js";
 export { welcomeGoogleEmail, type WelcomeGoogleData } from "./welcomeGoogle.js";
 export { partnerInviteEmail, type PartnerInviteData } from "./partnerInvite.js";
