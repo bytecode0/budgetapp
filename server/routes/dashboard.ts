@@ -6,6 +6,7 @@ import { periodBounds } from "../lib/period.js";
 import { spentByPerson } from "../lib/personSpending.js";
 import { countedAmounts } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
+import { hiddenLineIds } from "../lib/poolRefs.js";
 
 export const dashboardRouter = Router();
 
@@ -79,7 +80,11 @@ dashboardRouter.get("/household", requireAuth, async (req: AuthRequest, res: Res
       const key = e.allocationId ?? "__unassigned__";
       byAlloc[key] = (byAlloc[key] ?? 0) + spent(e);
     }
+    // The line of a debt hidden from the caller counts in the totals above but
+    // is not listed by category (server/lib/poolRefs.ts).
+    const hidden = await hiddenLineIds(pool, req.authUserId!);
     const byCategory = Object.entries(byAlloc)
+      .filter(([id]) => !hidden.has(id))
       .map(([id, total]) => ({
         allocationId: id === "__unassigned__" ? null : id,
         name: allocMap[id]?.name ?? null,

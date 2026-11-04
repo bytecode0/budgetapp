@@ -221,6 +221,7 @@ export async function previewBankAccount(
   const txns = await client.getAccountTransactions(account.externalAccountId!, dateFrom);
   const preview = await prepareImport(connection.userId, {
     accountId: account.id,
+    authUserId: connection.ownerUserId,
     rows: toNormalizedRows(txns.booked),
     purchasesSign: "negative",
   });

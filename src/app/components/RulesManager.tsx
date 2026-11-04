@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useRules } from '../hooks/useRules';
 import { useAllocations } from '../hooks/useAllocations';
+import { apiErrorMessage } from '../lib/apiErrors';
 
 interface RulesManagerProps {
   isOpen: boolean;
@@ -30,7 +31,7 @@ export function RulesManager({ isOpen, onClose }: RulesManagerProps) {
     setCreating(true);
     const result = await createRule({ matchType, pattern: pattern.trim(), allocationId });
     setCreating(false);
-    if ('error' in result) { toast.error(result.error as string); return; }
+    if ('error' in result) { toast.error(apiErrorMessage(t, result)); return; }
     toast.success(t('rules.created'));
     setPattern('');
   };

@@ -14,6 +14,8 @@ const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 const APP_URL = process.env.APP_URL ?? "http://localhost:5173";
 
+const normalizeEmail = (email: string | null | undefined) => (email ?? "").trim().toLowerCase();
+
 // ── GET /api/partner/status ──────────────────────────────────────────────────
 // Returns the full partner relationship state for the authenticated user
 partnerRouter.get("/status", requireAuth, async (req: AuthRequest, res: Response) => {
@@ -84,11 +86,11 @@ partnerRouter.post("/invite", requireAuth, async (req: AuthRequest, res: Respons
       return res.status(400).json({ error: "Email is required" });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = normalizeEmail(email);
 
     // Must not invite yourself
     const me = await prisma.user.findUnique({ where: { id: myId }, select: { email: true, name: true } });
-    if (me?.email?.toLowerCase() === normalizedEmail) {
+    if (normalizeEmail(me?.email) === normalizedEmail) {
       return res.status(400).json({ error: "You can't invite yourself" });
     }
 
@@ -159,12 +161,14 @@ partnerRouter.delete("/invite", requireAuth, async (req: AuthRequest, res: Respo
 });
 
 // ── GET /api/partner/invite/:token ───────────────────────────────────────────
-// Public — validate token and return invite details (for the accept screen)
+// Public — validate token and return what the accept screen shows: only the
+// inviter's name. The link travels by email and chat, so neither the inviter's
+// email nor the invited one is handed to whoever holds it.
 partnerRouter.get("/invite/:token", async (req: Request, res: Response) => {
   try {
     const invite = await prisma.partnerInvite.findUnique({
       where: { token: req.params.token },
-      include: { sender: { select: { name: true, email: true } } },
+      include: { sender: { select: { name: true } } },
     });
 
     if (!invite || invite.status !== "pending" || invite.expiresAt < new Date()) {
@@ -173,9 +177,7 @@ partnerRouter.get("/invite/:token", async (req: Request, res: Response) => {
 
     return res.json({
       invite: {
-        invitedEmail: invite.invitedEmail,
         senderName: invite.sender.name ?? "Unknown",
-        senderEmail: invite.sender.email ?? "",
       },
     });
   } catch (err) {
@@ -205,6 +207,15 @@ partnerRouter.post("/accept", requireAuth, async (req: AuthRequest, res: Respons
     // Can't accept your own invite
     if (invite.senderId === myId) {
       return res.status(400).json({ error: "You can't accept your own invite" });
+    }
+
+    // Only the invited email can accept: accepting opens the inviter's whole
+    // finances, and the link can be forwarded. The answer never names the
+    // invited email; the inviter sends a new invite to the right one.
+    const me = await prisma.user.findUnique({ where: { id: myId }, select: { email: true } });
+    const myEmail = normalizeEmail(me?.email);
+    if (!myEmail || myEmail !== normalizeEmail(invite.invitedEmail)) {
+      return res.status(403).json({ error: "This invite is for another email. Ask whoever invited you to send a new one to your account's email", code: "invite_wrong_email" });
     }
 
     // Check I'm not already linked to someone

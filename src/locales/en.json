@@ -477,6 +477,8 @@
     "years20": "20 years"
   },
   "allocation": {
+    "partnerPrivateCommitments": "Your partner's private commitments",
+    "partnerPrivateCommitmentsDesc": "They count in the total; only your partner sees the detail.",
     "title": "Allocate Your Income",
     "subtitle": "Give every euro a meaningful purpose",
     "monthlyIncome": "Monthly Income",
@@ -646,6 +648,7 @@
     "splitMustSum": "Split ({{total}}) must equal the amount ({{amount}})"
   },
   "rules": {
+    "unavailableError": "That text can't be used for a rule. Try another one.",
     "title": "Categorization rules",
     "subtitle": "Auto-assign expenses by description",
     "manageButton": "Rules",
@@ -933,7 +936,8 @@
   },
   "partnerInvite": {
     "title": "Shared finances invite",
-    "invited": "{{name}} ({{email}}) has invited you to share their financial data on Remanso.",
+    "invited": "{{name}} has invited you to share their financial data on Remanso.",
+    "wrongEmailError": "This invite is for another email. Ask whoever invited you to send a new one to your Remanso email.",
     "onceLinked": "Once linked, you'll share",
     "shareExpenses": "All expenses and spending history",
     "sharePlans": "Life plans and savings goals",

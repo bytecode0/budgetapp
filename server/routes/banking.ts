@@ -422,7 +422,7 @@ bankingRouter.post("/connections/:id/confirm", ...guarded, async (req: BankingRe
     if (!Array.isArray(rows)) return res.status(400).json({ error: "rows are required", code: "invalid_rows" });
     if (dismissed !== undefined && !Array.isArray(dismissed)) return res.status(400).json({ error: "dismissed must be a list", code: "invalid_rows" });
     const namedLines = rows.filter(r => r && (r.kind === "expense" || r.kind === "refund")).map(r => r.allocationId);
-    if (!(await allocationsInPool(req.userId!, namedLines))) return res.status(404).json(ALLOCATION_NOT_FOUND);
+    if (!(await allocationsInPool(req.userId!, req.authUserId!, namedLines))) return res.status(404).json(ALLOCATION_NOT_FOUND);
 
     let result: Awaited<ReturnType<typeof confirmImport>> = { expenses: 0, income: 0, inserted: 0, summary: { expenses: 0, refunds: 0, incomes: 0, payments: [] }, learned: [] };
     if (rows.length > 0) {

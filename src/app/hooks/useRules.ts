@@ -51,7 +51,7 @@ export function useRules() {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (!res.ok) return { error: data.error || 'Failed to create rule' };
+    if (!res.ok) return { error: data.error || 'Failed to create rule', code: data.code as string | undefined };
     setRules(prev => [...prev, data.rule]);
     return { rule: data.rule };
   };
@@ -64,7 +64,7 @@ export function useRules() {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (!res.ok) return { error: data.error || 'Failed to update rule' };
+    if (!res.ok) return { error: data.error || 'Failed to update rule', code: data.code as string | undefined };
     setRules(prev => prev.map(r => (r.id === id ? data.rule : r)));
     return { rule: data.rule };
   };

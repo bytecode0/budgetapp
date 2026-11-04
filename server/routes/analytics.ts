@@ -5,6 +5,7 @@ import { serializeMoney } from "../lib/money.js";
 import { periodBounds, periodKeyFor, enumeratePeriods } from "../lib/period.js";
 import { countedAmounts, debtCommitments } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
+import { hiddenLineIds } from "../lib/poolRefs.js";
 
 export const analyticsRouter = Router();
 
@@ -87,8 +88,12 @@ analyticsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
 
     const monthsSeries = months.map(m => ({ month: m, total: spentByMonth[m], income: incomeByMonth[m] }));
 
+    // The line of a debt hidden from the caller counts in the totals above but
+    // is not listed by category (server/lib/poolRefs.ts).
+    const hidden = await hiddenLineIds(userId, req.authUserId!);
     const allocMap = Object.fromEntries(allocations.map(a => [a.id, a]));
     const byCategory = Object.entries(totalByAllocation)
+      .filter(([allocationId]) => !hidden.has(allocationId))
       .map(([allocationId, total]) => {
         const a = allocMap[allocationId];
         return {

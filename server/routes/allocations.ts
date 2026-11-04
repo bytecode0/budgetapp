@@ -7,6 +7,8 @@ import { suggestBudgets } from "../lib/suggestBudgets.js";
 import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/period.js";
 import { debtCommitments } from "../lib/debtBalance.js";
 import { incomeBaselines } from "../lib/householdIncome.js";
+import { visibleToWhere } from "../lib/ownership.js";
+import { hiddenCommitted, notOnHiddenDebt } from "../lib/poolRefs.js";
 
 export const allocationsRouter = Router();
 
@@ -17,8 +19,9 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
     await createDefaultAllocations(req.userId!);
 
     const [allocations, settings, baselines] = await Promise.all([
+      // Not the line of a debt hidden from the caller (server/lib/poolRefs.ts).
       prisma.allocation.findMany({
-        where: { userId: req.userId! },
+        where: { userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       }),
       prisma.userSettings.findUnique({ where: { userId: req.userId! } }),
@@ -34,19 +37,26 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
     // (a card paid in full drops to 0 the period after), so it's recomputed on
     // every read rather than trusted from the stored column.
     const cycleStartDay = clampCycleStartDay(settings?.cycleStartDay ?? 1);
-    const commitments = await debtCommitments(req.userId!, periodBounds(currentPeriodKey(cycleStartDay), cycleStartDay));
+    const period = periodBounds(currentPeriodKey(cycleStartDay), cycleStartDay);
+    const commitments = await debtCommitments(req.userId!, period);
     const withDebtLines = allocations.map(a =>
       a.type === "debt" && a.debtId && commitments.has(a.debtId)
         ? { ...a, allocatedAmount: commitments.get(a.debtId)! }
         : a);
 
-    return res.json(serializeMoney({
-      allocations: withDebtLines,
-      ...baselines, // monthlyIncome (household), ownMonthlyIncome (editable), isCouple
-      darkMode: ownSettings?.darkMode ?? false,
-      language: ownSettings?.language ?? 'es',
-      cycleStartDay: settings?.cycleStartDay ?? 1,
-    }));
+    // The lines left out above, as one figure (euros) for the client totals.
+    const hidden = await hiddenCommitted(req.userId!, req.authUserId!, commitments);
+
+    return res.json({
+      ...serializeMoney({
+        allocations: withDebtLines,
+        ...baselines, // monthlyIncome (household), ownMonthlyIncome (editable), isCouple
+        darkMode: ownSettings?.darkMode ?? false,
+        language: ownSettings?.language ?? 'es',
+        cycleStartDay: settings?.cycleStartDay ?? 1,
+      }),
+      hiddenCommitted: toEuros(hidden),
+    });
   } catch (err) {
     console.error("[allocations/GET]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -71,7 +81,7 @@ allocationsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response)
     let resolvedDebtId: string | null = null;
     let debtAllocatedAmount: number | undefined;
     if (type === "debt" && debtId) {
-      const debt = await prisma.debt.findFirst({ where: { id: debtId, userId: req.userId! } });
+      const debt = await prisma.debt.findFirst({ where: { id: debtId, userId: req.userId!, ...visibleToWhere(req.authUserId!) } });
       if (!debt) return res.status(400).json({ error: "Debt not found" });
       resolvedDebtId = debt.id;
       const settings = await prisma.userSettings.findUnique({ where: { userId: req.userId! }, select: { cycleStartDay: true } });
@@ -118,7 +128,7 @@ allocationsRouter.patch("/reorder", requireAuth, async (req: AuthRequest, res: R
     await prisma.$transaction(
       order.map(({ id, sortOrder }) =>
         prisma.allocation.updateMany({
-          where: { id, userId: req.userId! },
+          where: { id, userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
           data: { sortOrder },
         })
       )
@@ -144,7 +154,7 @@ allocationsRouter.get("/suggested-budgets", requireAuth, async (req: AuthRequest
     if (suggestions.length === 0) return res.json({ suggestions: [] });
 
     const allocs = await prisma.allocation.findMany({
-      where: { id: { in: suggestions.map(s => s.allocationId) }, userId: req.userId! },
+      where: { id: { in: suggestions.map(s => s.allocationId) }, userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
       select: { id: true, name: true, icon: true, allocatedAmount: true },
     });
     const byId = Object.fromEntries(allocs.map(a => [a.id, a]));
@@ -185,7 +195,7 @@ allocationsRouter.patch("/budgets", requireAuth, async (req: AuthRequest, res: R
     if (valid.length === 0) return res.status(400).json({ error: "No valid budgets" });
 
     const owned = await prisma.allocation.findMany({
-      where: { id: { in: valid.map(b => b.id!) }, userId: req.userId! },
+      where: { id: { in: valid.map(b => b.id!) }, userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
       select: { id: true },
     });
     const ownedIds = new Set(owned.map(a => a.id));
@@ -212,7 +222,7 @@ allocationsRouter.patch("/budgets", requireAuth, async (req: AuthRequest, res: R
 allocationsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const existing = await prisma.allocation.findFirst({ where: { id, userId: req.userId! } });
+    const existing = await prisma.allocation.findFirst({ where: { id, userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) } });
     if (!existing) return res.status(404).json({ error: "Allocation not found" });
 
     const { name, icon, type, allocatedAmount, actualAmount, sortOrder, lifePlanId } = req.body;
@@ -259,7 +269,7 @@ allocationsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respo
 allocationsRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const existing = await prisma.allocation.findFirst({ where: { id, userId: req.userId! } });
+    const existing = await prisma.allocation.findFirst({ where: { id, userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) } });
     if (!existing) return res.status(404).json({ error: "Allocation not found" });
 
     // Método Ruta R1: generosity is the first line of the budget and never

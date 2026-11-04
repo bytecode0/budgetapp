@@ -23,7 +23,7 @@ import { periodBounds } from "../lib/period.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { countedAmounts, syncDebtStatus } from "../lib/debtBalance.js";
 import { pickDefaultAccount } from "../lib/defaultAccount.js";
-import { ACCOUNT_NOT_FOUND, ALLOCATION_NOT_FOUND, allocationsInPool } from "../lib/poolRefs.js";
+import { ACCOUNT_NOT_FOUND, ALLOCATION_NOT_FOUND, allocationsInPool, notOnHiddenDebt } from "../lib/poolRefs.js";
 import { visibleToWhere } from "../lib/ownership.js";
 
 export const expensesRouter = Router();
@@ -32,11 +32,12 @@ export const expensesRouter = Router();
 
 // An expense on a "debt" budget line IS a payment of that debt: the debtId is
 // inherited from the line, never sent by the client. Returns the debt (with its
-// card account, to reject paying a card from itself) or null.
-async function debtForAllocation(userId: string, allocationId: string | null) {
+// card account, to reject paying a card from itself) or null. Only a debt the
+// caller can see: another member's private debt can't be paid from here.
+async function debtForAllocation(userId: string, authUserId: string, allocationId: string | null) {
   if (!allocationId) return null;
   const alloc = await prisma.allocation.findFirst({
-    where: { id: allocationId, userId, type: "debt", debtId: { not: null } },
+    where: { id: allocationId, userId, type: "debt", debtId: { not: null }, debt: visibleToWhere(authUserId) },
     select: { debt: { select: { id: true, accountId: true } } },
   });
   return alloc?.debt ?? null;
@@ -133,7 +134,7 @@ expensesRouter.get("/suggest", requireAuth, async (req: AuthRequest, res: Respon
     if (!allocationId) return res.json({ suggestion: null });
 
     const alloc = await prisma.allocation.findFirst({
-      where: { id: allocationId, userId: req.userId! },
+      where: { id: allocationId, userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
       select: { id: true, name: true, icon: true },
     });
     return res.json({
@@ -158,12 +159,14 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
     const merchant = normalizeMerchant(description);
 
     // A chosen category must be one of the pool's lines.
-    if (!(await allocationsInPool(req.userId!, [allocationId]))) return res.status(404).json(ALLOCATION_NOT_FOUND);
+    if (!(await allocationsInPool(req.userId!, req.authUserId!, [allocationId]))) return res.status(404).json(ALLOCATION_NOT_FOUND);
 
     // Auto-categorize: when the user didn't pick an allocation, let the rules decide.
     let resolvedAllocationId: string | null = allocationId || null;
     if (!resolvedAllocationId) {
       resolvedAllocationId = await categorize(req.userId!, description ?? "", merchant);
+      // A pool rule may point at a line hidden from the caller: no category then.
+      if (!(await allocationsInPool(req.userId!, req.authUserId!, [resolvedAllocationId]))) resolvedAllocationId = null;
     }
 
     // Resolve the account: a visible one if given, else the caller's default.
@@ -171,7 +174,7 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
     if ("error" in resolvedAccount) return res.status(404).json(resolvedAccount.error);
     const resolvedAccountId = resolvedAccount.accountId;
 
-    const paidDebt = await debtForAllocation(req.userId!, resolvedAllocationId);
+    const paidDebt = await debtForAllocation(req.userId!, req.authUserId!, resolvedAllocationId);
     const lineError = debtLineError("expense", paidDebt, resolvedAccountId);
     if (lineError) return res.status(400).json(lineError);
 
@@ -367,6 +370,7 @@ expensesRouter.post("/import/preview", requireAuth, async (req: AuthRequest, res
     try {
       preview = await prepareImport(req.userId!, {
         accountId: resolvedAccountId,
+        authUserId: req.authUserId!,
         ...(fromBrowser ?? { file: { bytes: new Uint8Array(Buffer.from(dataBase64!, "base64")), filename: filename! } }),
         purchasesSign,
       });
@@ -397,8 +401,10 @@ expensesRouter.post("/import/classify", requireAuth, async (req: AuthRequest, re
     const merchants = [...new Set(raw.filter((m): m is string => typeof m === "string" && m.length > 0))].slice(0, 40);
     if (merchants.length === 0) return res.json({ suggestions: [] });
 
+    // Never the line of a debt hidden from the caller: its name would go to
+    // the AI and come back as a suggestion.
     const allocations = await prisma.allocation.findMany({
-      where: { userId: req.userId! },
+      where: { userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
       select: { id: true, name: true },
     });
 
@@ -476,7 +482,7 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
     // Every category named must be one of the pool's lines (a payment's line
     // comes from its debt, not the row).
     const namedLines = rows.filter(r => r && (r.kind === "expense" || r.kind === "refund")).map(r => r.allocationId);
-    if (!(await allocationsInPool(req.userId!, namedLines))) return res.status(404).json(ALLOCATION_NOT_FOUND);
+    if (!(await allocationsInPool(req.userId!, req.authUserId!, namedLines))) return res.status(404).json(ALLOCATION_NOT_FOUND);
 
     const resolvedAccount = await resolveAccountId(req.userId!, req.authUserId!, accountId);
     if ("error" in resolvedAccount) return res.status(404).json(resolvedAccount.error);
@@ -502,7 +508,9 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
 expensesRouter.patch("/:id/attribution", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    // Only a row the caller can see (as DELETE /:id).
+    // Only a row the caller can see (expenseListingFilter, as DELETE /:id):
+    // never the other member's row on a private debt or account, whose
+    // balance editing it would change.
     const existing = await prisma.expense.findFirst({
       where: { id, userId: req.userId!, ...(await expenseListingFilter(req)) },
       select: { id: true, amount: true, payerUserId: true, scope: true },
@@ -555,7 +563,9 @@ expensesRouter.patch("/:id/attribution", requireAuth, async (req: AuthRequest, r
 expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    // Only a row the caller can see (as DELETE /:id).
+    // Only a row the caller can see (expenseListingFilter, as DELETE /:id):
+    // never the other member's row on a private debt or account, whose
+    // balance editing it would change.
     const existing = await prisma.expense.findFirst({
       where: { id, userId: req.userId!, ...(await expenseListingFilter(req)) },
       include: { allocation: { select: { type: true, lifePlanId: true } } },
@@ -574,7 +584,7 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
 
     // Resolve the allocation that will apply after the update: a new one must
     // be one of the pool's lines.
-    if (allocationId !== undefined && !(await allocationsInPool(req.userId!, [allocationId]))) {
+    if (allocationId !== undefined && !(await allocationsInPool(req.userId!, req.authUserId!, [allocationId]))) {
       return res.status(404).json(ALLOCATION_NOT_FOUND);
     }
     const newAllocId = allocationId !== undefined ? (allocationId || null) : existing.allocationId;
@@ -586,7 +596,7 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
 
     // Moving onto / off a "debt" line makes it / stops it being a payment —
     // never for a refund, which undoes a purchase and can't pay a debt.
-    const paidDebt = await debtForAllocation(req.userId!, newAllocId);
+    const paidDebt = await debtForAllocation(req.userId!, req.authUserId!, newAllocId);
     const lineError = debtLineError(existing.kind, paidDebt, accountUpdate?.accountId ?? existing.accountId);
     if (lineError) return res.status(400).json(lineError);
 
@@ -627,7 +637,7 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     if (allocationId !== undefined && newAllocId && newAllocId !== existing.allocationId) {
       const effectiveMerchant = description !== undefined ? normalizeMerchant(description) : existing.merchant;
       if (!(paidDebt && isGenericMerchant(effectiveMerchant))) {
-        await learnFromCorrection(req.userId!, effectiveMerchant, newAllocId);
+        await learnFromCorrection(req.userId!, req.authUserId!, effectiveMerchant, newAllocId);
       }
     }
 
@@ -645,7 +655,8 @@ expensesRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Respons
   try {
     const { id } = req.params;
     // Only a row the caller can see (same filter as the list): at shared_stats
-    // a member can't delete the other's transactions by id.
+    // a member can't delete the other's transactions by id, and in no tier
+    // the other's rows on a private debt or account (it would change its balance).
     const existing = await prisma.expense.findFirst({
       where: { id, userId: req.userId!, ...(await expenseListingFilter(req)) },
       include: { allocation: { select: { type: true, lifePlanId: true } } },

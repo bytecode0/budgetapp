@@ -262,7 +262,7 @@ function AppInner() {
       <AuthFlow
         onAuthenticated={() => refreshUser()}
         hasInvite={inviteChecking || inviteToken !== null}
-        inviteBanner={inviteDetails ? { senderName: inviteDetails.senderName, senderEmail: inviteDetails.senderEmail } : null}
+        inviteBanner={inviteDetails ? { senderName: inviteDetails.senderName } : null}
       />
     );
   }
