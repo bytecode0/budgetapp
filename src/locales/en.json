@@ -1144,6 +1144,8 @@
     "upgradeNow": "Upgrade Now"
   },
   "debts": {
+    "debtFreeBy": "At this pace, debt-free by {{date}}",
+    "close": "Close",
     "title": "Debts",
     "subtitle": "Every credit card, loan, and installment plan — in one place.",
     "totalOwed": "Total owed",
