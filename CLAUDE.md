@@ -1,8 +1,10 @@
-# LifePlan BudgetApp — Project Guidelines for Claude
+# Remanso (formerly LifePlan) — Project Guidelines for Claude
 
 ## What this is
 
-LifePlan is an authenticated budgeting app (every API route behind `requireAuth`) for **families who earn well, get to the end of the month just barely, and never learned a system to save**. They may have debts (cards, car, installments), but debt does not drown them; what they lack is a method, not money (decided 4 Nov 2026, `docs/vision-y-plan-beta.md`).
+Remanso is an authenticated budgeting app (every API route behind `requireAuth`) for **families who earn well, get to the end of the month just barely, and never learned a system to save**. They may have debts (cards, car, installments), but debt does not drown them; what they lack is a method, not money (decided 4 Nov 2026, `docs/vision-y-plan-beta.md`).
+
+**Name (decided 4 Nov 2026, LPBETA-17):** the product is **Remanso**; it was called LifePlan. Only the visible brand changed: the repo, `model LifePlan` (savings plans), `usePlans.ts` and other internal code keep the old name on purpose. In a lockup next to the mark the name is lowercase (`remanso`); in prose, `Remanso`. Don't add new user-facing "LifePlan".
 
 The app is the tool of a system: **see** where the money goes and how much of the next paycheck is already committed; **order** a monthly budget where every euro has a destination; **get out of debt** with a dated plan (snowball/avalanche); **save with purpose** (named plans, always an emergency fund, a fixed "pay yourself first" % that each user chooses); and **save to invest**. The **"futuro comprometido"** (share of income already committed to debt) stays as the entry diagnosis, not the headline.
 

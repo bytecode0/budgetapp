@@ -3,7 +3,7 @@ import type { EmailDictionary } from "./es.js";
 export const en: EmailDictionary = {
   common: {
     // Same tagline as the app's sidebar (src/locales/en.json → sidebar.tagline).
-    tagline: "{product} · Financial Life Planner",
+    tagline: "{product} · Your money, at peace",
     footerReason: "You received this email because you have an account at {product}.",
     visit: "Visit {product}",
     support: "Contact support",

@@ -42,7 +42,7 @@ export interface EmailTheme {
 }
 
 const BRAND = {
-  productName: "LifePlan",
+  productName: "Remanso",
   // Shown in footers and used as Reply-To where an email asks the user to reply.
   supportEmail: "contact@luisvespa.com",
   fontStack: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
