@@ -36,13 +36,13 @@ import { loadDebtLedgers, startingBalanceFor } from "../lib/debtBalance.js";
     const [ledger] = await loadDebtLedgers(d.userId, [d.id]);
     if (!ledger) continue;
     if (ledger.payments.length + ledger.purchases.length + ledger.adjustments.length > 0) {
-      console.log(`skip   ${d.id} "${d.name}": has movements`);
+      console.log(`skip   ${d.id}: has movements`);
       skipped++;
       continue;
     }
     const starting = startingBalanceFor(d);
     if (starting <= 0) continue;
-    console.log(`${apply ? "set   " : "would "} ${d.id} "${d.name}": starting balance 0 → ${(starting / 100).toFixed(2)} (${d.installmentsTotal! - (d.installmentsPaid ?? 0)} × ${(d.installmentAmount! / 100).toFixed(2)})`);
+    console.log(`${apply ? "set   " : "would "} ${d.id}: starting balance from the remaining installments`);
     if (apply) {
       await prisma.debt.update({ where: { id: d.id }, data: { currentBalance: starting, balanceAsOf: new Date() } });
     }

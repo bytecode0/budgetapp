@@ -50,20 +50,34 @@ function plan(move: Partial<UnlinkPlan["move"]>): UnlinkPlan {
 test("ownershipFor: alone, everything in my scope is mine", () => {
   const own = ownershipFor("me", { kind: "solo" });
   assert.deepEqual(own.scopes, ["me"]);
-  assert.equal(own.isMine("expenseIds", { id: "e1", userId: "me" }), true);
-  assert.equal(own.isMine("expenseIds", { id: "e2", userId: "other" }), false);
+  assert.equal(own.inMyShare("expenseIds", { id: "e1", userId: "me" }), true);
+  assert.equal(own.inMyShare("expenseIds", { id: "e2", userId: "other" }), false);
+  assert.equal(own.ownsPlan({ userId: "me", ownerUserId: null }), true);
 });
 
 test("ownershipFor: a member owns what the unlink would move to her, the owner the rest", () => {
-  const p = plan({ expenseIds: ["hers"], accountIds: ["herAccount"] });
+  const p = plan({ expenseIds: ["hers"], allocationIds: ["herLine"] });
   const member = ownershipFor("her", { kind: "member", poolId: "pool", plan: p });
   const owner = ownershipFor("pool", { kind: "owner", plan: p });
   assert.deepEqual(member.scopes, ["her", "pool"]);
   assert.deepEqual(owner.scopes, ["pool"]);
-  for (const [key, id] of [["expenseIds", "hers"], ["accountIds", "herAccount"]] as const) {
-    assert.equal(member.isMine(key, { id, userId: "pool" }), true);
-    assert.equal(owner.isMine(key, { id, userId: "pool" }), false);
+  for (const [key, id] of [["expenseIds", "hers"], ["allocationIds", "herLine"]] as const) {
+    assert.equal(member.inMyShare(key, { id, userId: "pool" }), true);
+    assert.equal(owner.inMyShare(key, { id, userId: "pool" }), false);
   }
-  assert.equal(member.isMine("expenseIds", { id: "his", userId: "pool" }), false);
-  assert.equal(owner.isMine("expenseIds", { id: "his", userId: "pool" }), true);
+  assert.equal(member.inMyShare("expenseIds", { id: "his", userId: "pool" }), false);
+  assert.equal(owner.inMyShare("expenseIds", { id: "his", userId: "pool" }), true);
+});
+
+test("ownershipFor: rows with an owner go by their owner, ownerless plans to the pool's holder", () => {
+  const p = plan({});
+  const member = ownershipFor("her", { kind: "member", poolId: "pool", plan: p });
+  const owner = ownershipFor("pool", { kind: "owner", plan: p });
+  // A cross-owner pair stays in the pool: each half goes to its own owner.
+  assert.equal(member.owns({ ownerUserId: "her" }), true);
+  assert.equal(owner.owns({ ownerUserId: "her" }), false);
+  assert.equal(owner.owns({ ownerUserId: "pool" }), true);
+  assert.equal(owner.ownsPlan({ userId: "pool", ownerUserId: null }), true);
+  assert.equal(member.ownsPlan({ userId: "pool", ownerUserId: null }), false);
+  assert.equal(member.ownsPlan({ userId: "pool", ownerUserId: "her" }), true);
 });

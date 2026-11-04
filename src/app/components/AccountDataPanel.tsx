@@ -51,6 +51,7 @@ export function AccountDataPanel() {
 
   const errorText = (r: { error: string; code?: string }) =>
     r.code === 'otp_wait' ? t('account.delete.wait')
+      : r.code === 'deletion_in_progress' ? t('account.delete.inProgress')
       : r.code === 'export_too_large' ? t('account.export.tooLarge')
       : apiErrorMessage(t, r) || t('account.genericError');
 

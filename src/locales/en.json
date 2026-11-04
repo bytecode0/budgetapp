@@ -1545,6 +1545,7 @@
       "pendingTitle": "Your account will be deleted from {{date}}.",
       "pendingBody": "If you've changed your mind, cancel before then.",
       "cancel": "Cancel deletion",
+      "inProgress": "Your account is being deleted right now: it can no longer be cancelled.",
       "cancelled": "Deletion cancelled. Your account is still here."
     }
   },
@@ -1561,9 +1562,9 @@
         {
           "title": "Who sees your numbers",
           "paragraphs": [
-            "You. Nobody from your church, your community or your group of friends can see your data: Remanso has no dashboards for leaders, groups or organisers.",
+            "In the app, only you see your numbers. Remanso has no dashboards for leaders, groups or organisers: nobody from your church, your community or your group of friends has a way to see them.",
             "If you share your finances with your partner (a household), your partner sees what you share in the household, depending on the privacy level you choose. Nobody else.",
-            "To know whether the app helps, Luis, who makes Remanso, only counts how many people use it, with no names or amounts."
+            "Luis, who maintains the app, has technical access to the database; he doesn't look at it except to support you if you ask him, and the statistics he uses are only counts, with no names or amounts."
           ]
         },
         {
@@ -1586,7 +1587,7 @@
             "Resend sends the app's emails (your email address and the message).",
             "Enable Banking, only if you connect your bank: it reads your accounts, balances and transactions with the permission you give at your bank.",
             "Anthropic (Claude), only if you press a button to classify with AI when importing a statement: it receives the uncategorised merchant descriptions (up to 40 at a time) and the names of your categories. Never amounts, dates, your name, your email or account numbers. Your expense descriptions never go to free models or to other AI providers, and transactions from your connected bank are not sent to any AI.",
-            "OpenRouter, only if you ask AI to suggest a statement's columns: it receives the column titles and the format of the values, never your transactions.",
+            "The AI provider we have configured for reading statements (OpenRouter or Anthropic), only if you ask AI to suggest a statement's columns: it receives the column titles and the format of the values, never your transactions.",
             "Google, only if you sign in with Google. The website also loads its fonts from Google Fonts."
           ]
         },

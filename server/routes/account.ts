@@ -8,7 +8,7 @@
 //   GET    /api/account/deletion          { data: { requestedAt, dueAt } | null }
 //   POST   /api/account/deletion/code     emails a confirmation code
 //   POST   /api/account/deletion          { code } → marks the account (24 h grace)
-//   DELETE /api/account/deletion          cancels the request
+//   DELETE /api/account/deletion          cancels the request (409 while the purge runs)
 //   GET    /api/account/cron              the daily purge (accountDeletion.ts)
 //
 // The two exports are file downloads, so their success body is the file
@@ -22,7 +22,7 @@ import {
   sendAccountDeletedEmail, sendAccountDeletionCodeEmail, sendAccountDeletionRequestedEmail,
 } from "../lib/mailer.js";
 import { EXPORT_MAX_BYTES, buildJsonExport, buildMovementRows, movementsCsv } from "../lib/accountExport.js";
-import { deletionDueAt, runDeletionPurge } from "../lib/accountDeletion.js";
+import { deletionDueAt, isLockNotAvailable, runDeletionPurge } from "../lib/accountDeletion.js";
 import { cronAuthorized } from "../lib/banking/cron.js";
 import { getBankingClient } from "../lib/banking/enableBanking.js";
 import { getStripe, isBillingEnabled } from "../lib/stripe.js";
@@ -138,8 +138,11 @@ accountRouter.post("/deletion", requireAuth, async (req: AuthRequest, res: Respo
     const { deletionRequestedAt } = await prisma.user.findUniqueOrThrow({ where: { id: me }, select: { deletionRequestedAt: true } });
 
     // The email is the receipt and the way back, but the request stands without it.
-    sendAccountDeletionRequestedEmail(user.email, user.name ?? "", deletionDueAt(deletionRequestedAt!), resolveLocale(user.settings?.language))
-      .catch(err => console.error("[account/deletion] requested email failed:", err instanceof Error ? err.message : "unknown error"));
+    try {
+      await sendAccountDeletionRequestedEmail(user.email, user.name ?? "", deletionDueAt(deletionRequestedAt!), resolveLocale(user.settings?.language));
+    } catch (err) {
+      console.error("[account/deletion] requested email failed:", err instanceof Error ? err.message : "unknown error");
+    }
     return res.json({ data: deletionState(deletionRequestedAt) });
   } catch (err) {
     console.error("[account/deletion]", err);
@@ -147,11 +150,19 @@ accountRouter.post("/deletion", requireAuth, async (req: AuthRequest, res: Respo
   }
 });
 
+// The purge holds this user's row locked while it runs (accountDeletion.ts):
+// NOWAIT turns that into a clean 409 instead of a cancel that half-happens.
 accountRouter.delete("/deletion", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    await prisma.user.update({ where: { id: req.authUserId! }, data: { deletionRequestedAt: null } });
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${req.authUserId!} FOR UPDATE NOWAIT`;
+      await tx.user.update({ where: { id: req.authUserId! }, data: { deletionRequestedAt: null } });
+    });
     return res.json({ data: null });
   } catch (err) {
+    if (isLockNotAvailable(err)) {
+      return res.status(409).json({ error: "Your account is being deleted right now", code: "deletion_in_progress" });
+    }
     console.error("[account/deletion/cancel]", err);
     return res.status(500).json({ error: "Internal server error" });
   }

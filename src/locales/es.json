@@ -1545,6 +1545,7 @@
       "pendingTitle": "Tu cuenta se borrará a partir del {{date}}.",
       "pendingBody": "Si has cambiado de opinión, cancélalo antes de esa fecha.",
       "cancel": "Cancelar el borrado",
+      "inProgress": "Tu cuenta se está borrando en este momento: ya no se puede cancelar.",
       "cancelled": "Borrado cancelado. Tu cuenta sigue aquí."
     }
   },
@@ -1561,9 +1562,9 @@
         {
           "title": "Quién ve tus números",
           "paragraphs": [
-            "Tú. Nadie de tu iglesia, de tu comunidad ni de tu grupo de amigos puede ver tus datos: Remanso no tiene paneles para líderes, grupos ni organizadores.",
+            "En la app, tus números solo los ves tú. Remanso no tiene paneles para líderes, grupos ni organizadores: nadie de tu iglesia, de tu comunidad ni de tu grupo de amigos tiene una forma de verlos.",
             "Si compartes tus finanzas con tu pareja (un hogar), tu pareja ve lo que compartís en el hogar, según el nivel de privacidad que elijáis. Nadie más.",
-            "Para saber si la app sirve, Luis, que hace Remanso, solo cuenta cuántas personas la usan, sin nombres ni importes."
+            "Luis, que mantiene la app, tiene acceso técnico a la base de datos; no la mira salvo para darte soporte si se lo pides, y las estadísticas que usa son solo recuentos, sin nombres ni importes."
           ]
         },
         {
@@ -1586,7 +1587,7 @@
             "Resend envía los emails de la app (tu email y el mensaje).",
             "Enable Banking, solo si conectas tu banco: lee tus cuentas, saldos y movimientos con el permiso que das en tu banco.",
             "Anthropic (Claude), solo si al importar un extracto pulsas un botón para clasificar con IA: recibe los conceptos de comercio sin categoría (hasta 40 a la vez) y los nombres de tus categorías. Nunca importes, fechas, tu nombre, tu email ni números de cuenta. Los conceptos de tus gastos no van a modelos gratuitos ni a otros proveedores de IA, y los movimientos que llegan de tu banco conectado no se envían a ninguna IA.",
-            "OpenRouter, solo si pides sugerir las columnas de un extracto con IA: recibe los títulos de columna y el formato de los valores, nunca tus movimientos.",
+            "El proveedor de IA que tengamos configurado para leer extractos (OpenRouter o Anthropic), solo si pides sugerir las columnas de un extracto con IA: recibe los títulos de columna y el formato de los valores, nunca tus movimientos.",
             "Google, solo si entras con Google. Además, la web carga sus tipografías de Google Fonts."
           ]
         },

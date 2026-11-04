@@ -17,7 +17,7 @@ export function DeletionBanner() {
     setCancelling(true);
     const result = await cancel();
     setCancelling(false);
-    if ('error' in result) toast.error(t('account.genericError'));
+    if ('error' in result) toast.error(t(result.code === 'deletion_in_progress' ? 'account.delete.inProgress' : 'account.genericError'));
     else toast.success(t('account.delete.cancelled'));
   };
 
