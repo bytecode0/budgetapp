@@ -1103,7 +1103,7 @@
         }
       },
       "privacyTitle": "Your data is yours",
-      "privacyBody": "Remanso shows no ads, and does not sell your data or hand it to anyone. If you connect your bank, it is read-only: Remanso cannot move money or make payments.",
+      "privacyBody": "Remanso shows no ads, and does not sell your data or share it with third parties for their own purposes. If you connect your bank, it is read-only: Remanso cannot move money or make payments.",
       "privacyLink": "How we look after your data",
       "privacy": "Privacy",
       "terms": "Terms"
@@ -1468,7 +1468,7 @@
         {
           "title": "Cookies and local storage",
           "paragraphs": [
-            "Remanso uses a cookie, called \"token\", which keeps you signed in. It is technical and strictly necessary: it cannot be read by JavaScript, it expires after 7 days and it is deleted when you sign out. When you sign in with Google or connect your bank, a temporary technical cookie (at most 10 and 30 minutes) checks that the return was started by your browser. Your browser also keeps in its local storage the language you choose and whether you have hidden the \"Finish your setup\" notice. We use no analytics, advertising or third-party cookies, which is why we don't ask for your consent to them."
+            "Remanso uses a cookie, called \"token\", which keeps you signed in. It is technical and strictly necessary: it cannot be read by JavaScript, it expires after 7 days and it is deleted when you sign out. When you sign in with Google or connect your bank, a temporary technical cookie (at most 10 and 30 minutes) checks that the return was started by your browser. Your browser also keeps in its local storage the language and light or dark mode you choose, whether you have hidden the \"Finish your setup\" and \"Install the app\" notices, whether you have signed in on that device before and whether your account can connect banks. We use no analytics, advertising or third-party cookies, which is why we don't ask for your consent to them."
           ]
         },
         {

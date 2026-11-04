@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft } from 'lucide-react';
 import { startsOnLanding } from '../../../../shared/install';
-import { isStandalone } from '../../lib/installPrompt';
+import { isStandalone, signedInBefore } from '../../lib/installPrompt';
 import { Landing } from './Landing';
 import { Login } from './Login';
 import { Signup } from './Signup';
@@ -36,6 +36,7 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
     search: window.location.search,
     hasInvite,
     standalone: isStandalone(),
+    signedInBefore: signedInBefore(),
   }));
   const [currentScreen, setCurrentScreen] = useState<AuthScreen>(hasLanding ? 'landing' : 'login');
   const [pendingEmail, setPendingEmail] = useState('');

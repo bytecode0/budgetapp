@@ -33,6 +33,7 @@ import { applyDarkMode } from './lib/theme';
 import { ThemeToggle } from './components/shared/ThemeToggle';
 import { RemansoMark } from './components/shared/RemansoMark';
 import { InstallHint } from './components/shared/InstallHint';
+import { markSignedIn } from './lib/installPrompt';
 import { takeBankReturn, type BankReturnScreen } from './components/banking/bankReturn';
 
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
@@ -55,6 +56,8 @@ function writePendingInvite(token: string | null): void {
 
 function AppInner() {
   const { user, loading, logout, refreshUser } = useAuth();
+  // Remember that someone signed in here: the welcome page is then skipped.
+  useEffect(() => { if (user) markSignedIn(); }, [user]);
   const { needsOnboarding, missing: setupMissing, loading: onboardingLoading, refresh: refreshOnboardingStatus } = useOnboardingNeeded(Boolean(user));
   const { enabled: billingEnabled } = useBillingEnabled(Boolean(user));
   // Set when the dashboard's "Completa tu configuración" reopens the wizard at a step.

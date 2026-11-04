@@ -77,3 +77,15 @@ export function dismissInstallHint(): void {
     // Storage blocked: the hint stays closed for this visit only.
   }
 }
+
+// "Someone has signed in on this device": after that, the public welcome page
+// is skipped (logout, an expired session). A per-device convenience only.
+const SIGNED_IN_KEY = 'remanso-signed-in-before';
+
+export function signedInBefore(): boolean {
+  try { return localStorage.getItem(SIGNED_IN_KEY) === '1'; } catch { return false; }
+}
+
+export function markSignedIn(): void {
+  try { localStorage.setItem(SIGNED_IN_KEY, '1'); } catch { /* storage blocked */ }
+}

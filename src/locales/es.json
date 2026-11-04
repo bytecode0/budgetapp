@@ -1103,7 +1103,7 @@
         }
       },
       "privacyTitle": "Tus datos son tuyos",
-      "privacyBody": "Remanso no muestra publicidad, no vende tus datos ni los cede a nadie. Si conectas tu banco, es solo para leer: Remanso no puede mover dinero ni hacer pagos.",
+      "privacyBody": "Remanso no muestra publicidad, no vende tus datos ni los cede a terceros para sus propios fines. Si conectas tu banco, es solo para leer: Remanso no puede mover dinero ni hacer pagos.",
       "privacyLink": "Cómo cuidamos tus datos",
       "privacy": "Privacidad",
       "terms": "Términos"
@@ -1468,7 +1468,7 @@
         {
           "title": "Cookies y almacenamiento local",
           "paragraphs": [
-            "Remanso usa una cookie, llamada «token», que mantiene tu sesión iniciada. Es técnica e imprescindible: no es accesible desde JavaScript, caduca a los 7 días y se borra al cerrar sesión. Cuando entras con Google o conectas tu banco, una cookie técnica temporal (como mucho 10 y 30 minutos) comprueba que la vuelta la inició tu navegador. Además, tu navegador guarda en su almacenamiento local el idioma que eliges y si has ocultado el aviso «Completa tu configuración». No usamos cookies de analítica, de publicidad ni de terceros, por eso no te pedimos consentimiento para ellas."
+            "Remanso usa una cookie, llamada «token», que mantiene tu sesión iniciada. Es técnica e imprescindible: no es accesible desde JavaScript, caduca a los 7 días y se borra al cerrar sesión. Cuando entras con Google o conectas tu banco, una cookie técnica temporal (como mucho 10 y 30 minutos) comprueba que la vuelta la inició tu navegador. Además, tu navegador guarda en su almacenamiento local el idioma y el modo claro u oscuro que eliges, si has ocultado los avisos «Completa tu configuración» e «Instala la app», si ya has entrado alguna vez en ese dispositivo y si tu cuenta puede conectar bancos. No usamos cookies de analítica, de publicidad ni de terceros, por eso no te pedimos consentimiento para ellas."
           ]
         },
         {

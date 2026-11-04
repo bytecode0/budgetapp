@@ -53,3 +53,11 @@ test("mid-flow visits go straight to sign-in", () => {
 test("the installed app skips the welcome page", () => {
   assert.equal(startsOnLanding(entry({ standalone: true })), false);
 });
+
+test("returning users and bank returns skip the welcome page", () => {
+  const base = { pathname: "/", search: "", hasInvite: false, standalone: false };
+  assert.equal(startsOnLanding({ ...base, signedInBefore: true }), false);
+  assert.equal(startsOnLanding({ ...base, search: "?bankToken=abc" }), false);
+  assert.equal(startsOnLanding({ ...base, search: "?open=accounts" }), false);
+  assert.equal(startsOnLanding(base), true);
+});

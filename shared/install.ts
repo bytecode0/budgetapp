@@ -39,13 +39,17 @@ export interface AuthEntry {
   /** A partner invite is pending (?invite= or saved before an OAuth redirect). */
   hasInvite: boolean;
   standalone: boolean;
+  /** Someone has signed in on this device before: they know the app. */
+  signedInBefore?: boolean;
 }
 
 /** Whether a visitor without a session starts on the public welcome page
  *  rather than the sign-in form. Not when they are mid-flow (Google callback or
  *  error, partner invite) or opened the installed app: they already know it. */
 export function startsOnLanding(entry: AuthEntry): boolean {
-  if (entry.standalone || entry.hasInvite) return false;
+  if (entry.standalone || entry.hasInvite || entry.signedInBefore) return false;
   if (entry.pathname === "/auth/google/callback") return false;
-  return !new URLSearchParams(entry.search).has("error");
+  const params = new URLSearchParams(entry.search);
+  // Back from the bank, or the "renew your connection" email: an existing user.
+  return !params.has("error") && !params.has("bankToken") && !params.has("open");
 }
