@@ -41,14 +41,18 @@ Only with the user's go-ahead for this PR (or a standing instruction to merge ea
 
 ```bash
 gh pr merge <number> --merge
+git fetch origin main
+MERGE=$(gh pr view <number> --json mergeCommit -q .mergeCommit.oid)
 ```
 
 ## 4. Wait for CI and the deployment
 
 ```bash
-gh run list --workflow verify --branch main --limit 1 --json databaseId,headSha,status,conclusion
+gh run list --workflow verify --branch main --limit 5 --json databaseId,headSha,status,conclusion
 gh run watch <databaseId> --exit-status
 ```
+
+Use the run whose `headSha` equals `$MERGE` (right after the merge the newest run may still be the previous one: wait for it to appear).
 
 Vercel deploys the merge whether or not CI passes. If CI fails, stop and check `vercel ls --prod`: if that commit is already live and broken, offer `vercel rollback`.
 
@@ -58,14 +62,14 @@ Then poll production until it reports the merge commit (up to ~5 minutes):
 curl -s https://budget.luisvespa.com/api/health   # → {"ok":true,"commit":"<sha>"}
 ```
 
-`commit` must equal `git rev-parse origin/main`.
+`commit` must equal `$MERGE`.
 
 ## 5. Smoke test
 
 ```bash
 for p in / /api/debts /api/nope /api/banking/cron; do
   echo "$p $(curl -s -o /dev/null -w '%{http_code}' https://budget.luisvespa.com$p)"
-done   # 200 · 401 · 404 · 401 (the cron needs CRON_SECRET)
+done   # 200 · 401 · 404 · 401 (the cron needs CRON_SECRET; 503 if banking is off in production)
 vercel logs budget.luisvespa.com | grep -iE "error|P20[0-9]{2}" | head
 ```
 

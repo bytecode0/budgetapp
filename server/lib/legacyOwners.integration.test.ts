@@ -56,4 +56,25 @@ describe("legacy owners backfill (integration, real Postgres)", { skip: !TEST_DA
     const again = await backfill(prisma, false);
     assert.deepEqual(again, { pools: 1, expenses: { fill: 0, ambiguous: 1 }, plans: { fill: 0, ambiguous: 0 } });
   });
+
+  it("a couple that unlinked still counts as having had a partner", async () => {
+    const tables = await prisma.$queryRaw<{ tablename: string }[]>`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`;
+    await prisma.$executeRawUnsafe(`TRUNCATE ${tables.map(t => `"public"."${t.tablename}"`).join(", ")} CASCADE`);
+    const owner = await prisma.user.create({ data: { email: "was-linked@test.local" } });
+    const other = await prisma.user.create({ data: { email: "former@test.local" } });
+    // Unlinking cleared linkedUserId and the membership; the accepted invite stays.
+    await prisma.partnerInvite.create({ data: {
+      senderId: owner.id, invitedEmail: "former@test.local", token: "t-1", status: "accepted",
+      createdAt: new Date("2026-09-01T00:00:00Z"), expiresAt: new Date("2026-09-08T00:00:00Z"),
+    } });
+    // A payer who isn't the owner is a sign too, even earlier than the invite here.
+    await prisma.expense.createMany({ data: [
+      { userId: owner.id, amount: 100, createdByUserId: null, createdAt: new Date("2026-07-01T00:00:00Z") },                         // before any sign
+      { userId: owner.id, amount: 200, createdByUserId: null, payerUserId: other.id, createdAt: new Date("2026-08-01T00:00:00Z") }, // the payer sign
+      { userId: owner.id, amount: 300, createdByUserId: null, createdAt: new Date("2026-10-01T00:00:00Z") },                         // after: ambiguous
+    ] });
+
+    const dry = await backfill(prisma, false);
+    assert.deepEqual(dry, { pools: 1, expenses: { fill: 1, ambiguous: 2 }, plans: { fill: 0, ambiguous: 0 } });
+  });
 });

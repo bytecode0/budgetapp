@@ -5,10 +5,17 @@
 // pool's owner.
 //
 // Only what is certain is filled in, with the pool's owner (userId):
-//   - a pool with no linked partner: every such row is the owner's;
-//   - a pool with a partner: only rows created before the partner joined the
-//     household (HouseholdMember.joinedAt). Rows from after are left as they
-//     are and counted as "ambiguous": either of the two may have entered them.
+//   - a pool that never had a partner: every such row is the owner's;
+//   - a pool that has or had one: only rows created before the earliest sign
+//     of a partner. Rows from after are left as they are and counted as
+//     "ambiguous": either of the two may have entered them.
+// Signs of a partner, past or present (unlinking clears linkedUserId and the
+// membership, so the current state alone is not enough):
+//   - a UserSettings.linkedUserId pointing at the pool (its HouseholdMember
+//     .joinedAt; no membership row = no safe cutoff at all);
+//   - an accepted PartnerInvite sent by the pool's owner (its createdAt, which
+//     is before the acceptance);
+//   - a pool expense paid by, or shared with, someone else (its createdAt).
 //
 // Dry run by default. Prints counts only — no names, emails, amounts or ids.
 // Idempotent: filled rows are no longer null, so a re-run finds nothing.
@@ -26,13 +33,12 @@ export interface PoolPlan {
   cutoff: Date | null;
 }
 
-// A pool's partner = the user whose UserSettings.linkedUserId points at it.
-// Several partners (shouldn't happen) → the earliest join is the safe cutoff.
-export function cutoffFor(partnerJoins: (Date | null)[]): { hasPartner: boolean; cutoff: Date | null } {
-  if (partnerJoins.length === 0) return { hasPartner: false, cutoff: null };
-  const known = partnerJoins.filter((d): d is Date => d !== null);
-  // A partner with no membership row: no safe cutoff, so nothing is filled.
-  if (known.length < partnerJoins.length) return { hasPartner: true, cutoff: new Date(0) };
+// The earliest sign of a partner is the safe cutoff. A null sign is one with
+// no known date: then nothing is certain, and nothing is filled.
+export function cutoffFor(partnerSigns: (Date | null)[]): { hasPartner: boolean; cutoff: Date | null } {
+  if (partnerSigns.length === 0) return { hasPartner: false, cutoff: null };
+  const known = partnerSigns.filter((d): d is Date => d !== null);
+  if (known.length < partnerSigns.length) return { hasPartner: true, cutoff: new Date(0) };
   return { hasPartner: true, cutoff: new Date(Math.min(...known.map(d => d.getTime()))) };
 }
 
@@ -60,7 +66,20 @@ export async function backfillLegacyOwners(prisma: PrismaClient, apply: boolean)
       });
       return m?.joinedAt ?? null;
     }));
-    const { cutoff } = cutoffFor(joins);
+    const [invite, otherPayer, otherShare] = await Promise.all([
+      prisma.partnerInvite.findFirst({ where: { senderId: poolId, status: "accepted" }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+      prisma.expense.findFirst({
+        where: { userId: poolId, payerUserId: { not: null }, NOT: { payerUserId: poolId } },
+        orderBy: { createdAt: "asc" }, select: { createdAt: true },
+      }),
+      prisma.expense.findFirst({
+        where: { userId: poolId, shares: { some: { userId: { not: poolId } } } },
+        orderBy: { createdAt: "asc" }, select: { createdAt: true },
+      }),
+    ]);
+    const signs: (Date | null)[] = [...joins];
+    for (const found of [invite, otherPayer, otherShare]) if (found) signs.push(found.createdAt);
+    const { cutoff } = cutoffFor(signs);
     const before = cutoff ? { createdAt: { lt: cutoff } } : {};
 
     const expenseWhere = { userId: poolId, createdByUserId: null, ...before };

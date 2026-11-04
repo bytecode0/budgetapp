@@ -45,10 +45,14 @@ export function BankConnections({ accounts, pendingBankToken, onConsumedBankToke
   const [confirmDisconnect, setConfirmDisconnect] = useState<BankConnection | null>(null);
   // True while the post-consent flow (mapping, then the first review) runs.
   const tokenFlow = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
   const endTokenFlow = () => {
     if (!tokenFlow.current) return;
     tokenFlow.current = false;
-    onBankFlowDone?.();
+    // The user may have left Accounts while the exchange was in flight: then
+    // they chose where to be, and nothing moves them.
+    if (mounted.current) onBankFlowDone?.();
   };
 
   const openMapping = (connectionId: string, institutionName: string, bankAccounts: BankAccount[]) => {
