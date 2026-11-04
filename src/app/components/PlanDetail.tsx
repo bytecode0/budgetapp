@@ -445,7 +445,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
               <span className="text-sm text-destructive">{t('planDetail.areYouSure')}</span>
               <button
                 onClick={handleDelete} disabled={deleting}
-                className="px-3 py-2 bg-destructive text-white rounded-lg text-sm hover:bg-destructive/90 transition-colors flex items-center gap-1"
+                className="px-3 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm hover:bg-destructive/90 transition-colors flex items-center gap-1"
               >
                 {deleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} {t('planDetail.yes')}
               </button>
@@ -496,8 +496,8 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { value: 'safety',     labelKey: 'planDetail.typeSafety',      icon: '🛡️', active: 'bg-emerald-500 text-white border-emerald-500' },
-                    { value: 'savings',    labelKey: 'planDetail.typeSavings',     icon: '🎯', active: 'bg-primary text-white border-primary' },
-                    { value: 'investment', labelKey: 'planDetail.typeInvestment',  icon: '📈', active: 'bg-secondary text-white border-secondary' },
+                    { value: 'savings',    labelKey: 'planDetail.typeSavings',     icon: '🎯', active: 'bg-primary text-primary-foreground border-primary' },
+                    { value: 'investment', labelKey: 'planDetail.typeInvestment',  icon: '📈', active: 'bg-secondary text-primary-foreground border-secondary' },
                     { value: 'wealth',     labelKey: 'planDetail.typeWealth',      icon: '🚀', active: 'bg-amber-500 text-white border-amber-500' },
                   ].map(opt => (
                     <button
@@ -575,7 +575,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
               </button>
               <button
                 onClick={handleSave} disabled={saving || !form.title}
-                className="flex-1 py-2.5 bg-gradient-to-r from-primary to-secondary text-white rounded-xl hover:shadow-md transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                className="flex-1 py-2.5 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl hover:shadow-md transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
               >
                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('planDetail.saving')}</> : <><CheckCircle2 className="w-4 h-4" /> {t('planDetail.saveChanges')}</>}
               </button>
@@ -1261,7 +1261,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                 <button
                   onClick={handleSaveMilestones}
                   disabled={savingMilestones}
-                  className="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {savingMilestones ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
                   {t('planDetail.save')}

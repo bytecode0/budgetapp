@@ -147,6 +147,12 @@ This is a financial app. Rounding bugs here destroy user trust faster than anyth
 
 ## UI/UX Patterns — follow these in every new module
 
+**The app's design is Remanso (LPBETA-18, approved 4 Nov 2026).** The reference is the design system at https://claude.ai/artifact/WMDkSACG5weNQxzPB6KyB5 (logo, tokens, components, voice); the tokens live in `src/styles/theme.css`. Principles: each screen answers "¿vamos bien?" first, with **one** big number; calm over data (lots of air, few numbers at once); **going over budget is not an error**: it is `sun-ink` on `sun-soft` ("vas justo"), never red; red (`alert`/`destructive`) is only for real errors and deleting. No gradients, no emoji as decoration, no bouncy or spinning motion.
+
+Screens built before the redesign still use the old patterns (gradients, `emerald`/`red`/`amber` classes); phase 2 of LPBETA-18 moves them over screen by screen. **New or touched UI follows the rules below.**
+
+**Light/dark theme:** always available from the `ThemeToggle` (`src/app/components/shared/ThemeToggle.tsx`) in the top bar, the sidebar and the onboarding header, never only in Settings. The choice is the person's own (`UserSettings.darkMode` of `req.authUserId`, never the household pool) so it follows them to every device; `src/app/lib/theme.ts` keeps a device copy only to paint before load (`index.html`). Design every screen in both themes.
+
 ### 1. Floating Action Button (FAB) — primary create/add action
 
 Applies to **list-based modules where the user creates or adds items**. Does **not** apply to linear wizards such as the onboarding, which use "Back" / "Next". Never put the primary create action in a header button or inside a card.
@@ -156,27 +162,24 @@ import { motion } from 'motion/react';
 import { Plus } from 'lucide-react';
 
 <motion.button
-  initial={{ scale: 0 }}
-  animate={{ scale: 1 }}
-  transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
+  initial={{ opacity: 0, y: 8 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.3, duration: 0.2, ease: 'easeOut' }}
   onClick={() => setShowAdd(true)}
-  whileHover={{ scale: 1.1 }}
-  whileTap={{ scale: 0.9 }}
-  className="fixed right-6 bottom-6 w-16 h-16 bg-gradient-to-br from-primary to-secondary text-white rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center z-40 group"
+  aria-label={t('module.add')}
+  className="fixed right-6 bottom-6 w-16 h-16 bg-primary text-primary-foreground rounded-full shadow-soft hover:-translate-y-0.5 transition-transform flex items-center justify-center z-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 >
-  <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform" />
+  <Plus className="w-7 h-7" />
 </motion.button>
 ```
 
 **Rules:**
-- Size: `w-16 h-16` (64 px) — never smaller, never larger
-- Position: `fixed right-6 bottom-6 z-40`
-- Gradient: always `from-primary to-secondary` — never a flat color
-- Icon: `Plus` with `group-hover:rotate-90 transition-transform`
-- Spring entrance: `delay: 0.5, type: 'spring', stiffness: 200`
-- `whileHover: scale 1.1`, `whileTap: scale 0.9`
+- Size: `w-16 h-16` (64 px); position `fixed right-6 bottom-6 z-40` (plus the phone's safe-area insets)
+- Flat `bg-primary` (the `pool` colour) with `shadow-soft`, never a gradient
+- Calm entrance (fade and 8 px up, 200 ms); no spring, no scale-on-hover, no rotating icon
+- Always an `aria-label`
 
-**Where it's used today:** Activity, Plans (PlanningDashboard), Allocations (AllocationFlow) — all BudgetApp.
+**Where it's used today:** Activity, Plans (PlanningDashboard), Allocations (AllocationFlow) — still in the old style until phase 2.
 
 ---
 
@@ -236,25 +239,23 @@ Every new screen/module starts with a staggered fade-in pattern.
 ### 4. Cards
 
 ```tsx
-// Standard card
-<div className="bg-card border border-border rounded-2xl p-6">
+// Standard card: no shadow, only the border
+<div className="bg-card border border-border rounded-3xl p-6">
 
-// Hero / gradient card (income, plan header, month summary)
-<div className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-3xl p-8 shadow-2xl relative overflow-hidden">
-  <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-32 -mt-32" />
-  <div className="relative z-10">
-    {/* content */}
-  </div>
+// CalmCard: the one answer of the Home screen (replaces the old gradient hero). One per screen, one big number.
+<div className="bg-pool text-on-pool rounded-3xl p-8 relative overflow-hidden">
+  <p className="text-xs font-semibold uppercase tracking-wider opacity-80">{t('home.paidYourselfLabel')}</p>
+  <p className="text-5xl font-display">{fmt(paidCents)}</p>
+  <p className="text-sm">{t('home.paidYourselfOf', { goal: fmt(goalCents) })}</p>
 </div>
 
-// Status card — positive (green)
-<div className="bg-emerald-50 dark:bg-emerald-950/20 border-2 border-emerald-200 dark:border-emerald-800 rounded-2xl p-5">
-
-// Status card — negative (red)
-<div className="bg-red-50 dark:bg-red-950/20 border-2 border-red-200 dark:border-red-800 rounded-2xl p-5">
-
-// Status card — warning (amber)
-<div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-5">
+// Status: always an icon AND a word, never colour alone
+// good ("vas bien", contribution made)
+<div className="bg-reed-soft text-reed rounded-2xl p-5">
+// watch ("vas justo", over budget on a line) — NOT red
+<div className="bg-sun-soft text-sun-ink rounded-2xl p-5">
+// error (only real errors)
+<div className="bg-alert-soft text-alert rounded-2xl p-5">
 ```
 
 ---
@@ -354,17 +355,19 @@ When a list has no items, show a centered empty state with an icon, a short mess
 
 ### 10. Typography scale
 
+Fonts: **Fraunces** (soft serif, `font-display`) for headings and numbers, **Figtree** for everything else (`src/styles/fonts.css`).
+
 | Usage | Class |
 |---|---|
-| Page title | `text-4xl tracking-tight` |
+| Page title | `text-4xl tracking-tight font-display` |
 | Section heading | `text-2xl font-display` |
-| Card heading | `font-display text-lg` |
+| Card heading | `text-lg font-semibold` |
 | Body | `text-sm` |
-| Caption / label | `text-xs text-muted-foreground` |
-| Hero number | `text-5xl font-display` |
+| Caption / label | `text-xs text-muted-foreground` (uppercase labels: `font-semibold uppercase tracking-wider`) |
+| Hero number | `text-5xl font-display` — one per screen |
 | Stat number | `text-2xl font-display` |
 
-`font-display` is used for numbers and headings. Plain `font-sans` for body text.
+Amounts in columns: `tabular-nums`.
 
 ---
 
@@ -388,20 +391,21 @@ When a list has no items, show a centered empty state with an icon, a short mess
 
 ## Colour palette (Tailwind tokens)
 
+Brand tokens (Remanso, `src/styles/theme.css`, light and dark):
+
 | Token | Usage |
 |---|---|
-| `primary` | Main brand colour, CTAs |
-| `secondary` | Accent / success |
-| `accent` | Tertiary highlight |
-| `destructive` | Delete / error actions |
-| `muted` | Backgrounds, disabled states |
-| `card` | Card backgrounds |
-| `border` | All borders |
-| `muted-foreground` | Labels, captions |
+| `pool` (= `primary`) | The brand: the one primary action per view, active states, links. Text on it: `on-pool` |
+| `pool-soft` | Tinted backgrounds behind `pool` text (chips, selected rows) |
+| `sun` (= `accent`) | Warm accent, small fills only: a milestone reached, the Generosity line, the logo's sun. As text: `sun-ink` |
+| `sun-ink` / `sun-soft` | The "watch" state: going over budget, "vas justo" |
+| `reed` / `reed-soft` (= `secondary`) | The "good" state: on track, contribution made |
+| `alert` / `alert-soft` (= `destructive`) | Real errors and deleting only |
+| `surface` (= `background`), `surface-raised` (= `card`), `surface-sunk` (= `muted`) | Page, cards and sheets, sunk areas (progress tracks) |
+| `ink` (= `foreground`), `ink-muted` (= `muted-foreground`) | Text |
+| `line` (= `border`), `line-strong` | Hairlines; borders of inputs and controls (3:1) |
+| `scrim` | Behind sheets and modals |
 
-Status colours follow the same semantic pattern across the app:
-- **Green** (`emerald`) = good / under budget / contributed
-- **Amber** = warning / pending / out of sync
-- **Red** = over budget / missed / error
+Every text/background pair above passes WCAG AA in both themes. Status is never colour alone: each one carries an icon and a word.
 
 ---

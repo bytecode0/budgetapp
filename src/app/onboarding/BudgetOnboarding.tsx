@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'motion/react';
@@ -29,6 +30,8 @@ interface BudgetOnboardingProps {
   /** Where to open — the dashboard's "Completa tu configuración" reopens a given step. */
   initialStep?: OnboardingStep;
   onDone: () => void;
+  /** The always-visible light/dark switch, shown at the end of the header. */
+  themeToggle?: ReactNode;
 }
 
 // The onboarding wizard (docs/plan-deudas-y-onboarding.md, epic 3). Every step
@@ -36,7 +39,7 @@ interface BudgetOnboardingProps {
 // nothing is staged and submitted at the end — so "Continuar" only advances
 // (skipping a step is just continuing without filling it) and "Atrás" only
 // goes back: neither deletes anything.
-export function BudgetOnboarding({ initialStep = 'welcome', onDone }: BudgetOnboardingProps) {
+export function BudgetOnboarding({ initialStep = 'welcome', onDone, themeToggle }: BudgetOnboardingProps) {
   const { t } = useTranslation();
   const [step, setStep] = useState<OnboardingStep>(initialStep);
 
@@ -52,10 +55,11 @@ export function BudgetOnboarding({ initialStep = 'welcome', onDone }: BudgetOnbo
       <header className="w-full bg-card border-b border-border py-4 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
-            <Target className="w-5 h-5 text-white" />
+            <Target className="w-5 h-5 text-primary-foreground" />
           </div>
           <span className="font-display text-lg text-foreground">LifePlan</span>
         </div>
+        <div className="flex items-center gap-2">
         {inWizard && (
           <div className="flex items-center gap-2">
             <button
@@ -72,6 +76,8 @@ export function BudgetOnboarding({ initialStep = 'welcome', onDone }: BudgetOnbo
             </button>
           </div>
         )}
+        {themeToggle}
+        </div>
       </header>
 
       {inWizard && (

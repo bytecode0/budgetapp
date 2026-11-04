@@ -207,7 +207,7 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
                     <button
                       onClick={() => setStep('allocation')}
                       disabled={!amount || parseFloat(amount) <= 0}
-                      className="w-full py-4 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-display disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg transition-all"
+                      className="w-full py-4 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl font-display disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg transition-all"
                     >
                       {t('addExpense.continue')}
                     </button>
@@ -274,7 +274,7 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
                     </div>
                     <button
                       onClick={() => setStep('details')}
-                      className="w-full py-4 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-display hover:shadow-lg transition-all"
+                      className="w-full py-4 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl font-display hover:shadow-lg transition-all"
                     >
                       {t('addExpense.continue')}
                     </button>
@@ -360,7 +360,7 @@ export function AddExpense({ isOpen, onClose, onSaved, defaultDate }: AddExpense
                     <button
                       onClick={handleSubmit}
                       disabled={saving}
-                      className="w-full py-4 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-display hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="w-full py-4 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl font-display hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
                       {saving ? 'Saving...' : t('addExpense.addExpense')}

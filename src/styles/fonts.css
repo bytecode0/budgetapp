@@ -1,15 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap');
+/* Remanso type (LPBETA-18): Fraunces for headings and big numbers, Figtree for text. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,400..600,100&family=Figtree:wght@400;500;600;700&display=swap');
 
 body {
-  font-family: 'Manrope', -apple-system, sans-serif;
+  font-family: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-feature-settings: 'tnum' 1;
 }
 
 h1, h2, h3, h4, h5, h6, .font-display {
-  font-family: 'Outfit', -apple-system, sans-serif;
+  font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+  font-variation-settings: 'SOFT' 100;
 }
 
 .font-mono {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   font-feature-settings: 'tnum' 1;
+}
+
+/* Theme changes swap colours at once; nothing animates between themes. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }

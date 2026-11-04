@@ -24,6 +24,11 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
       prisma.userSettings.findUnique({ where: { userId: req.userId! } }),
       incomeBaselines(req.userId!, req.authUserId!),
     ]);
+    // Theme and language belong to the person, not the household pool: in a
+    // couple each member keeps their own (LPBETA-18).
+    const ownSettings = req.authUserId === req.userId
+      ? settings
+      : await prisma.userSettings.findUnique({ where: { userId: req.authUserId! } });
 
     // A debt line's amount depends on payments and on which period we're in
     // (a card paid in full drops to 0 the period after), so it's recomputed on
@@ -38,8 +43,8 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
     return res.json(serializeMoney({
       allocations: withDebtLines,
       ...baselines, // monthlyIncome (household), ownMonthlyIncome (editable), isCouple
-      darkMode: settings?.darkMode ?? false,
-      language: settings?.language ?? 'es',
+      darkMode: ownSettings?.darkMode ?? false,
+      language: ownSettings?.language ?? 'es',
       cycleStartDay: settings?.cycleStartDay ?? 1,
     }));
   } catch (err) {
@@ -283,10 +288,11 @@ allocationsRouter.patch("/settings/display", requireAuth, async (req: AuthReques
     if (darkMode !== undefined) updateData.darkMode = Boolean(darkMode);
     if (language !== undefined) updateData.language = String(language);
 
+    // The signed-in person's own row, never the household pool's (LPBETA-18).
     const settings = await prisma.userSettings.upsert({
-      where: { userId: req.userId! },
+      where: { userId: req.authUserId! },
       update: updateData,
-      create: { userId: req.userId!, ...updateData },
+      create: { userId: req.authUserId!, ...updateData },
     });
 
     return res.json({ darkMode: settings.darkMode, language: settings.language });

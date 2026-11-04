@@ -208,7 +208,7 @@ export function PlanningDashboard({ onNavigate, onViewPlan }: { onNavigate?: (sc
             </p>
             <button
               onClick={() => onNavigate?.('create-plan')}
-              className="px-6 py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl hover:shadow-md transition-all"
+              className="px-6 py-3 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl hover:shadow-md transition-all"
             >
               {t('dashboard.createFirstPlan')}
             </button>
@@ -319,7 +319,7 @@ export function PlanningDashboard({ onNavigate, onViewPlan }: { onNavigate?: (sc
         initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
         onClick={() => onNavigate?.('create-plan')}
         whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-        className="fixed right-6 bottom-6 w-16 h-16 bg-gradient-to-br from-primary to-secondary text-white rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center z-40 group"
+        className="fixed right-6 bottom-6 w-16 h-16 bg-gradient-to-br from-primary to-secondary text-primary-foreground rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center z-40 group"
       >
         <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform" />
       </motion.button>

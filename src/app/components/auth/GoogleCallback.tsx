@@ -42,7 +42,7 @@ export function GoogleCallback({ token, onSuccess, onError }: GoogleCallbackProp
         className="text-center"
       >
         <div className="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center shadow-lg mx-auto mb-4">
-          <Target className="w-9 h-9 text-white" />
+          <Target className="w-9 h-9 text-primary-foreground" />
         </div>
         <h2 className="text-xl font-display text-primary mb-2">LifePlan</h2>
         <Loader2 className="w-6 h-6 animate-spin text-primary mx-auto mb-2" />

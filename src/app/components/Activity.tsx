@@ -257,7 +257,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
           <button
             onClick={() => setFilterAllocationId('all')}
             className={`px-4 py-2 rounded-xl text-sm whitespace-nowrap transition-all ${
-              filterAllocationId === 'all' ? 'bg-primary text-white' : 'bg-card border border-border hover:bg-muted'
+              filterAllocationId === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card border border-border hover:bg-muted'
             }`}
           >
             {t('activity.all', { count: expenses.length })}
@@ -270,7 +270,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                 key={a.id}
                 onClick={() => setFilterAllocationId(a.id)}
                 className={`px-4 py-2 rounded-xl text-sm whitespace-nowrap flex items-center gap-2 transition-all ${
-                  filterAllocationId === a.id ? 'bg-primary text-white' : 'bg-card border border-border hover:bg-muted'
+                  filterAllocationId === a.id ? 'bg-primary text-primary-foreground' : 'bg-card border border-border hover:bg-muted'
                 }`}
               >
                 <span>{a.icon}</span>
@@ -283,7 +283,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
             <button
               onClick={() => setFilterAllocationId('__unassigned__')}
               className={`px-4 py-2 rounded-xl text-sm whitespace-nowrap transition-all ${
-                filterAllocationId === '__unassigned__' ? 'bg-primary text-white' : 'bg-card border border-border hover:bg-muted'
+                filterAllocationId === '__unassigned__' ? 'bg-primary text-primary-foreground' : 'bg-card border border-border hover:bg-muted'
               }`}
             >
               ❓ {t('activity.unassigned', { count: expenses.filter(e => !e.allocationId).length })}
@@ -332,7 +332,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
           {filterAllocationId === 'all' && (
             <button
               onClick={() => setShowAdd(true)}
-              className="px-5 py-2.5 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors text-sm"
+              className="px-5 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors text-sm"
             >
               {t('activity.addExpense')}
             </button>
@@ -519,7 +519,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
           initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
           onClick={() => setFabOpen(v => !v)}
           whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-          className="w-16 h-16 bg-gradient-to-br from-primary to-secondary text-white rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center"
+          className="w-16 h-16 bg-gradient-to-br from-primary to-secondary text-primary-foreground rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center"
         >
           <Plus className={`w-7 h-7 transition-transform ${fabOpen ? 'rotate-45' : ''}`} />
         </motion.button>
