@@ -8,30 +8,30 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 | LPBETA-01 | Ciclo de facturación de la tarjeta | Refinado (plan 1.9) | No |
 | LPBETA-02 | Gráficas de deudas, detalle y plan de pago | Refinado | No |
 | LPBETA-03 | Stripe y control de acceso Premium | Refinado | No |
-| LPBETA-04 | Pequeños pendientes | Lista | — |
+| LPBETA-04 | Pequeños pendientes | **Hecho y desplegado** (PR #14, 4 nov). Incluye `npm run backfill:legacy-owners`: Luis lo ejecuta en su terminal, primero sin `--apply` | — |
 | LPBETA-05 | Medir usuarios activos | **Hecho y desplegado** (PR #8, 4 nov) | Sí (aditivo: `User.lastBankReviewAt`, `PlanDeposit.byUserId`) |
-| LPBETA-06 | LifePlan no asesora sobre inversiones (simulador con aviso) | Refinado | No |
+| LPBETA-06 | Remanso no asesora sobre inversiones (simulador con aviso) | **Hecho y desplegado** (PR #13, 4 nov) | No |
 | LPBETA-07 | Inicio y onboarding para el nuevo cliente | Refinado — **va antes de la BETA** | Por confirmar al diseñar |
 | LPBETA-08 | Enlace de invitación para amigos | Aplazado (después de la BETA) | Sí (aditivo) |
 | LPBETA-09 | Borrar la cuenta, exportar los datos y promesa de privacidad | Refinado — **bloquea la BETA** | Sí (aditivo) |
 | LPBETA-10 | Línea de generosidad en el onboarding | Refinado | No |
-| LPBETA-11 | Instalable en el móvil (PWA) y página de bienvenida | En refinamiento | No |
+| LPBETA-11 | Instalable en el móvil (PWA) y página de bienvenida | **Hecho y desplegado** (PR #16, 4 nov). Bienvenida pública; PWA sin service worker. Falta probar en un móvil real: login con Google y vuelta del banco desde la app instalada | No |
 | LPBETA-12 | Detección de suscripciones y gastos hormiga | Refinado | Sí (aditivo, pequeño) |
 | LPBETA-13 | Celebrar los hitos | En refinamiento | Probablemente sí (aditivo, solo "ya visto") |
 | LPBETA-14 | Seguridad del acceso (códigos y contraseñas) | **Hecho y desplegado** (PR #7, 4 nov) | Sí (aditivo, aplicado en el schema) |
-| LPBETA-15 | Robo de cuenta preparado de antemano (registro + Google) | Refinado — **Alta, antes de invitar a nadie** | No |
-| LPBETA-16 | Límite al envío de códigos por email | Refinado — **Alta, antes de invitar a nadie** | Sí (aditivo, tabla de contadores) |
-| LPBETA-17 | Límite de uso de la IA (coste) | Refinado — **Alta, antes de invitar a nadie** | No (reutiliza la tabla del 16) |
-| LPBETA-18 | Salir del hogar no quita el acceso a los datos de la pareja | Refinado — **Media, antes de invitar a nadie** | No |
-| LPBETA-19 | Las deudas y cuentas privadas se ven y se modifican desde la pareja | Refinado — Media | No |
-| LPBETA-20 | La invitación de pareja no está ligada al email invitado | Refinado — Media (decidido 4 nov: solo el email invitado) | No |
+| LPBETA-15 | Robo de cuenta preparado de antemano (registro + Google) | En revisión (`feature/seguridad-alta`). **Espera el `db push` de `RateLimitHit` de Luis** | No |
+| LPBETA-16 | Límite al envío de códigos por email | En revisión (`feature/seguridad-alta`). **Espera el `db push` de `RateLimitHit` de Luis** | Sí (aditivo: tabla `RateLimitHit`) |
+| LPBETA-17 | Límite de uso de la IA (coste) | En revisión (`feature/seguridad-alta`). **Espera el `db push` de `RateLimitHit` de Luis** | No (usa la tabla del 16) |
+| LPBETA-18 | Salir del hogar no quita el acceso a los datos de la pareja | **Hecho y desplegado** (PR #20, 4 nov). Decidido 4 nov: lo privado de un miembro se oculta a la pareja en todos los niveles (también el transparente); los totales lo cuentan como "Compromisos privados de tu pareja" | No |
+| LPBETA-19 | Las deudas y cuentas privadas se ven y se modifican desde la pareja | **Hecho y desplegado** (PR #20, 4 nov). Decidido 4 nov: lo privado de un miembro se oculta a la pareja en todos los niveles (también el transparente); los totales lo cuentan como "Compromisos privados de tu pareja" | No |
+| LPBETA-20 | La invitación de pareja no está ligada al email invitado | **Hecho y desplegado** (PR #20, 4 nov). Decidido 4 nov: lo privado de un miembro se oculta a la pareja en todos los niveles (también el transparente); los totales lo cuentan como "Compromisos privados de tu pareja" | No |
 | LPBETA-21 | Cerrar todas las sesiones (sesiones revocables) | Refinado — Media | Sí (aditivo, un campo) |
-| LPBETA-22 | Dependencias con vulnerabilidades conocidas | Refinado — Media | No |
+| LPBETA-22 | Dependencias con vulnerabilidades conocidas | **Hecho y desplegado** (PR #18, 4 nov) | No |
 | LPBETA-23 | Endurecimiento menor de seguridad | Refinado — Baja | No |
 | LPBETA-24 | Medir la paz: una pregunta al mes | En refinamiento | Sí (aditivo: una tabla pequeña) |
 | LPBETA-25 | Dominio de la BETA: `app.luisvespa.com` | Refinado — decidido el 4 nov | No |
-| LPBETA-26 | Nuevo nombre de la app: **Remanso** | **Hecho** en el PR #10 — falta fusionar y comprobar la marca | No |
-| LPBETA-27 | Rediseño de toda la app para Remanso | **Fase 1 hecha y desplegada** (PR #9); fase 2 pendiente | No |
+| LPBETA-26 | Nuevo nombre de la app: **Remanso** | **Hecho y desplegado** (PR #10, 4 nov). Falta buscar la marca en la OEPM/EUIPO y que Luis cambie `EMAIL_FROM` en Vercel | No |
+| LPBETA-27 | Rediseño de toda la app para Remanso | Fase 1 hecha y desplegada (PR #9). Fase 2: Actividad (PR #12), Deudas (PR #15) y Planes (PR #19) en revisión; faltan Cuentas, Partidas, Hogar y Ajustes | No |
 
 ### Orden de ejecución (4 nov, sustituye al de abajo)
 
@@ -46,19 +46,19 @@ Reparto (4 nov): la sesión de **rebranding** hace 24–27; la **otra sesión** 
 | ✓ | LPBETA-14 · Seguridad del acceso | rebranding | Hecho y desplegado (PR #7). |
 | ✓ | LPBETA-05 · Medir usuarios activos | otra | Hecho y desplegado (PR #8). |
 | ✓ | LPBETA-27 · Rediseño, fase 1 (sistema de diseño, modo claro/oscuro) | rebranding | Hecho y desplegado (PR #9). |
-| 1 | LPBETA-26 · Nombre Remanso y logo | rebranding | En el PR #10. Falta fusionar y buscar la marca en la OEPM/EUIPO. |
-| 2 | LPBETA-04 · Pequeños pendientes | otra | El `/deploy` con el `db push` de producción: lo usan casi todos los siguientes. |
-| 3 | LPBETA-15, 16, 17 · Seguridad ALTA | otra | Antes de invitar a nadie. |
+| ✓ | LPBETA-26 · Nombre Remanso y logo | rebranding | Hecho y desplegado (PR #10). Falta buscar la marca en la OEPM/EUIPO. |
+| ✓ | LPBETA-04 · Pequeños pendientes | otra | Hecho y desplegado (PR #14). |
+| 3 | LPBETA-15, 16, 17 · Seguridad ALTA | otra | En revisión; espera el `db push` de Luis. Antes de invitar a nadie. |
 | 4 | LPBETA-09 · Borrar cuenta, exportar y privacidad | otra | Confianza y RGPD. |
-| 5 | LPBETA-06 · Aviso de inversiones | otra | Pequeño y decidido. |
-| 6 | LPBETA-18 · Seguridad MEDIA (salir del hogar) | otra | Antes de invitar a nadie. |
+| ✓ | LPBETA-06 · Aviso de inversiones | otra | Hecho y desplegado (PR #13). |
+| ✓ | LPBETA-18 · Seguridad MEDIA (salir del hogar) | otra | Hecho y desplegado con 19 y 20 (PR #20). |
 | 7 | LPBETA-25 · Dominio `app.luisvespa.com` | rebranding + Luis | Los paneles los hace Luis; los textos, Claude. |
 | 8 | LPBETA-07 · Inicio y onboarding | otra | Con el diseño nuevo (pautas de `CLAUDE.md`), después de fusionar el 26. |
 | 9 | LPBETA-10 · Generosidad | otra | El mismo flujo de onboarding que el 07. |
 | 10 | LPBETA-24 · Medir la paz | rebranding | Una tarjeta en el Inicio nuevo, después del 07. |
-| 11 | LPBETA-11 · PWA y bienvenida | otra | El icono ya existe (`public/icons/remanso-app-icon.svg`). |
-| 12 | LPBETA-27 · Rediseño, fase 2 (pantallas sin ticket propio) | rebranding | Actividad, Deudas, Planes, Cuentas, Hogar y Ajustes. |
-| 13 | LPBETA-19 a 23 · Seguridad MEDIA y BAJA | otra | |
+| ✓ | LPBETA-11 · PWA y bienvenida | otra | Hecho y desplegado (PR #16). Falta probarla en un móvil real. |
+| 12 | LPBETA-27 · Rediseño, fase 2 (pantallas sin ticket propio) | rebranding | Actividad (PR #12), Deudas (PR #15) y Planes (PR #19) en revisión. Después: Cuentas, Partidas (tras el 07), Hogar y Ajustes (tras el 09). |
+| 13 | LPBETA-19 a 23 · Seguridad MEDIA y BAJA | otra | 19, 20 (PR #20) y 22 (PR #18) hechos y desplegados; 21 y 23 pendientes. |
 | 14 | LPBETA-12 · Suscripciones y gastos hormiga | otra | Pantallas nuevas, ya con el diseño nuevo. |
 | 15 | LPBETA-13 · Celebrar los hitos | otra | Ídem. |
 | 16 | LPBETA-02 · Gráficas de deudas | otra | Ídem. |
