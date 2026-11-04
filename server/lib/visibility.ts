@@ -15,7 +15,10 @@ import { prisma } from "./prisma.js";
 import { AuthRequest } from "../middleware/auth.js";
 
 async function tier(req: AuthRequest): Promise<string> {
-  if (!req.householdId) return "transparent";
+  // Linked to a pool (req.userId is someone else's) but in no household: a
+  // leftover link must not open the pool's listings, so the most restrictive
+  // tier applies. Alone in her own scope, there is nobody else to hide.
+  if (!req.householdId) return req.userId !== req.authUserId ? "global_only" : "transparent";
   const hh = await prisma.household.findUnique({
     where: { id: req.householdId },
     select: { visibilityTier: true },

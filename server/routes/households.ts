@@ -6,6 +6,8 @@ import { computeBalances } from "../lib/balances.js";
 import { serializeMoney, toEuros } from "../lib/money.js";
 import { currentPeriodKey, periodKeyOffset, periodBounds } from "../lib/period.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
+import { lockSettings } from "../lib/partnerLink.js";
+import { unlinkMemberFromPool } from "../lib/partnerUnlink.js";
 
 export const householdsRouter = Router();
 
@@ -220,9 +222,35 @@ householdsRouter.delete("/members/:userId", requireAuth, async (req: AuthRequest
       return res.status(403).json({ error: "Only the owner can remove other members" });
     }
 
-    await prisma.householdMember.deleteMany({
-      where: { householdId: req.householdId, userId: targetUserId },
+    // Leaving the household is unlinking, as DELETE /api/partner/unlink: what
+    // gives access to the pool's data is UserSettings.linkedUserId (requireAuth
+    // → req.userId), so deleting only the membership row would leave whoever
+    // leaves (or is removed) reading the pool. The link is the target's own
+    // (she is the member) or, when the target is the owner, whoever is linked
+    // to her; it must point at this household's owner.
+    const householdId = req.householdId;
+    const owner = await prisma.householdMember.findFirst({
+      where: { householdId, role: "owner" }, select: { userId: true },
     });
+    const targetSettings = await prisma.userSettings.findUnique({
+      where: { userId: targetUserId }, select: { linkedUserId: true },
+    });
+    const link = !owner ? null
+      : targetSettings?.linkedUserId === owner.userId ? { memberId: targetUserId, poolId: owner.userId }
+      : targetUserId === owner.userId
+        ? await prisma.userSettings.findFirst({ where: { linkedUserId: owner.userId }, select: { userId: true } })
+          .then(s => (s ? { memberId: s.userId, poolId: owner.userId } : null))
+        : null;
+
+    await prisma.$transaction(async (tx) => {
+      if (link) {
+        // Re-read under the locks: a concurrent unlink must not move twice.
+        await lockSettings(tx, [link.memberId, link.poolId]);
+        const current = await tx.userSettings.findUnique({ where: { userId: link.memberId }, select: { linkedUserId: true } });
+        if (current?.linkedUserId === link.poolId) await unlinkMemberFromPool(tx, link);
+      }
+      await tx.householdMember.deleteMany({ where: { householdId, userId: targetUserId } });
+    }, { timeout: 30_000 });
     return res.json({ success: true });
   } catch (err) {
     console.error("[households/members/DELETE]", err);
