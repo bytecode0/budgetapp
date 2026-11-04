@@ -11,7 +11,7 @@ import { parseNormalizedRows, parseSkippedRows, parseSource } from "../../shared
 import { debtLineError } from "../lib/ingest/writes.js";
 import { confirmImport } from "../lib/ingest/confirm.js";
 import { isGenericMerchant } from "../lib/ingest/learnedPayments.js";
-import { planContribution } from "../lib/planContribution.js";
+import { planMonthsOfExpenses, withPlanContributions } from "../lib/planLedger.js";
 import type { NormalizedRow, SkippedRow, StatementSource } from "../../shared/ingest/types.js";
 import { aiEnabled, classifyMerchants } from "../lib/ai/classify.js";
 import { suggestCategories } from "../lib/ai/suggestCategories.js";
@@ -204,7 +204,11 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
       resolvedScope = hh && hh.financialModel !== "individual" ? "shared" : "personal";
     }
 
-    const expense = await prisma.expense.create({
+    // On a plan line, the plan's balance moves by the change in its month
+    // contribution (server/lib/planLedger.ts), in one transaction.
+    const expenseDate = date ? new Date(date) : new Date();
+    const planKeys = await planMonthsOfExpenses(prisma, req.userId!, [{ date: expenseDate, allocationId: resolvedAllocationId }]);
+    const expense = await prisma.$transaction(tx => withPlanContributions(tx, req.userId!, planKeys, () => tx.expense.create({
       data: {
         userId: req.userId!,
         amount: amountCents,
@@ -214,7 +218,7 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
         allocationId: resolvedAllocationId,
         accountId: resolvedAccountId,
         debtId: paidDebt?.id ?? null,
-        date: date ? new Date(date) : new Date(),
+        date: expenseDate,
         payerUserId: resolvedPayerId,
         createdByUserId: req.authUserId!,
         scope: resolvedScope,
@@ -225,19 +229,11 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
         allocation: { select: { id: true, name: true, icon: true, type: true, lifePlanId: true } },
         account: { select: { id: true, name: true, type: true } },
       },
-    });
+    })));
 
     // Shared expenses get split across household members (residue to the payer).
     if (resolvedScope === "shared" && req.householdId) {
       await rebuildExpenseShares(expense.id, amountCents, req.householdId, resolvedPayerId);
-    }
-
-    // Auto-contribute to linked life plan if this is a plan allocation
-    if (expense.allocation?.type === "plan" && expense.allocation.lifePlanId) {
-      await prisma.lifePlan.update({
-        where: { id: expense.allocation.lifePlanId },
-        data: { currentAmount: { increment: amountCents } },
-      });
     }
 
     await syncDebtStatus(req.userId!, [expense.debtId]);
@@ -318,17 +314,11 @@ expensesRouter.post("/merge", requireAuth, async (req: AuthRequest, res: Respons
     if ("error" in check) return res.status(check.status).json({ error: check.error });
     const { toRemove } = check;
 
-    // Reverse any plan contributions before deleting, mirroring DELETE /:id.
-    for (const e of toRemove) {
-      if (e.allocation?.type === "plan" && e.allocation.lifePlanId) {
-        await prisma.lifePlan.update({
-          where: { id: e.allocation.lifePlanId },
-          data: { currentAmount: { decrement: planContribution(e) } },
-        });
-      }
-    }
-    // Their dismissals go with them (DuplicateDismissal cascades).
-    await prisma.expense.deleteMany({ where: { id: { in: toRemove.map(e => e.id) }, userId: req.userId! } });
+    // Their dismissals go with them (DuplicateDismissal cascades). A plan
+    // line's plan moves by the change in its month contribution, as on DELETE /:id.
+    const planKeys = await planMonthsOfExpenses(prisma, req.userId!, toRemove);
+    await prisma.$transaction(tx => withPlanContributions(tx, req.userId!, planKeys,
+      () => tx.expense.deleteMany({ where: { id: { in: toRemove.map(e => e.id) }, userId: req.userId! } })));
     await syncDebtStatus(req.userId!, toRemove.map(e => e.debtId));
 
     return res.json({ success: true, removed: toRemove.length });
@@ -633,35 +623,27 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     const lineError = debtLineError(existing.kind, paidDebt, accountUpdate?.accountId ?? existing.accountId);
     if (lineError) return res.status(400).json(lineError);
 
-    // Reverse old plan contribution (a refund's is negative: planContribution)
-    if (existing.allocation?.type === "plan" && existing.allocation.lifePlanId) {
-      await prisma.lifePlan.update({
-        where: { id: existing.allocation.lifePlanId },
-        data: { currentAmount: { decrement: planContribution(existing) } },
-      });
-    }
-    // Apply new plan contribution
-    if (newAlloc?.type === "plan" && newAlloc.lifePlanId) {
-      await prisma.lifePlan.update({
-        where: { id: newAlloc.lifePlanId },
-        data: { currentAmount: { increment: planContribution({ kind: existing.kind, amount: newAmount }) } },
-      });
-    }
-
-    const expense = await prisma.expense.update({
+    // The plan(s) of the old and the new line and month move by the change
+    // in their month contribution (server/lib/planLedger.ts).
+    const newDate = date !== undefined ? new Date(date) : existing.date;
+    const planKeys = await planMonthsOfExpenses(prisma, req.userId!, [
+      { date: existing.date, allocationId: existing.allocationId },
+      { date: newDate, allocationId: newAllocId },
+    ]);
+    const expense = await prisma.$transaction(tx => withPlanContributions(tx, req.userId!, planKeys, () => tx.expense.update({
       where: { id },
       data: {
         ...(amount !== undefined && { amount: newAmount }),
         ...(description !== undefined && { description, merchant: normalizeMerchant(description) }),
         ...(allocationId !== undefined && { allocationId: allocationId || null, debtId: paidDebt?.id ?? null }),
         ...(accountUpdate ?? {}),
-        ...(date !== undefined && { date: new Date(date) }),
+        ...(date !== undefined && { date: newDate }),
       },
       include: {
         allocation: { select: { id: true, name: true, icon: true, type: true, lifePlanId: true } },
         account: { select: { id: true, name: true, type: true } },
       },
-    });
+    })));
 
     // Learn from manual re-assignment: when the user moves an expense to a (real)
     // allocation, remember the merchant -> allocation mapping for next time —
@@ -697,16 +679,10 @@ expensesRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Respons
     if (!existing) return res.status(404).json({ error: "Expense not found" });
 
     // Its "not duplicates" dismissals go with it (DuplicateDismissal cascades).
-    await prisma.expense.delete({ where: { id } });
+    // On a plan line, its plan moves by the change in its month contribution.
+    const planKeys = await planMonthsOfExpenses(prisma, req.userId!, [existing]);
+    await prisma.$transaction(tx => withPlanContributions(tx, req.userId!, planKeys, () => tx.expense.delete({ where: { id } })));
     await syncDebtStatus(req.userId!, [existing.debtId]);
-
-    // Reverse plan contribution if applicable
-    if (existing.allocation?.type === "plan" && existing.allocation.lifePlanId) {
-      await prisma.lifePlan.update({
-        where: { id: existing.allocation.lifePlanId },
-        data: { currentAmount: { decrement: planContribution(existing) } },
-      });
-    }
 
     return res.json({ success: true });
   } catch (err) {

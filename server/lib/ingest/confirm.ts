@@ -6,7 +6,7 @@
 // attribution.
 import { prisma } from "../prisma.js";
 import { learnFromCorrection } from "../categorize.js";
-import { planContributions } from "../planContribution.js";
+import { planMonthsOfExpenses, withPlanContributions } from "../planLedger.js";
 import { rebuildExpenseShares } from "../expenseShares.js";
 import { syncDebtStatus } from "../debtBalance.js";
 import { isGenericMerchant } from "./learnedPayments.js";
@@ -82,26 +82,21 @@ export async function confirmImport(ctx: ConfirmImportContext, rows: ConfirmRow[
   // gets credited only for the rows this call actually inserted (rows
   // already stored — a re-import, or a concurrent confirm that got there
   // first — are skipped by the unique externalId and not returned).
-  // Rows on a "plan" line contribute to its life plan like manual ones
-  // (refunds take money back out); DELETE/PATCH reverse it.
+  // Rows on a "plan" line move its life plan by the change in the plan's
+  // month contribution, as manual ones do (server/lib/planLedger.ts: a
+  // deposit already registered for the month isn't counted twice; refunds
+  // take money back out). The plans are locked in sorted id order.
+  const planKeys = await planMonthsOfExpenses(prisma, userId, plan.expenses);
   const { exp, inc, inserted } = await prisma.$transaction(async tx => {
-    const inserted = await tx.expense.createManyAndReturn({
+    const inserted = await withPlanContributions(tx, userId, planKeys, () => tx.expense.createManyAndReturn({
       data: plan.expenses.map(e => ({ ...e, userId, source, createdByUserId: authUserId })),
       skipDuplicates: true, // re-importing the same rows is a no-op
       select: { kind: true, amount: true, allocationId: true, debtId: true },
-    });
+    }));
     const inc = await tx.income.createMany({
       data: plan.incomes.map(i => ({ ...i, userId, ownerUserId: authUserId, source })),
       skipDuplicates: true,
     });
-    const planLines = await tx.allocation.findMany({
-      where: { userId, type: "plan", lifePlanId: { not: null } },
-      select: { id: true, lifePlanId: true },
-    });
-    const deltas = planContributions(inserted, new Map(planLines.map(l => [l.id, l.lifePlanId!])));
-    for (const [lifePlanId, delta] of deltas) {
-      await tx.lifePlan.update({ where: { id: lifePlanId }, data: { currentAmount: { increment: delta } } });
-    }
     return { exp: { count: inserted.length }, inc, inserted };
   }, { timeout: 30_000 }); // an interactive transaction defaults to 5 s; a statement may hold 5,000 rows
 

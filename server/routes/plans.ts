@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { toCents, serializeMoney } from "../lib/money.js";
 import { currentPeriodKey, periodBounds } from "../lib/period.js";
-import { loadBookedByPlan, planMonthContribution } from "../lib/payYourselfFirst.js";
+import { loadBookedByPlan, monthContribution } from "../lib/planLedger.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 
 export const plansRouter = Router();
@@ -87,8 +87,8 @@ plansRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
 
 // GET /api/plans/monthly-status?month=YYYY-MM
 // Returns contribution status for each plan that has a linked allocation.
-// The month's contribution is max(deposit, booked on the plan's line)
-// (server/lib/payYourselfFirst.ts): "contributed" once it reaches the expected
+// The month's contribution follows the one rule in server/lib/planLedger.ts
+// (with a deposit: max(deposit, booked on the plan's line); without: booked): "contributed" once it reaches the expected
 // amount; otherwise "pending" (this month or later) with only the remainder,
 // or "missed" (a past month).
 plansRouter.get("/monthly-status", requireAuth, async (req: AuthRequest, res: Response) => {
@@ -127,7 +127,7 @@ plansRouter.get("/monthly-status", requireAuth, async (req: AuthRequest, res: Re
 
     const status = plans.map(plan => {
       const expectedAmount = amountByPlanId[plan.id] ?? plan.monthlyContribution;
-      const depositedAmount = planMonthContribution(depositByPlanId[plan.id] ?? 0, booked.get(plan.id) ?? 0);
+      const depositedAmount = monthContribution(depositByPlanId[plan.id] ?? null, booked.get(plan.id) ?? 0);
       const remainingAmount = Math.max(0, expectedAmount - depositedAmount);
       let contributionStatus: "contributed" | "missed" | "pending";
       if (depositedAmount > 0 && remainingAmount === 0) {

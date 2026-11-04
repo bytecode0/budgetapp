@@ -19,6 +19,7 @@ describe("income shares and first goals (integration, real Postgres)", { skip: !
   let signToken: typeof import("./jwt.js").signToken;
   let createDefaultAllocations: typeof import("./defaults.js").createDefaultAllocations;
   let periodLib: typeof import("./period.js");
+  let confirmImport: typeof import("./ingest/confirm.js").confirmImport;
   let server: Server;
   let base: string;
 
@@ -38,6 +39,7 @@ describe("income shares and first goals (integration, real Postgres)", { skip: !
     ({ signToken } = await import("./jwt.js"));
     ({ createDefaultAllocations } = await import("./defaults.js"));
     periodLib = await import("./period.js");
+    ({ confirmImport } = await import("./ingest/confirm.js"));
     const app = (await import("../app.js")).default;
 
     const tables = await prisma.$queryRaw<{ tablename: string }[]>`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`;
@@ -352,5 +354,115 @@ describe("income shares and first goals (integration, real Postgres)", { skip: !
     const budgets = await ok(S, "GET", `/api/monthly-budgets?month=${month()}`);
     assert.equal(budgets.hiddenCommitted, 10);
     assert.equal(budgets.budgets.find((b: any) => b.allocation.type === "generosity").allocatedAmount, 300);
+  });
+
+  // ── One ledger for plan balances (server/lib/planLedger.ts) ─────────────
+
+  /** start + Σ over months of the contribution, recomputed from the rows:
+   *  with a deposit max(deposit, booked), without one booked. */
+  async function expectedBalance(planId: string, start: number): Promise<number> {
+    const [deposits, expenses] = await Promise.all([
+      prisma.planDeposit.findMany({ where: { planId } }),
+      prisma.expense.findMany({ where: { allocation: { lifePlanId: planId, type: "plan" } } }),
+    ]);
+    const booked = new Map<string, number>();
+    for (const e of expenses) {
+      const m = periodLib.periodKeyFor(e.date, 1);
+      booked.set(m, (booked.get(m) ?? 0) + (e.kind === "refund" ? -e.amount : e.amount));
+    }
+    const deposit = new Map(deposits.map(d => [d.month, d.amount]));
+    let total = start;
+    for (const m of new Set([...booked.keys(), ...deposit.keys()])) {
+      total += deposit.has(m) ? Math.max(deposit.get(m)!, booked.get(m) ?? 0) : (booked.get(m) ?? 0);
+    }
+    return total;
+  }
+
+  async function planWithLine(user: string, start = 0) {
+    const plan = (await ok(user, "POST", "/api/plans", { title: "Colchón", type: "emergency", targetAmount: 6000, currentAmount: start, monthlyContribution: 200, autoCreateAllocation: true })).plan;
+    const line = await prisma.allocation.findFirstOrThrow({ where: { userId: user, lifePlanId: plan.id } });
+    const balance = async () => (await prisma.lifePlan.findUniqueOrThrow({ where: { id: plan.id } })).currentAmount;
+    const consistent = async (cents: number) => {
+      assert.equal(await balance(), cents);
+      assert.equal(await balance(), await expectedBalance(plan.id, start * 100));
+    };
+    return { plan, line, balance, consistent };
+  }
+
+  const today = () => new Date().toISOString().slice(0, 10);
+  const importRows = (user: string, rows: { externalId: string; amountCents: number; allocationId: string; kind?: string }[]) =>
+    confirmImport({ userId: user, authUserId: user, householdId: null, accountId: null, source: "bank_sync" },
+      rows.map(r => ({ kind: r.kind ?? "expense", externalId: r.externalId, date: today(), description: "Transferencia", amountCents: r.amountCents, allocationId: r.allocationId })));
+
+  it("deposit then the bank imports the same transfer: the plan moves once", async () => {
+    const U = await signUp("Uxue", "uxue@example.com");
+    const p = await planWithLine(U, 1000);
+    await ok(U, "POST", "/api/plan-deposits/confirm", { month: month(), deposits: [{ planId: p.plan.id, amount: 200 }] });
+    await p.consistent(120000);
+    const r = await importRows(U, [{ externalId: "bank-1", amountCents: 20000, allocationId: p.line.id }]);
+    assert.ok(!("error" in r), JSON.stringify(r));
+    await p.consistent(120000);
+    assert.equal((await ok(U, "GET", `/api/dashboard/month?month=${month()}`)).data.paidYourself, 200);
+    // Re-importing the same movement is a no-op.
+    await importRows(U, [{ externalId: "bank-1", amountCents: 20000, allocationId: p.line.id }]);
+    await p.consistent(120000);
+  });
+
+  it("import then deposit: the deposit adds only what goes beyond the booked money", async () => {
+    const V = await signUp("Vera", "vera@example.com");
+    const p = await planWithLine(V);
+    await importRows(V, [{ externalId: "bank-2", amountCents: 15000, allocationId: p.line.id }]);
+    await p.consistent(15000);
+    await ok(V, "POST", "/api/plan-deposits/confirm", { month: month(), deposits: [{ planId: p.plan.id, amount: 200 }] });
+    await p.consistent(20000);
+    await ok(V, "POST", "/api/plan-deposits/confirm", { month: month(), deposits: [{ planId: p.plan.id, amount: 100 }] });
+    await p.consistent(15000); // the deposit below the booked money: booked counts
+  });
+
+  it("deleting or editing booked money after a deposit keeps the balance on the rule", async () => {
+    const W = await signUp("Wen", "wen@example.com");
+    const p = await planWithLine(W);
+    await ok(W, "POST", "/api/plan-deposits/confirm", { month: month(), deposits: [{ planId: p.plan.id, amount: 200 }] });
+    const e1 = (await ok(W, "POST", "/api/expenses", { amount: 150, description: "Transferencia", allocationId: p.line.id })).expense.id;
+    await p.consistent(20000);
+    await ok(W, "PATCH", `/api/expenses/${e1}`, { amount: 250 });
+    await p.consistent(25000);
+    await ok(W, "PATCH", `/api/expenses/${e1}`, { amount: 120 });
+    await p.consistent(20000);
+    // Moved off the plan line, and back.
+    const fixed = (await ok(W, "GET", "/api/allocations")).allocations.find((a: any) => a.type === "fixed");
+    await ok(W, "PATCH", `/api/expenses/${e1}`, { allocationId: fixed.id });
+    await p.consistent(20000);
+    await ok(W, "PATCH", `/api/expenses/${e1}`, { allocationId: p.line.id, amount: 300 });
+    await p.consistent(30000);
+    await ok(W, "DELETE", `/api/expenses/${e1}`);
+    await p.consistent(20000);
+  });
+
+  it("merging duplicate transfers on a plan line keeps the balance on the rule", async () => {
+    const X = await signUp("Xavi", "xavi@example.com");
+    const p = await planWithLine(X);
+    const a = (await ok(X, "POST", "/api/expenses", { amount: 200, description: "Transferencia ahorro", allocationId: p.line.id })).expense.id;
+    const b = (await ok(X, "POST", "/api/expenses", { amount: 200, description: "Transferencia ahorro", allocationId: p.line.id })).expense.id;
+    await p.consistent(40000);
+    await ok(X, "POST", "/api/plan-deposits/confirm", { month: month(), deposits: [{ planId: p.plan.id, amount: 200 }] });
+    await p.consistent(40000);
+    await ok(X, "POST", "/api/expenses/merge", { keepId: a, removeIds: [b] });
+    await p.consistent(20000);
+  });
+
+  it("a withdrawal on the plan line offsets: without a deposit the month can be negative", async () => {
+    const Y = await signUp("Yago", "yago@example.com");
+    const p = await planWithLine(Y, 1000);
+    await importRows(Y, [
+      { externalId: "bank-3", amountCents: 20000, allocationId: p.line.id },
+      { externalId: "bank-4", amountCents: 50000, allocationId: p.line.id, kind: "refund" },
+    ]);
+    await p.consistent(100000 - 30000);
+    assert.equal((await ok(Y, "GET", `/api/dashboard/month?month=${month()}`)).data.paidYourself, -300);
+    // With a deposit the month is max(deposit, booked).
+    await ok(Y, "POST", "/api/plan-deposits/confirm", { month: month(), deposits: [{ planId: p.plan.id, amount: 50 }] });
+    await p.consistent(100000 + 5000);
+    assert.equal((await ok(Y, "GET", `/api/dashboard/month?month=${month()}`)).data.paidYourself, 50);
   });
 });
