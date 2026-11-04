@@ -454,9 +454,9 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                     {invPreview?.map(row => (
                       <div key={row.label} className="text-center">
                         <p className="text-xs text-muted-foreground mb-1">{row.label}</p>
-                        <p className="text-xs text-red-500">{fmt(Math.round(row.pessimistic))}</p>
-                        <p className="text-sm font-display text-amber-600">{fmt(Math.round(row.base))}</p>
-                        <p className="text-xs text-secondary">{fmt(Math.round(row.optimistic))}</p>
+                        <p className="text-xs text-muted-foreground">{fmt(Math.round(row.pessimistic))}</p>
+                        <p className="text-sm font-display text-foreground">{fmt(Math.round(row.base))}</p>
+                        <p className="text-xs text-muted-foreground">{fmt(Math.round(row.optimistic))}</p>
                       </div>
                     ))}
                   </div>
@@ -695,9 +695,9 @@ export function CreatePlan({ onBack }: { onBack: () => void }) {
                     {invPreview.map(row => (
                       <div key={row.label} className="space-y-1">
                         <p className="text-xs font-medium text-muted-foreground">{row.label}</p>
-                        <p className="text-xs text-red-500">{fmt(Math.round(row.pessimistic))}</p>
-                        <p className="text-sm font-display text-amber-600">{fmt(Math.round(row.base))}</p>
-                        <p className="text-xs text-secondary">{fmt(Math.round(row.optimistic))}</p>
+                        <p className="text-xs text-muted-foreground">{fmt(Math.round(row.pessimistic))}</p>
+                        <p className="text-sm font-display text-foreground">{fmt(Math.round(row.base))}</p>
+                        <p className="text-xs text-muted-foreground">{fmt(Math.round(row.optimistic))}</p>
                       </div>
                     ))}
                   </div>

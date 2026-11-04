@@ -12,6 +12,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts';
 import { differenceInDays, format } from 'date-fns';
+import { es as esLocale, enGB } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { usePlans, getPlanStatus } from '../hooks/usePlans';
 import { useTranslation } from 'react-i18next';
@@ -134,7 +135,7 @@ function ProjectionTooltip({ active, payload, label, target, t, fmt }: any) {
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
               <span className="text-muted-foreground text-xs">{p.name}:</span>
-              <span className="font-medium ml-auto">{t('currency.symbol')}{Math.round(p.value).toLocaleString()}</span>
+              <span className="font-medium ml-auto">{fmt(Math.round(p.value))}</span>
             </div>
             {overGoal && (
               <p className="text-xs text-secondary pl-4">{t('planDetail.aboveGoalAmount', { amount: fmt(Math.round(gain)) })}</p>
@@ -157,6 +158,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
   const { cycleStartDay } = useMonth();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
+  const dateLocale = language === 'es' ? esLocale : enGB;
   const { plans, fetchPlans, updatePlan, deletePlan, contributeToPlan } = usePlans();
   const plan = plans.find(p => p.id === planId);
 
@@ -379,10 +381,12 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
 
   const scenarioLabel = (k: keyof typeof PROJECTION_RATE_PCTS) =>
     t(`planDetail.scenario.${k}`, { rate: PROJECTION_RATE_PCTS[k].toLocaleString(locale) });
+  // One neutral hue for the three scenarios: they are examples, not good or
+  // bad outcomes (no red/amber/green grading, LPBETA-06).
   const scenarioConfig = [
-    { pill: scenarioLabel('low'), rate: PROJECTION_RATES[0], stroke: '#F87171', dot: 'bg-red-400',     pillCls: 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800',         textColor: 'text-red-600 dark:text-red-400',     bg: 'bg-red-50 dark:bg-red-950/20' },
-    { pill: scenarioLabel('medium'), rate: PROJECTION_RATES[1], stroke: '#FBBF24', dot: 'bg-amber-400',   pillCls: 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800', textColor: 'text-amber-600 dark:text-amber-400',  bg: 'bg-amber-50 dark:bg-amber-950/20' },
-    { pill: scenarioLabel('high'), rate: PROJECTION_RATES[2], stroke: '#34D399', dot: 'bg-emerald-400', pillCls: 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800', textColor: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/20' },
+    { pill: scenarioLabel('low'), rate: PROJECTION_RATES[0], stroke: 'var(--pool)', opacity: 0.45, dash: '4 4', dotStyle: { backgroundColor: 'var(--pool)', opacity: 0.45 }, pillCls: 'bg-muted text-foreground border-border', textColor: 'text-foreground', bg: 'bg-muted/50' },
+    { pill: scenarioLabel('medium'), rate: PROJECTION_RATES[1], stroke: 'var(--pool)', opacity: 1, dash: undefined, dotStyle: { backgroundColor: 'var(--pool)', opacity: 1 }, pillCls: 'bg-muted text-foreground border-border', textColor: 'text-foreground', bg: 'bg-muted/50' },
+    { pill: scenarioLabel('high'), rate: PROJECTION_RATES[2], stroke: 'var(--pool)', opacity: 0.7, dash: '1 3', dotStyle: { backgroundColor: 'var(--pool)', opacity: 0.7 }, pillCls: 'bg-muted text-foreground border-border', textColor: 'text-foreground', bg: 'bg-muted/50' },
   ];
 
   const projectedCompletion = (() => {
@@ -967,7 +971,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {isInvestment
-                    ? scenarioConfig.map(s => s.pill).join(' · ')
+                    ? `${scenarioConfig.map(s => s.pill).join(' · ')} · ${t('planDetail.simulationShort')}`
                     : `${fmt(effectiveMonthly)}${t('currency.perMonthSuffix')} — ${plan.currentAmount < plan.targetAmount && projectedCompletion ? `${format(projectedCompletion, 'MMM yyyy')}` : t('planDetail.goalReached')}`}
                 </p>
               </div>
@@ -1053,7 +1057,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                     <div className="flex gap-2 flex-wrap">
                       {scenarioConfig.map(s => (
                         <div key={s.pill} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium ${s.pillCls}`}>
-                          <div className={`w-2 h-2 rounded-full ${s.dot}`} />
+                          <div className="w-2 h-2 rounded-full" style={s.dotStyle} />
                           {s.pill}
                         </div>
                       ))}
@@ -1146,9 +1150,9 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
 
                         {isInvestment ? (
                           <>
-                            <Line type="monotone" dataKey="pessimistic" name={scenarioConfig[0].pill} stroke={scenarioConfig[0].stroke} strokeWidth={2}   dot={false} activeDot={{ r: 4, fill: scenarioConfig[0].stroke }} />
-                            <Line type="monotone" dataKey="base"        name={scenarioConfig[1].pill} stroke={scenarioConfig[1].stroke} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: scenarioConfig[1].stroke }} />
-                            <Line type="monotone" dataKey="optimistic"  name={scenarioConfig[2].pill} stroke={scenarioConfig[2].stroke} strokeWidth={2}   dot={false} activeDot={{ r: 4, fill: scenarioConfig[2].stroke }} />
+                            <Line type="monotone" dataKey="pessimistic" name={scenarioConfig[0].pill} stroke={scenarioConfig[0].stroke} strokeOpacity={scenarioConfig[0].opacity} strokeDasharray={scenarioConfig[0].dash} strokeWidth={2}   dot={false} activeDot={{ r: 4, fill: scenarioConfig[0].stroke }} />
+                            <Line type="monotone" dataKey="base"        name={scenarioConfig[1].pill} stroke={scenarioConfig[1].stroke} strokeOpacity={scenarioConfig[1].opacity} strokeDasharray={scenarioConfig[1].dash} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: scenarioConfig[1].stroke }} />
+                            <Line type="monotone" dataKey="optimistic"  name={scenarioConfig[2].pill} stroke={scenarioConfig[2].stroke} strokeOpacity={scenarioConfig[2].opacity} strokeDasharray={scenarioConfig[2].dash} strokeWidth={2}   dot={false} activeDot={{ r: 4, fill: scenarioConfig[2].stroke }} />
                           </>
                         ) : (
                           <Line type="monotone" dataKey="linear" name="Projection" stroke={plan.color} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: plan.color }} />
@@ -1308,7 +1312,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                           {reached ? (
                             <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{t('planDetail.reached')}</span>
                           ) : goalDate ? (
-                            <span className="text-xs text-muted-foreground">{t('planDetail.milestoneEta', { date: format(goalDate, 'MMM yyyy'), rate: PROJECTION_RATE_PCTS.medium.toLocaleString(locale) })}</span>
+                            <span className="text-xs text-muted-foreground">{t('planDetail.milestoneEta', { date: format(goalDate, 'MMM yyyy', { locale: dateLocale }), rate: PROJECTION_RATE_PCTS.medium.toLocaleString(locale) })}</span>
                           ) : null}
                           {milestoneEdit !== null && (
                             <button
