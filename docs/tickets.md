@@ -19,6 +19,7 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 | LPBETA-12 | Detección de suscripciones y gastos hormiga | Refinado | Sí (aditivo, pequeño) |
 | LPBETA-13 | Celebrar los hitos | En refinamiento | Probablemente sí (aditivo, solo "ya visto") |
 | LPBETA-14 | Seguridad del acceso (códigos y contraseñas) | **Hecho y desplegado** (PR #7, 4 nov) | Sí (aditivo, aplicado en el schema) |
+| LPBETA-15 | Medir la paz: una pregunta al mes | En refinamiento | Sí (aditivo: una tabla pequeña) |
 
 ### Orden de prioridad (4 nov; Luis: medir primero, LPBETA-03 de los últimos)
 
@@ -39,6 +40,8 @@ Situación: la alfa está desplegada en `budget.luisvespa.com` con 2 usuarios. T
 | 5 | LPBETA-07 · Inicio y onboarding para el nuevo cliente | L | El mensaje del nuevo cliente. Sin taller, el onboarding tiene que explicarse solo. |
 | 6 | LPBETA-10 · Generosidad en el onboarding | S | Justo después del 07 y en la misma línea de trabajo: los dos cambian el onboarding. |
 | 7 | LPBETA-11 · PWA y página de bienvenida | S–M | El amigo recibe un enlace por WhatsApp: necesita ver qué es antes de registrarse, y luego instalarla solo. Faltan respuestas de Luis (logo, página pública o solo con enlace). |
+
+**Sin colocar todavía — LPBETA-15 · Medir la paz (S–M).** Propuesta de Claude: justo después del 09 y antes de invitar a la primera ola, porque **la primera respuesta de cada persona es su línea base**. Si llega tarde, no se podrá decir "antes de LifePlan estaba en 2". Luis decide.
 
 **B. Durante la BETA (de finales de noviembre a diciembre)**
 | # | Ticket | Tamaño | Por qué va aquí |
@@ -472,3 +475,27 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 2. ¿Tono: sobrio (tarjeta) o festivo (confeti)?
 3. ¿Los interruptores de notificaciones: se quitan ya o se dejan para cuando este ticket esté hecho?
 4. ¿Antes o después de la BETA?
+
+---
+
+## LPBETA-15 · Medir la paz: una pregunta al mes — EN REFINAMIENTO
+
+**Por qué:** la misión promete que ver y controlar el dinero "genera paz interior". LPBETA-05 mide el **uso**, no la paz. Sin un dato propio, no se puede decir si la misión funciona, y los testimonios ("pasamos de 2 a 4 en tres meses") dependerían de la memoria de cada uno. **No enseña nada** (decisión del 4 nov: la app no enseña), solo pregunta.
+
+**Lo que ya existe (verificado, 4 nov):** nada parecido. El periodo de presupuesto de cada usuario se calcula desde su `cycleStartDay` (`server/lib/period.ts`, etiqueta `YYYY-MM`). `npm run stats:active` (LPBETA-05) ya imprime recuentos agregados sin nombres ni importes.
+
+**Propuesta:**
+- **La pregunta:** *"¿Cómo te sientes hoy con tu dinero?"*, con 5 opciones de 1 (muy intranquilo) a 5 (en paz), cada una con una palabra corta. Sin texto libre: más rápido de responder y nada sensible que guardar.
+- **Cuándo:** una vez por periodo de presupuesto (el del día de cobro de cada uno), como una tarjeta pequeña en Inicio. Aparece al empezar el periodo, o en la primera visita de quien acaba de registrarse (**esa es la línea base**). Se puede cerrar ("ahora no") y no vuelve hasta el periodo siguiente. Nunca más de una vez por periodo, sin emails ni notificaciones.
+- **Para el usuario:** después de responder, si ya hay 2 o más respuestas, una línea sencilla con su evolución ("hace 3 meses: 2 · hoy: 4"). Sin juicio si baja.
+- **Hogar:** cada persona responde por sí misma y **su respuesta es privada**: la pareja no la ve.
+- **Para Luis (`stats:active`):** media del último periodo, cuántos respondieron, distribución 1–5 y, de quienes tienen 2 o más respuestas, cuántos suben, igual o bajan. **Solo si hay al menos 5 respuestas en el grupo**: con amigos que se conocen, una media de 2 personas identifica a alguien. Nunca respuestas individuales.
+- **Schema (aditivo, se propone antes de aplicarlo):** una tabla `PeaceCheckin` (`id`, `userId`, `period` "YYYY-MM", `score` 1–5, `createdAt`), única por (`userId`, `period`). Se borra en cascada con el usuario (LPBETA-09). El periodo se guarda porque hace falta para la unicidad; si el usuario cambia su día de cobro, las respuestas antiguas quedan en su periodo original.
+- **API:** `GET /api/checkins` (las mías y si toca preguntar este periodo) y `POST /api/checkins` (`{ score }`, el servidor pone el periodo), detrás de `requireAuth`. Responder cuenta como actividad para LPBETA-05.
+- **Privacidad:** se menciona en la promesa de privacidad (LPBETA-09): "una pregunta al mes sobre cómo te sientes con tu dinero; solo tú ves tu respuesta y Luis solo ve medias de grupos de 5 o más".
+- Textos en es y en. Tests: una respuesta por periodo, el umbral de 5 en las estadísticas, y que la pareja no ve la respuesta.
+
+**Preguntas abiertas para Luis:**
+1. ¿Te vale la frase *"¿Cómo te sientes hoy con tu dinero?"* y la escala de 1 a 5? (Alternativa: caras o emojis en vez de números.)
+2. ¿El usuario ve su propia evolución, o solo la pregunta?
+3. ¿Dónde lo colocas en el orden? (Propuesta: después del 09, antes de la primera ola de amigos.)
