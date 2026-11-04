@@ -1,0 +1,461 @@
+# Tickets de LifePlan
+
+Backlog de tickets refinados. **Ninguno se implementa hasta que Luis lo pida**, y el orden lo decide él.
+Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deudas-y-onboarding.md).
+
+| # | Ticket | Estado | Schema |
+|---|---|---|---|
+| LPBETA-01 | Ciclo de facturación de la tarjeta | Refinado (plan 1.9) | No |
+| LPBETA-02 | Gráficas de deudas, detalle y plan de pago | Refinado | No |
+| LPBETA-03 | Stripe y control de acceso Premium | Refinado | No |
+| LPBETA-04 | Pequeños pendientes | Lista | — |
+| LPBETA-05 | Medir usuarios activos | Refinado | No |
+| LPBETA-06 | LifePlan no asesora sobre inversiones (simulador con aviso) | Refinado | No |
+| LPBETA-07 | Inicio y onboarding para el nuevo cliente | Refinado — **va antes de la BETA** | Por confirmar al diseñar |
+| LPBETA-08 | Enlace de invitación para amigos | Aplazado (después de la BETA) | Sí (aditivo) |
+| LPBETA-09 | Borrar la cuenta, exportar los datos y promesa de privacidad | Refinado — **bloquea la BETA** | Sí (aditivo) |
+| LPBETA-10 | Línea de generosidad en el onboarding | Refinado | No |
+| LPBETA-11 | Instalable en el móvil (PWA) y página de bienvenida | En refinamiento | No |
+| LPBETA-12 | Detección de suscripciones y gastos hormiga | Refinado | Sí (aditivo, pequeño) |
+| LPBETA-13 | Celebrar los hitos | En refinamiento | Probablemente sí (aditivo, solo "ya visto") |
+| LPBETA-14 | Seguridad del acceso (códigos y contraseñas) | **Hecho** en `feature/seguridad-acceso` (4 nov) — falta `db push` y probar en el navegador | Sí (aditivo, aplicado en el schema) |
+
+### Orden de prioridad (4 nov; Luis: medir primero, LPBETA-03 de los últimos)
+
+Situación: la alfa está desplegada en `budget.luisvespa.com` con 2 usuarios. Tamaño: S = un día o menos, M = 2–3 días, L = una semana.
+
+**Cambio del 4 nov:** todavía no hay taller. Luis invitará uno a uno a amigos que vea que necesitan la app. Por eso no hay fecha fija: los amigos entran poco a poco y la app tiene que entenderse **sola**, sin nadie al lado. Eso sube la importancia del 07 (el mensaje del onboarding) y del 11 (la página que ve quien recibe el enlace por WhatsApp).
+
+**Puerta para invitar al primer amigo: 14 + 05 + 09 + 07** (medir, confianza y un mensaje que se entienda solo). El resto del bloque A puede llegar mientras los primeros amigos ya la usan.
+
+**A. Antes de invitar a los amigos (por olas, sin fecha fija)**
+| # | Ticket | Tamaño | Por qué va aquí |
+|---|---|---|---|
+| 0 | **LPBETA-14 · Seguridad del acceso (códigos y contraseñas)** | S–M | **Urgente, antes de invitar a nadie:** el sistema es público y hoy se puede adivinar el código de recuperación de contraseña de otra persona. Ya afecta a la alfa desplegada. |
+| 1 | LPBETA-05 · Medir usuarios activos | S | Sin medir, la BETA no enseña nada. Con 2 usuarios ya da la línea base y prueba el script antes de que haya 20. Solo lectura, sin schema. |
+| 2 | LPBETA-04 · Pequeños pendientes | S | Sobre todo el `/deploy` del `db push` de producción: lo necesitan los siguientes tickets que cambian el schema (09, 12, 13). |
+| 3 | LPBETA-09 · Borrar cuenta, exportar y privacidad | M–L | Bloquea la BETA: RGPD y la primera duda en una comunidad donde todos se conocen. Toca la autenticación. |
+| 4 | LPBETA-06 · Aviso de inversiones | S | Riesgo regulatorio y todo decidido: tasas 3,5/5/7 % y aviso. Rápido. |
+| 5 | LPBETA-07 · Inicio y onboarding para el nuevo cliente | L | El mensaje del nuevo cliente. Sin taller, el onboarding tiene que explicarse solo. |
+| 6 | LPBETA-10 · Generosidad en el onboarding | S | Justo después del 07 y en la misma línea de trabajo: los dos cambian el onboarding. |
+| 7 | LPBETA-11 · PWA y página de bienvenida | S–M | El amigo recibe un enlace por WhatsApp: necesita ver qué es antes de registrarse, y luego instalarla solo. Faltan respuestas de Luis (logo, página pública o solo con enlace). |
+
+**B. Durante la BETA (de finales de noviembre a diciembre)**
+| # | Ticket | Tamaño | Por qué va aquí |
+|---|---|---|---|
+| 8 | LPBETA-12 · Suscripciones y gastos hormiga | M–L | Decidido "para la BETA". Necesita unas semanas de movimientos para detectar algo, así que llega bien a las 2–3 semanas de uso. |
+| 9 | LPBETA-13 · Celebrar los hitos | M | Retención y testimonios. Tiene más sentido cuando ya hay un mes de aportaciones. Faltan respuestas de Luis. |
+
+**C. Después de la BETA**
+| # | Ticket | Tamaño | Por qué va aquí |
+|---|---|---|---|
+| 10 | LPBETA-02 · Gráficas de deudas y plan de pago | L | Valioso, pero el nuevo cliente no tiene la deuda como eje. Se prioriza según lo que pida la BETA. |
+| 11 | LPBETA-01 · Ciclo de facturación de la tarjeta | M | Precisión para quien usa tarjeta revolving. El mismo criterio que el 02. |
+| 12 | LPBETA-03 · Stripe y Premium | M | Decisión de Luis: de los últimos. No se cobra antes de la etapa 2, y antes hacen falta Vercel Pro y lo legal. |
+| 13 | LPBETA-08 · Enlace de invitación | M | Aplazado hasta después de la BETA. Su recompensa (descuento en Premium) depende del 03, por eso va detrás. |
+
+**El bloque B** empieza cuando haya unas semanas de uso real (el 12 necesita movimientos para detectar algo), no en una fecha.
+
+Luis decide cuándo se ejecuta cada uno.
+
+---
+
+## LPBETA-01 · Ciclo de facturación de la tarjeta — REFINADO
+
+Con `statementDay` / `paymentDueDay` de la tarjeta, separar **lo que vence este mes** (compras hasta el día de corte) del **saldo total** (incluye compras después del corte, que se pagan el mes siguiente). Es el diferenciador de "dos ejes de tiempo" del producto. El modelo actual lo permite sin cambiar el schema (saldo derivado, `server/lib/debtBalance.ts`). Detalle original en el plan, sección 1.9.
+
+---
+
+## LPBETA-02 · Gráficas de deudas, detalle y plan de pago — REFINADO
+
+Petición de Luis: ver con gráficas cuánto falta para cancelar cada deuda, lo pagado y lo que resta; un simulador de pago extra; y el plan de pago (bola de nieve / avalancha) en su propia pantalla, con la gráfica de salida de deuda que cambia según el método elegido.
+
+### Lo que ya existe (verificado en el código, 3 nov)
+- `server/lib/debtPayoff.ts`: `simulatePayoff(debts, method, extraCents)` simula bola de nieve y avalancha con pago extra mensual, y devuelve solo un **resumen**: meses, intereses, total pagado y el mes en que se cierra cada deuda. No devuelve la serie mes a mes, que es lo que necesita una gráfica.
+- `GET /api/debts/payoff?extra=` compara los dos métodos con saldos vivos (`owedNow`). La tarjeta en modo contado usa su saldo entero como mínimo.
+- `Debts.tsx` tiene ya el bloque "plan de pago" con el campo de pago extra y las dos tarjetas comparativas. No hay gráfica ni pantalla de detalle, y el método elegido no se guarda.
+- `GET /api/debts/timeline`: el "futuro comprometido" por periodo.
+- `recharts` 2.15.2 ya está instalado.
+- Lo pagado sale de los pagos registrados contra la deuda (el saldo es derivado, `debtBalance.ts`). `Debt.principal` (lo prestado al inicio) es opcional y muchas deudas no lo tendrán.
+
+### Propuesta
+**LPBETA-02.1 Motor: serie mes a mes.** Ampliar `simulatePayoff` (o una función hermana) para que devuelva, por mes, el saldo de cada deuda, lo pagado y los intereses. Puro, en céntimos, con tests. De ahí salen todas las gráficas y el simulador. También un **pago único** (p. ej. la paga extra de junio o diciembre) además del extra mensual.
+
+**LPBETA-02.2 Pantalla de detalle de una deuda** (se abre al tocar una deuda en la lista):
+- Cabecera: saldo actual, fecha estimada de fin y "te quedan N meses".
+- Barra o anillo: pagado / resta / intereses que faltan por pagar.
+- Gráfica de saldo en el tiempo: lo real hasta hoy (de los pagos) en línea continua y la proyección en discontinua hasta cero.
+- Simulador: pago extra mensual y pago único → "terminas en X en vez de Y, ahorras N meses e Z de intereses". Se recalcula al momento. **Solo para mirar** (decisión del 3 nov): no guarda nada ni cambia el presupuesto.
+- Historial de pagos y compras (hoy en 1.6 como pendiente).
+
+**LPBETA-02.3 Pantalla del plan de pago** (sale de Deudas a su propia pantalla):
+- Selector bola de nieve / avalancha: la gráfica se actualiza al cambiarlo. No se guarda (decisión del 3 nov).
+- Pago extra mensual.
+- Gráfica de áreas apiladas: el saldo de cada deuda en su color hasta llegar a cero, con la **fecha de libertad** marcada.
+- Lista en el orden del método con la fecha de cierre de cada deuda.
+- Comparación en una línea: "Con avalancha terminas N meses antes y ahorras X".
+
+### Sugerencias de Claude (para decidir)
+- **Futuro comprometido a lo largo del plan:** una gráfica del % de ingresos comprometido bajando a medida que se cierran deudas. Une este ticket con la métrica central del producto.
+- **Fecha de libertad en Inicio**, que abre la pantalla del plan.
+- **"Solo mínimos" como referencia** en la gráfica del plan, para que se vea lo que se gana con el plan.
+- **Hitos:** marcar en la gráfica cuándo cae cada deuda ("aquí se libera tu cuota de 50 €").
+- Más adelante: "aplicar" el pago extra del simulador al presupuesto como partida.
+
+### Riesgos que hay que resolver en el diseño
+- **Deudas sin TAE o sin mínimo:** la simulación no converge (tope de 600 meses) o la avalancha se vuelve igual que la bola de nieve. Pedir el dato en la propia pantalla en vez de mostrar una fecha falsa.
+- **Tarjetas:** la proyección supone que no hay compras nuevas. Decirlo en la pantalla. Una tarjeta en modo contado no es deuda que proyectar.
+- **Lo pagado sin `principal`:** "pagado" = pagos registrados desde que la deuda está en la app, no desde que se pidió el préstamo.
+- **Hogar:** las deudas de la pareja entran según su visibilidad, igual que hoy en `/payoff`.
+
+### Schema
+Ninguno: el simulador es solo para mirar (decisión del 3 nov). Si más adelante se quiere guardar el método o el extra, sería aditivo (p. ej. `UserSettings.payoffMethod`) y se propone antes.
+
+### Preguntas abiertas para Luis
+1. ~~¿Pago único además del extra mensual?~~ → decidido 3 nov: **sí, las dos opciones** en el simulador.
+2. ~~¿Guardar el método y el extra?~~ → decidido 3 nov: **el simulador es solo para mirar**; no se guarda nada.
+3. ~~¿Alguna parte será Premium?~~ → decidido 3 nov: **no**. Premium será solo la conexión con bancos y el botón de importar ficheros; las gráficas y el simulador son gratis.
+4. ~~¿Antes o después del ciclo de facturación?~~ → el orden lo decide Luis al pedir la ejecución. Nota: con LPBETA-01 hecho, las fechas de las tarjetas salen más exactas.
+
+---
+
+## LPBETA-03 · Stripe y control de acceso Premium — REFINADO
+
+Petición de Luis: habilitar el botón Premium y poner control de acceso a importar. Premium incluirá **solo la conexión con bancos y el botón de importar ficheros** (decisión del 3 nov). Tocar Stripe está en "no modificar sin preguntar": este refinamiento es esa pregunta.
+
+**Sin entorno de preproducción (decisión del 3 nov):** `budget.luisvespa.com` hace de preproducción mientras solo la usan la familia de Luis y algunos amigos. Cuando haya usuarios que paguen se revisa si hace falta separar entornos.
+
+### Lo que ya existe (verificado en el código, 3 nov)
+- Stripe ya está programado (2.9): checkout, confirmación, cancelar/reactivar, cambiar tarjeta, webhook y emails de suscripción. Es perezoso: sin `STRIPE_*`, sus rutas responden 503 y `useBillingEnabled` oculta Premium en el frontend.
+- `Subscription.plan` (`free` | `premium`) en el schema.
+- `bankingAccess()` (`server/lib/banking/config.ts`) ya devuelve un motivo y está preparado para añadir `premium_required`. La importación de ficheros no tiene ningún control de acceso todavía.
+
+### LPBETA-03.0 Planes de suscripción (decididos el 3 nov; precios aprobados por Luis el 3 nov)
+- **Compartir el hogar con la pareja sigue siendo gratis.**
+- **Premium solo habilita la conexión con bancos y la importación con IA.** La versión gratis es completa; se cobra por comodidad y por el coste de la IA y de las conexiones.
+- **Hogar es más caro** porque son más personas y más cuentas bancarias.
+- **Solo pago anual y barato:** convierte menos, pero ingresa más por usuario cuando se cobre de verdad. Quien no llega a fin de mes tiene la versión gratis.
+
+| Plan | Para quién | Incluye | Precio propuesto |
+|---|---|---|---|
+| **Gratis** | 1 persona (puede compartir hogar) | Todo menos banca e importar | 0 |
+| **Premium** | 1 persona | + conexión con bancos + importar con IA | **24 €/año** (2 €/mes) |
+| **Hogar** | los 2 miembros del hogar | Premium para los dos | **36 €/año** (3 €/mes; 12 € menos que dos Premium) |
+
+**Por qué esos precios (mercado, búsqueda del 3 nov, fuentes de terceros):** las apps estadounidenses con banca cuestan ~95–110 $/año (YNAB 109 $, Monarch 99,99 $, Copilot 95 $); las europeas de control de gastos, ~15–36 €/año (Spendee Premium con banca ~36 $/año, Wallet ~18–20 £/año). 24 € queda por debajo de casi todas las europeas con banca y a un cuarto de las americanas: "menos que un café al mes". **Oferta de lanzamiento:** "precio de fundador" que se mantiene mientras siga suscrito.
+**A revisar con la respuesta de Enable Banking:** si cobran por conexión al mes, comprobar que 24 €/36 € al año lo cubren. La comisión de Stripe en 24 € es ~0,60 €.
+
+**Impacto en el código (hoy hay un solo precio):**
+- `server/lib/stripe.ts` solo conoce `STRIPE_PREMIUM_PRICE_ID` y traduce el precio a `plan: "premium"`. Hace falta un segundo precio (`STRIPE_HOUSEHOLD_PRICE_ID`, variable nueva) y el valor `plan: "household"`. `Subscription.plan` es texto, así que **no cambia el schema**.
+- El control de acceso (LPBETA-03.2) mira también al hogar: un miembro tiene Premium si su suscripción es Premium **o** si alguien de su hogar tiene Hogar.
+- Pasar de Premium a Hogar a mitad de año: Stripe prorratea; decidir si se permite desde la app.
+- Textos y emails dicen "al año"; cancelar deja el acceso hasta el final del año pagado.
+
+**Familia y amigos: gratis para siempre** (decisión del 3 nov), porque `budget.luisvespa.com` es el entorno de preproducción; el cobro real será en un entorno de producción futuro. Propuesta: lista de emails con Premium regalado en una variable (`PREMIUM_COMP_EMAILS`, igual que `BANKING_ALLOWED_EMAILS`), sin schema.
+
+### LPBETA-03.1 Activar Stripe en modo test en budget.luisvespa.com
+- **Luis, en el panel de Stripe (modo test):** producto "LifePlan Premium" con su precio → `STRIPE_PREMIUM_PRICE_ID`; webhook a `https://budget.luisvespa.com/api/stripe/webhook` con los 5 eventos de 2.9 → `STRIPE_WEBHOOK_SECRET`; `STRIPE_SECRET_KEY` de test. Las tres en Vercel y redesplegar.
+- **Claude:** revisar los puntos abiertos de 2.9 antes de activar: cuerpo crudo del webhook en la función de Vercel y `current_period_end` según la versión de la API fijada.
+- En modo test nadie paga dinero real: los usuarios usan la tarjeta de prueba `4242 4242 4242 4242`.
+
+### LPBETA-03.2 Control de acceso Premium (servidor y frontend, CLAUDE.md)
+- `bankingAccess()` devuelve `premium_required` sin Premium.
+- Función igual para importar (`importAccess()`): las rutas de importación responden con error claro sin Premium.
+- La interfaz muestra "Hazte Premium" en la franja del banco, en Cuentas y en el botón de importar, en lugar de esconderlos sin explicar. Si Stripe está apagado, no se bloquea nada (no se puede pedir algo que no se puede comprar).
+- Textos: la pantalla y el email de Premium pasan a listar lo que incluye (banca e importar).
+- Tests del control de acceso y de que la app sigue funcionando sin variables de Stripe.
+
+### LPBETA-03.3 Verificación (en budget.luisvespa.com, modo test)
+Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responden error → se hace Premium con `4242…` → vuelve con Premium activo → webhook 200 en el panel de Stripe → email "suscripción activada" → banca e importar funcionan → cancelar → queda "cancela al final del periodo" → reactivar. Con `4000 0000 0000 0341`, email de pago fallido.
+
+### Antes de cobrar dinero real (fuera de este ticket)
+- **Vercel Hobby es solo para uso no comercial.** Cobrar exige el plan **Pro** (20 $/mes).
+- Claves live de Stripe y webhook live (sin tocar código), cuenta de Stripe como autónomo, IVA (Stripe Tax) y textos legales mínimos (términos, privacidad, cancelación; decisión I).
+
+### Preguntas abiertas para Luis
+1. ~~Hogar~~ → plan propio, más caro; compartir hogar sigue gratis (3 nov).
+2. ~~Forma de pago~~ → solo anual y barato (3 nov).
+3. ~~Precios~~ → aprobados 3 nov: **24 €/año Premium y 36 €/año Hogar**, con precio de fundador. Revisar solo si el coste de Enable Banking por conexión no cabe.
+4. ~~Usuarios actuales~~ → gratis para siempre en este entorno (3 nov).
+
+---
+
+## LPBETA-04 · Pequeños pendientes
+
+- Reescribir el comando `/deploy` (`.claude/skills/deploy/`): el paso del `db push` de producción no funciona como está escrito (las variables de Neon son Sensitive); debe dar la receta de "pega la URL entre comillas" en tu terminal.
+- Restos de i18n: algunos `€` escritos a mano en otras claves de traducción.
+- Movimientos antiguos sin atribuir a una persona del hogar.
+- Conectar el banco desde Actividad vuelve a Cuentas tras el consentimiento, en vez de a Actividad.
+
+---
+
+> Los tickets LPBETA-05 a LPBETA-08 salen de [`vision-y-plan-beta.md`](vision-y-plan-beta.md) (4 nov).
+
+## LPBETA-05 · Medir usuarios activos — REFINADO
+
+**Por qué:** la meta del plan es 1.000 usuarios **activos** y hoy la app no los mide.
+
+**Definición** (`vision-y-plan-beta.md` §3): usuario activo = ha registrado o revisado movimientos en los últimos 30 días.
+
+**Lo que ya existe (verificado, 4 nov):** `User.createdAt`; `Expense.createdAt` y `Expense.createdByUserId` (quién lo apuntó, también en hogares); `Income`, `PlanDeposit` con su fecha de creación; `Account.bankReviewedAt` (revisión de la banca). No hay "último acceso" ni herramientas de analítica, y no se quieren: nada de terceros que vea datos financieros.
+
+**Propuesta:**
+- Un **script** `npm run stats:active` (como `repair:partner-data`) que imprime **solo números**, nunca nombres, emails ni importes:
+  - registrados en total y en los últimos 7/30 días;
+  - activos en 7 y 30 días (alguna fila creada por ellos en `Expense`, `Income`, `PlanDeposit`, o una revisión de banca);
+  - hogares con 2 miembros;
+  - cuántos tienen al menos un plan de ahorro y cuántos han hecho una aportación en 30 días (medidas de la BETA, §5);
+  - retención por semana de alta (de los que se registraron la semana X, cuántos siguen activos).
+- Lo ejecuta **Luis en su terminal** contra producción, con la URL de Neon entre comillas, igual que el `db push`. Los datos de producción no pasan por Claude.
+- Solo lectura; tests con la base de datos de prueba.
+
+**Más adelante (no ahora):** una pantalla de administración. Exige definir quién es administrador, y eso toca la autenticación (lista de "no modificar sin preguntar").
+
+---
+
+## LPBETA-06 · LifePlan no asesora sobre inversiones (simulador con aviso) — REFINADO
+
+**Por qué:** decisión del 4 nov: LifePlan da el método para ahorrar; cada uno invierte donde quiera. En España el asesoramiento financiero está regulado: la app no debe parecer que recomienda.
+
+**Lo que ya existe (verificado, 4 nov) — importante:**
+- Los planes tienen `goalClass` `savings` | `investment`, y los de inversión muestran **"Proyección de Inversión — 3 Escenarios"** (`PlanDetail.tsx:278`):
+  - plan de inversión: **1 % / 5 % / 15 %** anual;
+  - plan de "riqueza": **5 % / 12 % / 25 %** anual, con etiquetas "Conservador (5%)" y "Agresivo (25%)".
+- Un 25 % anual sostenido no es realista, y llamar "conservador" a un 5 % puede leerse como promesa. Para el nuevo cliente esto es lo contrario del mensaje "te damos el método, tú decides".
+
+**Propuesta:**
+- **Aviso claro y corto** donde se habla de invertir (crear plan de inversión, detalle del plan, taller): "LifePlan te ayuda a ahorrar. No recomienda productos ni gestiona tu dinero. Las proyecciones son ejemplos, no promesas."
+- Lo mismo en la página legal (`LegalPage.tsx`).
+- **Proyecciones prudentes**, a decidir por Luis:
+  - **(a, recomendada)** un solo escenario que el usuario elige (por defecto un % moderado, p. ej. 4 %) y sin etiquetas de riesgo;
+  - (b) mantener 3 escenarios con tasas más bajas (p. ej. 2 % / 4 % / 7 %) y nombres neutros ("bajo / medio / alto");
+  - (c) quitar las proyecciones y mostrar solo lo ahorrado y la meta.
+- Textos en es y en; sin cambios de schema.
+
+**Decidido 4 nov:** las proyecciones **se mantienen**. No enseñan a invertir: son un **simulador para motivar**, para que el usuario vea cuánto podría crecer su dinero con el tiempo. Se añade el aviso de "simulación, no promesa" junto a la gráfica.
+**Tasas, decidido 4 nov: se bajan.** Luis: el escenario más bajo **nunca por debajo del 3,5 %**, porque las cuentas remuneradas ya dan eso y los bonos están en el 4–5 %.
+- Nuevas tasas, iguales para los planes de inversión y de "riqueza": **bajo 3,5 % · medio 5 % · alto 7 %** anual (el medio y el alto los propuso Claude: 7 % es una referencia habitual a largo plazo de la bolsa global).
+- Nombres neutros: "bajo / medio / alto", sin "conservador" ni "agresivo".
+- Las tasas viven en un solo sitio en el código (hoy `projRates` en `PlanDetail.tsx:278`) para poder ajustarlas sin buscar.
+- Cambian los textos con porcentajes escritos (`planDetail.conservative`, `aggressive`, `wealthProjectionNote` "5–25%"), en es y en.
+
+---
+
+## LPBETA-07 · Inicio y onboarding para el nuevo cliente — REFINADO (antes de la BETA)
+
+**Por qué:** el cliente objetivo cambió el 4 nov (gana bien, llega justo, sin sistema de ahorro). Hoy la app habla sobre todo de deuda.
+
+**Lo que ya existe (verificado, 4 nov):**
+- Onboarding en `src/app/onboarding/`: bienvenida, ingresos, ahorro, tarjetas, préstamos, banco, partidas del presupuesto y resultado. El resultado gira en torno a "X de tus Y ya van a deudas este mes".
+- En Inicio, la tarjeta del futuro comprometido ("El N % de tu próximo cobro ya está destinado a deudas").
+- Planes de ahorro con meta y aportaciones (Planes).
+
+**Propuesta (a refinar con Luis):**
+- **Onboarding:** mismo flujo, otro mensaje. Pregunta inicial sobre el objetivo ("ahorrar de forma constante", "fondo de emergencia", "salir de deudas", "ahorrar para invertir"); las preguntas de tarjetas y préstamos siguen, pero sin protagonismo si el usuario no tiene deudas.
+- **Resultado del onboarding:** "Ganas X. Cada mes podrías ahorrar Y si…", con el futuro comprometido como un dato más, no el titular.
+- **Inicio orientado a la paz** (lista del 4 nov): arriba, **"Te has pagado X de Y este mes"** (lo apartado para ti frente a tu % de "Págate a ti primero") y un **semáforo con una frase** que resume cómo va el mes. La deuda va debajo.
+  - Por definir al diseñar: qué mide el semáforo (¿ahorro, presupuesto o los dos?) y las frases de cada color.
+- **Primeras metas al terminar el onboarding** (decisión del 4 nov; sustituye a la del umbral de ahorro, porque el sistema no puede saber si el dinero ahorrado es de verdad un fondo de emergencia):
+  1. **Siempre se ofrece crear el plan "Fondo de emergencia"**, también a quien ya tiene ahorros.
+     - Meta sugerida: 3 meses de gastos del presupuesto, **editable** (cada usuario decide).
+     - Si ya tiene ahorros (el onboarding los pregunta en `SavingsStep.tsx`): la app propone empezar el plan con ese dinero y le dice que lo tenga **separado, en un lugar seguro, por ejemplo una cuenta remunerada**. Es una pauta general, sin recomendar ningún banco ni producto (LPBETA-06).
+  2. **Siempre se anima a "Págate a ti primero"**: apartar un **% fijo del sueldo** al cobrar.
+     - **El % lo elige cada usuario.** Ejemplos (10 %, 15 %, 20 %) sin marcar ninguno como "el correcto".
+     - La app no se ata al método del taller: sirve para el método que cada uno quiera seguir (decisión del 4 nov).
+- Revisar los textos que hablen de sobreendeudamiento (web de bienvenida, emails, CLAUDE.md "What this is").
+
+**Preguntas abiertas para Luis:**
+1. ~~¿Primera meta?~~ → decidido 4 nov: **siempre** fondo de emergencia (con lo ya ahorrado como punto de partida) **y** "Págate a ti primero" con el % que elija el usuario. Sin umbral.
+2. ~~¿Método con nombre propio?~~ → decidido 4 nov: **no**; la app es moldeable al método de cada usuario y cada uno elige su %.
+3. ~~¿Antes de la BETA?~~ → decidido 4 nov: **sí, antes de la BETA.**
+
+---
+
+## LPBETA-08 · Enlace de invitación para amigos — APLAZADO (después de la BETA, decisión del 4 nov)
+
+**Por qué:** etapa 3 del plan (crecer por recomendación, sin anuncios).
+
+**Lo que ya existe (verificado, 4 nov):** la invitación a la **pareja** (`PartnerInvite`, une el hogar). El registro es abierto (`POST /api/auth/register` y Google). No hay invitación a amigos ni se sabe quién trajo a quién.
+
+**Propuesta:**
+- Cada usuario tiene un **enlace personal** (`budget.luisvespa.com/?ref=CÓDIGO`) para compartir por WhatsApp, con un texto ya escrito.
+- Al registrarse con ese enlace se guarda quién le invitó. **Schema aditivo:** `User.referralCode` (único) y `User.referredByUserId` (opcional). Se propone antes de aplicarlo.
+- El amigo invitado **no** entra en el hogar ni ve nada del que invita: es solo atribución.
+- `stats:active` (LPBETA-05) cuenta registros y activos que llegan por invitación.
+- **Recompensa** (idea de Luis, 4 nov): quien invita a **5 personas que se vuelven activas** (definición de LPBETA-05) obtiene un **descuento para comprar Premium**. Requiere LPBETA-03 y LPBETA-05. En Stripe se hace con un cupón de un solo uso. Durante la BETA, sin recompensa.
+
+**Preguntas abiertas para Luis:**
+1. ~~¿Ya para la BETA?~~ → decidido 4 nov: **puede esperar**, después de la BETA.
+2. ~~¿Recompensa?~~ → decidido 4 nov: **sí**, descuento en Premium al invitar a 5 usuarios que se vuelven activos. Activos durante **30 días** (decidido 4 nov). Falta el % del descuento.
+
+---
+
+> LPBETA-09 a LPBETA-11 salen de la lista para la BETA del 4 nov.
+
+## LPBETA-09 · Borrar la cuenta, exportar los datos y promesa de privacidad — REFINADO (bloquea la BETA)
+
+**Por qué:** confianza y RGPD (derecho de supresión y de portabilidad). En una iglesia donde todos se conocen, "¿quién ve mis números?" es la primera pregunta.
+
+**Lo que ya existe (verificado, 4 nov):**
+- Páginas públicas `/privacy` y `/terms` (`LegalPage.tsx`, textos en `legal.*`, actualizados el 29 oct).
+- **No hay forma de borrar la cuenta ni de exportar los datos.**
+- Casi todas las relaciones de `User` borran en cascada. Pero en un hogar los datos viven en el pool del miembro principal (`userId` = pool): borrar a ese usuario borraría también lo de su pareja.
+- Ya existe la separación de una pareja (`server/lib/partnerUnlink.ts`), que reparte los datos de cada uno.
+
+**Propuesta:**
+- **Exportar mis datos** (Ajustes): un fichero (JSON, y CSV de movimientos) con **solo lo que es mío** (`ownerUserId` / `createdByUserId`), no lo de la pareja.
+- **Borrar mi cuenta** (Ajustes), con confirmación por código al email:
+  1. si está en un hogar, primero se separa (`partnerUnlink`): la pareja conserva lo suyo;
+  2. se revocan las conexiones con bancos en Enable Banking;
+  3. si hay suscripción en Stripe (LPBETA-03), se cancela;
+  4. se borra el usuario y todo lo suyo, y se cierra la sesión.
+  - **24 horas para arrepentirse** (decisión del 4 nov): al pedirlo se marca la cuenta (`User.deletionRequestedAt`, **schema aditivo**) y se envía un email con "cancelar el borrado". Si entra en la app durante ese plazo, ve "tu cuenta se borrará el …" con el botón de cancelar.
+  - El borrado real lo hace la tarea diaria (Vercel Cron, como `/api/banking/cron`, con `CRON_SECRET`): borra las cuentas con más de 24 h de aviso. Con una pasada al día, se borra entre 24 y 48 h después de pedirlo; la promesa lo dice así.
+  - Email de confirmación de que se ha borrado.
+- **Promesa de privacidad en una página**, en lenguaje sencillo, enlazada desde el onboarding y Ajustes: quién ve tus datos (nadie de la iglesia; en un hogar, solo tu pareja lo que compartes), qué no hacemos (no vendemos ni compartimos datos, no hay anuncios), qué terceros intervienen (Neon, Vercel, Resend, Enable Banking, Anthropic para clasificar sin nombres de comercios a modelos gratis…) y cómo borrar o exportar.
+- Tests de integración: borrar al miembro principal de un hogar no toca los datos de la pareja.
+
+**Cuidado:** borrar la cuenta toca la sesión (lista de "no modificar sin preguntar": auth). Este ticket es esa pregunta.
+
+**Preguntas abiertas para Luis:**
+1. ~~¿Plazo para arrepentirse?~~ → decidido 4 nov: **24 horas**.
+2. ~~¿Quién redacta la promesa?~~ → decidido 4 nov: **la redacta Claude** y Luis la revisa.
+
+---
+
+## LPBETA-10 · Línea de generosidad en el onboarding — REFINADO
+
+**Por qué:** es lo que diferencia LifePlan de YNAB o Ramsey y lo que da sentido a la misión.
+
+**Regla (Método Ruta R1, ya en el código):** la generosidad es la **primera línea del presupuesto** y nunca desaparece; el usuario puede ponerla a 0, pero no borrarla (`server/routes/allocations.ts:260`).
+- **Porcentaje libre y opcional.**
+- **Sin la palabra "diezmo"**: "generosidad" o "dar", para que sirva dentro y fuera de la iglesia.
+
+**Lo que ya existe (verificado, 4 nov):** el tipo de partida `generosity` en el servidor (no se puede borrar; se copia al separar una pareja). **El onboarding no la crea** y no hay textos para ella en `es.json`/`en.json`.
+
+**Propuesta:**
+- Un paso corto en el onboarding, antes de las partidas del presupuesto: "¿Quieres reservar una parte para dar?" con un % libre (ejemplos sin marcar ninguno, y "ahora no" = 0 %).
+- Crea la línea de generosidad como primera del presupuesto, con el importe = % de los **ingresos del hogar** (`householdMonthIncome`, el mismo ingreso que usa Inicio). Si cambian los ingresos, se recalcula con el mismo %.
+- A quien ya está registrado, crearle la línea a 0 si no la tiene (para que la regla R1 se cumpla para todos).
+- En el resultado del onboarding y en Inicio, aparece como "Das X al mes" (sin juicio si es 0).
+
+**Preguntas abiertas para Luis:**
+1. ~~¿Sobre qué ingresos?~~ → decidido 4 nov: **los del hogar**.
+2. ~~¿Nombre?~~ → decidido 4 nov: **"Generosidad"**.
+
+---
+
+## LPBETA-11 · Instalable en el móvil (PWA) y página de bienvenida — EN REFINAMIENTO
+
+**Por qué:** que todos la instalen en el móvil durante el taller, como una app, sin tiendas.
+
+**Lo que ya existe (verificado, 4 nov):** no hay manifiesto (`public/` solo tiene `robots.txt`; `index.html` sin `manifest` ni `apple-touch-icon`). La pantalla de bienvenida actual es la de después de registrarse ("¡Bienvenido a LifePlan!") y habla de "Planes de Vida" e inversiones.
+
+**Propuesta:**
+- **Manifiesto PWA** (`manifest.webmanifest`): nombre, iconos (192 y 512 px, y el de Apple), color de tema, `display: standalone`. Sin modo sin conexión (no hace falta para la BETA y evita servir datos viejos).
+- **Instrucciones de instalación** dentro de la app (iPhone: Compartir → Añadir a pantalla de inicio; Android: el aviso de instalar).
+- **Página de bienvenida sencilla** para quien llega sin sesión: qué es LifePlan en una frase, el sistema en pasos, la promesa de privacidad (LPBETA-09) y "Crear cuenta". Con el mensaje del nuevo cliente (`vision-y-plan-beta.md`).
+
+**Preguntas abiertas para Luis:**
+1. ¿Tienes logo o icono en buena resolución? Si no, preparo uno sencillo provisional.
+2. ~~¿Pública o solo con enlace?~~ → decidido 4 nov: **pública**, igual que todo el sistema (registro abierto). Consecuencias:
+   - ~~`public/robots.txt` desfasado~~ → **hecho (4 nov, rama `feature/seguridad-acceso`):** permite todo menos `/api/`; ya no menciona la Radiografía.
+   - Cualquiera puede registrarse: LPBETA-05 mostrará también los registros que no vienen de invitaciones, y la seguridad del acceso va antes (LPBETA-14).
+
+---
+
+## LPBETA-12 · Detección de suscripciones y gastos hormiga — REFINADO (para la BETA)
+
+**Por qué:** responde a la frase del cliente objetivo: "cada mes desaparece el dinero y no sé en qué". Las suscripciones olvidadas y los pequeños gastos repetidos (café, snacks, envíos, apps) son el dinero que "desaparece" sin que se note.
+
+**Lo que ya existe (verificado, 4 nov):**
+- **Detección de cargos recurrentes** (`server/lib/recurring.ts`, `GET /api/recurring`, `RecurringCommitment`): un comercio es recurrente si aparece en **3 meses distintos** con un importe estable (±20 % o ±3 €). Solo cadencia **mensual**. Estados: detectado / confirmado / ignorado, y puede enlazarse a una partida fija.
+- Se muestra dentro de las partidas del presupuesto (`RecurringManager` en `AllocationFlow.tsx`), no en Inicio ni en Actividad: es fácil no verlo.
+- Cada movimiento tiene `merchant` normalizado (`normalizeMerchant.ts`).
+- **No existe nada para gastos hormiga.**
+
+**Propuesta:**
+- **Suscripciones** (sobre lo que ya hay):
+  - detectar también cadencia **anual** y **semanal** (hoy solo mensual), y cargos nuevos que aparecen por primera vez y se repiten al mes siguiente (pruebas gratis que pasan a cobrarse);
+  - aviso de **subida de precio** ("Netflix ha pasado de 12,99 a 15,99");
+  - una vista **"Tus suscripciones"**: lista, total al mes y **total al año** ("pagas 540 € al año en suscripciones"), con "la quiero" / "voy a cancelarla" (recordatorio, la app no cancela nada).
+- **Gastos hormiga:**
+  - gastos **pequeños y frecuentes** en el mismo comercio o la misma categoría: **menos de 10 € y 4 o más veces al mes** (decisión del 4 nov);
+  - mostrarlos **sumados y llevados al año**: "Café: 3,20 € × 18 veces = 58 € este mes → ~690 € al año";
+  - y unirlo al ahorro (LPBETA-07): "si lo reduces a la mitad, son 345 € al año más para tu plan".
+- **Dónde se ve** (decisión del 4 nov): **en Inicio y en un email mensual**; la vista completa en Actividad.
+  - **Email mensual** "Tu mes en LifePlan": suscripciones, gastos hormiga y lo que te has pagado (LPBETA-07). Plantilla nueva en `server/lib/email/` (es y en, muestra en `samples.ts`), enviada por una tarea mensual de Vercel Cron.
+  - **Darse de baja** del email desde el propio email y en Ajustes (`UserSettings`, columna aditiva). Por RGPD y por respeto.
+  - **Límite de Resend:** 100 emails al día en el plan gratis. Con la BETA sobra; al acercarse a los 100 usuarios hay que repartir el envío en varios días o pasar a Cloudflare (decisión K).
+- **Sin IA y sin enviar nombres de comercios fuera:** heurística en el servidor sobre los movimientos que ya hay, en céntimos, con tests.
+- Respeta la visibilidad del hogar (`expenseListingFilter`).
+
+**Schema (aditivo, pequeño):** `RecurringCommitment.cadence` ya es texto (admite `yearly`/`weekly`). Nuevas: la preferencia del email mensual en `UserSettings`, y quizá el precio anterior en `RecurringCommitment` para avisar de subidas. Se proponen antes.
+
+**Preguntas abiertas para Luis:**
+1. ~~¿Umbral?~~ → decidido 4 nov: **menos de 10 € y 4 veces al mes**.
+2. ~~¿Dónde?~~ → decidido 4 nov: **Inicio y email mensual**.
+3. ~~¿Antes o después de la BETA?~~ → decidido 4 nov: **para la BETA**.
+
+---
+
+## LPBETA-14 · Seguridad del acceso (códigos y contraseñas) — HECHO (rama `feature/seguridad-acceso`, 4 nov)
+
+**Implementado:** código de 6 dígitos con `crypto.randomInt` y comparado en tiempo constante; 5 intentos por código, reservados de forma atómica antes de comparar (`server/lib/otp.ts`, `consumeOtp`); 10 intentos de inicio de sesión y después 15 min de bloqueo, contados en la base de datos (`server/lib/loginThrottle.ts`); `resetToken` de un solo uso, atado a la contraseña que sustituye; restablecer la contraseña quita el bloqueo; email "tu contraseña ha cambiado" (`templates/passwordChanged.ts`); la UI con 6 casillas que caben en el móvil y mensajes traducidos (`auth.otp.*`, `auth.login.tooManyAttempts`). Tests: `otp.test.ts`, `loginThrottle.test.ts`.
+**Schema aplicado (aditivo):** `OtpToken.attempts Int @default(0)`, `User.failedLogins Int @default(0)`, `User.loginLockedUntil DateTime?`.
+**Al desplegar:** el `db push` de producción va **antes** de subir el código; si no, el login falla por las columnas que faltan.
+**Pendiente fuera de este ticket:** `register` sobrescribe la contraseña de una cuenta sin verificar con el mismo email (bajo impacto: la cuenta no tiene datos hasta verificarse; con el límite de 5 intentos ya no se puede forzar el código). Cualquiera puede bloquear 15 min el login por contraseña de otra persona fallando 10 veces; se sale restableciendo la contraseña o con Google.
+
+
+**Por qué:** el sistema es público (decisión del 4 nov) y guarda datos financieros. Encontrado al revisar qué implica abrirlo. Afecta ya a la alfa desplegada.
+
+**Lo que hay hoy (verificado en el código, 4 nov):**
+- **Código de 5 dígitos** (90.000 combinaciones) generado con `Math.random()` (`server/lib/otp.ts:4`), que no es un generador seguro.
+- **Sin límite de intentos** en `POST /api/auth/verify-reset-otp`, `POST /api/auth/verify-email` ni `POST /api/auth/login`. Solo `resend-otp` tiene una espera (`auth.ts:389`). El código vale 15 minutos (`OTP_TTL_MS`).
+- **Consecuencia:** quien sepa el email de otra persona puede pedir un código de recuperación y probar combinaciones hasta acertar dentro de esos 15 minutos. Después cambia la contraseña y entra en su cuenta. Con `login` sin límite, también se pueden probar contraseñas sin freno.
+- El limitador que existe (`server/lib/rateLimit.ts`) vive en memoria, y su propio comentario dice que en Vercel no es una barrera de seguridad (cada instancia cuenta por separado).
+- Menores: el código se compara con `===` en vez de en tiempo constante, y el `resetToken` (15 min) se puede usar más de una vez.
+
+**Propuesta:**
+- Código de **6 dígitos** con `crypto.randomInt`.
+- **Máximo 5 intentos por código**: al quinto fallo se invalida y hay que pedir otro. Necesita un contador en la base de datos. **Schema aditivo:** `OtpToken.attempts Int @default(0)`. Se propone antes de aplicarlo.
+- **Límite en `login`** por email (p. ej. 10 fallos en 15 min → esperar), contado en la base de datos, no en memoria. Puede reutilizar la misma tabla o una pequeña nueva (se propone antes).
+- Comparación en tiempo constante (`crypto.timingSafeEqual`) y `resetToken` de un solo uso.
+- Respuestas que no revelen si un email existe (`send-reset` ya lo hace en parte; revisar `register` y `login`).
+- Email de aviso "tu contraseña ha cambiado" con `replyTo` de soporte.
+- Tests: el quinto intento fallido invalida el código, el código correcto después ya no sirve, y el bloqueo de login expira.
+
+**Cuidado:** toca la autenticación (lista de "no modificar sin preguntar"). Este ticket es esa pregunta.
+
+---
+
+## LPBETA-13 · Celebrar los hitos — EN REFINAMIENTO
+
+**Por qué:** la paz y la disciplina se sostienen viendo el progreso. Los momentos "lo hemos conseguido" (primer mes ahorrando, una deuda cerrada) son los que el usuario recuerda y los que luego cuenta como testimonio en los talleres y en las redes (`vision-y-plan-beta.md` §5 y §7). La app **no enseña** (decisión del 4 nov: enseña la empresa, en los talleres y las redes); celebrar no es enseñar, es reconocer lo que el usuario ya hizo.
+
+**Lo que ya existe (verificado, 4 nov):**
+- **Hitos de plan:** `LifePlan.milestones` (array JSON de importes, pensado para planes de inversión), editables en `PlanDetail.tsx` (sección "Hitos"). Hoy solo se muestran; no pasa nada al alcanzarlos.
+- **Plan completado:** estado `completed` en el detalle del plan.
+- **Deuda cerrada:** `Debt.status = "paid_off"` (`server/routes/debts.ts:437`).
+- **Aportaciones que faltan:** Inicio ya avisa de los planes sin aportar este mes (`missedPlans`). Existe el aviso negativo, pero no el positivo.
+- **Ojo, textos que prometen algo que no existe:** Ajustes muestra los interruptores "Hitos del plan: recibe notificaciones cuando alcances marcadores de progreso", "Recordatorios mensuales", "Alertas de presupuesto" y "Smart insights" (`PlanningSettings.tsx:179`). Son estado local de React: no se guardan y nada envía notificaciones. Va contra la regla de que los textos solo describen lo que el código hace.
+
+**Propuesta:**
+- **Qué se celebra** (calculado desde los datos que ya existen, sin guardar el evento: "derivar, no almacenar"):
+  1. la primera aportación a un plan;
+  2. el primer mes en que se cumple el % de "Págate a ti primero" (depende de LPBETA-07), y las rachas (3, 6, 12 meses seguidos);
+  3. un hito de un plan alcanzado y un plan completado;
+  4. el fondo de emergencia completo;
+  5. una deuda cerrada: "Has cerrado X. Liberas N € al mes" (enlaza con el futuro comprometido);
+  6. un mes cerrado dentro del presupuesto.
+- **Cómo:** una tarjeta de celebración en Inicio, **una sola vez por evento**, sobria y en el tono de la marca (verde, frase corta y "Seguir"). Sin juicio cuando no se consigue.
+- **Hogar:** los dos miembros ven las celebraciones de lo compartido; las de lo privado, solo su dueño (`visibility.ts`).
+- **"Ya visto":** para no repetir la celebración en cada visita ni en cada dispositivo, hace falta guardar qué eventos ha visto ya el usuario. **Schema aditivo** (p. ej. `UserSettings.seenCelebrations`, texto JSON, o una tabla pequeña); se propone antes de aplicarlo. `localStorage` no vale: la repetiría en el móvil después de verla en el ordenador.
+- **Los interruptores de notificaciones de Ajustes:** quitarlos hasta que haya notificaciones de verdad, o dejar solo los que este ticket haga reales.
+- Textos en es y en, y tests de la detección de eventos (en céntimos, con datos de hogar).
+
+**Preguntas abiertas para Luis:**
+1. ¿Botón de "compartir" (imagen o texto para WhatsApp)? Si lo hay, por defecto **sin importes** ("¡Hemos cerrado una deuda!"), para que nadie de la comunidad vea las cifras de otro.
+2. ¿Tono: sobrio (tarjeta) o festivo (confeti)?
+3. ¿Los interruptores de notificaciones: se quitan ya o se dejan para cuando este ticket esté hecho?
+4. ¿Antes o después de la BETA?

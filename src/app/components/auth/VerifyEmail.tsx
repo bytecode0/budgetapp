@@ -3,6 +3,10 @@ import { motion } from 'motion/react';
 import { Mail, ArrowLeft, Target } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
+import { apiErrorMessage } from '../../lib/apiErrors';
+
+// Same length as the server's codes (server/lib/otp.ts OTP_LENGTH).
+const OTP_LENGTH = 6;
 import { useAuth } from '../../context/AuthContext';
 
 interface VerifyEmailProps {
@@ -14,7 +18,7 @@ interface VerifyEmailProps {
 export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
   const { t } = useTranslation();
   const { refreshUser } = useAuth();
-  const [otp, setOtp] = useState(['', '', '', '', '']);
+  const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [isLoading, setIsLoading] = useState(false);
   const [timer, setTimer] = useState(60);
   const [timerActive, setTimerActive] = useState(true);
@@ -48,7 +52,7 @@ export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = otp.join('');
-    if (code.length < 5) return;
+    if (code.length < OTP_LENGTH) return;
     setIsLoading(true);
     try {
       const res = await fetch('/api/auth/verify-email', {
@@ -59,7 +63,7 @@ export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error || 'Verification failed');
+        toast.error(apiErrorMessage(t, data) || 'Verification failed');
         return;
       }
       toast.success('Email verified! Welcome to LifePlan!');
@@ -85,7 +89,7 @@ export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
         return;
       }
       toast.success('New verification code sent!');
-      setOtp(['', '', '', '', '']);
+      setOtp(Array(OTP_LENGTH).fill(''));
       startTimer();
     } catch {
       toast.error('Something went wrong');
@@ -133,7 +137,7 @@ export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
           <form onSubmit={handleVerify} className="space-y-6">
             <div>
               <label className="block text-sm font-display mb-4 text-center">{t('auth.verifyEmail.enterCode')}</label>
-              <div className="flex gap-3 justify-center">
+              <div className="flex gap-2 sm:gap-3 justify-center">
                 {otp.map((digit, index) => (
                   <input
                     key={index}
@@ -144,7 +148,7 @@ export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
                     value={digit}
                     onChange={(e) => handleOtpChange(index, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                    className="w-14 h-16 text-center text-2xl font-bold rounded-xl border-2 bg-background transition-all focus:outline-none"
+                    className="w-11 h-14 sm:w-14 sm:h-16 text-center text-2xl font-bold rounded-xl border-2 bg-background transition-all focus:outline-none"
                     style={{
                       borderColor: digit ? 'var(--color-primary)' : 'var(--color-border)',
                       color: 'var(--color-foreground)',
@@ -156,7 +160,7 @@ export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
 
             <button
               type="submit"
-              disabled={isLoading || otp.join('').length < 5}
+              disabled={isLoading || otp.join('').length < OTP_LENGTH}
               className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-display hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? t('auth.verifyEmail.verifying') : t('auth.verifyEmail.verifyEmail')}

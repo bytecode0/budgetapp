@@ -446,6 +446,12 @@ En modo restringido, con tus cuentas reales: conectar banco → revisar y confir
 
 ---
 
+## Épicas 6 y 7 y siguientes tickets
+
+Movidos a [`docs/tickets.md`](tickets.md) el 3 nov.
+
+---
+
 ## Decisiones
 
 ### Tomadas (21 oct 2026)

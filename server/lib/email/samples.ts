@@ -5,6 +5,7 @@ import type { EmailLocale } from "./locales/index.js";
 import {
   bankConsentExpiringEmail,
   partnerInviteEmail,
+  passwordChangedEmail,
   passwordResetEmail,
   paymentFailedEmail,
   subscriptionActivatedEmail,
@@ -33,6 +34,11 @@ export const EMAIL_SAMPLES: EmailSample[] = [
     mustContain: both(SAMPLE_OTP, "Ana"),
   },
   { name: "password-reset", render: (l) => passwordResetEmail({ otp: SAMPLE_OTP }, l), mustContain: both(SAMPLE_OTP) },
+  {
+    name: "password-changed",
+    render: (l) => passwordChangedEmail({ name: "Ana García" }, l),
+    mustContain: both("Ana", "contact@luisvespa.com"),
+  },
   { name: "welcome", render: (l) => welcomeEmail({ name: "Ana García" }, l), mustContain: both("Ana", "http://localhost:5173") },
   {
     name: "welcome-google",

@@ -3,6 +3,10 @@ import { motion } from 'motion/react';
 import { Mail, ArrowLeft, Lock, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
+import { apiErrorMessage } from '../../lib/apiErrors';
+
+// Same length as the server's codes (server/lib/otp.ts OTP_LENGTH).
+const OTP_LENGTH = 6;
 
 interface ForgotPasswordProps {
   onBack: () => void;
@@ -12,7 +16,7 @@ export function ForgotPassword({ onBack }: ForgotPasswordProps) {
   const { t } = useTranslation();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '', '']);
+  const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -54,7 +58,7 @@ export function ForgotPassword({ onBack }: ForgotPasswordProps) {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp.join('').length < 5) return;
+    if (otp.join('').length < OTP_LENGTH) return;
     setIsLoading(true);
     try {
       const res = await fetch('/api/auth/verify-reset-otp', {
@@ -63,7 +67,7 @@ export function ForgotPassword({ onBack }: ForgotPasswordProps) {
         body: JSON.stringify({ email, otp: otp.join('') }),
       });
       const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Verification failed'); return; }
+      if (!res.ok) { toast.error(apiErrorMessage(t, data) || 'Verification failed'); return; }
       setResetToken(data.resetToken);
       toast.success('Code verified!');
       setStep(3);
@@ -85,7 +89,7 @@ export function ForgotPassword({ onBack }: ForgotPasswordProps) {
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || 'Could not resend code'); return; }
       toast.success('New code sent!');
-      setOtp(['', '', '', '', '']);
+      setOtp(Array(OTP_LENGTH).fill(''));
       startTimer();
     } catch {
       toast.error('Something went wrong');
@@ -221,7 +225,7 @@ export function ForgotPassword({ onBack }: ForgotPasswordProps) {
 
             <div className="bg-card border border-border rounded-3xl p-8 shadow-lg">
               <form onSubmit={handleVerifyOtp} className="space-y-6">
-                <div className="flex gap-3 justify-center">
+                <div className="flex gap-2 sm:gap-3 justify-center">
                   {otp.map((digit, index) => (
                     <input
                       key={index}
@@ -232,7 +236,7 @@ export function ForgotPassword({ onBack }: ForgotPasswordProps) {
                       value={digit}
                       onChange={(e) => handleOtpChange(index, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                      className="w-14 h-16 text-center text-2xl font-bold rounded-xl border-2 bg-background transition-all focus:outline-none"
+                      className="w-11 h-14 sm:w-14 sm:h-16 text-center text-2xl font-bold rounded-xl border-2 bg-background transition-all focus:outline-none"
                       style={{
                         borderColor: digit ? 'var(--color-primary)' : 'var(--color-border)',
                         color: 'var(--color-foreground)',
@@ -242,7 +246,7 @@ export function ForgotPassword({ onBack }: ForgotPasswordProps) {
                 </div>
                 <button
                   type="submit"
-                  disabled={isLoading || otp.join('').length < 5}
+                  disabled={isLoading || otp.join('').length < OTP_LENGTH}
                   className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-display hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? t('auth.forgotPassword.verifying') : t('auth.forgotPassword.verifyCode')}

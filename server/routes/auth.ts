@@ -1,13 +1,15 @@
 import { Router, Request, Response } from "express";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { OAuth2Client } from "google-auth-library";
 import { prisma } from "../lib/prisma.js";
 import { signToken, verifyToken } from "../lib/jwt.js";
-import { generateOtp, hashOtp, verifyOtp } from "../lib/otp.js";
+import { consumeOtp, generateOtp, hashOtp, type OtpResult } from "../lib/otp.js";
+import { clearLoginFailures, reserveLoginAttempt } from "../lib/loginThrottle.js";
 import { createDefaultAllocations } from "../lib/defaults.js";
 import {
   sendVerificationEmail,
+  sendPasswordChangedEmail,
   sendPasswordResetEmail,
   sendWelcomeEmail,
   sendWelcomeGoogleEmail,
@@ -254,6 +256,27 @@ async function createOtp(email: string, type: string) {
   return otp;
 }
 
+/** The 400 for a code that didn't verify; `code` lets the UI tell the two apart. */
+function otpFailure(res: Response, result: Exclude<OtpResult, "ok">) {
+  return result === "incorrect"
+    ? res.status(400).json({ error: "Incorrect code", code: "otp_incorrect" })
+    : res.status(400).json({ error: "Code expired or invalid, request a new one", code: "otp_invalid" });
+}
+
+// A password-reset token is bound to the password it replaces: once the
+// password changes, the token no longer matches, so it works only once.
+export function passwordFingerprint(passwordHash: string | null): string {
+  return createHash("sha256").update(passwordHash ?? "").digest("hex").slice(0, 32);
+}
+
+// bcrypt hash of a random string: comparing against it when the email has no
+// password keeps the response time the same as for a wrong password.
+// Built on first use, not at import: it would add ~70 ms to every cold start.
+let dummyPasswordHash: Promise<string> | null = null;
+function dummyHash(): Promise<string> {
+  return (dummyPasswordHash ??= bcrypt.hash(randomBytes(16).toString("hex"), 10));
+}
+
 // Register
 authRouter.post("/register", async (req: Request, res: Response) => {
   try {
@@ -309,20 +332,8 @@ authRouter.post("/verify-email", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Email and OTP are required" });
     }
 
-    const record = await prisma.otpToken.findFirst({
-      where: { email, type: "email_verification", used: false },
-      orderBy: { createdAt: "desc" },
-    });
-
-    if (!record || record.expiresAt < new Date()) {
-      return res.status(400).json({ error: "Code expired or invalid" });
-    }
-
-    if (!verifyOtp(otp, record.tokenHash)) {
-      return res.status(400).json({ error: "Incorrect code" });
-    }
-
-    await prisma.otpToken.update({ where: { id: record.id }, data: { used: true } });
+    const result = await consumeOtp(prisma, String(email), "email_verification", String(otp));
+    if (result !== "ok") return otpFailure(res, result);
 
     const user = await prisma.user.update({
       where: { email },
@@ -438,22 +449,16 @@ authRouter.post("/verify-reset-otp", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Email and OTP are required" });
     }
 
-    const record = await prisma.otpToken.findFirst({
-      where: { email, type: "password_reset", used: false },
-      orderBy: { createdAt: "desc" },
-    });
+    const result = await consumeOtp(prisma, String(email), "password_reset", String(otp));
+    if (result !== "ok") return otpFailure(res, result);
 
-    if (!record || record.expiresAt < new Date()) {
-      return res.status(400).json({ error: "Code expired or invalid" });
-    }
+    const user = await prisma.user.findUnique({ where: { email: String(email) }, select: { passwordHash: true } });
+    if (!user) return otpFailure(res, "invalid");
 
-    if (!verifyOtp(otp, record.tokenHash)) {
-      return res.status(400).json({ error: "Incorrect code" });
-    }
-
-    await prisma.otpToken.update({ where: { id: record.id }, data: { used: true } });
-
-    const resetToken = signToken({ email, type: "password_reset" }, "15m");
+    const resetToken = signToken(
+      { email, type: "password_reset", pwf: passwordFingerprint(user.passwordHash) },
+      "15m",
+    );
     return res.json({ resetToken });
   } catch (err) {
     console.error("[auth/verify-reset-otp]", err);
@@ -481,12 +486,34 @@ authRouter.post("/reset-password", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Invalid or expired reset token" });
     }
 
-    if (payload.type !== "password_reset" || !payload.email) {
+    if (payload.type !== "password_reset" || !payload.email || typeof payload.pwf !== "string") {
       return res.status(400).json({ error: "Invalid reset token" });
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({ where: { email: payload.email }, data: { passwordHash } });
+    const user = await prisma.user.findUnique({
+      where: { email: payload.email },
+      select: { id: true, name: true, email: true, passwordHash: true, settings: { select: { language: true } } },
+    });
+    // The token only works for the password it was issued against: once used
+    // (the password changed), it no longer matches.
+    if (!user || passwordFingerprint(user.passwordHash) !== payload.pwf) {
+      return res.status(400).json({ error: "Invalid or expired reset token" });
+    }
+
+    // Conditional on the password being unchanged since the check above, so
+    // two concurrent uses of the same token can't both succeed.
+    const updated = await prisma.user.updateMany({
+      where: { id: user.id, passwordHash: user.passwordHash },
+      data: { passwordHash, failedLogins: 0, loginLockedUntil: null },
+    });
+    if (updated.count !== 1) {
+      return res.status(400).json({ error: "Invalid or expired reset token" });
+    }
+
+    sendPasswordChangedEmail(user.email!, user.name ?? "", resolveLocale(user.settings?.language)).catch((e) =>
+      console.error("[auth/reset-password] password changed email failed:", e)
+    );
 
     return res.json({ message: "Password updated successfully" });
   } catch (err) {
@@ -509,13 +536,19 @@ authRouter.post("/login", async (req: Request, res: Response) => {
       include: { subscription: true },
     });
     if (!user || !user.passwordHash) {
+      await bcrypt.compare(String(password), await dummyHash()); // same timing as a wrong password
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    const valid = await bcrypt.compare(password, user.passwordHash);
+    if ((await reserveLoginAttempt(prisma, user.id)) === "locked") {
+      return res.status(429).json({ error: "Too many failed attempts, try again later", code: "LOGIN_LOCKED" });
+    }
+
+    const valid = await bcrypt.compare(String(password), user.passwordHash);
     if (!valid) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
+    await clearLoginFailures(prisma, user.id);
 
     if (!user.emailVerified) {
       return res.status(403).json({
