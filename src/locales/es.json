@@ -672,11 +672,11 @@
   "activity": {
     "title": "Actividad",
     "subtitle": "Sigue tus gastos según tu plan",
-    "totalSpent": "Total Gastado",
+    "totalSpent": "Gastado este mes",
     "avgPerDay": "promedio {{amount}}/día",
     "pctOfIncome": "% de ingresos mensuales",
     "transactions": "Transacciones",
-    "topCategory": "Categoría Principal",
+    "topCategory": "Donde más gastas",
     "noExpenses": "Sin gastos todavía",
     "all": "Todo ({{count}})",
     "unassigned": "Sin asignar ({{count}})",
@@ -685,7 +685,7 @@
     "addExpense": "Añadir Gasto",
     "addIncome": "Añadir Ingreso",
     "noMovements": "Sin movimientos todavía",
-    "addFirstMovement": "Añade tu primer gasto o ingreso de este mes",
+    "addFirstMovement": "Apunta tu primer gasto o ingreso con el botón +, o importa el extracto de tu banco.",
     "incomeThisMonth": "+{{amount}} ingresos",
     "expenseRemoved": "Gasto eliminado",
     "incomeRemoved": "Ingreso eliminado",
@@ -695,7 +695,14 @@
     "shared": "Compartido",
     "sharedPaidBy": "Compartido · pagó {{name}}",
     "payCard": "Pagar tarjeta",
-    "refund": "Devolución"
+    "refund": "Devolución",
+    "movementsCount_one": "{{count}} movimiento",
+    "movementsCount_other": "{{count}} movimientos",
+    "incomeLabel": "Ingresos",
+    "editMovement": "Editar movimiento",
+    "deleteMovement": "Borrar movimiento",
+    "openAddMenu": "Añadir un movimiento",
+    "closeAddMenu": "Cerrar"
   },
   "addIncome": {
     "title": "Añadir ingreso",

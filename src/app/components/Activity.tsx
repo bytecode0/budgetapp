@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, TrendingDown, TrendingUp, Filter, Trash2, Loader2, Receipt, Pencil, Wand2, Copy, Upload, CreditCard } from 'lucide-react';
+import { Plus, X, TrendingDown, TrendingUp, Trash2, Loader2, Waves, Pencil, Wand2, Copy, Upload, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -25,11 +25,13 @@ type Movement =
   | { kind: 'expense'; id: string; date: string; amount: number; expense: Expense }
   | { kind: 'income'; id: string; date: string; amount: number; income: Income };
 
+// Category chips: calm and neutral, the line's own icon carries the identity
+// (LPBETA-27). Savings lines get the brand tint so "money for you" stands out.
 function getTypeColor(type: string) {
   switch (type) {
-    case 'essential':  return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
-    case 'investment': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
-    case 'flexible':   return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+    case 'investment':
+    case 'plan':       return 'bg-pool-soft text-pool';
+    case 'generosity': return 'bg-sun-soft text-sun-ink';
     default:           return 'bg-muted text-muted-foreground';
   }
 }
@@ -37,7 +39,7 @@ function getTypeColor(type: string) {
 
 export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () => void }) {
   const { t } = useTranslation();
-  const { currency, fmt } = useMoney();
+  const { fmt } = useMoney();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
 
@@ -143,22 +145,30 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
 
   return (
     <div className="space-y-6 pb-24">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-start justify-between gap-4">
-        <div className="space-y-2">
-          <h1 className="text-4xl tracking-tight">{t('activity.title')}</h1>
+      {/* Header: title, the month being shown, and the two secondary tools */}
+      <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: 'easeOut' }} className="flex flex-wrap items-end justify-between gap-4">
+        <div className="space-y-1 min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground capitalize flex items-center gap-2">
+            {monthLabel(currentMonth, locale)}
+            {isFutureMonth && (
+              <span className="normal-case tracking-normal font-medium text-sun-ink bg-sun-soft px-2 py-0.5 rounded-full">
+                {t('monthlyReview.nextMonth')}
+              </span>
+            )}
+          </p>
+          <h1 className="text-4xl tracking-tight font-display">{t('activity.title')}</h1>
           <p className="text-muted-foreground">{t('activity.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setShowImport(true)}
-            className="px-4 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors text-sm flex items-center gap-2"
+            className="h-11 px-4 border border-line-strong rounded-xl hover:bg-muted transition-colors text-sm font-medium flex items-center gap-2"
           >
             <Upload className="w-4 h-4" /> {t('import.button')}
           </button>
           <button
             onClick={() => setShowRules(true)}
-            className="px-4 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors text-sm flex items-center gap-2"
+            className="h-11 px-4 border border-line-strong rounded-xl hover:bg-muted transition-colors text-sm font-medium flex items-center gap-2"
           >
             <Wand2 className="w-4 h-4" /> {t('rules.manageButton')}
           </button>
@@ -168,85 +178,43 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
       {/* Bank: connect, review what's held, reconnect — or just when it last synced */}
       <BankStrip onChanged={() => { fetchExpenses(currentMonth); fetchIncomes(currentMonth); fetchAccounts(); fetchDuplicates(); }} />
 
-      {/* Month display */}
+      {/* One summary card: what went out this month, and where most of it went */}
       <motion.div
-        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-        className="flex items-center justify-center gap-3 bg-card border border-border rounded-2xl px-5 py-3"
+        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05, duration: 0.2, ease: 'easeOut' }}
+        className="bg-card border border-border rounded-3xl p-6 space-y-4"
       >
-        <p className="font-display text-sm capitalize">{monthLabel(currentMonth, locale)}</p>
-        {isFutureMonth && (
-          <span className="text-xs text-violet-600 bg-violet-100 dark:bg-violet-900/30 dark:text-violet-400 px-2 py-0.5 rounded-full">
-            {t('monthlyReview.nextMonth')}
-          </span>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('activity.totalSpent')}</p>
+            <p className="text-4xl font-display tabular-nums">{fmt(totalSpent)}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('activity.movementsCount', { count: expenses.length })} · {t('activity.avgPerDay', { amount: fmt(avgPerDay) })}
+            </p>
+          </div>
+          {totalIncome > 0 && (
+            <div className="space-y-1 text-right">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('activity.incomeLabel')}</p>
+              <p className="text-2xl font-display tabular-nums text-reed">+{fmt(totalIncome)}</p>
+            </div>
+          )}
+        </div>
+        {monthlyIncome > 0 && (
+          <div className="space-y-1.5">
+            <div className="h-2 bg-surface-sunk rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(budgetUsedPct)} aria-valuemin={0} aria-valuemax={100} aria-label={t('activity.pctOfIncome')}>
+              <div className="h-full bg-primary rounded-full transition-[width] duration-500 ease-out" style={{ width: `${budgetUsedPct}%` }} />
+            </div>
+            <p className="text-xs text-muted-foreground">{budgetUsedPct.toFixed(0)}% {t('activity.pctOfIncome')}</p>
+          </div>
+        )}
+        {topAllocation && (
+          <p className="text-sm border-t border-border pt-4 flex items-center gap-2 min-w-0">
+            <span className="text-muted-foreground shrink-0">{t('activity.topCategory')}</span>
+            <span className="shrink-0">{topAllocation.icon}</span>
+            <span className="font-medium truncate">{topAllocation.name}</span>
+            <span className="ml-auto tabular-nums shrink-0">{fmt(topAllocation.amount)}</span>
+          </p>
         )}
       </motion.div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-2xl p-6"
-        >
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-              <TrendingDown className="w-5 h-5" />
-            </div>
-            <p className="text-sm opacity-90">{t('activity.totalSpent')}</p>
-          </div>
-          <p className="text-3xl font-display">{fmt(totalSpent)}</p>
-          <p className="text-sm opacity-75 mt-1">{t('activity.avgPerDay', { amount: fmt(avgPerDay) })}</p>
-          {totalIncome > 0 && (
-            <p className="text-sm opacity-75 mt-0.5">{t('activity.incomeThisMonth', { amount: fmt(totalIncome) })}</p>
-          )}
-          {monthlyIncome > 0 && (
-            <div className="mt-3">
-              <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-white/70 rounded-full transition-all"
-                  style={{ width: `${budgetUsedPct}%` }}
-                />
-              </div>
-              <p className="text-xs opacity-60 mt-1">{budgetUsedPct.toFixed(0)}% {t('activity.pctOfIncome')}</p>
-            </div>
-          )}
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="bg-card border border-border rounded-2xl p-6"
-        >
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center">
-              <Receipt className="w-5 h-5 text-secondary" />
-            </div>
-            <p className="text-sm text-muted-foreground">{t('activity.transactions')}</p>
-          </div>
-          <p className="text-3xl font-display">{expenses.length}</p>
-          <p className="text-sm text-muted-foreground mt-1">{monthLabel(currentMonth, locale)}</p>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-          className="bg-card border border-border rounded-2xl p-6"
-        >
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center">
-              <Filter className="w-5 h-5 text-accent" />
-            </div>
-            <p className="text-sm text-muted-foreground">{t('activity.topCategory')}</p>
-          </div>
-          {topAllocation ? (
-            <>
-              <p className="text-xl font-display flex items-center gap-2">
-                <span>{topAllocation.icon}</span>{topAllocation.name}
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">{currency}{topAllocation.amount.toFixed(2)} {t('activity.totalSpent')}</p>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground mt-2">{t('activity.noExpenses')}</p>
-          )}
-        </motion.div>
-      </div>
 
       {/* Allocation filter chips */}
       {allocations.length > 0 && (
@@ -256,8 +224,8 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
         >
           <button
             onClick={() => setFilterAllocationId('all')}
-            className={`px-4 py-2 rounded-xl text-sm whitespace-nowrap transition-all ${
-              filterAllocationId === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card border border-border hover:bg-muted'
+            className={`h-10 px-4 rounded-full text-sm whitespace-nowrap transition-colors ${
+              filterAllocationId === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card border border-line-strong hover:bg-muted'
             }`}
           >
             {t('activity.all', { count: expenses.length })}
@@ -269,8 +237,8 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
               <button
                 key={a.id}
                 onClick={() => setFilterAllocationId(a.id)}
-                className={`px-4 py-2 rounded-xl text-sm whitespace-nowrap flex items-center gap-2 transition-all ${
-                  filterAllocationId === a.id ? 'bg-primary text-primary-foreground' : 'bg-card border border-border hover:bg-muted'
+                className={`h-10 px-4 rounded-full text-sm whitespace-nowrap flex items-center gap-2 transition-colors ${
+                  filterAllocationId === a.id ? 'bg-primary text-primary-foreground' : 'bg-card border border-line-strong hover:bg-muted'
                 }`}
               >
                 <span>{a.icon}</span>
@@ -282,11 +250,11 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
           {expenses.some(e => !e.allocationId) && (
             <button
               onClick={() => setFilterAllocationId('__unassigned__')}
-              className={`px-4 py-2 rounded-xl text-sm whitespace-nowrap transition-all ${
-                filterAllocationId === '__unassigned__' ? 'bg-primary text-primary-foreground' : 'bg-card border border-border hover:bg-muted'
+              className={`h-10 px-4 rounded-full text-sm whitespace-nowrap transition-colors ${
+                filterAllocationId === '__unassigned__' ? 'bg-primary text-primary-foreground' : 'bg-card border border-line-strong hover:bg-muted'
               }`}
             >
-              ❓ {t('activity.unassigned', { count: expenses.filter(e => !e.allocationId).length })}
+              {t('activity.unassigned', { count: expenses.filter(e => !e.allocationId).length })}
             </button>
           )}
         </motion.div>
@@ -296,16 +264,16 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
       {duplicateGroups.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-5 py-4"
+          className="flex items-center gap-3 bg-sun-soft text-sun-ink rounded-2xl px-5 py-4"
         >
-          <Copy className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <Copy className="w-5 h-5 shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-amber-800 dark:text-amber-300">{t('duplicates.bannerTitle', { count: duplicateGroups.length })}</p>
-            <p className="text-sm text-amber-700/70 dark:text-amber-400/70">{t('duplicates.bannerDesc')}</p>
+            <p className="font-semibold">{t('duplicates.bannerTitle', { count: duplicateGroups.length })}</p>
+            <p className="text-sm text-foreground/80">{t('duplicates.bannerDesc')}</p>
           </div>
           <button
             onClick={() => setShowDuplicates(true)}
-            className="text-xs text-amber-700 dark:text-amber-400 hover:underline shrink-0"
+            className="h-10 px-4 rounded-xl bg-card text-foreground border border-line-strong text-sm font-medium hover:bg-muted transition-colors shrink-0"
           >
             {t('duplicates.review')}
           </button>
@@ -319,28 +287,22 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
         </div>
       ) : movements.length === 0 ? (
         <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="bg-card border border-dashed border-border rounded-2xl p-12 text-center"
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: 'easeOut' }}
+          className="text-center py-16 px-6 space-y-3"
         >
-          <Receipt className="w-12 h-12 mx-auto mb-4 opacity-20" />
-          <p className="font-display text-lg mb-1">{t('activity.noMovements')}</p>
-          <p className="text-sm text-muted-foreground mb-6">
+          <div className="w-16 h-16 bg-pool-soft text-pool rounded-3xl flex items-center justify-center mx-auto">
+            <Waves className="w-8 h-8" />
+          </div>
+          <p className="font-display text-lg">{t('activity.noMovements')}</p>
+          <p className="text-sm text-muted-foreground max-w-sm mx-auto">
             {filterAllocationId === 'all'
               ? t('activity.addFirstMovement')
               : t('activity.noExpensesInCategory')}
           </p>
-          {filterAllocationId === 'all' && (
-            <button
-              onClick={() => setShowAdd(true)}
-              className="px-5 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors text-sm"
-            >
-              {t('activity.addExpense')}
-            </button>
-          )}
         </motion.div>
       ) : (
         <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.2, ease: 'easeOut' }}
           className="space-y-6"
         >
           {grouped.map(([day, dayItems], groupIdx) => {
@@ -351,26 +313,26 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
             <div key={day}>
               <div className="flex items-center justify-between mb-2 px-1">
                 <p className="text-sm font-medium text-muted-foreground">{formatDateLabel(day)}</p>
-                <p className={`text-sm ${net > 0 ? 'text-emerald-600' : 'text-muted-foreground'}`}>
-                  {net > 0 ? '+' : ''}{currency}{net.toFixed(2)}
+                <p className={`text-sm tabular-nums ${net > 0 ? 'text-reed font-medium' : 'text-muted-foreground'}`}>
+                  {net > 0 ? '+' : net < 0 ? '−' : ''}{fmt(Math.abs(net))}
                 </p>
               </div>
-              <div className="bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border">
+              <div className="bg-card border border-border rounded-3xl overflow-hidden divide-y divide-border">
                 <AnimatePresence initial={false}>
                   {dayItems.map((m, idx) => (
                     <motion.div
                       key={m.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20, height: 0 }}
-                      transition={{ delay: groupIdx * 0.04 + idx * 0.02 }}
-                      className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors gap-3"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ delay: Math.min(groupIdx * 0.03 + idx * 0.015, 0.3), duration: 0.18 }}
+                      className="flex items-center justify-between px-4 py-3.5 hover:bg-muted/40 transition-colors gap-3"
                     >
                       {m.kind === 'expense' ? (
                         <>
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-11 h-11 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-xl flex items-center justify-center text-xl shrink-0">
-                              {m.expense.allocation?.icon ?? '❓'}
+                            <div className="w-11 h-11 bg-surface-sunk rounded-2xl flex items-center justify-center text-xl shrink-0">
+                              {m.expense.allocation?.icon ?? <Waves className="w-5 h-5 text-muted-foreground" />}
                             </div>
                             <div className="min-w-0">
                               <p className="font-medium text-sm truncate">
@@ -387,7 +349,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                                   </span>
                                 )}
                                 {m.expense.kind === 'refund' && (
-                                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-reed-soft text-reed">
                                     {t('activity.refund')}
                                   </span>
                                 )}
@@ -397,7 +359,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                                   </span>
                                 )}
                                 {m.expense.scope === 'shared' && (
-                                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-pool-soft text-pool">
                                     {m.expense.payerName
                                       ? t('activity.sharedPaidBy', { name: m.expense.payerName })
                                       : t('activity.shared')}
@@ -408,18 +370,20 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             {m.expense.kind === 'refund'
-                              ? <p className="text-lg font-display text-emerald-600">+{currency}{m.amount.toFixed(2)}</p>
-                              : <p className="text-lg font-display">{currency}{m.amount.toFixed(2)}</p>}
+                              ? <p className="text-base font-semibold tabular-nums text-reed">+{fmt(m.amount)}</p>
+                              : <p className="text-base font-semibold tabular-nums">{fmt(m.amount)}</p>}
                             <button
                               onClick={() => setEditing(m.expense)}
-                              className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                              aria-label={t('activity.editMovement')}
+                              className="w-10 h-10 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-pool-soft rounded-xl transition-colors"
                             >
                               <Pencil className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => handleDelete(m.id)}
                               disabled={deletingId === m.id}
-                              className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50"
+                              aria-label={t('activity.deleteMovement')}
+                              className="w-10 h-10 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-alert-soft rounded-xl transition-colors disabled:opacity-50"
                             >
                               {deletingId === m.id
                                 ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -430,7 +394,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                       ) : (
                         <>
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-11 h-11 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
+                            <div className="w-11 h-11 bg-reed-soft rounded-2xl flex items-center justify-center text-reed shrink-0">
                               <TrendingUp className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
@@ -438,7 +402,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                                 {m.income.description || t(`addIncome.cat.${m.income.category}`)}
                               </p>
                               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-reed-soft text-reed">
                                   {t(`addIncome.cat.${m.income.category}`)}
                                 </span>
                                 {m.income.account && (
@@ -450,20 +414,22 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <p className="text-lg font-display text-emerald-600">+{currency}{m.amount.toFixed(2)}</p>
+                            <p className="text-base font-semibold tabular-nums text-reed">+{fmt(m.amount)}</p>
                             {/* Another member's income is read-only (the server answers 403). */}
                             {m.income.ownerUserId === user?.id && (
                               <>
                                 <button
                                   onClick={() => setEditingIncome(m.income)}
-                                  className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                                  aria-label={t('activity.editMovement')}
+                              className="w-10 h-10 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-pool-soft rounded-xl transition-colors"
                                 >
                                   <Pencil className="w-4 h-4" />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteIncome(m.id)}
                                   disabled={deletingId === m.id}
-                                  className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50"
+                                  aria-label={t('activity.deleteMovement')}
+                              className="w-10 h-10 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-alert-soft rounded-xl transition-colors disabled:opacity-50"
                                 >
                                   {deletingId === m.id
                                     ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -484,31 +450,31 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
         </motion.div>
       )}
 
-      {/* FAB speed-dial: choose expense or income */}
-      <div className="fixed right-6 bottom-6 z-40 flex flex-col items-end gap-3">
+      {/* FAB speed-dial: expense, income or paying a card (LPBETA-27: flat, calm) */}
+      <div className="fixed z-40 flex flex-col items-end gap-3" style={{ right: 'calc(1.5rem + env(safe-area-inset-right, 0px))', bottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }}>
         <AnimatePresence>
           {fabOpen && (
             <>
               {cardChoices.length > 0 && (
                 <motion.button
-                  initial={{ opacity: 0, y: 10, scale: 0.8 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.8 }}
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} transition={{ duration: 0.16 }}
                   onClick={() => { setFabOpen(false); setPayingCard(cardChoices[0]); }}
-                  className="flex items-center gap-2 pl-4 pr-5 py-3 bg-card border border-border text-foreground rounded-full shadow-xl hover:bg-muted transition-colors text-sm"
+                  className="h-12 flex items-center gap-2 pl-4 pr-5 bg-card border border-border text-foreground rounded-full shadow-soft hover:bg-muted transition-colors text-sm font-medium"
                 >
-                  <CreditCard className="w-5 h-5" /> {t('activity.payCard')}
+                  <CreditCard className="w-5 h-5 text-muted-foreground" /> {t('activity.payCard')}
                 </motion.button>
               )}
               <motion.button
-                initial={{ opacity: 0, y: 10, scale: 0.8 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.8 }}
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} transition={{ duration: 0.16, delay: 0.03 }}
                 onClick={() => { setFabOpen(false); setShowAddIncome(true); }}
-                className="flex items-center gap-2 pl-4 pr-5 py-3 bg-emerald-600 text-white rounded-full shadow-xl hover:bg-emerald-600/90 transition-colors text-sm"
+                className="h-12 flex items-center gap-2 pl-4 pr-5 bg-card border border-border text-foreground rounded-full shadow-soft hover:bg-muted transition-colors text-sm font-medium"
               >
-                <TrendingUp className="w-5 h-5" /> {t('activity.addIncome')}
+                <TrendingUp className="w-5 h-5 text-reed" /> {t('activity.addIncome')}
               </motion.button>
               <motion.button
-                initial={{ opacity: 0, y: 10, scale: 0.8 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.8 }}
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} transition={{ duration: 0.16, delay: 0.06 }}
                 onClick={() => { setFabOpen(false); setShowAdd(true); }}
-                className="flex items-center gap-2 pl-4 pr-5 py-3 bg-primary text-primary-foreground rounded-full shadow-xl hover:bg-primary/90 transition-colors text-sm"
+                className="h-12 flex items-center gap-2 pl-4 pr-5 bg-primary text-primary-foreground rounded-full shadow-soft hover:bg-primary/90 transition-colors text-sm font-medium"
               >
                 <TrendingDown className="w-5 h-5" /> {t('activity.addExpense')}
               </motion.button>
@@ -516,12 +482,13 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
           )}
         </AnimatePresence>
         <motion.button
-          initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.2, ease: 'easeOut' }}
           onClick={() => setFabOpen(v => !v)}
-          whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-          className="w-16 h-16 bg-gradient-to-br from-primary to-secondary text-primary-foreground rounded-full shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center"
+          aria-expanded={fabOpen}
+          aria-label={fabOpen ? t('activity.closeAddMenu') : t('activity.openAddMenu')}
+          className="w-16 h-16 bg-primary text-primary-foreground rounded-full shadow-soft hover:-translate-y-0.5 transition-transform flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          <Plus className={`w-7 h-7 transition-transform ${fabOpen ? 'rotate-45' : ''}`} />
+          {fabOpen ? <X className="w-7 h-7" /> : <Plus className="w-7 h-7" />}
         </motion.button>
       </div>
 
