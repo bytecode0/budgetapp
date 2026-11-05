@@ -236,6 +236,17 @@ describe("account export and deletion (integration, real Postgres)", { skip: !TE
     assert.deepEqual((await res.json() as any).data, summary(0));
   });
 
+  it("the deletion code shares the emailed-code limits (3 an hour per address) → 429 rate_limited", async () => {
+    const G = await signUp("Gema", "gema@test.local");
+    for (let i = 0; i < 3; i++) {
+      await ok(G, "POST", "/api/account/deletion/code");
+      await prisma.otpToken.deleteMany({ where: { email: "gema@test.local" } }); // past the 1/min pace
+    }
+    const res = await raw(G, "POST", "/api/account/deletion/code");
+    assert.equal(res.status, 429);
+    assert.equal((await res.json() as any).code, "rate_limited");
+  });
+
   // ── deleting the pool OWNER: the pool is handed to the partner ─────────
 
   it("setup: pool data the partner has a claim on, and cross-owner pairs", async () => {

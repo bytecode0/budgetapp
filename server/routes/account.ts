@@ -24,6 +24,7 @@ import {
 import { EXPORT_MAX_BYTES, buildJsonExport, buildMovementRows, movementsCsv } from "../lib/accountExport.js";
 import { deletionDueAt, isLockNotAvailable, runDeletionPurge } from "../lib/accountDeletion.js";
 import { cronAuthorized } from "../lib/banking/cron.js";
+import { codeSendChecks, prismaRateLimitStore, takeRateLimit } from "../lib/rateLimit.js";
 import { getBankingClient } from "../lib/banking/enableBanking.js";
 import { getStripe, isBillingEnabled } from "../lib/stripe.js";
 
@@ -33,6 +34,9 @@ export const DELETION_OTP_TYPE = "account_deletion";
 const OTP_TTL_MS = 15 * 60 * 1000;
 /** Same pace as POST /api/auth/resend-otp: one new code a minute. */
 const OTP_RESEND_MS = 60_000;
+/** Plus the limits every emailed code shares (server/lib/rateLimit.ts, LPBETA-16):
+ *  per address, per IP and the global daily cap that protects the email quota. */
+const rateLimitStore = prismaRateLimitStore(prisma);
 
 const TOO_LARGE = { error: "Your export is too large to download here: write to support", code: "export_too_large" };
 
@@ -99,6 +103,10 @@ accountRouter.post("/deletion/code", requireAuth, async (req: AuthRequest, res: 
     });
     if (last && last.createdAt > new Date(Date.now() - OTP_RESEND_MS)) {
       return res.status(429).json({ error: "Wait before requesting a new code", code: "otp_wait" });
+    }
+    // The caller is signed in, so saying "limit reached" leaks nothing.
+    if (!(await takeRateLimit(rateLimitStore, codeSendChecks(user.email, req.ip)))) {
+      return res.status(429).json({ error: "Too many codes requested, try again later", code: "rate_limited" });
     }
 
     await prisma.otpToken.deleteMany({ where: { email: user.email, type: DELETION_OTP_TYPE } });
