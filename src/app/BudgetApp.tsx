@@ -16,6 +16,7 @@ import { Accounts } from './components/Accounts';
 import { Debts } from './components/Debts';
 import { FamilyDashboard } from './components/FamilyDashboard';
 import { AddExpense } from './components/AddExpense';
+import { DeletionBanner } from './components/DeletionBanner';
 import { AuthFlow } from './components/auth/AuthFlow';
 import { PartnerInviteAccept } from './components/PartnerInviteAccept';
 import { BudgetOnboarding } from './onboarding/BudgetOnboarding';
@@ -142,7 +143,9 @@ function AppInner() {
       setCurrentScreen('accounts');
       if (bankToken) setBankReturn(back);
     }
-    if (bankToken || isBankError || params.get('open') === 'accounts') {
+    // The "your account will be deleted" email links here (?open=settings).
+    if (params.get('open') === 'settings') setCurrentScreen('settings');
+    if (bankToken || isBankError || params.get('open') === 'accounts' || params.get('open') === 'settings') {
       const url = new URL(window.location.href);
       url.searchParams.delete('bankToken');
       url.searchParams.delete('open');
@@ -500,6 +503,8 @@ function AppInner() {
       {/* Main Content */}
       <div className="lg:ml-72 pt-16 lg:pt-0">
         <main className="container mx-auto px-4 lg:px-8 py-6 lg:py-8 max-w-7xl">
+          {/* Settings shows the same notice in its own account panel. */}
+          {currentScreen !== 'settings' && <DeletionBanner />}
           <InstallHint />
           <AnimatePresence mode="wait">
             <motion.div

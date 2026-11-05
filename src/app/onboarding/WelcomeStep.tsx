@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { motion } from 'motion/react';
-import { Sun, ArrowRight, Wallet, PiggyBank, ListChecks } from 'lucide-react';
+import { Sun, ArrowRight, Wallet, PiggyBank, ListChecks, ShieldCheck } from 'lucide-react';
 
 interface WelcomeStepProps {
   onStart: () => void;
@@ -29,6 +29,16 @@ export function WelcomeStep({ onStart }: WelcomeStepProps) {
         >
           {t('onboarding.welcome.start')} <ArrowRight className="w-4 h-4" />
         </button>
+
+        {/* Who sees my numbers? The privacy promise (LPBETA-09), in a new tab so the wizard isn't lost. */}
+        <a
+          href="/privacy-promise"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2 w-fit"
+        >
+          <ShieldCheck className="w-4 h-4 text-primary" /> {t('onboarding.welcome.privacyPromise')}
+        </a>
       </div>
 
       {/* Right column: what the next minutes cover — in, out, kept */}

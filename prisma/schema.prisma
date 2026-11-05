@@ -23,8 +23,19 @@ model User {
   // by the daily sync, which moves Account.bankReviewedAt on its own. Read by
   // the active-users count (server/lib/activeStats.ts, LPBETA-05).
   lastBankReviewAt DateTime?
+  // When this person asked to delete their account (LPBETA-09), confirmed
+  // with an email code. Null = no request (or cancelled). The daily job
+  // (GET /api/account/cron, server/lib/accountDeletion.ts) deletes the account
+  // once this is more than 24 h old, so it goes 24–48 h after the request.
+  deletionRequestedAt DateTime?
+  // When the daily job claimed this account for deletion (it runs in steps:
+  // claim, Stripe, data, bank sessions). While set, cancelling answers 409.
+  // Cleared if the job has to give up (e.g. Stripe failed) so the person can
+  // still cancel; a crashed run leaves it set, and after an hour it counts as
+  // released (cancelling works again; the next run re-claims).
+  deletionStartedAt   DateTime?
 
-  settings       UserSettings?
+  settings      UserSettings?
   subscription   Subscription?
   lifePlans      LifePlan[]
   allocations    Allocation[]

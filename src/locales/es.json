@@ -1294,7 +1294,8 @@
       "card2Title": "Lo que sale",
       "card2Desc": "Un presupuesto donde cada euro tiene un destino: lo fijo, lo variable y lo que ya está comprometido.",
       "card3Title": "Lo que te quedas",
-      "card3Desc": "Un fondo de emergencia y un porcentaje que te pagas a ti primero, el que tú elijas."
+      "card3Desc": "Un fondo de emergencia y un porcentaje que te pagas a ti primero, el que tú elijas.",
+      "privacyPromise": "¿Quién ve tus números? Nuestra promesa de privacidad"
     },
     "income": {
       "title": "Configura tu ingreso",
@@ -1508,11 +1509,105 @@
     "symbol": "€",
     "perMonthSuffix": "/mes"
   },
+  "account": {
+    "sectionTitle": "Tus datos y tu cuenta",
+    "close": "Cerrar",
+    "genericError": "Algo ha fallado. Inténtalo de nuevo.",
+    "promise": {
+      "title": "Promesa de privacidad",
+      "subtitle": "Quién ve tus números y qué hacemos con ellos"
+    },
+    "export": {
+      "title": "Exportar mis datos",
+      "subtitle": "Descarga una copia de lo que es tuyo",
+      "json": "Mis datos (JSON)",
+      "csv": "Mis movimientos (CSV)",
+      "onlyMine": "Solo lo tuyo: si compartes tus finanzas, lo de tu pareja no se incluye.",
+      "tooLarge": "Tu copia es demasiado grande para descargarla aquí. Escríbenos a contact@luisvespa.com y te la enviamos."
+    },
+    "delete": {
+      "title": "Borrar mi cuenta",
+      "subtitle": "Con 24 horas para cambiar de opinión",
+      "modalTitle": "Borrar tu cuenta",
+      "what1": "Se borran tu cuenta y tus datos: movimientos, cuentas, deudas, metas y presupuesto.",
+      "what2": "Si compartes tus finanzas, antes se separan: tu pareja conserva lo suyo.",
+      "what3": "Se desconectan tus bancos y, si tienes una suscripción, se cancela.",
+      "what4": "Tienes 24 horas para cancelarlo. El borrado se hace una vez al día: entre 24 y 48 horas después de pedirlo.",
+      "exportFirst": "Si quieres guardar una copia, expórtala antes.",
+      "sendCode": "Enviarme un código por email",
+      "codeSent": "Te hemos enviado un código por email",
+      "enterCode": "Escribe el código de 6 cifras que te hemos enviado por email.",
+      "codeLabel": "Código",
+      "confirm": "Borrar mi cuenta",
+      "resend": "Enviar otro código",
+      "wait": "Espera un minuto antes de pedir otro código.",
+      "requested": "Hecho. Tu cuenta se borrará en 24–48 horas; puedes cancelarlo hasta entonces.",
+      "pendingTitle": "Tu cuenta se borrará a partir del {{date}}.",
+      "pendingBody": "Si has cambiado de opinión, cancélalo antes de esa fecha.",
+      "cancel": "Cancelar el borrado",
+      "inProgress": "Tu cuenta se está borrando en este momento: ya no se puede cancelar.",
+      "cancelled": "Borrado cancelado. Tu cuenta sigue aquí."
+    }
+  },
   "legal": {
     "lastUpdated": "Última actualización: 4 de noviembre de 2026",
     "backToApp": "Volver a Remanso",
     "privacyLink": "Política de privacidad",
     "termsLink": "Términos del servicio",
+    "promiseLink": "Promesa de privacidad",
+    "promise": {
+      "title": "Nuestra promesa de privacidad",
+      "intro": "Lo esencial sobre tus datos en Remanso, en pocas palabras. Los detalles legales están en la política de privacidad.",
+      "sections": [
+        {
+          "title": "Quién ve tus números",
+          "paragraphs": [
+            "En la app, tus números solo los ves tú. Remanso no tiene paneles para líderes, grupos ni organizadores: nadie de tu iglesia, de tu comunidad ni de tu grupo de amigos tiene una forma de verlos.",
+            "Si compartes tus finanzas con tu pareja (un hogar), tu pareja ve lo que compartís en el hogar, según el nivel de privacidad que elijáis. Nadie más.",
+            "Luis, que mantiene la app, tiene acceso técnico a la base de datos; no la mira salvo para darte soporte si se lo pides, y las estadísticas que usa son solo recuentos, sin nombres ni importes."
+          ]
+        },
+        {
+          "title": "Lo que no hacemos",
+          "paragraphs": [],
+          "items": [
+            "No vendemos tus datos ni los compartimos con nadie para sus propios fines.",
+            "No hay anuncios, ni cookies de publicidad o de analítica.",
+            "No movemos tu dinero: si conectas tu banco, es solo para leer."
+          ]
+        },
+        {
+          "title": "Quién nos ayuda a que funcione",
+          "paragraphs": [
+            "Solo estos proveedores tratan datos, y solo para prestarnos su servicio:"
+          ],
+          "items": [
+            "Neon guarda la base de datos, en la Unión Europea (Fráncfort).",
+            "Vercel aloja la web y el servidor, que funciona en Fráncfort.",
+            "Resend envía los emails de la app (tu email y el mensaje).",
+            "Enable Banking, solo si conectas tu banco: lee tus cuentas, saldos y movimientos con el permiso que das en tu banco.",
+            "Anthropic (Claude), solo si al importar un extracto pulsas un botón para clasificar con IA: recibe los conceptos de comercio sin categoría (hasta 40 a la vez) y los nombres de tus categorías. Nunca importes, fechas, tu nombre, tu email ni números de cuenta. Los conceptos de tus gastos no van a modelos gratuitos ni a otros proveedores de IA, y los movimientos que llegan de tu banco conectado no se envían a ninguna IA.",
+            "El proveedor de IA que tengamos configurado para leer extractos (OpenRouter o Anthropic), solo si pides sugerir las columnas de un extracto con IA: recibe los títulos de columna y el formato de los valores, nunca tus movimientos.",
+            "Google, solo si entras con Google. Además, la web carga sus tipografías de Google Fonts.",
+      "Stripe, solo si te suscribes a Premium: gestiona el pago (tu email y tu tarjeta, que nosotros nunca vemos). Al borrar tu cuenta borramos también tu ficha de cliente en Stripe; Stripe puede conservar el registro de los pagos el tiempo que le exija la ley."
+          ]
+        },
+        {
+          "title": "Llévate tus datos o bórralos",
+          "paragraphs": [
+            "Exportar: en Ajustes → Tus datos y tu cuenta descargas un archivo con tus datos y otro (CSV, se abre con Excel) con tus movimientos. Solo lo tuyo: lo de tu pareja no sale.",
+            "Borrar: en el mismo sitio pides borrar tu cuenta y lo confirmas con un código que te enviamos por email. Tienes 24 horas para cambiar de opinión. El borrado se hace una vez al día, así que tu cuenta desaparece entre 24 y 48 horas después de pedirlo, y te avisamos por email.",
+            "Si estás en un hogar, antes se separan los datos: tu pareja conserva los suyos y se borran los tuyos. Desconectamos tus bancos y, si tuvieras una suscripción, borramos tu ficha de cliente en Stripe, lo que la cancela al momento. Las copias de seguridad del proveedor de la base de datos pueden conservar tus datos durante un tiempo limitado antes de borrarse solas."
+          ]
+        },
+        {
+          "title": "¿Dudas?",
+          "paragraphs": [
+            "Escríbenos a contact@luisvespa.com."
+          ]
+        }
+      ]
+    },
     "privacy": {
       "title": "Política de privacidad",
       "intro": "Esta política explica qué datos trata Remanso (budget.luisvespa.com), para qué los usa y con quién se comparten. Remanso es una aplicación gratuita, en fase beta, para organizar tu presupuesto y tus deudas.",
@@ -1530,7 +1625,7 @@
           ],
           "items": [
             "Tu cuenta: nombre, email y contraseña. De la contraseña guardamos solo un hash (bcrypt), nunca la contraseña en sí. Si entras con Google, guardamos el nombre, el email y la dirección de la foto de perfil que Google nos facilita.",
-            "Códigos de verificación de un solo uso que te enviamos por email para confirmar tu cuenta o recuperar la contraseña. Caducan a los 15 minutos.",
+            "Códigos de verificación de un solo uso que te enviamos por email para confirmar tu cuenta, recuperar la contraseña o confirmar el borrado de tu cuenta. Caducan a los 15 minutos.",
             "Tus datos financieros: ingresos, gastos (importe, fecha, concepto y categoría), presupuesto y categorías, cuentas y saldos, tarjetas, préstamos, cuotas y deudas con sus pagos, metas de ahorro, reglas para categorizar gastos y tus preferencias (idioma, tema, día de cobro).",
             "Extractos bancarios que importas: el archivo (CSV, Excel, Norma 43 u OFX) se lee en tu navegador y al servidor solo llegan los movimientos que contiene (fecha, importe, concepto y, si los trae, saldo y estado). Si tu navegador no consigue leerlo y el archivo es pequeño, se envía al servidor para leerlo allí, sin guardarlo. Guardamos los movimientos que confirmas, no el archivo. Si indicas qué columna es cada una, guardamos esa correspondencia (los títulos de las columnas) en la cuenta para el próximo extracto.",
             "Si conectas tu banco (opcional): a través de Enable Banking leemos, con tu permiso de solo lectura dado en la web de tu banco, el nombre y tipo de las cuentas y tarjetas que compartas, su moneda, los cuatro últimos caracteres del IBAN, los saldos y los movimientos contabilizados (fecha, importe, concepto y, si los trae, el nombre del comercio o de la otra parte y el saldo tras el movimiento). Los movimientos se clasifican con tus propias reglas; los conceptos del banco no se envían a ninguna IA. Guardamos los movimientos que confirmas, los saldos, la fecha en que caduca el permiso y un identificador de la sesión con el banco, cifrado. No guardamos el IBAN completo ni tus credenciales del banco: nunca las vemos.",
@@ -1547,7 +1642,7 @@
         {
           "title": "Para qué los usamos y con qué base",
           "paragraphs": [
-            "Usamos tus datos para prestarte el servicio que pides al registrarte: guardar tu información, calcular tu presupuesto, tu futuro comprometido y tu plan de salida de deudas, y enviarte los emails necesarios (verificación, recuperación de contraseña, bienvenida e invitaciones al hogar). La base jurídica es la ejecución del contrato que aceptas al crear tu cuenta (artículo 6.1.b del RGPD).",
+            "Usamos tus datos para prestarte el servicio que pides al registrarte: guardar tu información, calcular tu presupuesto, tu futuro comprometido y tu plan de salida de deudas, y enviarte los emails necesarios (verificación, recuperación de contraseña, bienvenida, invitaciones al hogar y avisos del borrado de tu cuenta). La base jurídica es la ejecución del contrato que aceptas al crear tu cuenta (artículo 6.1.b del RGPD).",
             "Los registros técnicos se usan para mantener el servicio funcionando y seguro, sobre la base del interés legítimo (artículo 6.1.f del RGPD)."
           ]
         },
@@ -1586,7 +1681,7 @@
           "paragraphs": [
             "Guardamos tus datos mientras tengas la cuenta. Puedes borrar en cualquier momento, desde la propia aplicación, los movimientos, cuentas, deudas y demás elementos que hayas creado. Los códigos de verificación caducan a los 15 minutos y las invitaciones al hogar, a los 7 días.",
             "Si desconectas un banco, retiramos el permiso en el proveedor y dejamos de leerlo; los movimientos que ya importaste se quedan hasta que los borres.",
-            "La aplicación todavía no tiene un botón para eliminar la cuenta. Para hacerlo, escribe a contact@luisvespa.com desde el email de tu cuenta y la eliminaremos junto con todos sus datos. Las copias de seguridad del proveedor de base de datos pueden conservarlos durante un periodo limitado antes de borrarse."
+            "Puedes borrar tu cuenta desde Ajustes → Tus datos y tu cuenta, confirmándolo con un código que te enviamos por email. Tienes 24 horas para cancelarlo; después la borramos, junto con todos tus datos, en la siguiente pasada diaria, es decir, entre 24 y 48 horas después de pedirlo. Si compartes tus finanzas con otra persona, antes separamos los datos de cada uno y ella conserva los suyos. Desconectamos tus bancos y te avisamos por email cuando esté hecho. Las copias de seguridad del proveedor de base de datos pueden conservarlos durante un periodo limitado antes de borrarse."
           ]
         },
         {
@@ -1598,7 +1693,7 @@
         {
           "title": "Tus derechos",
           "paragraphs": [
-            "Puedes pedir acceso a tus datos, su rectificación o supresión, oponerte a su tratamiento o pedir que se limite, y pedir una copia en un formato de uso común (portabilidad). Escribe a contact@luisvespa.com y te responderemos en el plazo de un mes. Si crees que no hemos tratado bien tus datos, puedes reclamar ante la Agencia Española de Protección de Datos (www.aepd.es)."
+            "Puedes pedir acceso a tus datos, su rectificación o supresión, oponerte a su tratamiento o pedir que se limite, y pedir una copia en un formato de uso común (portabilidad). Desde Ajustes → Tus datos y tu cuenta puedes descargar tú mismo una copia de tus datos (JSON) y de tus movimientos (CSV), y borrar tu cuenta. Para todo lo demás, escribe a contact@luisvespa.com y te responderemos en el plazo de un mes. Si crees que no hemos tratado bien tus datos, puedes reclamar ante la Agencia Española de Protección de Datos (www.aepd.es)."
           ]
         },
         {

@@ -163,5 +163,9 @@ test("the cron budget leaves room under the function's maxDuration", async () =>
   assert.equal(maxDuration, 60);
   // The budget, plus one account's slowest calls (each request times out at 15 s), fits.
   assert.ok(CRON_BUDGET_MS + 2 * 15_000 < maxDuration * 1000);
-  assert.deepEqual(vercel.crons, [{ path: "/api/banking/cron", schedule: "0 5 * * *" }]);
+  // Daily (Hobby allows once a day per entry): the bank sync and the account-deletion purge (LPBETA-09).
+  assert.deepEqual(vercel.crons, [
+    { path: "/api/banking/cron", schedule: "0 5 * * *" },
+    { path: "/api/account/cron", schedule: "0 4 * * *" },
+  ]);
 });

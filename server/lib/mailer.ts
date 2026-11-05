@@ -4,6 +4,9 @@
 import { sendEmail } from "./email/index.js";
 import type { EmailLocale } from "./email/locales/index.js";
 import {
+  accountDeletedEmail,
+  accountDeletionCodeEmail,
+  accountDeletionRequestedEmail,
   bankConsentExpiringEmail,
   partnerInviteEmail,
   passwordChangedEmail,
@@ -50,4 +53,21 @@ export async function sendBankConsentExpiringEmail(
   locale: EmailLocale = "es",
 ) {
   await sendEmail({ to: email, ...bankConsentExpiringEmail({ name, bankName, expiresAt }, locale) });
+}
+
+export async function sendAccountDeletionCodeEmail(email: string, otp: string, locale: EmailLocale = "es") {
+  await sendEmail({ to: email, ...accountDeletionCodeEmail({ otp }, locale) });
+}
+
+export async function sendAccountDeletionRequestedEmail(
+  email: string,
+  name: string,
+  deleteAfter: Date,
+  locale: EmailLocale = "es",
+) {
+  await sendEmail({ to: email, ...accountDeletionRequestedEmail({ name, deleteAfter }, locale) });
+}
+
+export async function sendAccountDeletedEmail(email: string, name: string, locale: EmailLocale = "es") {
+  await sendEmail({ to: email, ...accountDeletedEmail({ name }, locale) });
 }

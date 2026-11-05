@@ -11,3 +11,6 @@ export { subscriptionActivatedEmail, type SubscriptionActivatedData } from "./su
 export { subscriptionCancelledEmail, type SubscriptionCancelledData } from "./subscriptionCancelled.js";
 export { paymentFailedEmail, type PaymentFailedData } from "./paymentFailed.js";
 export { bankConsentExpiringEmail, type BankConsentExpiringData } from "./bankConsentExpiring.js";
+export { accountDeletionCodeEmail, type AccountDeletionCodeData } from "./accountDeletionCode.js";
+export { accountDeletionRequestedEmail, type AccountDeletionRequestedData } from "./accountDeletionRequested.js";
+export { accountDeletedEmail, type AccountDeletedData } from "./accountDeleted.js";
