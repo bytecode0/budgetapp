@@ -24,6 +24,9 @@ export interface Debt {
   purchasesTotal: number; // euros
   paymentsTotal: number; // euros
   monthlyCommitment: number; // euros — this period's budget line
+  // A card with statementDay + paymentDueDay (server/lib/cardCycle.ts): what
+  // the next due date asks for vs the rest of `owed`, due on the following one.
+  cycle: DebtCycle | null;
   principal: number | null; // euros
   apr: number | null;
   creditLimit: number | null; // euros
@@ -39,6 +42,16 @@ export interface Debt {
   householdId?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DebtCycle {
+  dueOn: string; // YYYY-MM-DD
+  closesOn: string; // YYYY-MM-DD — that statement's cut-off
+  closed: boolean; // false: the cut-off hasn't come yet, the amount can still grow
+  dueAmount: number; // euros — "lo que vence": that statement, still unpaid
+  minimumDue: number | null; // euros — "minimum" cards: min(minimum, dueAmount); null otherwise
+  afterCutAmount: number; // euros — purchases after the cut-off
+  afterCutDueOn: string; // YYYY-MM-DD
 }
 
 export interface DebtPayload {

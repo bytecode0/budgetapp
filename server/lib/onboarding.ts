@@ -182,6 +182,7 @@ export function computeOnboardingResult(input: ResultInput): OnboardingResult {
     input.monthlyIncome,
     input.cycleStartDay,
     1,
+    input.now,
   );
   const committed = timeline[0]?.committed ?? 0;
   const pctCommitted = timeline[0]?.pctCommitted ?? 0;

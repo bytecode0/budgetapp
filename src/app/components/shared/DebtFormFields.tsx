@@ -43,6 +43,7 @@ export interface DebtFormState {
   currentBalance: string;
   apr: string;
   creditLimit: string;
+  statementDay: string;
   paymentDueDay: string;
   minimumPayment: string;
   installmentAmount: string;
@@ -60,7 +61,7 @@ export interface DebtFormState {
 /** A new loan / installment plan. */
 export const EMPTY_DEBT_FORM: DebtFormState = {
   id: null, name: '', kind: 'installment', paymentMode: 'installments', currentBalance: '', apr: '', creditLimit: '',
-  paymentDueDay: '', minimumPayment: '', installmentAmount: '', installmentsTotal: '', installmentsPaid: '',
+  statementDay: '', paymentDueDay: '', minimumPayment: '', installmentAmount: '', installmentsTotal: '', installmentsPaid: '',
   loadedBalance: '', loadedInstallmentsPaid: '', cardBacked: false,
 };
 
@@ -73,6 +74,7 @@ export function debtFormFromDebt(d: Debt): DebtFormState {
     currentBalance: String(d.currentBalance),
     apr: d.apr != null ? String(d.apr) : '',
     creditLimit: d.creditLimit != null ? String(d.creditLimit) : '',
+    statementDay: d.statementDay != null ? String(d.statementDay) : '',
     paymentDueDay: d.paymentDueDay != null ? String(d.paymentDueDay) : '',
     minimumPayment: d.minimumPayment != null ? String(d.minimumPayment) : '',
     installmentAmount: d.installmentAmount != null ? String(d.installmentAmount) : '',
@@ -94,6 +96,7 @@ export function debtPayloadFromForm(form: DebtFormState): DebtPayload {
     ...((!form.id || form.currentBalance !== form.loadedBalance) && { currentBalance: parseFloat(form.currentBalance) || 0 }),
     apr: form.apr ? parseFloat(form.apr) : null,
     creditLimit: CARD_LIKE.has(form.kind) && form.creditLimit ? parseFloat(form.creditLimit) : null,
+    statementDay: CARD_LIKE.has(form.kind) && form.statementDay ? parseInt(form.statementDay, 10) : null,
     paymentDueDay: form.paymentDueDay ? parseInt(form.paymentDueDay, 10) : null,
     minimumPayment: form.paymentMode === 'minimum' && form.minimumPayment ? parseFloat(form.minimumPayment) : null,
     installmentAmount: isInstallments && form.installmentAmount ? parseFloat(form.installmentAmount) : null,
@@ -219,6 +222,25 @@ export function DebtFormFields({ form, setForm }: DebtFormFieldsProps) {
             placeholder="0"
             className="w-full border border-line-strong rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
           />
+        </div>
+      )}
+
+      {/* A card's statement cut-off: with the due day, it splits what's due
+          from purchases after the cut-off (server/lib/cardCycle.ts). */}
+      {isCardLike && (
+        <div className="space-y-2">
+          <label className="text-xs text-muted-foreground">{t('debts.statementDayLabel')}</label>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={28}
+            value={form.statementDay}
+            onChange={e => setForm(f => ({ ...f, statementDay: e.target.value }))}
+            placeholder="1-28"
+            className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+          />
+          <p className="text-xs text-muted-foreground">{t('debts.statementDayHint')}</p>
         </div>
       )}
 

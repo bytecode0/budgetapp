@@ -36,6 +36,11 @@ export interface LedgerDebt {
   installmentsTotal: number | null;
   installmentAmount: number | null;
   minimumPayment: number | null;
+  // The card's billing cycle (server/lib/cardCycle.ts) and when the anchor
+  // was set. Optional: a ledger built by hand without them has no cycle.
+  statementDay?: number | null;
+  paymentDueDay?: number | null;
+  balanceAsOf?: Date;
 }
 
 export interface LedgerMovement {
@@ -101,6 +106,14 @@ function replay(ledger: DebtLedger, before?: Date): { split: Map<string, Payment
     split.set(m.id, { toPrevious, toPurchases: m.amount - toPrevious });
   }
   return { split, previousLeft };
+}
+
+/** What payments dated before `before` (all of them when omitted) paid of the
+ *  pre-existing debt — the budget-spending part of their split. */
+export function previousPaidBefore(ledger: DebtLedger, before?: Date): number {
+  let paid = 0;
+  for (const s of replay(ledger, before).split.values()) paid += s.toPrevious;
+  return paid;
 }
 
 /** Each payment split between pre-existing debt and purchases. */
@@ -217,6 +230,7 @@ const LEDGER_DEBT_SELECT = {
   id: true, kind: true, status: true, paymentMode: true, accountId: true,
   currentBalance: true, balanceAsOf: true,
   installmentsPaid: true, installmentsTotal: true, installmentAmount: true, minimumPayment: true,
+  statementDay: true, paymentDueDay: true,
 } as const;
 
 const utcDay = (d: Date) => d.toISOString().slice(0, 10);
@@ -258,13 +272,13 @@ export function buildLedgers(
 ): DebtLedger[] {
   const signed = (e: LedgerExpense): LedgerMovement =>
     ({ id: e.id, amount: e.kind === "refund" ? -e.amount : e.amount, date: e.date });
-  return debts.map(({ balanceAsOf, ...debt }) => ({
+  return debts.map(debt => ({
     debt,
     payments: expenses
-      .filter(e => e.debtId === debt.id && e.kind !== "refund" && inLedger(e, balanceAsOf))
+      .filter(e => e.debtId === debt.id && e.kind !== "refund" && inLedger(e, debt.balanceAsOf))
       .map(signed),
     purchases: debt.accountId
-      ? expenses.filter(e => !e.debtId && e.accountId === debt.accountId && inLedger(e, balanceAsOf)).map(signed)
+      ? expenses.filter(e => !e.debtId && e.accountId === debt.accountId && inLedger(e, debt.balanceAsOf)).map(signed)
       : [],
     adjustments: adjustments.filter(a => a.debtId === debt.id).map(a => ({ id: a.id, amount: a.amount, date: a.date })),
   }));
