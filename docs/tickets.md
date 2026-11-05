@@ -5,16 +5,16 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 
 | # | Ticket | Estado | Schema |
 |---|---|---|---|
-| LPBETA-01 | Ciclo de facturación de la tarjeta | Refinado (plan 1.9) | No |
+| LPBETA-01 | Ciclo de facturación de la tarjeta | **Hecho, en revisión** (4 nov): toca Debts.tsx, DebtFormFields y un componente nuevo, CardCycleLine; se rebasa sobre el rediseño de Deudas (PR #15) | No |
 | LPBETA-02 | Gráficas de deudas, detalle y plan de pago | Refinado | No |
 | LPBETA-03 | Stripe y control de acceso Premium | Refinado | No |
 | LPBETA-04 | Pequeños pendientes | **Hecho y desplegado** (PR #14, 4 nov). Incluye `npm run backfill:legacy-owners`: Luis lo ejecuta en su terminal, primero sin `--apply` | — |
 | LPBETA-05 | Medir usuarios activos | **Hecho y desplegado** (PR #8, 4 nov) | Sí (aditivo: `User.lastBankReviewAt`, `PlanDeposit.byUserId`) |
 | LPBETA-06 | Remanso no asesora sobre inversiones (simulador con aviso) | **Hecho y desplegado** (PR #13, 4 nov) | No |
-| LPBETA-07 | Inicio y onboarding para el nuevo cliente | Refinado — **va antes de la BETA** | Por confirmar al diseñar |
+| LPBETA-07 | Inicio y onboarding para el nuevo cliente | **Listo** (4 nov), rebasando sobre los rediseños. **Espera el `db push` combinado de Luis** | Por confirmar al diseñar |
 | LPBETA-08 | Enlace de invitación para amigos | Aplazado (después de la BETA) | Sí (aditivo) |
 | LPBETA-09 | Borrar la cuenta, exportar los datos y promesa de privacidad | Refinado — **bloquea la BETA** | Sí (aditivo) |
-| LPBETA-10 | Línea de generosidad en el onboarding | Refinado | No |
+| LPBETA-10 | Línea de generosidad en el onboarding | **Listo** con el 07 (4 nov). **Espera el `db push` combinado de Luis** | No |
 | LPBETA-11 | Instalable en el móvil (PWA) y página de bienvenida | **Hecho y desplegado** (PR #16, 4 nov). Bienvenida pública; PWA sin service worker. Falta probar en un móvil real: login con Google y vuelta del banco desde la app instalada | No |
 | LPBETA-12 | Detección de suscripciones y gastos hormiga | Refinado | Sí (aditivo, pequeño) |
 | LPBETA-13 | Celebrar los hitos | En refinamiento | Probablemente sí (aditivo, solo "ya visto") |
@@ -27,11 +27,11 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 | LPBETA-20 | La invitación de pareja no está ligada al email invitado | **Hecho y desplegado** (PR #20, 4 nov). Decidido 4 nov: lo privado de un miembro se oculta a la pareja en todos los niveles (también el transparente); los totales lo cuentan como "Compromisos privados de tu pareja" | No |
 | LPBETA-21 | Cerrar todas las sesiones (sesiones revocables) | Refinado — Media | Sí (aditivo, un campo) |
 | LPBETA-22 | Dependencias con vulnerabilidades conocidas | **Hecho y desplegado** (PR #18, 4 nov) | No |
-| LPBETA-23 | Endurecimiento menor de seguridad | Refinado — Baja | No |
+| LPBETA-23 | Endurecimiento menor de seguridad | Parcial: puntos 3, 4 y 7 **hechos y desplegados** (PR #23, 4 nov); la CSP de la web, en modo Report-Only hasta revisarla en el navegador. Los puntos 2, 5 y 6 van detrás de la seguridad alta | No |
 | LPBETA-24 | Medir la paz: una pregunta al mes | En refinamiento | Sí (aditivo: una tabla pequeña) |
 | LPBETA-25 | Dominio de la BETA: `app.luisvespa.com` | Refinado — decidido el 4 nov | No |
 | LPBETA-26 | Nuevo nombre de la app: **Remanso** | **Hecho y desplegado** (PR #10, 4 nov). Falta buscar la marca en la OEPM/EUIPO y que Luis cambie `EMAIL_FROM` en Vercel | No |
-| LPBETA-27 | Rediseño de toda la app para Remanso | Fase 1 hecha y desplegada (PR #9). Fase 2: Actividad (PR #12), Deudas (PR #15) y Planes (PR #19) en revisión; faltan Cuentas, Partidas, Hogar y Ajustes | No |
+| LPBETA-27 | Rediseño de toda la app para Remanso | Fase 1 hecha y desplegada (PR #9). Fase 2 en revisión: Actividad (PR #12), Deudas (#15), Planes (#19), Cuentas y banca (#21), Ajustes y Hogar (#22). Falta Partidas, después del 07 | No |
 
 ### Orden de ejecución (4 nov, sustituye al de abajo)
 
@@ -57,7 +57,7 @@ Reparto (4 nov): la sesión de **rebranding** hace 24–27; la **otra sesión** 
 | 9 | LPBETA-10 · Generosidad | otra | El mismo flujo de onboarding que el 07. |
 | 10 | LPBETA-24 · Medir la paz | rebranding | Una tarjeta en el Inicio nuevo, después del 07. |
 | ✓ | LPBETA-11 · PWA y bienvenida | otra | Hecho y desplegado (PR #16). Falta probarla en un móvil real. |
-| 12 | LPBETA-27 · Rediseño, fase 2 (pantallas sin ticket propio) | rebranding | Actividad (PR #12), Deudas (PR #15) y Planes (PR #19) en revisión. Después: Cuentas, Partidas (tras el 07), Hogar y Ajustes (tras el 09). |
+| 12 | LPBETA-27 · Rediseño, fase 2 (pantallas sin ticket propio) | rebranding | En revisión: Actividad (#12), Deudas (#15), Planes (#19), Cuentas (#21), Ajustes y Hogar (#22). Falta Partidas (tras el 07). |
 | 13 | LPBETA-19 a 23 · Seguridad MEDIA y BAJA | otra | 19, 20 (PR #20) y 22 (PR #18) hechos y desplegados; 21 y 23 pendientes. |
 | 14 | LPBETA-12 · Suscripciones y gastos hormiga | otra | Pantallas nuevas, ya con el diseño nuevo. |
 | 15 | LPBETA-13 · Celebrar los hitos | otra | Ídem. |
@@ -330,6 +330,12 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 2. ~~¿Método con nombre propio?~~ → decidido 4 nov: **no**; la app es moldeable al método de cada usuario y cada uno elige su %.
 3. ~~¿Antes de la BETA?~~ → decidido 4 nov: **sí, antes de la BETA.**
 
+
+**Pendientes de seguimiento (4 nov, al implementar):** el saldo de un plan no se ajusta en tres casos:
+- cuando una pareja se separa y se mueven gastos de una partida de plan;
+- al borrar una partida de plan;
+- al cambiar el plan enlazado a una partida.
+Son candidatos a ticket propio.
 ---
 
 ## LPBETA-08 · Enlace de invitación para amigos — APLAZADO (después de la BETA, decisión del 4 nov)
