@@ -49,11 +49,13 @@ function stillDueAt(d: TimelineDebtInput, periodsAhead: number): boolean {
  *  the current period always commits exactly what the debt's budget line
  *  holds (monthlyCommitment), cycle or not.
  *  A card paid in full with a billing cycle (server/lib/cardCycle.ts, rule 5)
- *  also commits, in later periods, the pre-existing debt that falls due then
- *  — never its purchases, already spending in their categories. What earlier
- *  periods commit counts as paid, unless the payments recorded already paid
- *  more of that debt. Without a cycle, a card paid in full commits nothing
- *  after the current period, as before. */
+ *  also commits, in LATER periods, pre-existing debt that only falls due
+ *  then and isn't in the current line yet (e.g. interest recorded with a
+ *  later date) — never its purchases, already spending in their categories.
+ *  What earlier periods commit counts as paid, unless the payments recorded
+ *  already paid more of that debt; and later periods never commit more than
+ *  the live balance minus what the current line still expects. Without a
+ *  cycle, a card paid in full commits nothing after the current period. */
 export function timelineInput<T extends TimelineDebtInput>(
   d: T, ledger: DebtLedger, periods: { start: Date; end: Date }[],
 ): T {
@@ -65,11 +67,15 @@ export function timelineInput<T extends TimelineDebtInput>(
 
   const paidBeforeStart = previousPaidBefore(ledger, current.start);
   const paidAll = previousPaidBefore(ledger);
+  const stillExpected = Math.max(0, line - (paidAll - paidBeforeStart));
+  let available = Math.max(0, debtState(ledger).balance - stillExpected);
   let committed = line;
   const cycleAmounts = periods.map((p, i) => {
     if (i === 0) return line;
-    const amount = Math.max(0, previousDueBefore(ledger, p.end, days) - Math.max(paidAll, paidBeforeStart + committed));
+    const due = Math.max(0, previousDueBefore(ledger, p.end, days) - Math.max(paidAll, paidBeforeStart + committed));
+    const amount = Math.min(due, available);
     committed += amount;
+    available -= amount;
     return amount;
   });
   return { ...base, cycleAmounts };

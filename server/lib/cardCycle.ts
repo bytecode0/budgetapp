@@ -28,13 +28,14 @@
 //     below zero nor above the live balance.
 //  4. Missing statementDay or paymentDueDay, or a card in "installments"
 //     mode: no cycle — every caller falls back to today's behaviour.
-//  5. Budget and committed future count only the PRE-EXISTING debt of a card
-//     paid in full, never its purchases (already spending in their
-//     categories — CLAUDE.md, "How debts work"). The cycle only says WHEN that
-//     debt is due (rule 2): its budget line holds the part due by the period's
-//     end (debtBalance.ts, monthlyCommitment), and the timeline places what's
-//     due later in later periods (debtTimeline.ts, timelineInput). Purchases
-//     show up only in "lo que vence" on the Debts screen (cardCycleSummary).
+//  5. The budget line (debtBalance.ts, monthlyCommitment) ignores the cycle.
+//     The committed future's current period equals that line; for a card paid
+//     in full, the cycle only places in LATER periods pre-existing debt
+//     (anchor + adjustments) that falls due then and isn't in the current
+//     line, capped at the live balance (debtTimeline.ts, timelineInput).
+//     Purchases are never committed — already spending in their categories
+//     (CLAUDE.md, "How debts work"); they show up only in "lo que vence" on
+//     the Debts screen (cardCycleSummary).
 import type { DebtLedger } from "./debtBalance.js";
 
 const DAY_MS = 86_400_000;

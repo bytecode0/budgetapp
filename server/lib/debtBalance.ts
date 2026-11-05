@@ -21,7 +21,6 @@
 // adjustment only affects payments made after it — never a closed month.
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
-import { cycleDaysOf, previousDueBefore } from "./cardCycle.js";
 
 /** The client, or a transaction (to read and write under one lock). */
 type Db = Prisma.TransactionClient;
@@ -209,13 +208,6 @@ export function monthlyCommitment(ledger: DebtLedger, period: { start: Date; end
 
   switch (d.paymentMode) {
     case "full": {
-      // A card with a billing cycle (server/lib/cardCycle.ts, rule 5): the
-      // pre-existing debt due by the period's end, less what payments before
-      // the period already paid of it. Debt recorded after this period's due
-      // date is due next period, and its line is next period's — e.g. "I owe
-      // 1,000" typed on Nov 20 with a Dec 5 due date belongs to December.
-      const days = cycleDaysOf(d);
-      if (days) return Math.max(0, previousDueBefore(ledger, period.end, days) - previousPaidBefore(ledger, period.start));
       // Only the pre-existing debt: new purchases are already budgeted in
       // their own categories. A correction made during the period (interest)
       // is owed this period too. Unfloored running total, as in replay().
