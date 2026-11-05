@@ -22,7 +22,7 @@ import {
   sendAccountDeletedEmail, sendAccountDeletionCodeEmail, sendAccountDeletionRequestedEmail,
 } from "../lib/mailer.js";
 import { EXPORT_MAX_BYTES, buildJsonExport, buildMovementRows, movementsCsv } from "../lib/accountExport.js";
-import { deletionDueAt, isLockNotAvailable, runDeletionPurge } from "../lib/accountDeletion.js";
+import { claimActive, deletionDueAt, isLockNotAvailable, runDeletionPurge } from "../lib/accountDeletion.js";
 import { cronAuthorized } from "../lib/banking/cron.js";
 import { codeSendChecks, prismaRateLimitStore, takeRateLimit } from "../lib/rateLimit.js";
 import { getBankingClient } from "../lib/banking/enableBanking.js";
@@ -167,8 +167,9 @@ accountRouter.delete("/deletion", requireAuth, async (req: AuthRequest, res: Res
     const cancelled = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${req.authUserId!} FOR UPDATE NOWAIT`;
       const user = await tx.user.findUniqueOrThrow({ where: { id: req.authUserId! }, select: { deletionStartedAt: true } });
-      if (user.deletionStartedAt) return false;
-      await tx.user.update({ where: { id: req.authUserId! }, data: { deletionRequestedAt: null } });
+      // A stale claim (a run that died) no longer blocks: the next run re-claims.
+      if (claimActive(user.deletionStartedAt, new Date())) return false;
+      await tx.user.update({ where: { id: req.authUserId! }, data: { deletionRequestedAt: null, deletionStartedAt: null } });
       return true;
     });
     if (!cancelled) return res.status(409).json(IN_PROGRESS);

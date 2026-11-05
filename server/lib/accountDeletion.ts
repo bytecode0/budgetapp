@@ -11,18 +11,28 @@
 // Purge of one user D, in short steps so no database transaction waits on
 // the network:
 //   1. Claim: a short transaction locks D's User row (mark still set and due)
-//      and sets deletionStartedAt. From here a cancel answers 409.
+//      and sets deletionStartedAt. From here a cancel answers 409 — unless
+//      the claim is more than CLAIM_STALE_MS old (a run that died): then it
+//      counts as released, cancelling works again and the next run re-claims.
 //   2. Stripe (outside any transaction). Billing configured: the Stripe
 //      customer is deleted, which also cancels any subscription at once. Not
 //      configured: an account with a live subscription is skipped (retried
 //      tomorrow, the claim released); without one, deletion goes on. If Stripe
 //      fails, the claim is released and nothing else has happened.
-//   3. Data: ONE short transaction that re-checks the claim, then
+//   3. Bank sessions: revoked at the provider before the data step (best
+//      effort, at most BANK_REVOKE_TIMEOUT_MS each; a failure is logged and the
+//      consent expires on its own within 180 days), then marked revoked — so a
+//      run killed after the data commit can't lose them.
+//   4. Data: ONE short transaction that re-checks the claim, then
 //      a. household, under lockSettings (as accept/unlink):
 //         - debts of D that the survivor has movements on are kept and
 //           re-owned to her (keepDebtsTheSurvivorUses): deleting them would
 //           turn her payments into full-amount spending and leave her card
-//           purchases on nothing, changing months already closed;
+//           purchases on nothing, changing months already closed. Every
+//           closed month of the survivor's counted spending stays the same,
+//           except with a legacy cross-owner pair (from before the same-owner
+//           rule): a frozen debt keeps its balance, but how its past payments
+//           split between old debt and purchases can change;
 //         - the other cross-owner debt–account pairs are resolved so nothing
 //           of D's stays inside the other person's data (resolveCrossOwnerPairs);
 //         - D is the MEMBER: unlinkMemberFromPool moves her rows to her own
@@ -42,12 +52,16 @@
 //      d. the user is deleted (every relation cascades), and households left
 //         without members.
 //      If it fails, it rolls back and the claim is released.
-//   4. After the commit: her bank sessions are revoked at the provider (best
-//      effort; a failure is logged, and the consent expires on its own within
-//      180 days), and the "your account was deleted" email.
+//   5. After the commit: the "your account was deleted" email.
 //
-// A run stops starting new users after PURGE_BUDGET_MS (the function's limit
-// is 60 s); the rest go the next day, oldest request first.
+// Whose movement is it: who ENTERED it (createdByUserId); only rows with no
+// creator (legacy, bank sync) fall back to who paid it. The payer alone can't
+// say: POST /api/expenses defaults it to the account's owner, so a partner's
+// purchase on D's card is stored paid by D.
+//
+// A run starts a new user only during its first PURGE_START_BUDGET_MS (the
+// function's limit is 60 s and one user can wait on Stripe and the bank); the
+// rest go the next day, oldest request first.
 // Safe to run again: a user already gone is "gone", an unmarked one "not_due".
 // Logs name a user only by id, as the rest of the server does, never by email.
 import type { Prisma, PrismaClient } from "@prisma/client";
@@ -101,12 +115,12 @@ async function inChunks(ids: string[], run: (chunk: string[]) => Promise<unknown
   for (let i = 0; i < ids.length; i += CHUNK) await run(ids.slice(i, i + CHUNK));
 }
 
-/** D's own movement: she paid it, or entered it with no payer recorded. */
-export function isOwnMovement(e: { payerUserId: string | null; createdByUserId: string | null }, deletedId: string): boolean {
-  return e.payerUserId === deletedId || (e.payerUserId === null && e.createdByUserId === deletedId);
+/** `userId`'s own movement: she entered it; with no creator recorded, she paid it. */
+export function isOwnMovement(e: { payerUserId: string | null; createdByUserId: string | null }, userId: string): boolean {
+  return e.createdByUserId !== null ? e.createdByUserId === userId : e.payerUserId === userId;
 }
-const ownMovementWhere = (deletedId: string) => ({
-  OR: [{ payerUserId: deletedId }, { payerUserId: null, createdByUserId: deletedId }],
+const ownMovementWhere = (userId: string) => ({
+  OR: [{ createdByUserId: userId }, { createdByUserId: null, payerUserId: userId }],
 });
 
 /** Names for what the survivor inherits, in her language (the old ones may name D). */
@@ -263,7 +277,12 @@ export async function sweepOwnedElsewhere(tx: Tx, deletedId: string, now: Date):
       await tx.expense.deleteMany({ where: { userId: scope, accountId: { in: accounts }, debtId: null, ...ownMovementWhere(deletedId) } });
     }
     const debts = (await tx.debt.findMany({ where: mine, select: { id: true } })).map(d => d.id);
-    if (debts.length) await tx.allocation.deleteMany({ where: { debtId: { in: debts }, type: "debt" } });
+    if (debts.length) {
+      // Her payments of her debts go with them (left behind they would count
+      // as full-amount spending). Nobody else's are left: those debts were kept.
+      await tx.expense.deleteMany({ where: { userId: scope, debtId: { in: debts }, ...ownMovementWhere(deletedId) } });
+      await tx.allocation.deleteMany({ where: { debtId: { in: debts }, type: "debt" } });
+    }
     await tx.debt.deleteMany({ where: mine });
     await tx.income.deleteMany({ where: mine });
     await tx.account.deleteMany({ where: mine });
@@ -292,12 +311,15 @@ export function clashRenames(
 export async function transferPool(tx: Tx, ctx: { ownerId: string; partnerId: string }): Promise<void> {
   const { ownerId, partnerId } = ctx;
   // The owner's own rows: what the unlink would give the owner if HE were the
-  // member leaving the pool — except what the partner paid, which stays hers.
+  // member leaving the pool — except the partner's own movements (she entered
+  // them, or paid them with no creator recorded), which stay hers.
   const own = planUnlink(await loadUnlinkInput(tx, ownerId, ownerId)).move;
-  const paidByPartner = new Set((await tx.expense.findMany({
-    where: { userId: ownerId, payerUserId: partnerId }, select: { id: true },
+  // A shared household expense she paid stays too: the household's history,
+  // and her money (the payer of a shared expense is chosen, not defaulted).
+  const partnersOwn = new Set((await tx.expense.findMany({
+    where: { userId: ownerId, OR: [ownMovementWhere(partnerId), { scope: "shared", payerUserId: partnerId }] }, select: { id: true },
   })).map(e => e.id));
-  const ownExpenses = own.expenseIds.filter(id => !paidByPartner.has(id));
+  const ownExpenses = own.expenseIds.filter(id => !partnersOwn.has(id));
 
   const del = <T>(ids: string[], run: (chunk: string[]) => Promise<T>) => inChunks(ids, run);
   await del(own.ruleIds, ids => tx.categorizationRule.deleteMany({ where: { id: { in: ids } } }));
@@ -413,6 +435,22 @@ export function hasLiveSubscription(sub: { stripeSubscriptionId: string | null; 
 
 const SHORT_TX = { timeout: 30_000, maxWait: 10_000 };
 
+/** A claim older than this belongs to a run that died (a run lasts < 60 s):
+ *  it counts as released. */
+export const CLAIM_STALE_MS = 60 * 60 * 1000;
+/** Whether a purge holds the account now (cancelling answers 409). */
+export function claimActive(startedAt: Date | null, now: Date): boolean {
+  return startedAt !== null && now.getTime() - startedAt.getTime() < CLAIM_STALE_MS;
+}
+
+/** Each bank revocation waits at most this long (best effort). */
+export const BANK_REVOKE_TIMEOUT_MS = 5_000;
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("TIMEOUT")), ms); });
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}
+
 async function releaseClaim(db: PrismaClient, userId: string): Promise<void> {
   await db.user.updateMany({ where: { id: userId }, data: { deletionStartedAt: null } });
 }
@@ -463,20 +501,37 @@ export async function purgeUser(db: PrismaClient, userId: string, deps: PurgeDep
     throw err;
   }
 
-  // 3. Data.
-  let sessions: { id: string; requisitionId: string }[] | null;
+  // 3. Bank sessions, before the data step (best effort).
+  const sessions = await db.bankConnection.findMany({
+    where: { ownerUserId: userId, requisitionId: { not: "" } },
+    select: { id: true, requisitionId: true },
+  });
+  for (const c of sessions) {
+    if (!deps.banking) {
+      console.error(`[account/purge] connection ${c.id}: banking not configured, provider session not revoked`);
+      continue;
+    }
+    try {
+      await withTimeout(deps.banking.deleteSession(decrypt(c.requisitionId)), BANK_REVOKE_TIMEOUT_MS);
+    } catch (err) {
+      console.error(`[account/purge] connection ${c.id}: provider session not revoked: ${err instanceof Error && err.message === "TIMEOUT" ? "TIMEOUT" : syncErrorCode(err)}`);
+    }
+  }
+  if (sessions.length) {
+    await db.bankConnection.updateMany({
+      where: { id: { in: sessions.map(c => c.id) } },
+      data: { status: "revoked", requisitionId: "" },
+    });
+  }
+
+  // 4. Data.
+  let done: boolean;
   try {
-    sessions = await db.$transaction(async (tx) => {
+    done = await db.$transaction(async (tx) => {
       const still = await tx.$queryRaw<{ id: string }[]>`
         SELECT "id" FROM "User" WHERE "id" = ${userId} AND "deletionRequestedAt" <= ${cutoff}
           AND "deletionStartedAt" IS NOT NULL FOR UPDATE`;
-      if (still.length === 0) return null;
-
-      // Read before the rows go; revoked after the commit.
-      const toRevoke = await tx.bankConnection.findMany({
-        where: { ownerUserId: userId, requisitionId: { not: "" } },
-        select: { id: true, requisitionId: true },
-      });
+      if (still.length === 0) return false;
 
       // a. Household.
       const link = await partnerLinkOf(tx, userId);
@@ -501,29 +556,18 @@ export async function purgeUser(db: PrismaClient, userId: string, deps: PurgeDep
       if (memberships.length) {
         await tx.household.deleteMany({ where: { id: { in: memberships.map(m => m.householdId) }, members: { none: {} } } });
       }
-      return toRevoke;
+      return true;
     }, SHORT_TX);
   } catch (err) {
     await releaseClaim(db, userId);
     throw err;
   }
-  if (sessions === null) {
+  if (!done) {
     await releaseClaim(db, userId);
     return "not_due";
   }
 
-  // 4. After the commit: bank sessions (best effort) and the goodbye email.
-  for (const c of sessions) {
-    if (!deps.banking) {
-      console.error(`[account/purge] connection ${c.id}: banking not configured, provider session not revoked`);
-      continue;
-    }
-    try {
-      await deps.banking.deleteSession(decrypt(c.requisitionId));
-    } catch (err) {
-      console.error(`[account/purge] connection ${c.id}: provider session not revoked: ${syncErrorCode(err)}`);
-    }
-  }
+  // 5. After the commit: the goodbye email.
   if (user.email) {
     await deps.sendDeletedEmail(user.email, user.name ?? "", resolveLocale(user.settings?.language))
       .catch(err => console.error(`[account/purge] user ${userId}: deleted email failed:`, err instanceof Error ? err.message : "unknown error"));
@@ -531,9 +575,10 @@ export async function purgeUser(db: PrismaClient, userId: string, deps: PurgeDep
   return "deleted";
 }
 
-/** Stop starting new users after this long: the function's maxDuration is
- *  60 s (vercel.json) and one user can wait on Stripe and the bank. */
-export const PURGE_BUDGET_MS = 40_000;
+/** Start a new user only this early in a run: the function's maxDuration is
+ *  60 s (vercel.json) and one user can take Stripe's 8 s, a few 5 s bank
+ *  revocations and two short transactions. */
+export const PURGE_START_BUDGET_MS = 10_000;
 
 export interface PurgeSummary {
   deleted: number;
@@ -552,7 +597,7 @@ export async function runDeletionPurge(
 ): Promise<PurgeSummary> {
   const clock = opts.clock ?? Date.now;
   const started = clock();
-  const budget = opts.budgetMs ?? PURGE_BUDGET_MS;
+  const budget = opts.budgetMs ?? PURGE_START_BUDGET_MS;
   const due = await db.user.findMany({
     where: { deletionRequestedAt: { not: null, lte: purgeCutoff(deps.now) } },
     orderBy: { deletionRequestedAt: "asc" },

@@ -115,11 +115,15 @@ describe("account export and deletion (integration, real Postgres)", { skip: !TE
   const summary = (deleted: number, extra: Partial<{ failed: number; skipped: number; remaining: number }> = {}) =>
     ({ deleted, failed: 0, skipped: 0, remaining: 0, ...extra });
 
-  /** What each of `payer`'s expenses counts as spending, by month — the rule:
-   *  deleting the other person never changes a closed month of the survivor. */
-  async function countedByMonth(scope: string, payer: string): Promise<Record<string, number>> {
+  /** What each of `person`'s own expenses (entered by her; with no creator,
+   *  paid by her) counts as spending, by month — the rule: deleting the other
+   *  person never changes a closed month of the survivor. */
+  async function countedByMonth(scope: string, person: string, alsoIds: string[] = []): Promise<Record<string, number>> {
     const counted = await debtLib.countedAmounts(scope);
-    const rows = await prisma.expense.findMany({ where: { userId: scope, payerUserId: payer }, select: { id: true, amount: true, date: true } });
+    const rows = await prisma.expense.findMany({
+      where: { userId: scope, OR: [{ createdByUserId: person }, { createdByUserId: null, payerUserId: person }, { id: { in: alsoIds } }] },
+      select: { id: true, amount: true, date: true },
+    });
     const out: Record<string, number> = {};
     for (const r of rows) {
       const month = r.date.toISOString().slice(0, 7);
@@ -224,8 +228,10 @@ describe("account export and deletion (integration, real Postgres)", { skip: !TE
     // Between the purge's short steps the claim (deletionStartedAt) says the same.
     await prisma.user.update({ where: { id: A }, data: { deletionStartedAt: new Date() } });
     assert.equal((await raw(A, "DELETE", "/api/account/deletion")).status, 409);
-    await prisma.user.update({ where: { id: A }, data: { deletionStartedAt: null } });
+    // A claim over an hour old belongs to a run that died: cancelling works.
+    await prisma.user.update({ where: { id: A }, data: { deletionStartedAt: new Date(Date.now() - 2 * HOUR) } });
     await ok(A, "DELETE", "/api/account/deletion");
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: A } })).deletionStartedAt, null);
   });
 
   it("the cron route needs CRON_SECRET", async () => {
@@ -289,9 +295,11 @@ describe("account export and deletion (integration, real Postgres)", { skip: !TE
     ids.aCard = (await prisma.account.create({ data: { userId: A, ownerUserId: A, name: "Visa Ana", type: "card" } })).id;
     ids.aCardDebt = (await prisma.debt.create({ data: { userId: A, ownerUserId: A, name: "Visa Ana", kind: "credit_card", accountId: ids.aCard, balanceAsOf: old } })).id;
     await prisma.expense.create({ data: { userId: A, amount: 3_000, description: "ANA-CARD-BUY", accountId: ids.aCard, payerUserId: A, createdByUserId: A, date: new Date("2026-09-05T12:00:00Z") } });
-    await prisma.expense.create({ data: { userId: A, amount: 2_000, description: "BEA-ON-ANA-CARD", accountId: ids.aCard, payerUserId: B, createdByUserId: B, date: new Date("2026-09-06T12:00:00Z") } });
-    await prisma.expense.create({ data: { userId: A, amount: 4_000, description: "BEA-PAYS-ANA-CARD", debtId: ids.aCardDebt, payerUserId: B, createdByUserId: B, date: new Date("2026-10-02T12:00:00Z") } });
-    ids.bCountedBefore = JSON.stringify(await countedByMonth(A, B));
+    // As POST /api/expenses stores them: the payer defaults to the card's owner (A).
+    await prisma.expense.create({ data: { userId: A, amount: 2_000, description: "BEA-ON-ANA-CARD", accountId: ids.aCard, payerUserId: A, createdByUserId: B, date: new Date("2026-09-06T12:00:00Z") } });
+    await prisma.expense.create({ data: { userId: A, amount: 4_000, description: "BEA-PAYS-ANA-CARD", debtId: ids.aCardDebt, payerUserId: A, createdByUserId: B, date: new Date("2026-10-02T12:00:00Z") } });
+    // The shared expense A entered and B paid becomes hers too (its creator is erased).
+    ids.bCountedBefore = JSON.stringify(await countedByMonth(A, B, [ids.sharedPaidByB]));
     ids.bLoanLiveBefore = String(await liveBalance(A, ids.bDebtOnAAccount));
   });
 
@@ -385,6 +393,11 @@ describe("account export and deletion (integration, real Postgres)", { skip: !TE
     assert.deepEqual([aCardDebt.ownerUserId, aCardDebt.accountId, aCardDebt.name], [B, ids.aCard, "Tarjeta compartida"]);
     const anaCardBuy = await prisma.expense.findFirstOrThrow({ where: { description: "ANA-CARD-BUY" } });
     assert.deepEqual([anaCardBuy.userId, anaCardBuy.payerUserId, anaCardBuy.createdByUserId], [B, null, null]);
+    // B's purchase and payment on A's card survive, hers.
+    for (const description of ["BEA-ON-ANA-CARD", "BEA-PAYS-ANA-CARD"]) {
+      const e = await prisma.expense.findFirstOrThrow({ where: { description } });
+      assert.deepEqual([e.userId, e.createdByUserId], [B, B], description);
+    }
     // The rule: no month of B's counted spending changed.
     assert.equal(JSON.stringify(await countedByMonth(B, B)), ids.bCountedBefore);
 
@@ -443,6 +456,16 @@ describe("account export and deletion (integration, real Postgres)", { skip: !TE
     ids.fDebtOnB = (await prisma.debt.create({ data: { userId: F, ownerUserId: F, name: "Deuda Fede", kind: "other", accountId: ids.bAccInF, currentBalance: 1_000, balanceAsOf: new Date("2026-01-01T00:00:00Z") } })).id;
     ids.fCard = (await prisma.account.create({ data: { userId: F, ownerUserId: F, name: "Visa Fede", type: "card" } })).id;
     ids.bDebtOnFCard = (await prisma.debt.create({ data: { userId: F, ownerUserId: B, name: "Deuda Visa Fede", kind: "credit_card", accountId: ids.fCard } })).id;
+    // B's loan in F's scope, paid from her account there; and F's own spending.
+    ids.bAcc2InF = (await prisma.account.create({ data: { userId: F, ownerUserId: B, name: "BEA-ACC2-IN-F", type: "checking" } })).id;
+    ids.bLoanInF = (await prisma.debt.create({ data: { userId: F, ownerUserId: B, name: "BEA-LOAN-IN-F", kind: "other", currentBalance: 20_000, balanceAsOf: new Date("2026-08-01T00:00:00Z") } })).id;
+    for (const date of ["2026-09-03T12:00:00Z", "2026-10-03T12:00:00Z"]) {
+      await prisma.expense.create({
+        data: { userId: F, amount: 5_000, description: "BEA-LOAN-PAY-IN-F", debtId: ids.bLoanInF, accountId: ids.bAcc2InF, payerUserId: B, createdByUserId: B, date: new Date(date) },
+      });
+    }
+    await prisma.expense.create({ data: { userId: F, amount: 3_300, description: "FEDE-SUPER", payerUserId: F, createdByUserId: F, date: new Date("2026-09-04T12:00:00Z") } });
+    const fCountedBefore = JSON.stringify(await countedByMonth(F, F));
     // …which her export includes.
     const bJson = await (await raw(B, "GET", "/api/account/export")).text();
     assert.ok(bJson.includes("BEA-LEFT-IN-F") && bJson.includes("Deuda Visa Fede"));
@@ -468,6 +491,11 @@ describe("account export and deletion (integration, real Postgres)", { skip: !TE
     const fDebt = await prisma.debt.findUniqueOrThrow({ where: { id: ids.fDebtOnB } });
     assert.deepEqual([fDebt.accountId, fDebt.currentBalance], [null, 1_000]);
     assert.deepEqual((await prisma.debt.findUniqueOrThrow({ where: { id: ids.bDebtOnFCard } })).ownerUserId, F);
+    // Her loan and its payments are gone from F's scope; F's months unchanged.
+    assert.equal(await prisma.debt.count({ where: { id: ids.bLoanInF } }), 0);
+    assert.equal(await prisma.expense.count({ where: { description: "BEA-LOAN-PAY-IN-F" } }), 0);
+    assert.equal(await prisma.account.count({ where: { id: ids.bAcc2InF } }), 0);
+    assert.equal(JSON.stringify(await countedByMonth(F, F)), fCountedBefore);
 
     assert.equal(await prisma.user.findUnique({ where: { id: B } }), null);
     assert.equal(await prisma.expense.count({ where: { description: { startsWith: "BEA-" } } }), 0);

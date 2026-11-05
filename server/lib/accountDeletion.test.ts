@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  DELETION_GRACE_MS, clashRenames, deletionDueAt, frozenAnchor, hasLiveSubscription, isDeletionDue, isLockNotAvailable, isOwnMovement,
+  CLAIM_STALE_MS, DELETION_GRACE_MS, claimActive, clashRenames, deletionDueAt, frozenAnchor, hasLiveSubscription, isDeletionDue, isLockNotAvailable, isOwnMovement,
   pairAction, purgeCutoff,
 } from "./accountDeletion.js";
 
@@ -65,11 +65,19 @@ test("frozenAnchor keeps the live balance and never subtracts a future payment t
     [{ amount: 1_000, date: new Date("2026-11-06T18:00:00Z"), createdAt: past }], at), 5_000);
 });
 
-test("isOwnMovement: what D paid, or entered with no payer", () => {
-  assert.equal(isOwnMovement({ payerUserId: "D", createdByUserId: "S" }, "D"), true);
-  assert.equal(isOwnMovement({ payerUserId: null, createdByUserId: "D" }, "D"), true);
-  assert.equal(isOwnMovement({ payerUserId: "S", createdByUserId: "D" }, "D"), false);
+test("isOwnMovement: who entered it; the payer only when nobody is recorded as creator", () => {
+  // The route defaults the payer to the account's owner: S's purchase on D's card.
+  assert.equal(isOwnMovement({ payerUserId: "D", createdByUserId: "S" }, "D"), false);
+  assert.equal(isOwnMovement({ payerUserId: "S", createdByUserId: "D" }, "D"), true);
+  assert.equal(isOwnMovement({ payerUserId: "D", createdByUserId: null }, "D"), true);
   assert.equal(isOwnMovement({ payerUserId: null, createdByUserId: null }, "D"), false);
+});
+
+test("claimActive: a claim blocks cancelling for an hour, then counts as released", () => {
+  const now = new Date("2026-11-06T10:00:00Z");
+  assert.equal(claimActive(null, now), false);
+  assert.equal(claimActive(new Date(now.getTime() - 60_000), now), true);
+  assert.equal(claimActive(new Date(now.getTime() - CLAIM_STALE_MS), now), false);
 });
 
 test("hasLiveSubscription: only a Stripe subscription that may still charge", () => {

@@ -31,7 +31,8 @@ model User {
   // When the daily job claimed this account for deletion (it runs in steps:
   // claim, Stripe, data, bank sessions). While set, cancelling answers 409.
   // Cleared if the job has to give up (e.g. Stripe failed) so the person can
-  // still cancel; a crashed run leaves it set and the next run continues.
+  // still cancel; a crashed run leaves it set, and after an hour it counts as
+  // released (cancelling works again; the next run re-claims).
   deletionStartedAt   DateTime?
 
   settings      UserSettings?
