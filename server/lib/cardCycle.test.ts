@@ -2,11 +2,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  clampedDay, statementClosingIn, nextStatementDue, statementsDueIn, cycleDaysOf,
-  cardCycleSummary, cycleCommitments, isoDay,
+  clampedDay, statementClosingIn, nextStatementDue, cycleDaysOf, cardCycleSummary, isoDay,
 } from "./cardCycle.js";
-import type { DebtLedger, LedgerDebt } from "./debtBalance.js";
-import { buildDebtTimeline } from "./debtTimeline.js";
+import { monthlyCommitment, type DebtLedger, type LedgerDebt } from "./debtBalance.js";
+import { buildDebtTimeline, timelineInput } from "./debtTimeline.js";
 import { periodBounds, periodKeyOffset } from "./period.js";
 
 const D = (s: string) => new Date(`${s}T00:00:00.000Z`);
@@ -85,20 +84,6 @@ test("nextStatementDue: today counts; the day after the due date moves on", () =
   assert.equal(day(nextStatementDue(D("2026-11-06"), C25_5).dueOn), "2026-12-05");
   assert.equal(day(nextStatementDue(D("2026-11-06"), C25_5).closesOn), "2026-11-25");
   assert.equal(day(nextStatementDue(D("2026-12-31"), C25_5).dueOn), "2027-01-05");
-});
-
-test("statementsDueIn: one per calendar month, and with a payday-based period", () => {
-  const nov = periodBounds("2026-11", 1);
-  assert.deepEqual(statementsDueIn(nov, C25_5).map(s => day(s.dueOn)), ["2026-11-05"]);
-  // Payday 25: period "2026-11" is Oct 25 → Nov 25.
-  const p = periodBounds("2026-11", 25);
-  assert.deepEqual(statementsDueIn(p, C25_5).map(s => day(s.dueOn)), ["2026-11-05"]);
-  // A due day of 31 over a February period: Feb 28.
-  const feb = periodBounds("2026-02", 1);
-  assert.deepEqual(statementsDueIn(feb, { statementDay: 15, paymentDueDay: 31 }).map(s => day(s.dueOn)), ["2026-02-28"]);
-  // A due date on the period's end is the next period's (end is exclusive).
-  const p28 = periodBounds("2026-03", 28); // Feb 28 → Mar 28
-  assert.deepEqual(statementsDueIn(p28, { statementDay: 10, paymentDueDay: 28 }).map(s => day(s.dueOn)), ["2026-02-28"]);
 });
 
 test("cycleDaysOf: needs both days, a card, and not installments mode", () => {
@@ -204,7 +189,6 @@ test("overpaid card: nothing due, nothing after", () => {
 
 test("no cycle: no summary (callers keep today's behaviour)", () => {
   assert.equal(cardCycleSummary(ledger(card({ statementDay: null }))), null);
-  assert.equal(cycleCommitments(ledger(card({ paymentDueDay: null })), periods("2026-11", 3)), null);
 });
 
 test("leap year: a cut-off on the 29th of February 2028 holds the purchase of that day", () => {
@@ -219,74 +203,95 @@ test("leap year: a cut-off on the 29th of February 2028 holds the purchase of th
   assert.equal(day(s.afterCutDueOn), "2028-04-10");
 });
 
-// ── Committed future ───────────────────────────────────────────────────────
+test("minimum card: the line shows the minimum due, never more than the statement", () => {
+  const big = cardCycleSummary(ledger(card({ paymentMode: "minimum", minimumPayment: 3000 }), {
+    purchases: [mv("a", 10000, "2026-10-10")],
+  }), D("2026-10-28"))!;
+  assert.equal(big.dueAmount, 10000);
+  assert.equal(big.minimumDue, 3000);
+  const small = cardCycleSummary(ledger(card({ paymentMode: "minimum", minimumPayment: 3000 }), {
+    purchases: [mv("a", 1000, "2026-10-10")],
+  }), D("2026-10-28"))!;
+  assert.equal(small.minimumDue, 1000);
+  assert.equal(cardCycleSummary(ledger(card()), D("2026-10-28"))!.minimumDue, null); // full card
+});
 
-test("full card: each period commits what falls due in it", () => {
+// ── Budget line and committed future ───────────────────────────────────────
+
+const NOV = periodBounds("2026-11", 1);
+/** What the timeline commits per period for one debt, as the route builds it. */
+function committed(l: DebtLedger, from = "2026-11", n = 3, cycleStartDay = 1): number[] {
+  const ps = periods(from, n, cycleStartDay);
+  const name = { name: l.debt.id };
+  const tl = buildDebtTimeline([timelineInput({ ...l.debt, ...name }, l, ps)], 300000, cycleStartDay, n, new Date(ps[0].start.getTime() + 86_400_000));
+  return tl.map(p => p.items.find(i => i.debtId === l.debt.id)?.amount ?? 0);
+}
+
+test("full card with a cycle: purchases are never committed (already spending in their categories)", () => {
   const l = ledger(card(), {
     purchases: [mv("oct", 50000, "2026-10-10"), mv("after", 20000, "2026-10-28"), mv("nov", 10000, "2026-11-03")],
   });
-  // November (calendar periods): Nov 5 due → October's statement (500).
-  // December: Dec 5 → purchases Oct 26–Nov 25 so far (300). Then nothing.
-  assert.deepEqual(cycleCommitments(l, periods("2026-11", 4)), [50000, 30000, 0, 0]);
+  assert.equal(monthlyCommitment(l, NOV), 0);
+  assert.deepEqual(committed(l), [0, 0, 0]);
 });
 
-test("full card: paying during the current period doesn't shrink it, and doesn't shift the next", () => {
-  const l = ledger(card(), {
-    purchases: [mv("oct", 50000, "2026-10-10"), mv("after", 20000, "2026-10-28")],
-    payments: [mv("p", 50000, "2026-11-05")],
+test("full card with a cycle: the pre-existing debt is committed in the period it falls due", () => {
+  // Typed Nov 20 ("I owe 1,000"), after November's due date (Nov 5): due Dec 5.
+  const l = ledger(card({ currentBalance: 100000, balanceAsOf: at("2026-11-20T10:00:00Z") }), {
+    purchases: [mv("nov", 5000, "2026-11-21")],
   });
-  assert.deepEqual(cycleCommitments(l, periods("2026-11", 3)), [50000, 20000, 0]);
+  assert.equal(monthlyCommitment(l, NOV), 0);
+  assert.equal(monthlyCommitment(l, periodBounds("2026-12", 1)), 100000);
+  assert.deepEqual(committed(l), [0, 100000, 0]);
+  // Typed Oct 28, between the cut-off and the due date: it's November's.
+  const oct = ledger(card({ currentBalance: 100000, balanceAsOf: at("2026-10-28T10:00:00Z") }));
+  assert.equal(monthlyCommitment(oct, NOV), 100000);
+  assert.deepEqual(committed(oct), [100000, 0, 0]);
 });
 
-test("full card: paying ahead lowers the next period", () => {
-  const l = ledger(card(), {
-    purchases: [mv("oct", 50000, "2026-10-10"), mv("after", 20000, "2026-10-28")],
-    payments: [mv("p", 65000, "2026-11-05")],
+test("full card with a cycle: paying during the period doesn't shrink it; paying ahead clears the next", () => {
+  const debt = card({ currentBalance: 100000, balanceAsOf: at("2026-11-20T10:00:00Z") });
+  const during = ledger(debt, { payments: [mv("p", 100000, "2026-12-04")] });
+  assert.deepEqual(committed(during, "2026-12", 2), [100000, 0]);
+  const ahead = ledger(debt, { payments: [mv("p", 100000, "2026-11-25")] });
+  assert.deepEqual(committed(ahead), [0, 0, 0]);
+  assert.equal(monthlyCommitment(ahead, periodBounds("2026-12", 1)), 0);
+});
+
+test("full card with a cycle: interest is committed when it falls due; an unpaid older debt stays in the current period", () => {
+  const l = ledger(card({ currentBalance: 30000, balanceAsOf: at("2026-09-01T10:00:00Z") }), {
+    adjustments: [mv("int", 1200, "2026-11-10")], // due Dec 5
   });
-  assert.deepEqual(cycleCommitments(l, periods("2026-11", 2)), [50000, 5000]);
+  assert.equal(monthlyCommitment(l, NOV), 30000); // due Oct 5, never paid
+  assert.deepEqual(committed(l), [30000, 1200, 0]);
 });
 
-test("full card: payments before the period start reduce it", () => {
-  const l = ledger(card(), {
-    purchases: [mv("oct", 50000, "2026-10-10")],
-    payments: [mv("early", 30000, "2026-10-30")],
-  });
-  assert.deepEqual(cycleCommitments(l, periods("2026-11", 2)), [20000, 0]);
+test("payday-based periods: the pre-existing debt follows the user's cycleStartDay", () => {
+  // Payday 10: "2026-12" = Nov 10 → Dec 10 holds Dec 5.
+  const l = ledger(card({ currentBalance: 100000, balanceAsOf: at("2026-11-20T10:00:00Z") }));
+  assert.equal(monthlyCommitment(l, periodBounds("2026-12", 10)), 100000);
+  assert.deepEqual(committed(l, "2026-12", 2, 10), [100000, 0]);
+  // Payday 6: "2026-12" = Nov 6 → Dec 6 also holds Dec 5; "2027-01" nothing.
+  assert.deepEqual(committed(l, "2026-12", 2, 6), [100000, 0]);
 });
 
-test("full card: after this period's due date, the next statement is next period's", () => {
-  // Today Nov 20: Nov 5 was paid in full; purchases since the Oct 25 cut-off
-  // are due Dec 5, i.e. in December, not November.
-  const l = ledger(card(), {
-    purchases: [mv("oct", 50000, "2026-10-10"), mv("nov", 12000, "2026-11-12")],
-    payments: [mv("p", 50000, "2026-11-04")],
-  });
-  assert.deepEqual(cycleCommitments(l, periods("2026-11", 2)), [50000, 12000]);
-});
-
-test("full card with an unpaid overdue statement commits it in the current period", () => {
-  const l = ledger(card(), { purchases: [mv("sep", 40000, "2026-09-10")] }); // due Oct 5, never paid
-  assert.deepEqual(cycleCommitments(l, periods("2026-11", 2)), [40000, 0]);
-});
-
-test("minimum card: the minimum at each due date, capped by what's still owed", () => {
-  const l = ledger(card({ paymentMode: "minimum", minimumPayment: 10000, currentBalance: 25000 }), {});
-  assert.deepEqual(cycleCommitments(l, periods("2026-11", 4)), [10000, 10000, 5000, 0]);
-});
-
-test("minimum card: a statement smaller than the minimum commits only the statement", () => {
-  const l = ledger(card({ paymentMode: "minimum", minimumPayment: 10000 }), { purchases: [mv("a", 4000, "2026-10-10")] });
-  assert.deepEqual(cycleCommitments(l, periods("2026-11", 2)), [4000, 0]);
-});
-
-test("payday-based periods: due dates are bucketed by the user's cycleStartDay", () => {
-  // Payday 10: "2026-11" = Oct 10 → Nov 10 (holds Nov 5), "2026-12" = Nov 10 → Dec 10 (Dec 5).
-  const l = ledger(card(), { purchases: [mv("oct", 50000, "2026-10-12"), mv("after", 20000, "2026-10-28")] });
-  assert.deepEqual(cycleCommitments(l, periods("2026-11", 3, 10)), [50000, 20000, 0]);
-  // Payday 6: "2026-11" = Oct 6 → Nov 6 still holds Nov 5.
-  assert.deepEqual(cycleCommitments(l, periods("2026-11", 2, 6)), [50000, 20000]);
-  // Payday 5: Nov 5 opens "2026-12" (Nov 5 → Dec 5); "2026-11" holds Oct 5.
-  assert.deepEqual(cycleCommitments(l, periods("2026-11", 3, 5)), [0, 50000, 20000]);
+test("the current period of the timeline equals the budget line, for every card", () => {
+  const cases: [string, DebtLedger][] = [
+    ["full, no cycle", ledger(card({ statementDay: null, currentBalance: 100000, balanceAsOf: at("2026-11-20T10:00:00Z") }), { purchases: [mv("a", 5000, "2026-11-21")] })],
+    ["full, cycle, created Nov 20 with 1,000", ledger(card({ currentBalance: 100000, balanceAsOf: at("2026-11-20T10:00:00Z") }))],
+    ["full, cycle, statement due this period", ledger(card({ currentBalance: 40000, balanceAsOf: at("2026-10-28T10:00:00Z") }), { payments: [mv("p", 10000, "2026-11-02")] })],
+    ["minimum, no cycle", ledger(card({ paymentMode: "minimum", minimumPayment: 6000, statementDay: null, currentBalance: 50000 }))],
+    ["minimum, cycle", ledger(card({ paymentMode: "minimum", minimumPayment: 6000, currentBalance: 50000 }))],
+    ["minimum, cycle, balance 0", ledger(card({ paymentMode: "minimum", minimumPayment: 6000 }))],
+    ["minimum, no cycle, balance 0", ledger(card({ paymentMode: "minimum", minimumPayment: 6000, statementDay: null }))],
+  ];
+  for (const [label, l] of cases) {
+    assert.equal(committed(l)[0], monthlyCommitment(l, NOV), label);
+  }
+  // Without a cycle, the full card keeps today's figures; the minimum card at
+  // balance 0 still commits its minimum every period, as before.
+  assert.deepEqual(committed(cases[0][1]), [100000, 0, 0]);
+  assert.deepEqual(committed(cases[5][1]), [6000, 6000, 6000]);
 });
 
 test("buildDebtTimeline uses the cycle amounts when given, the payment mode otherwise", () => {

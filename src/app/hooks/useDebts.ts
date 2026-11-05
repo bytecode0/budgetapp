@@ -48,7 +48,8 @@ export interface DebtCycle {
   dueOn: string; // YYYY-MM-DD
   closesOn: string; // YYYY-MM-DD — that statement's cut-off
   closed: boolean; // false: the cut-off hasn't come yet, the amount can still grow
-  dueAmount: number; // euros — "lo que vence"
+  dueAmount: number; // euros — "lo que vence": that statement, still unpaid
+  minimumDue: number | null; // euros — "minimum" cards: min(minimum, dueAmount); null otherwise
   afterCutAmount: number; // euros — purchases after the cut-off
   afterCutDueOn: string; // YYYY-MM-DD
 }

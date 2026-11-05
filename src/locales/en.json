@@ -1173,7 +1173,7 @@
     "totalOwed": "Total owed",
     "totalOwedHint": "across {{count}} active debt(s)",
     "committedPerPeriod": "Committed per period",
-    "committedHint": "minimums and installments due",
+    "committedHint": "due this period: minimums, installments and cards' earlier debt (their purchases already count as spending)",
     "emptyTitle": "No debts tracked yet",
     "emptyDesc": "Add a credit card, loan, or installment plan with the + button.",
     "newTitle": "New debt",
@@ -1190,7 +1190,10 @@
     "cycle": {
       "due": "Due {{date}}: {{amount}}",
       "dueOpen": "Due {{date}}: {{amount}} so far (statement closes {{closes}})",
-      "afterCut": "After the statement: {{amount}}, due {{date}}"
+      "afterCut": "After the statement: {{amount}}, due {{date}}",
+      "minimumDue": "Due {{date}}: minimum {{amount}}",
+      "statement": "Statement: {{amount}}",
+      "statementOpen": "Statement: {{amount}} so far (closes {{closes}})"
     },
     "minimumPaymentLabel": "Minimum payment",
     "installmentAmountLabel": "Installment amount",

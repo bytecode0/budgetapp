@@ -3,12 +3,13 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { mutationAccess, reorderableEntries, visibleToWhere } from "../lib/ownership.js";
 import { toCents, serializeMoney } from "../lib/money.js";
-import { buildDebtTimeline } from "../lib/debtTimeline.js";
+import { buildDebtTimeline, timelineInput } from "../lib/debtTimeline.js";
 import { householdBaselineIncome } from "../lib/householdIncome.js";
 import { simulatePayoff, type PayoffMethod } from "../lib/debtPayoff.js";
 import { debtAccountLinkError, cardDebtKindLocked, creditCardOnNonCardAccount, type DebtAccountLinkError } from "../lib/debtAccountLink.js";
 import { clampCycleStartDay, currentPeriodKey, periodBounds, periodKeyOffset } from "../lib/period.js";
-import { cardCycleSummary, cycleCommitments, isoDay } from "../lib/cardCycle.js";
+import { cardCycleSummary, isoDay } from "../lib/cardCycle.js";
+import { now as clockNow } from "../lib/clock.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import {
   loadDebtLedgers, debtState, owedNow, monthlyCommitment, setLiveValues, syncDebtAllocations, syncDebtStatus, ensureDebtLine,
@@ -31,7 +32,7 @@ const CONSUMER_DEBT_KINDS = new Set(["credit_card", "installment", "bnpl", "payd
 
 async function currentPeriod(userId: string): Promise<{ start: Date; end: Date }> {
   const day = await getCycleStartDay(userId);
-  return periodBounds(currentPeriodKey(day), day);
+  return periodBounds(currentPeriodKey(day, clockNow()), day);
 }
 
 // The API speaks LIVE values: `currentBalance` is the live ledger balance
@@ -44,7 +45,7 @@ function withLiveState<T extends { id: string; currentBalance: number }>(debt: T
   const state = debtState(ledger);
   // A card with a billing cycle: "lo que vence" (dueAmount, on dueOn) vs the
   // rest of `owed`, due on the following due date (server/lib/cardCycle.ts).
-  const cycle = ledger.debt.status === "active" ? cardCycleSummary(ledger) : null;
+  const cycle = ledger.debt.status === "active" ? cardCycleSummary(ledger, clockNow()) : null;
   return {
     ...debt,
     currentBalance: state.balance,
@@ -60,6 +61,7 @@ function withLiveState<T extends { id: string; currentBalance: number }>(debt: T
       closesOn: isoDay(cycle.closesOn),
       closed: cycle.closed,
       dueAmount: cycle.dueAmount,
+      minimumDue: cycle.minimumDue,
       afterCutAmount: cycle.afterCutAmount,
       afterCutDueOn: isoDay(cycle.afterCutDueOn),
     },
@@ -166,22 +168,16 @@ debtsRouter.get("/timeline", requireAuth, async (req: AuthRequest, res: Response
     ]);
 
     const cycleStartDay = clampCycleStartDay(settings?.cycleStartDay ?? 1);
-    const now = new Date();
+    const now = clockNow();
     const currentKey = currentPeriodKey(cycleStartDay, now);
     const periods = Array.from({ length: periodsCount }, (_, i) => periodBounds(periodKeyOffset(currentKey, i), cycleStartDay));
-    const period = periods[0];
     const ledgers = await ledgersById(req.userId!);
-    // Measured at the period's start, like the budget line, so paying during
-    // this period doesn't make the commitment vanish from it. A card paid in
-    // full without a billing cycle commits exactly what its budget line holds
-    // this period; with one (statementDay + paymentDueDay), what falls due in
-    // each period (server/lib/cardCycle.ts).
+    // The current period commits exactly what each budget line holds; a card
+    // paid in full with a billing cycle places its later-due pre-existing
+    // debt in later periods (timelineInput, server/lib/debtTimeline.ts).
     const live = debts.map(d => {
       const ledger = ledgers.get(d.id);
-      if (!ledger) return d;
-      const atStart = debtState(ledger, period.start);
-      const cycleAmounts = cycleCommitments(ledger, periods) ?? undefined;
-      return { ...d, installmentsPaid: atStart.installmentsPaid, previousRemaining: monthlyCommitment(ledger, period), cycleAmounts };
+      return ledger ? timelineInput(d, ledger, periods) : d;
     });
     const timeline = buildDebtTimeline(live, monthlyIncome, cycleStartDay, periodsCount, now);
 

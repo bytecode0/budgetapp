@@ -14,27 +14,18 @@ import type { Server } from "node:http";
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 
-// The scenario is built around today: the statement closed yesterday and is
-// due today. That needs yesterday in this month and both days in 1-28 (the
-// stored range), i.e. today between the 2nd and the 28th.
-const NOW = new Date();
-const TODAY = NOW.getUTCDate();
-const scenarioFits = TODAY >= 2 && TODAY <= 28;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
-const utcDay = (offsetDays: number) =>
-  new Date(Date.UTC(NOW.getUTCFullYear(), NOW.getUTCMonth(), NOW.getUTCDate() + offsetDays));
-/** Day `day` of the month `offset` months from now, clamped. */
-const dayOfMonth = (offset: number, day: number) => {
-  const first = new Date(Date.UTC(NOW.getUTCFullYear(), NOW.getUTCMonth() + offset, 1));
-  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), Math.min(day, last)));
-};
+const D = (s: string) => new Date(`${s}T00:00:00.000Z`);
+// The routes read the date from server/lib/clock.ts, pinned per test: the
+// scenarios don't depend on the day the suite runs.
+const NOV_2 = new Date("2026-11-02T12:00:00Z");
+const NOV_20 = new Date("2026-11-20T12:00:00Z");
 
 describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABASE_URL && "TEST_DATABASE_URL not set" }, () => {
   let prisma: typeof import("./prisma.js").prisma;
   let signToken: typeof import("./jwt.js").signToken;
   let createDefaultAllocations: typeof import("./defaults.js").createDefaultAllocations;
-  let periodLib: typeof import("./period.js");
+  let setClockForTests: typeof import("./clock.js").setClockForTests;
   let server: Server;
   let base: string;
 
@@ -53,7 +44,7 @@ describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABA
     ({ prisma } = await import("./prisma.js"));
     ({ signToken } = await import("./jwt.js"));
     ({ createDefaultAllocations } = await import("./defaults.js"));
-    periodLib = await import("./period.js");
+    ({ setClockForTests } = await import("./clock.js"));
     const app = (await import("../app.js")).default;
 
     const tables = await prisma.$queryRaw<{ tablename: string }[]>`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`;
@@ -66,6 +57,7 @@ describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABA
   });
 
   after(async () => {
+    setClockForTests?.(null);
     await new Promise<void>(resolve => (server ? server.close(() => resolve()) : resolve()));
     await prisma?.$disconnect();
   });
@@ -108,22 +100,22 @@ describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABA
     return { A: A.id, B: B.id };
   }
 
-  /** A card account (its debt follows, server/lib/cardDebt.ts), with its debt
-   *  anchored 10 days ago so purchases dated since then are in its ledger. */
-  async function card(userId: string, name: string, owed: number, over: { visibility?: string; statementDay?: number | null; paymentDueDay?: number | null } = {}) {
+  /** A card account (its debt follows, server/lib/cardDebt.ts), its debt
+   *  anchored at `asOf` (what it owed then) so later purchases are in its
+   *  ledger. Cut-off on the 25th, due on the 5th unless told otherwise. */
+  async function card(userId: string, name: string, owed: number, asOf: Date, over: { visibility?: string; statementDay?: number | null; paymentDueDay?: number | null; mode?: string; minimum?: number } = {}) {
     const { account } = await ok(userId, "POST", "/api/accounts", {
-      name, type: "card", currentBalance: owed, cardPaymentMode: "full",
+      name, type: "card", currentBalance: owed, cardPaymentMode: over.mode ?? "full",
+      ...(over.minimum !== undefined && { cardMinimumPayment: over.minimum }),
       ...(over.visibility && { visibility: over.visibility }),
     });
     const pool = (await prisma.account.findUniqueOrThrow({ where: { id: account.id } })).userId;
     const debt = await prisma.debt.findFirstOrThrow({ where: { userId: pool, accountId: account.id } });
-    await prisma.debt.update({ where: { id: debt.id }, data: { balanceAsOf: utcDay(-10) } });
-    if (over.statementDay !== undefined || over.paymentDueDay !== undefined) {
-      await ok(userId, "PATCH", `/api/debts/${debt.id}`, {
-        ...(over.statementDay !== undefined && { statementDay: over.statementDay }),
-        ...(over.paymentDueDay !== undefined && { paymentDueDay: over.paymentDueDay }),
-      });
-    }
+    await prisma.debt.update({ where: { id: debt.id }, data: { balanceAsOf: asOf } });
+    await ok(userId, "PATCH", `/api/debts/${debt.id}`, {
+      statementDay: over.statementDay === undefined ? 25 : over.statementDay,
+      paymentDueDay: over.paymentDueDay === undefined ? 5 : over.paymentDueDay,
+    });
     return { accountId: account.id as string, debtId: debt.id };
   }
 
@@ -144,38 +136,71 @@ describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABA
 
   // ── the cycle ──────────────────────────────────────────────────────────
 
-  it("splits what's due from purchases after the cut-off, and commits each to its period", { skip: !scenarioFits && "today must be between the 2nd and the 28th" }, async () => {
+  it("splits what's due from purchases after the cut-off; the timeline commits only the earlier debt", async () => {
+    setClockForTests(NOV_2);
     const { A } = await couple();
-    // Cut-off yesterday, due today: yesterday's purchase is in the closed
-    // statement, today's is after the cut-off (due next month).
-    const visa = await card(A, "Visa", 100, { statementDay: TODAY - 1, paymentDueDay: TODAY });
-    await purchase(A, visa.accountId, 50, utcDay(-1));
-    await purchase(A, visa.accountId, 20, utcDay(0));
-    await pay(A, visa.debtId, 30, utcDay(0));
+    // Owed 100 on Oct 20 (due Nov 5), 50 bought before the Oct 25 cut-off,
+    // 20 after it (due Dec 5), 30 paid on Nov 2.
+    const visa = await card(A, "Visa", 100, D("2026-10-20"));
+    await purchase(A, visa.accountId, 50, D("2026-10-22"));
+    await purchase(A, visa.accountId, 20, D("2026-10-30"));
+    await pay(A, visa.debtId, 30, D("2026-11-02"));
 
     const d = (await debtsOf(A)).find(x => x.id === visa.debtId);
     assert.equal(d.owed, 140);
     assert.deepEqual(d.cycle, {
-      dueOn: iso(utcDay(0)),
-      closesOn: iso(utcDay(-1)),
+      dueOn: "2026-11-05",
+      closesOn: "2026-10-25",
       closed: true,
-      dueAmount: 120,       // anchor 100 + 50 up to the cut-off − 30 paid
-      afterCutAmount: 20,   // today's purchase
-      afterCutDueOn: iso(dayOfMonth(1, TODAY)),
+      dueAmount: 120,     // 100 + 50 up to the cut-off − 30 paid
+      minimumDue: null,
+      afterCutAmount: 20, // the purchase after the cut-off
+      afterCutDueOn: "2026-12-05",
     });
 
-    // Calendar periods (cycleStartDay 1): this month commits the statement due
-    // today (150 — paying during the period doesn't shrink it); next month the
-    // purchase after the cut-off; then nothing recorded yet.
+    // Purchases are spending in their categories, never committed: November
+    // holds the earlier debt due Nov 5 (100; paying during it doesn't shrink
+    // it), exactly the budget line; then nothing.
     const tl = await timelineOf(A);
-    assert.equal(tl[0].period, periodLib.currentPeriodKey(1));
-    assert.deepEqual(itemAmounts(tl, visa.debtId), [150, 20, 0]);
+    assert.deepEqual(tl.map(p => p.period), ["2026-11", "2026-12", "2027-01"]);
+    assert.deepEqual(itemAmounts(tl, visa.debtId), [100, 0, 0]);
+    assert.equal(d.monthlyCommitment, 100);
+  });
+
+  it("debt typed after this period's due date is next period's, in the budget line and the timeline", async () => {
+    setClockForTests(NOV_20);
+    const { A } = await couple();
+    const visa = await card(A, "Nueva", 1000, NOV_20);
+    await purchase(A, visa.accountId, 40, D("2026-11-21"));
+
+    const d = (await debtsOf(A)).find(x => x.id === visa.debtId);
+    assert.equal(d.monthlyCommitment, 0);
+    assert.equal(d.cycle.dueOn, "2026-12-05");
+    assert.equal(d.cycle.dueAmount, 1040); // the cut-off (Nov 25) hasn't come: the purchase is in too
+    assert.equal(d.cycle.closed, false);
+    assert.equal(d.cycle.dueAmount + d.cycle.afterCutAmount, d.owed);
+    const tl = await timelineOf(A);
+    assert.deepEqual(itemAmounts(tl, visa.debtId), [0, 1000, 0]);
+    const line = await prisma.allocation.findFirstOrThrow({ where: { debtId: visa.debtId } });
+    assert.equal(line.allocatedAmount, 0); // the stored fallback agrees
+  });
+
+  it("a minimum card shows its minimum due and keeps committing what its budget line holds", async () => {
+    setClockForTests(NOV_2);
+    const { A } = await couple();
+    const m = await card(A, "Revolving", 300, D("2026-10-01"), { mode: "minimum", minimum: 60 });
+    const d = (await debtsOf(A)).find(x => x.id === m.debtId);
+    assert.equal(d.cycle.minimumDue, 60);
+    assert.equal(d.cycle.dueAmount, 300);
+    assert.deepEqual(itemAmounts(await timelineOf(A), m.debtId), [60, 60, 60]);
+    assert.equal(d.monthlyCommitment, 60);
   });
 
   it("a card without a statement day keeps today's behaviour", async () => {
+    setClockForTests(NOV_20);
     const { A } = await couple();
-    const plain = await card(A, "Amex", 80, { paymentDueDay: 5 });
-    await purchase(A, plain.accountId, 15, utcDay(0));
+    const plain = await card(A, "Amex", 80, D("2026-11-10"), { statementDay: null });
+    await purchase(A, plain.accountId, 15, D("2026-11-15"));
 
     const d = (await debtsOf(A)).find(x => x.id === plain.debtId);
     assert.equal(d.statementDay, null);
@@ -183,32 +208,35 @@ describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABA
     assert.equal(d.owed, 95);
     // Paid in full without a cycle: only the pre-existing debt, this period.
     assert.deepEqual(itemAmounts(await timelineOf(A), plain.debtId), [80, 0, 0]);
+    assert.equal(d.monthlyCommitment, 80);
   });
 
-  it("a member's private card stays out of the partner's debts and timeline; a shared one is in", { skip: !scenarioFits && "today must be between the 2nd and the 28th" }, async () => {
+  it("a member's private card stays out of the partner's debts and timeline; a shared one is in", async () => {
+    setClockForTests(NOV_20);
     const { A, B } = await couple();
-    const secret = await card(B, "Privada", 60, { visibility: "private", statementDay: TODAY - 1, paymentDueDay: TODAY });
-    const shared = await card(B, "Común", 40, { statementDay: TODAY - 1, paymentDueDay: TODAY });
-    await purchase(B, secret.accountId, 25, utcDay(0));
+    const secret = await card(B, "Privada", 60, NOV_20, { visibility: "private" });
+    const shared = await card(B, "Común", 40, D("2026-10-28"));
+    await purchase(B, secret.accountId, 25, D("2026-11-26"));
 
     // The owner sees both, with their cycle.
     const mine = await debtsOf(B);
     assert.equal(mine.find(x => x.id === secret.debtId)?.cycle?.dueAmount, 60);
     assert.equal(mine.find(x => x.id === secret.debtId)?.cycle?.afterCutAmount, 25);
-    assert.deepEqual(itemAmounts(await timelineOf(B), secret.debtId), [60, 25, 0]);
+    assert.deepEqual(itemAmounts(await timelineOf(B), secret.debtId), [0, 60, 0]);
 
     // The partner: the shared card with its cycle, no trace of the private one.
     const theirs = await debtsOf(A);
     assert.equal(theirs.some(x => x.id === secret.debtId), false);
-    assert.equal(theirs.find(x => x.id === shared.debtId)?.cycle?.dueAmount, 40);
+    assert.equal(theirs.find(x => x.id === shared.debtId)?.cycle?.dueOn, "2026-12-05");
     const tl = await timelineOf(A);
     assert.equal(tl.some(p => (p.items as any[]).some(i => i.debtId === secret.debtId || i.name === "Privada")), false);
-    assert.deepEqual(itemAmounts(tl, shared.debtId), [40, 0, 0]);
+    assert.deepEqual(itemAmounts(tl, shared.debtId), [40, 0, 0]); // due Nov 5, unpaid
   });
 
   it("statementDay is accepted on PATCH, clamped to 1-28 and clearable", async () => {
+    setClockForTests(NOV_2);
     const { A } = await couple();
-    const c = await card(A, "Clamp", 0, { statementDay: 31 });
+    const c = await card(A, "Clamp", 0, D("2026-10-20"), { statementDay: 31 });
     assert.equal((await prisma.debt.findUniqueOrThrow({ where: { id: c.debtId } })).statementDay, 28);
     await ok(A, "PATCH", `/api/debts/${c.debtId}`, { statementDay: null });
     assert.equal((await prisma.debt.findUniqueOrThrow({ where: { id: c.debtId } })).statementDay, null);

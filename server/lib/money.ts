@@ -80,6 +80,7 @@ const MONEY_KEYS = new Set([
   "remainingAmount",
   "dueAmount",
   "afterCutAmount",
+  "minimumDue",
 ]);
 
 /**

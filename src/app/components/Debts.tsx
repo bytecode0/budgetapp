@@ -17,11 +17,12 @@ import { CardCycleLine } from './shared/CardCycleLine';
 import { apiErrorMessage } from '../lib/apiErrors';
 
 // What a payment of this debt usually is, to prefill the payment sheet. A card
-// with a billing cycle suggests what's due, not purchases after the cut-off.
+// with a billing cycle suggests what its line shows as due (the statement, or
+// the minimum due), not purchases after the cut-off.
 const suggestedPayment = (d: Debt): number =>
   d.paymentMode === 'full' ? (d.cycle && d.cycle.dueAmount > 0 ? d.cycle.dueAmount : d.owed)
   : d.paymentMode === 'installments' ? d.installmentAmount ?? 0
-  : d.minimumPayment ?? 0;
+  : (d.cycle?.minimumDue ? d.cycle.minimumDue : d.minimumPayment ?? 0);
 
 const DRAG_TYPE = 'DEBT_ROW';
 interface DragItem { id: string; index: number }

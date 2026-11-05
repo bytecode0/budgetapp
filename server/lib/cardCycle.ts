@@ -28,6 +28,13 @@
 //     below zero nor above the live balance.
 //  4. Missing statementDay or paymentDueDay, or a card in "installments"
 //     mode: no cycle — every caller falls back to today's behaviour.
+//  5. Budget and committed future count only the PRE-EXISTING debt of a card
+//     paid in full, never its purchases (already spending in their
+//     categories — CLAUDE.md, "How debts work"). The cycle only says WHEN that
+//     debt is due (rule 2): its budget line holds the part due by the period's
+//     end (debtBalance.ts, monthlyCommitment), and the timeline places what's
+//     due later in later periods (debtTimeline.ts, timelineInput). Purchases
+//     show up only in "lo que vence" on the Debts screen (cardCycleSummary).
 import type { DebtLedger } from "./debtBalance.js";
 
 const DAY_MS = 86_400_000;
@@ -74,17 +81,6 @@ export function nextStatementDue(date: Date, days: CardCycleDays): Statement {
   throw new Error("unreachable: a statement is due every month");
 }
 
-/** Statements whose due date falls in [start, end), oldest first. */
-export function statementsDueIn(period: { start: Date; end: Date }, days: CardCycleDays): Statement[] {
-  const out: Statement[] = [];
-  let s = nextStatementDue(period.start, days);
-  while (s.dueOn < period.end) {
-    out.push(s);
-    s = statementClosingIn(s.closesOn.getUTCFullYear(), s.closesOn.getUTCMonth() + 1, days);
-  }
-  return out;
-}
-
 /** The card's cycle days, or null when it has no usable cycle (rule 4). */
 export function cycleDaysOf(debt: DebtLedger["debt"]): CardCycleDays | null {
   if (debt.kind !== "credit_card" || debt.paymentMode === "installments") return null;
@@ -108,18 +104,29 @@ function chargedBy(ledger: DebtLedger, s: Statement): number {
 const live = (ledger: DebtLedger) =>
   ledger.debt.currentBalance + sum(ledger.purchases) + sum(ledger.adjustments) - sum(ledger.payments);
 
+/** The pre-existing debt (anchor + adjustments, rule 2) due before `end`,
+ *  cumulative, no payments subtracted. Without a `balanceAsOf` (a ledger
+ *  built by hand) the anchor counts as already due. */
+export function previousDueBefore(ledger: DebtLedger, end: Date, days: CardCycleDays): number {
+  const dueBefore = (date: Date) => nextStatementDue(date, days).dueOn < end;
+  const asOf = ledger.debt.balanceAsOf;
+  const anchor = !asOf || dueBefore(asOf) ? ledger.debt.currentBalance : 0;
+  return anchor + sum(ledger.adjustments.filter(a => dueBefore(a.date)));
+}
+
 export interface CardCycleSummary {
   dueOn: Date;            // the next due date (today included)
   closesOn: Date;         // its statement's cut-off
   closed: boolean;        // false: the cut-off hasn't come yet, the amount can still grow
-  dueAmount: number;      // cents — what that due date asks for ("lo que vence")
+  dueAmount: number;      // cents — that statement, what's still unpaid of it ("lo que vence")
+  minimumDue: number | null; // cents — "minimum" cards: min(minimum, dueAmount); null otherwise
   afterCutAmount: number; // cents — the rest of the balance, due later
   afterCutDueOn: Date;    // when that rest is due (the following due date)
 }
 
 /** "Lo que vence" vs "saldo total" for a card with a cycle, as of `now`.
  *  null without one (rule 4). The two amounts always add up to the live
- *  balance (floored at zero). */
+ *  balance (floored at zero). Display only: this includes purchases. */
 export function cardCycleSummary(ledger: DebtLedger, now: Date = new Date()): CardCycleSummary | null {
   const days = cycleDaysOf(ledger.debt);
   if (!days) return null;
@@ -127,53 +134,16 @@ export function cardCycleSummary(ledger: DebtLedger, now: Date = new Date()): Ca
   const next = nextStatementDue(now, days);
   const following = statementClosingIn(next.closesOn.getUTCFullYear(), next.closesOn.getUTCMonth() + 1, days);
   const dueAmount = Math.min(owed, Math.max(0, chargedBy(ledger, next) - sum(ledger.payments)));
+  const minimum = ledger.debt.minimumPayment ?? ledger.debt.installmentAmount;
   return {
     dueOn: next.dueOn,
     closesOn: next.closesOn,
     closed: next.boundary <= dayOf(now),
     dueAmount,
+    minimumDue: ledger.debt.paymentMode === "minimum" && minimum != null ? Math.min(minimum, dueAmount) : null,
     afterCutAmount: owed - dueAmount,
     afterCutDueOn: following.dueOn,
   };
-}
-
-/** What a card with a cycle commits in each period of the committed-future
- *  timeline (`periods[0]` is the current one), or null without a cycle.
- *
- *  Each due date commits its statement to the period it falls in:
- *   - "full": the whole statement (purchases up to the cut-off, plus any
- *     pre-existing debt or older unpaid remainder). Purchases after the
- *     cut-off move to the next period: that's money of next month's income
- *     already spoken for. Only movements recorded so far count, so periods
- *     past the next statement usually commit 0.
- *   - "minimum": `minimumPayment` at each due date, never more than what's
- *     still owed after the earlier commitments (the balance carries over).
- *  Like the budget line, the current period is measured at its START:
- *  payments made during it don't shrink what it commits (they're paying it).
- *  Commitments of earlier due dates count as paid when measuring later ones,
- *  unless the payments recorded are already larger. */
-export function cycleCommitments(
-  ledger: DebtLedger,
-  periods: { start: Date; end: Date }[],
-): number[] | null {
-  const days = cycleDaysOf(ledger.debt);
-  if (!days || periods.length === 0) return null;
-  const minimum = ledger.debt.minimumPayment ?? ledger.debt.installmentAmount ?? 0;
-  const paidBeforeStart = sum(ledger.payments.filter(p => p.date < periods[0].start));
-  const paidAll = sum(ledger.payments);
-
-  let committed = 0;
-  return periods.map((period, i) => {
-    let inPeriod = 0;
-    for (const s of statementsDueIn(period, days)) {
-      const covered = Math.max(i === 0 ? paidBeforeStart : paidAll, paidBeforeStart + committed);
-      const outstanding = Math.max(0, chargedBy(ledger, s) - covered);
-      const amount = ledger.debt.paymentMode === "minimum" ? Math.min(minimum, outstanding) : outstanding;
-      committed += amount;
-      inPeriod += amount;
-    }
-    return inPeriod;
-  });
 }
 
 /** "YYYY-MM-DD" of a UTC day, for the API. */
