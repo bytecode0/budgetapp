@@ -51,6 +51,8 @@ const ERROR_KEYS: Record<string, string> = {
   // Email codes (server/routes/auth.ts)
   otp_incorrect: 'auth.otp.incorrect',
   otp_invalid: 'auth.otp.invalid',
+  // Rate limits (server/lib/rateLimit.ts): emailed codes, AI calls
+  rate_limited: 'apiErrors.rateLimited',
 };
 
 /** The message to show for a failed debt/account request (call it only once

@@ -16,7 +16,8 @@ import type { NormalizedRow, SkippedRow, StatementSource } from "../../shared/in
 import { aiEnabled, classifyMerchants } from "../lib/ai/classify.js";
 import { suggestCategories } from "../lib/ai/suggestCategories.js";
 import { suggestImportMapping } from "../lib/ai/importMapping.js";
-import { createRateLimiter } from "../lib/rateLimit.js";
+import { AI_MAPPING_HOURLY, aiChecks, prismaRateLimitStore, takeRateLimit, type RateRule } from "../lib/rateLimit.js";
+import { parseMerchantInput, toOriginals } from "../lib/ai/merchantInput.js";
 import { rebuildExpenseShares } from "../lib/expenseShares.js";
 import { expenseListingFilter } from "../lib/visibility.js";
 import { periodBounds } from "../lib/period.js";
@@ -397,6 +398,16 @@ expensesRouter.post("/import/preview", requireAuth, async (req: AuthRequest, res
   }
 });
 
+// The AI endpoints spend LifePlan's money per call: each counts against a
+// per-person budget in the database (LPBETA-17, server/lib/rateLimit.ts).
+const rateLimitStore = prismaRateLimitStore(prisma);
+function allowAiCall(req: AuthRequest, extra: RateRule[] = []): Promise<boolean> {
+  return takeRateLimit(rateLimitStore, aiChecks(req.authUserId ?? req.userId!, extra));
+}
+function aiRateLimited(res: Response) {
+  return res.status(429).json({ error: "Too many AI requests, try again later", code: "rate_limited" });
+}
+
 // POST /api/expenses/import/classify
 // Body: { merchants: string[] }. AI-classifies the given (rule-less) merchants
 // against the user's allocations. Read-only — returns suggestions the UI merges
@@ -405,9 +416,9 @@ expensesRouter.post("/import/classify", requireAuth, async (req: AuthRequest, re
   try {
     if (!aiEnabled()) return res.status(503).json({ error: "AI not configured" });
 
-    const raw = (req.body?.merchants ?? []) as unknown[];
-    const merchants = [...new Set(raw.filter((m): m is string => typeof m === "string" && m.length > 0))].slice(0, 40);
-    if (merchants.length === 0) return res.json({ suggestions: [] });
+    const input = parseMerchantInput(req.body?.merchants);
+    if (input.merchants.length === 0) return res.json({ suggestions: [] });
+    if (!(await allowAiCall(req))) return aiRateLimited(res);
 
     // Never the line of a debt hidden from the caller: its name would go to
     // the AI and come back as a suggestion.
@@ -416,11 +427,12 @@ expensesRouter.post("/import/classify", requireAuth, async (req: AuthRequest, re
       select: { id: true, name: true },
     });
 
-    const map = await classifyMerchants(merchants, allocations);
+    const map = await classifyMerchants(input.merchants, allocations);
     const nameById = Object.fromEntries(allocations.map(a => [a.id, a.name]));
     const suggestions = Object.entries(map)
       .filter(([, id]) => id)
-      .map(([merchant, allocationId]) => ({ merchant, allocationId, name: nameById[allocationId!] ?? null }));
+      .flatMap(([cut, allocationId]) => toOriginals(input, [cut])
+        .map(merchant => ({ merchant, allocationId, name: nameById[allocationId!] ?? null })));
 
     return res.json({ suggestions });
   } catch (err) {
@@ -436,11 +448,12 @@ expensesRouter.post("/import/suggest-categories", requireAuth, async (req: AuthR
   try {
     if (!aiEnabled()) return res.status(503).json({ error: "AI not configured" });
 
-    const raw = (req.body?.merchants ?? []) as unknown[];
-    const merchants = [...new Set(raw.filter((m): m is string => typeof m === "string" && m.length > 0))].slice(0, 40);
-    if (merchants.length === 0) return res.json({ categories: [] });
+    const input = parseMerchantInput(req.body?.merchants);
+    if (input.merchants.length === 0) return res.json({ categories: [] });
+    if (!(await allowAiCall(req))) return aiRateLimited(res);
 
-    const categories = await suggestCategories(merchants);
+    const categories = (await suggestCategories(input.merchants))
+      .map(c => ({ ...c, merchants: toOriginals(input, c.merchants) }));
     return res.json({ categories });
   } catch (err) {
     console.error("[expenses/import/suggest-categories]", err);
@@ -456,10 +469,9 @@ expensesRouter.post("/import/suggest-categories", requireAuth, async (req: AuthR
 // data row, is passed on to the AI. → { data: { mapping } }, a suggestion the manual mapping
 // screen pre-fills for the user to confirm. 503 ai_unavailable when the
 // feature isn't configured (the screen stays fully manual), 429 per user.
-const mappingSuggestions = createRateLimiter({ limit: 10, windowMs: 60 * 60 * 1000 });
 expensesRouter.post("/import/suggest-mapping", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const result = await suggestImportMapping(req.body, () => mappingSuggestions.take(req.authUserId ?? req.userId!));
+    const result = await suggestImportMapping(req.body, () => allowAiCall(req, [AI_MAPPING_HOURLY]));
     if ("mapping" in result) return res.json({ data: { mapping: result.mapping } });
     switch (result.error) {
       case "unavailable": return res.status(503).json({ error: "AI mapping is not configured", code: "ai_unavailable" });

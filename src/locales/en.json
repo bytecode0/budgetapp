@@ -785,6 +785,7 @@
     "aiClassified": "AI classified {{count}} merchants",
     "aiNoneFound": "AI couldn't confidently classify these",
     "aiFailed": "AI classification failed",
+    "aiRateLimited": "You've used the AI a lot in a short time. Try again later or pick the categories by hand.",
     "aiSuggested": "AI",
     "aiSuggestCategories": "Suggest categories",
     "aiCategoriesProposed": "{{count}} categories proposed",
@@ -1035,6 +1036,7 @@
     },
     "verifyEmail": {
       "verifiedToast": "Email verified. Welcome to Remanso.",
+      "noPassword": "Your account has no password. To create one, use \"Forgot password?\" when signing in, or sign in with Google.",
       "back": "Back",
       "title": "Check your inbox",
       "sentCodeTo": "We sent a 6-digit code to",
@@ -1599,7 +1601,8 @@
   "apiErrors": {
     "refundOnDebtLine": "A refund can't go on a debt line: it undoes a purchase, it doesn't pay the debt.",
     "allocationNotFound": "That category no longer exists. Reload and pick another one.",
-    "accountNotFound": "That account isn't available. Reload and pick another one."
+    "accountNotFound": "That account isn't available. Reload and pick another one.",
+    "rateLimited": "You've made too many attempts in a row. Wait a while and try again."
   },
   "banking": {
     "connectBank": "Connect your bank",

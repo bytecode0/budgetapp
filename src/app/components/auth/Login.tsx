@@ -11,7 +11,8 @@ interface LoginProps {
   onLogin: () => void;
   onSwitchToSignup: () => void;
   onForgotPassword: () => void;
-  onNeedVerification: (email: string) => void;
+  /** The password goes on to the code screen: verifying is what sets it. */
+  onNeedVerification: (email: string, password: string) => void;
   googleError?: string | null;
 }
 
@@ -36,7 +37,7 @@ export function Login({ onLogin, onSwitchToSignup, onForgotPassword, onNeedVerif
     if (result.error) {
       if (result.code === 'EMAIL_NOT_VERIFIED') {
         toast.info(t('auth.login.verifyEmailFirst'));
-        onNeedVerification(email);
+        onNeedVerification(email, password);
       } else if (result.code === 'LOGIN_LOCKED') {
         toast.error(t('auth.login.tooManyAttempts'));
       } else {

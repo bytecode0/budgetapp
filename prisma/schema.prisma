@@ -520,6 +520,20 @@ model OtpToken {
   @@index([email, type])
 }
 
+// Rate limiting counted in the database (LPBETA-16/17): one row per key and
+// fixed window, incremented atomically (server/lib/rateLimit.ts). In memory it
+// wouldn't hold on Vercel, where every instance has its own. `key` is
+// "<rule>:<sha256 of the email/IP/user id>", never the identifier itself.
+// Rows older than two days are deleted as new hits come in.
+model RateLimitHit {
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@id([key, windowStart])
+  @@index([windowStart])
+}
+
 // ── Household (Epic H1) ──────────────────────────────────────────────
 // A financial unit formed by one or more people. Replaces the "merge into the
 // primary user's pool" hack (UserSettings.linkedUserId), which is kept in

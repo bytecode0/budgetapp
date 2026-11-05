@@ -244,7 +244,7 @@ export function useImport() {
   // preview; never throws — degrades to an error string the UI can toast.
   const classify = async (
     merchants: string[],
-  ): Promise<{ error?: string; suggestions?: AiSuggestion[] }> => {
+  ): Promise<{ error?: string; code?: string; suggestions?: AiSuggestion[] }> => {
     setClassifying(true);
     try {
       const res = await fetch('/api/expenses/import/classify', {
@@ -254,7 +254,7 @@ export function useImport() {
         body: JSON.stringify({ merchants }),
       });
       const data = await res.json();
-      if (!res.ok) return { error: data.error || 'AI classification failed' };
+      if (!res.ok) return { error: data.error || 'AI classification failed', code: data.code as string | undefined };
       return { suggestions: (data.suggestions ?? []) as AiSuggestion[] };
     } catch {
       return { error: 'Network error' };
@@ -266,7 +266,7 @@ export function useImport() {
   // AI proposes a category set from the merchants (cold-start helper).
   const suggestCategories = async (
     merchants: string[],
-  ): Promise<{ error?: string; categories?: AiCategory[] }> => {
+  ): Promise<{ error?: string; code?: string; categories?: AiCategory[] }> => {
     setSuggestingCats(true);
     try {
       const res = await fetch('/api/expenses/import/suggest-categories', {
@@ -276,7 +276,7 @@ export function useImport() {
         body: JSON.stringify({ merchants }),
       });
       const data = await res.json();
-      if (!res.ok) return { error: data.error || 'AI suggestion failed' };
+      if (!res.ok) return { error: data.error || 'AI suggestion failed', code: data.code as string | undefined };
       return { categories: (data.categories ?? []) as AiCategory[] };
     } catch {
       return { error: 'Network error' };

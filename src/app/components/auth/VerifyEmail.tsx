@@ -12,12 +12,16 @@ import { RemansoMark } from '../shared/RemansoMark';
 
 interface VerifyEmailProps {
   email: string;
+  /** What they typed at sign-up or login; verifying sets it as the password. */
+  password: string;
+  /** The name typed at sign-up ('' from the login path); verifying sets it. */
+  name: string;
   onVerified: () => void;
   onBack: () => void;
 }
 
-export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
-  const { t } = useTranslation();
+export function VerifyEmail({ email, password, name, onVerified, onBack }: VerifyEmailProps) {
+  const { t, i18n } = useTranslation();
   const { refreshUser } = useAuth();
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [isLoading, setIsLoading] = useState(false);
@@ -60,7 +64,13 @@ export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp: code }),
+        body: JSON.stringify({
+          email,
+          otp: code,
+          language: i18n.language === 'en' ? 'en' : 'es',
+          ...(password && { password }),
+          ...(name && { name }),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -68,6 +78,8 @@ export function VerifyEmail({ email, onVerified, onBack }: VerifyEmailProps) {
         return;
       }
       toast.success(t('auth.verifyEmail.verifiedToast'));
+      // No password on the account (none came with the request): say how to get one.
+      if (data.passwordSet === false) toast.info(t('auth.verifyEmail.noPassword'), { duration: 10000 });
       onVerified();
     } catch {
       toast.error('Something went wrong. Please try again.');

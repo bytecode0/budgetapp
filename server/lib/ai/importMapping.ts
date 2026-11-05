@@ -74,11 +74,14 @@ export function buildPrompt(input: ShapeInput): string {
 /** Validates what the client sent (titles + formats only), then — if the
  *  feature is configured and `allow()` (the caller's rate limit) says so —
  *  asks the model. Throws only on a provider failure. */
-export async function suggestImportMapping(body: unknown, allow: () => boolean = () => true): Promise<SuggestResult> {
+export async function suggestImportMapping(
+  body: unknown,
+  allow: () => boolean | Promise<boolean> = () => true,
+): Promise<SuggestResult> {
   if (!aiAvailable("importMapping")) return { error: "unavailable" };
   const parsed = parseShapeInput(body);
   if ("error" in parsed) return { error: "invalid_input", message: parsed.error };
-  if (!allow()) return { error: "rate_limited" };
+  if (!(await allow())) return { error: "rate_limited" };
   const text = await complete("importMapping", { system: SYSTEM, prompt: buildPrompt(parsed.input), json: true, maxTokens: 400 });
   const mapping = checkSuggestion(extractJson(text), parsed.input.headers);
   return mapping ? { mapping } : { error: "no_suggestion" };
