@@ -1588,7 +1588,8 @@
             "Enable Banking, only if you connect your bank: it reads your accounts, balances and transactions with the permission you give at your bank.",
             "Anthropic (Claude), only if you press a button to classify with AI when importing a statement: it receives the uncategorised merchant descriptions (up to 40 at a time) and the names of your categories. Never amounts, dates, your name, your email or account numbers. Your expense descriptions never go to free models or to other AI providers, and transactions from your connected bank are not sent to any AI.",
             "The AI provider we have configured for reading statements (OpenRouter or Anthropic), only if you ask AI to suggest a statement's columns: it receives the column titles and the format of the values, never your transactions.",
-            "Google, only if you sign in with Google. The website also loads its fonts from Google Fonts."
+            "Google, only if you sign in with Google. The website also loads its fonts from Google Fonts.",
+      "Stripe, only if you subscribe to Premium: it handles the payment (your email and your card, which we never see). When you delete your account we also delete your customer record at Stripe; Stripe may keep the record of payments for as long as the law requires."
           ]
         },
         {
@@ -1596,7 +1597,7 @@
           "paragraphs": [
             "Export: in Settings → Your data and your account you download one file with your data and another (CSV, opens in Excel) with your transactions. Only what is yours: your partner's data is not included.",
             "Delete: in the same place you ask to delete your account and confirm it with a code we email you. You have 24 hours to change your mind. Deletion runs once a day, so your account is gone between 24 and 48 hours after your request, and we email you.",
-            "If you are in a household, the data is separated first: your partner keeps theirs and yours is deleted. We disconnect your banks and, if you had a subscription, we cancel it. The database provider's backups may keep your data for a limited time before they delete themselves."
+            "If you are in a household, the data is separated first: your partner keeps theirs and yours is deleted. We disconnect your banks and, if you had a subscription, we delete your customer record at Stripe, which cancels it at once. The database provider's backups may keep your data for a limited time before they delete themselves."
           ]
         },
         {

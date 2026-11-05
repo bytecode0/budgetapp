@@ -1588,7 +1588,8 @@
             "Enable Banking, solo si conectas tu banco: lee tus cuentas, saldos y movimientos con el permiso que das en tu banco.",
             "Anthropic (Claude), solo si al importar un extracto pulsas un botón para clasificar con IA: recibe los conceptos de comercio sin categoría (hasta 40 a la vez) y los nombres de tus categorías. Nunca importes, fechas, tu nombre, tu email ni números de cuenta. Los conceptos de tus gastos no van a modelos gratuitos ni a otros proveedores de IA, y los movimientos que llegan de tu banco conectado no se envían a ninguna IA.",
             "El proveedor de IA que tengamos configurado para leer extractos (OpenRouter o Anthropic), solo si pides sugerir las columnas de un extracto con IA: recibe los títulos de columna y el formato de los valores, nunca tus movimientos.",
-            "Google, solo si entras con Google. Además, la web carga sus tipografías de Google Fonts."
+            "Google, solo si entras con Google. Además, la web carga sus tipografías de Google Fonts.",
+      "Stripe, solo si te suscribes a Premium: gestiona el pago (tu email y tu tarjeta, que nosotros nunca vemos). Al borrar tu cuenta borramos también tu ficha de cliente en Stripe; Stripe puede conservar el registro de los pagos el tiempo que le exija la ley."
           ]
         },
         {
@@ -1596,7 +1597,7 @@
           "paragraphs": [
             "Exportar: en Ajustes → Tus datos y tu cuenta descargas un archivo con tus datos y otro (CSV, se abre con Excel) con tus movimientos. Solo lo tuyo: lo de tu pareja no sale.",
             "Borrar: en el mismo sitio pides borrar tu cuenta y lo confirmas con un código que te enviamos por email. Tienes 24 horas para cambiar de opinión. El borrado se hace una vez al día, así que tu cuenta desaparece entre 24 y 48 horas después de pedirlo, y te avisamos por email.",
-            "Si estás en un hogar, antes se separan los datos: tu pareja conserva los suyos y se borran los tuyos. Desconectamos tus bancos y, si tuvieras una suscripción, la cancelamos. Las copias de seguridad del proveedor de la base de datos pueden conservar tus datos durante un tiempo limitado antes de borrarse solas."
+            "Si estás en un hogar, antes se separan los datos: tu pareja conserva los suyos y se borran los tuyos. Desconectamos tus bancos y, si tuvieras una suscripción, borramos tu ficha de cliente en Stripe, lo que la cancela al momento. Las copias de seguridad del proveedor de la base de datos pueden conservar tus datos durante un tiempo limitado antes de borrarse solas."
           ]
         },
         {

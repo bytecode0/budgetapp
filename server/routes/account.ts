@@ -150,36 +150,40 @@ accountRouter.post("/deletion", requireAuth, async (req: AuthRequest, res: Respo
   }
 });
 
-// The purge holds this user's row locked while it runs (accountDeletion.ts):
-// NOWAIT turns that into a clean 409 instead of a cancel that half-happens.
+// Once the daily job has claimed the account (deletionStartedAt, set under
+// the row lock), cancelling answers 409 instead of half-happening. NOWAIT
+// gives the same answer while a claim or data step holds the lock.
+const IN_PROGRESS = { error: "Your account is being deleted right now", code: "deletion_in_progress" };
 accountRouter.delete("/deletion", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    await prisma.$transaction(async (tx) => {
+    const cancelled = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${req.authUserId!} FOR UPDATE NOWAIT`;
+      const user = await tx.user.findUniqueOrThrow({ where: { id: req.authUserId! }, select: { deletionStartedAt: true } });
+      if (user.deletionStartedAt) return false;
       await tx.user.update({ where: { id: req.authUserId! }, data: { deletionRequestedAt: null } });
+      return true;
     });
+    if (!cancelled) return res.status(409).json(IN_PROGRESS);
     return res.json({ data: null });
   } catch (err) {
     if (isLockNotAvailable(err)) {
-      return res.status(409).json({ error: "Your account is being deleted right now", code: "deletion_in_progress" });
+      return res.status(409).json(IN_PROGRESS);
     }
     console.error("[account/deletion/cancel]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-/** Cancels now (not at period end). Already cancelled or unknown to Stripe
- *  counts as done, so a retry never blocks on it. */
-async function cancelStripeSubscriptionNow(id: string): Promise<void> {
-  const stripe = getStripe();
+/** Deletes the Stripe customer, which also cancels its subscriptions at
+ *  once. Already deleted counts as done, so a retry never blocks on it. A
+ *  short timeout and no retries: the purge must fit the cron's time budget. */
+async function deleteStripeCustomerNow(customerId: string): Promise<void> {
   try {
-    const sub = await stripe.subscriptions.retrieve(id);
-    if (sub.status === "canceled" || sub.status === "incomplete_expired") return;
+    await getStripe().customers.del(customerId, undefined, { timeout: 8_000, maxNetworkRetries: 0 });
   } catch (err) {
     if ((err as { code?: string })?.code === "resource_missing") return;
     throw err;
   }
-  await stripe.subscriptions.cancel(id);
 }
 
 // GET /api/account/cron — Vercel Cron, daily (vercel.json). Authenticated by
@@ -191,7 +195,7 @@ accountRouter.get("/cron", async (req: Request, res: Response) => {
     const summary = await runDeletionPurge(prisma, {
       now: new Date(),
       banking: getBankingClient(), // unattended: no PSU headers; null when banking is off
-      cancelStripeSubscription: isBillingEnabled() ? cancelStripeSubscriptionNow : null,
+      deleteStripeCustomer: isBillingEnabled() ? deleteStripeCustomerNow : null,
       sendDeletedEmail: sendAccountDeletedEmail,
     });
     return res.json({ data: summary });

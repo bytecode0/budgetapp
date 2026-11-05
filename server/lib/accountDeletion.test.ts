@@ -1,7 +1,10 @@
 // Run with:  node --import tsx --test server/lib/accountDeletion.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DELETION_GRACE_MS, clashRenames, deletionDueAt, isDeletionDue, isLockNotAvailable, pairAction, purgeCutoff } from "./accountDeletion.js";
+import {
+  DELETION_GRACE_MS, clashRenames, deletionDueAt, frozenAnchor, hasLiveSubscription, isDeletionDue, isLockNotAvailable, isOwnMovement,
+  pairAction, purgeCutoff,
+} from "./accountDeletion.js";
 
 const T0 = new Date("2026-11-04T10:00:00Z");
 const at = (ms: number) => new Date(T0.getTime() + ms);
@@ -43,4 +46,35 @@ test("isLockNotAvailable recognises Postgres 55P03 from a raw query", () => {
   assert.equal(isLockNotAvailable(new Error("could not obtain lock on row in relation \"User\"")), true);
   assert.equal(isLockNotAvailable(new Error("boom")), false);
   assert.equal(isLockNotAvailable(null), false);
+});
+
+test("frozenAnchor keeps the live balance and never subtracts a future payment twice", () => {
+  const at = new Date("2026-11-06T10:00:00Z");
+  const past = new Date("2026-10-01T12:00:00Z");
+  const future = new Date("2026-12-01T12:00:00Z");
+  // anchor 100 € + purchase 20 € − future payment 15 € = 105 € live.
+  const anchor = frozenAnchor(10_500, { purchases: [{ amount: 2_000, date: past }], adjustments: [] },
+    [{ amount: 1_500, date: future, createdAt: past }], at);
+  assert.equal(anchor, 12_000); // then 120 − 15 = 105, as before
+  // A future adjustment stays in the ledger, a future purchase on D's account leaves it.
+  assert.equal(frozenAnchor(10_000, {
+    purchases: [{ amount: 700, date: future }], adjustments: [{ amount: 300, date: future }, { amount: 200, date: past }],
+  }, [], at), 9_000);
+  // A payment dated earlier the same day but recorded before the anchor drops out of the new ledger: it is in the anchor.
+  assert.equal(frozenAnchor(5_000, { purchases: [], adjustments: [] },
+    [{ amount: 1_000, date: new Date("2026-11-06T18:00:00Z"), createdAt: past }], at), 5_000);
+});
+
+test("isOwnMovement: what D paid, or entered with no payer", () => {
+  assert.equal(isOwnMovement({ payerUserId: "D", createdByUserId: "S" }, "D"), true);
+  assert.equal(isOwnMovement({ payerUserId: null, createdByUserId: "D" }, "D"), true);
+  assert.equal(isOwnMovement({ payerUserId: "S", createdByUserId: "D" }, "D"), false);
+  assert.equal(isOwnMovement({ payerUserId: null, createdByUserId: null }, "D"), false);
+});
+
+test("hasLiveSubscription: only a Stripe subscription that may still charge", () => {
+  assert.equal(hasLiveSubscription({ stripeSubscriptionId: "sub", status: "active" }), true);
+  assert.equal(hasLiveSubscription({ stripeSubscriptionId: "sub", status: "past_due" }), true);
+  assert.equal(hasLiveSubscription({ stripeSubscriptionId: "sub", status: "cancelled" }), false);
+  assert.equal(hasLiveSubscription({ stripeSubscriptionId: null, status: "active" }), false);
 });

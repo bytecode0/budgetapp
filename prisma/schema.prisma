@@ -28,6 +28,11 @@ model User {
   // (GET /api/account/cron, server/lib/accountDeletion.ts) deletes the account
   // once this is more than 24 h old, so it goes 24–48 h after the request.
   deletionRequestedAt DateTime?
+  // When the daily job claimed this account for deletion (it runs in steps:
+  // claim, Stripe, data, bank sessions). While set, cancelling answers 409.
+  // Cleared if the job has to give up (e.g. Stripe failed) so the person can
+  // still cancel; a crashed run leaves it set and the next run continues.
+  deletionStartedAt   DateTime?
 
   settings      UserSettings?
   subscription   Subscription?

@@ -3,8 +3,9 @@
 //
 // What is "mine" in a household:
 //   - accounts, debts, bank connections, income: the rows I own (ownerUserId),
-//     wherever they sit — so a partner's half of an old cross-owner
-//     debt–account pair is never in my export, and mine always is;
+//     wherever they sit (my scope, the pool, or a former partner's pool where
+//     an old cross-owner pair left one) — so a partner's half of such a pair
+//     is never in my export, and mine always is;
 //   - savings plans: the ones I own; the pool's owner also gets the plans
 //     with no owner (made before plans had one), marked "ownerless";
 //   - expenses, budget lines (with their monthly budgets) and categorisation
@@ -159,11 +160,14 @@ const FOREIGN_KEYS = [
 
 async function loadRecords(db: PrismaClient, own: Ownership) {
   const inScope = { userId: { in: own.scopes } };
+  // Rows I own wherever they are (an old cross-owner pair can leave one in a
+  // former partner's pool).
+  const ownedAnywhere = { OR: [inScope, { ownerUserId: own.me }] };
   const [accounts, debts, connections, plans, allocations, rules, recurring] = await Promise.all([
-    db.account.findMany({ where: inScope, orderBy: { sortOrder: "asc" } }),
-    db.debt.findMany({ where: inScope, orderBy: { sortOrder: "asc" }, include: { adjustments: { orderBy: { date: "asc" } } } }),
+    db.account.findMany({ where: ownedAnywhere, orderBy: { sortOrder: "asc" } }),
+    db.debt.findMany({ where: ownedAnywhere, orderBy: { sortOrder: "asc" }, include: { adjustments: { orderBy: { date: "asc" } } } }),
     db.bankConnection.findMany({
-      where: inScope,
+      where: ownedAnywhere,
       select: {
         id: true, userId: true, ownerUserId: true, institutionName: true, institutionCountry: true, provider: true, status: true,
         consentGivenAt: true, expiresAt: true, lastSyncedAt: true, createdAt: true,
@@ -204,7 +208,7 @@ export async function buildJsonExport(db: PrismaClient, me: string, now = new Da
     }),
     loadRecords(db, own),
     countMyExpenses(db, own),
-    db.income.count({ where: { userId: { in: own.scopes }, ownerUserId: me, ...visibleIncomeWhere(me) } }),
+    db.income.count({ where: { ownerUserId: me, ...visibleIncomeWhere(me) } }),
   ]);
   const { settings, subscription, householdMemberships, ...profile } = user;
   return {
@@ -242,8 +246,8 @@ export async function buildMovementRows(db: PrismaClient, me: string): Promise<M
   const visible = { OR: [{ ownerUserId: me }, { visibility: "household" }] };
   const [expenses, incomes, accounts, debts, allocations] = await Promise.all([
     db.expense.findMany({ where: exportableExpenses(own) }),
-    db.income.findMany({ where: { ...inScope, ownerUserId: me, ...visibleIncomeWhere(me) } }),
-    db.account.findMany({ where: { ...inScope, ...visible }, select: { id: true, name: true, currency: true } }),
+    db.income.findMany({ where: { ownerUserId: me, ...visibleIncomeWhere(me) } }),
+    db.account.findMany({ where: { AND: [{ OR: [inScope, { ownerUserId: me }] }, visible] }, select: { id: true, name: true, currency: true } }),
     db.debt.findMany({ where: { ...inScope, ...visible }, select: { id: true, name: true } }),
     db.allocation.findMany({ where: { ...inScope, ...notOnHiddenDebt(me) }, select: { id: true, name: true } }),
   ]);
