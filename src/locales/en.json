@@ -160,8 +160,6 @@
     "greetingAfternoon": "Good afternoon",
     "greetingEvening": "Good evening",
     "reviewingPastMonth": "Reviewing past month",
-    "hereBudgetDoing": "Here's how your budget is doing this month",
-    "historicalSummary": "Historical budget summary",
     "monthlyIncome": "Monthly Income",
     "actualIncome": "actual this month",
     "spentSoFar": "Spent so far",
@@ -170,33 +168,12 @@
     "acrossAllPlans": "across all plans",
     "lifePlans": "Life Plans",
     "completed": "completed",
-    "overBudgetBy": "Over budget by {{amount}}",
-    "categoriesExceeded_one": "{{count}} category exceeded its budget",
-    "categoriesExceeded_other": "{{count}} categories exceeded their budget",
     "viewExpenses": "View expenses",
     "unassignedTitle": "{{amount}} not categorized",
     "unassignedDesc": "Some spending isn't assigned to a category yet — it still counts in your total.",
-    "onTrack": "On track — {{amount}} under budget so far",
-    "finishedUnder": "Finished {{amount}} under budget",
-    "usedPct": "Used {{pct}}% of the monthly budget",
-    "noExpenses": "No expenses recorded for this month",
-    "startTracking": "Start tracking your spending to see how you're doing against your budget",
-    "noExpenseDataPeriod": "No expense data was recorded for this period",
-    "addExpense": "Add expense",
     "missedPlanContribs_one": "{{count}} life plan missed its contribution this month",
     "missedPlanContribs_other": "{{count}} life plans missed their contributions this month",
     "reviewPlans": "Review plans",
-    "financialTips": "Financial Tips",
-    "principlesOptimize": "Principles to optimize your plan",
-    "tip5030Badge": "strategy",
-    "tip5030Title": "50/30/20 Rule",
-    "tip5030Body": "Allocate 50% to essentials, 30% to flexible spending, and 20% to savings and investments.",
-    "tipAutomateBadge": "tip",
-    "tipAutomateTitle": "Automate Savings",
-    "tipAutomateBody": "Set up automatic transfers to your life plan accounts on payday so you save before you spend.",
-    "tipReviewBadge": "mindset",
-    "tipReviewTitle": "Review Monthly",
-    "tipReviewBody": "Check your plans once a month to stay on track and adjust contributions when your income changes.",
     "committedFutureTitle": "What's already committed",
     "committedFutureSubtitle": "{{pct}}% of your next paycheck is already spoken for by debt",
     "viewDebts": "View debts",
@@ -209,7 +186,39 @@
       "warning": "Almost everything coming in already has a job: {{amount}} left.",
       "over": "You're budgeting {{amount}} more than you earn."
     },
-    "budgetedNoIncome": "You have {{amount}} budgeted but no income recorded."
+    "budgetedNoIncome": "You have {{amount}} budgeted but no income recorded.",
+    "monthTitle": "Your month",
+    "paidYourselfLabel": "You've paid yourself",
+    "paidYourselfOf": "of {{goal}} this month · your {{pct}}%",
+    "paidYourselfNoGoal": "Choose what percentage of what comes in you pay yourself first.",
+    "paidYourselfNoIncome": "Add your income to work out how much your {{pct}}% is.",
+    "choosePct": "Choose my %",
+    "changePct": "Change %",
+    "setAside": "Set it aside in a plan",
+    "payFirstSheetTitle": "Pay yourself first",
+    "payFirstSaved": "Saved: you pay yourself {{pct}}%",
+    "close": "Close",
+    "light": {
+      "label": "How the month is going",
+      "word": {
+        "good": "On track",
+        "tight": "Cutting it close",
+        "over": "You've gone over",
+        "neutral": "No data yet"
+      },
+      "noBudget": "Make your budget to see how the month is going.",
+      "overBudget": "{{amount}} over what you budgeted.",
+      "goalMissed": "The month ended without setting aside {{amount}} of your %.",
+      "nearBudget": "Close to the limit: {{amount}} of the budget left.",
+      "goalPending": "Spending is fine. You still have {{amount}} to pay yourself.",
+      "goalMet": "Spending in order and you've paid yourself your %.",
+      "onTrack": "Spending is within the budget.",
+      "categoriesExceeded_one": "{{count}} line has gone over its budget.",
+      "categoriesExceeded_other": "{{count}} lines have gone over their budget."
+    },
+    "plansCompleted": "{{done}} of {{total}} plans completed",
+    "generosityLabel": "Generosity",
+    "gives": "You give {{amount}} a month"
   },
   "dashboard": {
     "title": "Your plans",
@@ -1265,17 +1274,17 @@
     "continue": "Continue",
     "cancel": "Cancel",
     "welcome": {
-      "badge": "New · Financial clarity",
-      "titlePrefix": "Take control of your",
-      "titleHighlight": "financial future",
-      "subtitle": "In a few steps we'll get to know your real situation — income, savings and debts — so your budget starts from where you actually are, not from zero.",
-      "start": "Start your journey",
-      "card1Title": "Income analysis",
-      "card1Desc": "Map out your own income, and your household's if you share expenses with a partner.",
-      "card2Title": "Savings overview",
-      "card2Desc": "Log what you've already saved and invested, safely.",
-      "card3Title": "Debt classification",
-      "card3Desc": "Organize your debts to see what you're really committed to each month."
+      "badge": "Your money, at peace",
+      "titlePrefix": "Stop scraping by at the end of the month and start",
+      "titleHighlight": "saving every month",
+      "subtitle": "In a few minutes we'll see where your money goes —what comes in, what goes out, what you've already saved and, if you have any, your debts— so your budget starts from where you really are.",
+      "start": "Get started",
+      "card1Title": "What comes in",
+      "card1Desc": "Your income, and your household's if you share expenses with your partner.",
+      "card2Title": "What goes out",
+      "card2Desc": "A budget where every euro has a job: fixed, variable and what's already committed.",
+      "card3Title": "What you keep",
+      "card3Desc": "An emergency fund and a percentage you pay yourself first, the one you choose."
     },
     "income": {
       "title": "Set up your income",
@@ -1311,23 +1320,52 @@
     },
     "result": {
       "title": "Your starting point",
-      "subtitle": "No sugar-coating. Now you can see it, and that is what makes changing it possible.",
-      "committedFuture": "Committed future",
       "committedOf": "{{committed}} of your {{income}} already goes to debt this month, before you spend anything.",
       "pct": "{{value}}%",
-      "missingIncome": "Add your income to see how much of your future is already committed.",
       "totalOwed": "Total debt",
       "freedomDate": "Debt-free date",
       "freedomNone": "No consumer debt",
-      "leftover": "What is left",
-      "leftoverDesc": "After debts and your fixed and variable expenses.",
-      "leftoverNegative": "Your plan spends more than comes in: review variable expenses first.",
       "attackOrder": "Order to pay off your debts (smallest first)",
       "monthN": "month {{n}}",
       "unnamedDebt": "Debt",
       "loadFailed": "Could not calculate the result",
-      "goToDashboard": "Go to my dashboard",
-      "freedomNever": "With these payments the debt is never paid off: raise the payment."
+      "goToDashboard": "Go to my home",
+      "freedomNever": "With these payments the debt is never paid off: raise the payment.",
+      "earn": "You earn {{income}} a month.",
+      "couldSaveLabel": "Each month you could save",
+      "couldSaveIf": "if you stick to the budget you've just made.",
+      "noRoom": "You earn {{income}} a month and your budget already gives all of it a job. Trim your variable spending a little and you'll be able to start setting something aside each month.",
+      "overspent": "You earn {{income}} a month and your budget gives out {{amount}} more than comes in. Look at your variable spending first: that's how you'll start saving.",
+      "noIncome": "Add your income to see how much you could save each month.",
+      "committedFutureLabel": "Committed future",
+      "committedNone": "None of what you earn goes to debt.",
+      "debtTitle": "Your debts",
+      "firstGoalsTitle": "Your first goals",
+      "firstGoalsSubtitle": "Two habits that work whatever method you follow. You decide the numbers.",
+      "emergency": {
+        "title": "Emergency fund",
+        "desc": "A cushion for the unexpected. We suggest 3 months of your expenses ({{monthly}} a month); set whatever amount you like.",
+        "targetLabel": "Your target",
+        "startLabel": "Starting with",
+        "savedHint": "You already have {{amount}} saved: you can start the fund with that money. Keep it apart from your everyday money, somewhere safe; for example, an interest-bearing account.",
+        "separateHint": "When you start setting money aside, keep it apart from your everyday money, somewhere safe; for example, an interest-bearing account.",
+        "create": "Create my emergency fund",
+        "created": "Emergency fund created",
+        "createFailed": "The plan couldn't be created. Please try again.",
+        "targetRequired": "Set a target above 0.",
+        "already": "You already have an emergency fund in your plans.",
+        "planTitle": "Emergency fund"
+      },
+      "payFirst": {
+        "title": "Pay yourself first",
+        "desc": "On payday, set aside a fixed percentage for yourself first and live on the rest. Choose yours; you can change it whenever you like.",
+        "amount": "Your {{pct}}% is {{amount}} a month.",
+        "noRoom": "Today your budget leaves {{leftover}} free: to reach your %, you'll need to make room for it.",
+        "saved": "Saved",
+        "saveFailed": "It couldn't be saved. Please try again."
+      },
+      "generosityLabel": "Generosity",
+      "givesNothing": "You're not setting anything aside to give for now."
     },
     "bank": {
       "title": "Your bank account",
@@ -1349,7 +1387,9 @@
       "noCards": "No credit cards?",
       "createdOk": "Card added",
       "noCardsButton": "I don't have credit cards",
-      "noCardsAnswered": "Noted: you don't have credit cards. Press Continue."
+      "noCardsAnswered": "Noted: you don't have credit cards. Press Continue.",
+      "titleQuiet": "Do you have credit cards?",
+      "subtitleQuiet": "If you have one, add it so its purchases count. If not, press \"I don't have any\" and carry on."
     },
     "loans": {
       "title": "Loans and installments",
@@ -1361,7 +1401,9 @@
       "owedLabel": "Outstanding",
       "note": "Include your mortgage too: it is treated differently from a card or a consumer loan, and you will not need to add it as a fixed expense.",
       "noLoansButton": "I don't have loans or installments",
-      "noLoansAnswered": "Noted: you don't have loans or installments. Press Continue."
+      "noLoansAnswered": "Noted: you don't have loans or installments. Press Continue.",
+      "titleQuiet": "Do you pay for anything in installments?",
+      "subtitleQuiet": "Car, mortgage, buy-now-pay-later… If you don't pay anything in installments, press \"I don't have any\" and carry on."
     },
     "lines": {
       "income": "Income",
@@ -1394,7 +1436,7 @@
     },
     "setup": {
       "title": "Finish your setup",
-      "subtitle": "This is still missing to see your full committed future:",
+      "subtitle": "Here's what's missing to complete your budget:",
       "dismiss": "Hide",
       "complete": "Complete",
       "items": {
@@ -1411,7 +1453,46 @@
       }
     },
     "undo": "Undo",
-    "answerFailed": "Couldn't save. Please try again."
+    "answerFailed": "Couldn't save. Please try again.",
+    "goal": {
+      "title": "What do you want to achieve?",
+      "subtitle": "Pick what matters most to you right now. You'll be able to do the rest too.",
+      "saveFailed": "Your answer couldn't be saved. Please try again.",
+      "options": {
+        "steady": {
+          "title": "Save every month",
+          "desc": "Stop scraping by and have something left over, consistently."
+        },
+        "emergency": {
+          "title": "Build a cushion",
+          "desc": "An emergency fund for the unexpected."
+        },
+        "debt": {
+          "title": "Get out of debt",
+          "desc": "Finish paying off cards, installments and loans."
+        },
+        "invest": {
+          "title": "Save to invest",
+          "desc": "Set money aside each month to invest wherever you decide."
+        }
+      }
+    },
+    "percent": {
+      "example": "{{pct}}%",
+      "other": "Other",
+      "customLabel": "Your percentage",
+      "invalid": "Enter a percentage between 0 and 100."
+    },
+    "generosity": {
+      "title": "Would you like to set aside a part to give?",
+      "subtitle": "A percentage of what comes into your household, to give wherever you choose.",
+      "desc": "It's the first line of your budget. It's optional: choose any percentage, or \"Not now\", and change it whenever you like. If your income changes, the percentage stays the same.",
+      "notNow": "Not now",
+      "gives": "You give {{amount}} a month.",
+      "givesNothing": "For now you're not setting anything aside to give. You can change it whenever you like.",
+      "noIncome": "Once you add your income, we'll work out how much it is.",
+      "saveFailed": "It couldn't be saved. Please try again."
+    }
   },
   "currency": {
     "symbol": "€",

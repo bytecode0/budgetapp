@@ -28,10 +28,10 @@ export function featureItems(locale: EmailLocale): ListItem[] {
   const { d, t } = strings(locale);
   const f = d.common.features;
   return [
-    { title: t(f.allDebtsTitle), body: t(f.allDebtsBody) },
+    { title: t(f.budgetTitle), body: t(f.budgetBody) },
+    { title: t(f.payFirstTitle), body: t(f.payFirstBody) },
+    { title: t(f.emergencyTitle), body: t(f.emergencyBody) },
     { title: t(f.committedTitle), body: t(f.committedBody) },
-    { title: t(f.debtFreeTitle), body: t(f.debtFreeBody) },
-    { title: t(f.attackTitle), body: t(f.attackBody) },
   ];
 }
 

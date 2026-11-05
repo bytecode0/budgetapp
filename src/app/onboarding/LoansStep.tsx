@@ -14,7 +14,12 @@ import { NoneAnswer } from './NoneAnswer';
 // Loans and installment plans (car, Klarna, payday loans, mortgage…), with
 // the same form as Debts. The server creates each debt's budget line.
 // Cards were the previous step: their debts aren't listed here.
-export function LoansStep() {
+interface LoansStepProps {
+  /** Debt isn't the user's goal: offer "No tengo" first (LPBETA-07). */
+  quiet?: boolean;
+}
+
+export function LoansStep({ quiet = false }: LoansStepProps) {
   const { t } = useTranslation();
   const { fmt } = useMoney();
   const { debts, createDebt, deleteDebt } = useDebts();
@@ -42,8 +47,18 @@ export function LoansStep() {
     if (result.error) toast.error(apiErrorMessage(t, result));
   };
 
+  const noneAnswer = loans.length === 0 && !adding && (
+    <NoneAnswer
+      answer="noLoans"
+      hintKey="onboarding.loans.noLoans"
+      buttonKey="onboarding.loans.noLoansButton"
+      answeredKey="onboarding.loans.noLoansAnswered"
+    />
+  );
+
   return (
     <div>
+      {quiet && <div className="mb-6">{noneAnswer}</div>}
       <div className="space-y-3 mb-4">
         {loans.map(d => {
           const Icon = kindIcon(d.kind);
@@ -101,14 +116,7 @@ export function LoansStep() {
         </button>
       )}
 
-      {loans.length === 0 && !adding && (
-        <NoneAnswer
-          answer="noLoans"
-          hintKey="onboarding.loans.noLoans"
-          buttonKey="onboarding.loans.noLoansButton"
-          answeredKey="onboarding.loans.noLoansAnswered"
-        />
-      )}
+      {!quiet && noneAnswer}
 
       <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 mt-8 flex gap-3 text-sm text-amber-800 dark:text-amber-400">
         <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />

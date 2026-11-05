@@ -184,7 +184,9 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
   const [savingMilestones, setSavingMilestones] = useState(false);
 
   // Monthly contribution tracking
-  type MonthlyContribStatus = { status: 'contributed' | 'missed' | 'pending'; expectedAmount: number; depositedAmount: number } | null;
+  // depositedAmount: the month's contribution, max(deposit, booked on the plan's line);
+  // remainingAmount: what's left to reach the expected amount (GET /api/plans/monthly-status).
+  type MonthlyContribStatus = { status: 'contributed' | 'missed' | 'pending'; expectedAmount: number; depositedAmount: number; remainingAmount: number } | null;
   const [monthlyStatus, setMonthlyStatus] = useState<MonthlyContribStatus>(null);
   const [showDepositPanel, setShowDepositPanel] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
@@ -292,15 +294,18 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
     if (!res.ok) return;
     const data = await res.json();
     const entry = data.status.find((s: any) => s.planId === pid);
-    setMonthlyStatus(entry ? { status: entry.status, expectedAmount: entry.expectedAmount, depositedAmount: entry.depositedAmount } : null);
+    setMonthlyStatus(entry ? { status: entry.status, expectedAmount: entry.expectedAmount, depositedAmount: entry.depositedAmount, remainingAmount: entry.remainingAmount ?? entry.expectedAmount } : null);
   };
 
   useEffect(() => { if (planId) fetchMonthlyStatus(planId); }, [planId]);
 
   const handleMonthlyDeposit = async () => {
     if (!plan) return;
-    const amount = parseFloat(depositAmount) || plan.monthlyContribution;
-    if (!amount || amount <= 0) return;
+    const added = parseFloat(depositAmount) || plan.monthlyContribution;
+    if (!added || added <= 0) return;
+    // The deposit is the month's total: what's already contributed (booked
+    // from the bank or registered) plus what's added now, so nothing counts twice.
+    const amount = (monthlyStatus?.depositedAmount ?? 0) + added;
     setDepositing(true);
     const month = currentPeriodKey(cycleStartDay);
     const res = await fetch('/api/plan-deposits/confirm', {
@@ -312,7 +317,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
     setDepositing(false);
     if (res.ok) {
       await fetchPlans();
-      setMonthlyStatus(prev => prev ? { ...prev, status: 'contributed', depositedAmount: amount } : prev);
+      await fetchMonthlyStatus(plan.id);
       setShowDepositPanel(false);
       setDepositAmount('');
       toast.success(t('planDetail.contribRegistered'));
@@ -824,7 +829,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
                   <p className="font-medium text-sm">
                     {monthlyStatus.status === 'contributed' && t('planDetail.monthContributed', { amount: fmt(monthlyStatus.depositedAmount) })}
                     {monthlyStatus.status === 'missed'      && t('planDetail.monthMissed')}
-                    {monthlyStatus.status === 'pending'     && t('planDetail.monthPending', { amount: fmt(monthlyStatus.expectedAmount) })}
+                    {monthlyStatus.status === 'pending'     && t('planDetail.monthPending', { amount: fmt(monthlyStatus.remainingAmount) })}
                   </p>
                   <p className="text-xs text-muted-foreground capitalize mt-0.5">
                     {monthLabel(currentPeriodKey(cycleStartDay), locale)}
@@ -833,7 +838,7 @@ export function PlanDetail({ planId, onBack }: { planId: string; onBack: () => v
               </div>
               {monthlyStatus.status !== 'contributed' && !showDepositPanel && (
                 <button
-                  onClick={() => { setDepositAmount(String(monthlyStatus.expectedAmount)); setShowDepositPanel(true); }}
+                  onClick={() => { setDepositAmount(String(monthlyStatus.remainingAmount)); setShowDepositPanel(true); }}
                   className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm hover:bg-primary/90 transition-colors shrink-0"
                 >
                   {t('planDetail.registerContrib')}

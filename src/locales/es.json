@@ -160,8 +160,6 @@
     "greetingAfternoon": "Buenas tardes",
     "greetingEvening": "Buenas noches",
     "reviewingPastMonth": "Revisando mes anterior",
-    "hereBudgetDoing": "Así está tu presupuesto este mes",
-    "historicalSummary": "Resumen histórico del presupuesto",
     "monthlyIncome": "Ingresos Mensuales",
     "actualIncome": "real este mes",
     "spentSoFar": "Gastado hasta ahora",
@@ -170,33 +168,12 @@
     "acrossAllPlans": "en todos los planes",
     "lifePlans": "Planes de Vida",
     "completed": "completados",
-    "overBudgetBy": "Presupuesto excedido en {{amount}}",
-    "categoriesExceeded_one": "{{count}} categoría excedió su presupuesto",
-    "categoriesExceeded_other": "{{count}} categorías excedieron su presupuesto",
     "viewExpenses": "Ver gastos",
     "unassignedTitle": "{{amount}} sin categoría",
     "unassignedDesc": "Parte del gasto aún no está asignado a una categoría — sigue contando en tu total.",
-    "onTrack": "En seguimiento — {{amount}} por debajo del presupuesto hasta ahora",
-    "finishedUnder": "Terminado {{amount}} por debajo del presupuesto",
-    "usedPct": "Usado el {{pct}}% del presupuesto mensual",
-    "noExpenses": "Sin gastos registrados este mes",
-    "startTracking": "Empieza a registrar tus gastos para ver cómo vas contra tu presupuesto",
-    "noExpenseDataPeriod": "No se registraron datos de gastos para este período",
     "missedPlanContribs_one": "{{count}} plan de vida no ha recibido aportación este mes",
     "missedPlanContribs_other": "{{count}} planes de vida no han recibido aportación este mes",
     "reviewPlans": "Revisar planes",
-    "addExpense": "Añadir gasto",
-    "financialTips": "Consejos Financieros",
-    "principlesOptimize": "Principios para optimizar tu plan",
-    "tip5030Badge": "estrategia",
-    "tip5030Title": "Regla 50/30/20",
-    "tip5030Body": "Asigna el 50% a lo esencial, el 30% a gastos flexibles y el 20% a ahorros e inversiones.",
-    "tipAutomateBadge": "consejo",
-    "tipAutomateTitle": "Automatiza el Ahorro",
-    "tipAutomateBody": "Configura transferencias automáticas a tus cuentas de plan de vida el día de cobro para ahorrar antes de gastar.",
-    "tipReviewBadge": "mentalidad",
-    "tipReviewTitle": "Revisa Mensualmente",
-    "tipReviewBody": "Revisa tus planes una vez al mes para mantenerte en el camino y ajusta las contribuciones cuando cambien tus ingresos.",
     "committedFutureTitle": "Lo que ya está comprometido",
     "committedFutureSubtitle": "El {{pct}}% de tu próximo cobro ya está destinado a deudas",
     "viewDebts": "Ver deudas",
@@ -209,7 +186,39 @@
       "warning": "Casi todo lo que entra ya tiene destino: te quedan {{amount}}.",
       "over": "Presupuestas {{amount}} más de lo que ingresas."
     },
-    "budgetedNoIncome": "Tienes presupuestado {{amount}} pero no hay ingresos registrados."
+    "budgetedNoIncome": "Tienes presupuestado {{amount}} pero no hay ingresos registrados.",
+    "monthTitle": "Tu mes",
+    "paidYourselfLabel": "Te has pagado",
+    "paidYourselfOf": "de {{goal}} este mes · tu {{pct}} %",
+    "paidYourselfNoGoal": "Elige qué porcentaje de lo que entra te pagas a ti primero.",
+    "paidYourselfNoIncome": "Añade tus ingresos para calcular cuánto es tu {{pct}} %.",
+    "choosePct": "Elegir mi %",
+    "changePct": "Cambiar %",
+    "setAside": "Apartar en un plan",
+    "payFirstSheetTitle": "Págate a ti primero",
+    "payFirstSaved": "Guardado: te pagas el {{pct}} %",
+    "close": "Cerrar",
+    "light": {
+      "label": "Cómo va el mes",
+      "word": {
+        "good": "Vas bien",
+        "tight": "Vas justo",
+        "over": "Te has pasado",
+        "neutral": "Sin datos aún"
+      },
+      "noBudget": "Haz tu presupuesto para ver cómo va el mes.",
+      "overBudget": "{{amount}} por encima de lo presupuestado.",
+      "goalMissed": "El mes terminó sin apartar {{amount}} de tu %.",
+      "nearBudget": "Cerca del límite: quedan {{amount}} del presupuesto.",
+      "goalPending": "El gasto va bien. Te falta pagarte {{amount}}.",
+      "goalMet": "Gasto en orden y ya te has pagado tu %.",
+      "onTrack": "El gasto va dentro del presupuesto.",
+      "categoriesExceeded_one": "{{count}} partida se ha pasado de su presupuesto.",
+      "categoriesExceeded_other": "{{count}} partidas se han pasado de su presupuesto."
+    },
+    "plansCompleted": "{{done}} de {{total}} planes completados",
+    "generosityLabel": "Generosidad",
+    "gives": "Das {{amount}} al mes"
   },
   "dashboard": {
     "title": "Tus planes",
@@ -1265,17 +1274,17 @@
     "continue": "Continuar",
     "cancel": "Cancelar",
     "welcome": {
-      "badge": "Nuevo · Claridad financiera",
-      "titlePrefix": "Toma el control de tu",
-      "titleHighlight": "futuro financiero",
-      "subtitle": "En unos pasos vamos a conocer tu situación real — ingresos, ahorro y deudas — para que tu presupuesto empiece desde donde estás de verdad, no desde cero.",
-      "start": "Empezar tu camino",
-      "card1Title": "Análisis de ingresos",
-      "card1Desc": "Mapea tu propio ingreso, y el de tu hogar si compartes gastos con tu pareja.",
-      "card2Title": "Resumen de ahorros",
-      "card2Desc": "Registra lo que ya has ahorrado e invertido, de forma segura.",
-      "card3Title": "Clasificación de deudas",
-      "card3Desc": "Organiza tus deudas para ver con qué estás realmente comprometido cada mes."
+      "badge": "Tu dinero, en calma",
+      "titlePrefix": "Deja de llegar justo a fin de mes y empieza a",
+      "titleHighlight": "ahorrar cada mes",
+      "subtitle": "En unos minutos vemos a dónde va tu dinero —lo que entra, lo que sale, lo que ya tienes ahorrado y, si las tienes, tus deudas— para que tu presupuesto empiece desde donde estás de verdad.",
+      "start": "Empezar",
+      "card1Title": "Lo que entra",
+      "card1Desc": "Tu ingreso, y el de tu hogar si compartís gastos con tu pareja.",
+      "card2Title": "Lo que sale",
+      "card2Desc": "Un presupuesto donde cada euro tiene un destino: lo fijo, lo variable y lo que ya está comprometido.",
+      "card3Title": "Lo que te quedas",
+      "card3Desc": "Un fondo de emergencia y un porcentaje que te pagas a ti primero, el que tú elijas."
     },
     "income": {
       "title": "Configura tu ingreso",
@@ -1311,23 +1320,52 @@
     },
     "result": {
       "title": "Tu punto de partida",
-      "subtitle": "Sin adornos. Ahora puedes verlo, y eso es lo que hace posible cambiarlo.",
-      "committedFuture": "Futuro comprometido",
       "committedOf": "{{committed}} de tus {{income}} ya van a deudas este mes, antes de gastar nada.",
       "pct": "{{value}} %",
-      "missingIncome": "Añade tus ingresos para ver cuánto de tu futuro ya está comprometido.",
       "totalOwed": "Deuda total",
       "freedomDate": "Fecha de libertad",
       "freedomNone": "Sin deuda de consumo",
-      "leftover": "Lo que sobra",
-      "leftoverDesc": "Tras las deudas y tus gastos fijos y variables.",
-      "leftoverNegative": "Tu plan gasta más de lo que entra: revisa primero los gastos variables.",
       "attackOrder": "Orden para saldar tus deudas (la más pequeña primero)",
       "monthN": "mes {{n}}",
       "unnamedDebt": "Deuda",
       "loadFailed": "No se pudo calcular el resultado",
-      "goToDashboard": "Ir a mi panel",
-      "freedomNever": "Con estos pagos la deuda no se salda nunca: sube el pago."
+      "goToDashboard": "Ir a mi inicio",
+      "freedomNever": "Con estos pagos la deuda no se salda nunca: sube el pago.",
+      "earn": "Ganas {{income}} al mes.",
+      "couldSaveLabel": "Cada mes podrías ahorrar",
+      "couldSaveIf": "si mantienes el presupuesto que acabas de hacer.",
+      "noRoom": "Ganas {{income}} al mes y tu presupuesto ya lo reparte todo. Si recortas un poco los gastos variables, podrás empezar a apartar algo cada mes.",
+      "overspent": "Ganas {{income}} al mes y tu presupuesto reparte {{amount}} más de lo que entra. Revisa primero los gastos variables: así podrás empezar a ahorrar.",
+      "noIncome": "Añade tus ingresos para ver cuánto podrías ahorrar cada mes.",
+      "committedFutureLabel": "Futuro comprometido",
+      "committedNone": "Nada de lo que ganas va a deudas.",
+      "debtTitle": "Tus deudas",
+      "firstGoalsTitle": "Tus primeras metas",
+      "firstGoalsSubtitle": "Dos hábitos que sirven sigas el método que sigas. Tú decides las cifras.",
+      "emergency": {
+        "title": "Fondo de emergencia",
+        "desc": "Un colchón para los imprevistos. Te sugerimos 3 meses de tus gastos ({{monthly}} al mes); pon la cantidad que quieras.",
+        "targetLabel": "Tu meta",
+        "startLabel": "Empiezas con",
+        "savedHint": "Ya tienes {{amount}} ahorrado: puedes empezar el fondo con ese dinero. Tenlo separado del dinero del día a día, en un lugar seguro; por ejemplo, una cuenta remunerada.",
+        "separateHint": "Cuando empieces a apartar, tenlo separado del dinero del día a día, en un lugar seguro; por ejemplo, una cuenta remunerada.",
+        "create": "Crear mi fondo de emergencia",
+        "created": "Fondo de emergencia creado",
+        "createFailed": "No se ha podido crear el plan. Inténtalo de nuevo.",
+        "targetRequired": "Pon una meta mayor que 0.",
+        "already": "Ya tienes un fondo de emergencia en tus planes.",
+        "planTitle": "Fondo de emergencia"
+      },
+      "payFirst": {
+        "title": "Págate a ti primero",
+        "desc": "El día que cobras, aparta primero un porcentaje fijo para ti y vive con el resto. Elige el tuyo; puedes cambiarlo cuando quieras.",
+        "amount": "Tu {{pct}} % son {{amount}} al mes.",
+        "noRoom": "Hoy tu presupuesto deja {{leftover}} libres: para llegar a tu %, tendrás que hacerle sitio.",
+        "saved": "Guardado",
+        "saveFailed": "No se ha podido guardar. Inténtalo de nuevo."
+      },
+      "generosityLabel": "Generosidad",
+      "givesNothing": "Ahora no reservas nada para dar."
     },
     "bank": {
       "title": "Tu cuenta del banco",
@@ -1349,7 +1387,9 @@
       "noCards": "¿No tienes tarjetas de crédito?",
       "createdOk": "Tarjeta añadida",
       "noCardsButton": "No tengo tarjetas de crédito",
-      "noCardsAnswered": "Anotado: no tienes tarjetas de crédito. Pulsa Continuar."
+      "noCardsAnswered": "Anotado: no tienes tarjetas de crédito. Pulsa Continuar.",
+      "titleQuiet": "¿Tienes tarjetas de crédito?",
+      "subtitleQuiet": "Si tienes alguna, añádela para que sus compras cuenten. Si no, pulsa «No tengo» y sigue."
     },
     "loans": {
       "title": "Préstamos y cuotas",
@@ -1361,7 +1401,9 @@
       "owedLabel": "Pendiente",
       "note": "Incluye también la hipoteca: la tratamos distinto a una tarjeta o un préstamo de consumo, y no tendrás que añadirla como gasto fijo.",
       "noLoansButton": "No tengo préstamos ni cuotas",
-      "noLoansAnswered": "Anotado: no tienes préstamos ni cuotas. Pulsa Continuar."
+      "noLoansAnswered": "Anotado: no tienes préstamos ni cuotas. Pulsa Continuar.",
+      "titleQuiet": "¿Pagas algo a plazos?",
+      "subtitleQuiet": "Coche, hipoteca, compras a plazos… Si no pagas nada en cuotas, pulsa «No tengo» y sigue."
     },
     "lines": {
       "income": "Ingreso",
@@ -1394,7 +1436,7 @@
     },
     "setup": {
       "title": "Completa tu configuración",
-      "subtitle": "Te falta esto para ver tu futuro comprometido completo:",
+      "subtitle": "Te falta esto para tener tu presupuesto completo:",
       "dismiss": "Ocultar",
       "complete": "Completar",
       "items": {
@@ -1411,7 +1453,46 @@
       }
     },
     "undo": "Deshacer",
-    "answerFailed": "No se ha podido guardar. Inténtalo de nuevo."
+    "answerFailed": "No se ha podido guardar. Inténtalo de nuevo.",
+    "goal": {
+      "title": "¿Qué quieres conseguir?",
+      "subtitle": "Elige lo que más te importa ahora. Lo demás también podrás hacerlo.",
+      "saveFailed": "No se ha podido guardar tu respuesta. Inténtalo de nuevo.",
+      "options": {
+        "steady": {
+          "title": "Ahorrar cada mes",
+          "desc": "Dejar de llegar justo y que sobre algo, de forma constante."
+        },
+        "emergency": {
+          "title": "Tener un colchón",
+          "desc": "Un fondo de emergencia para los imprevistos."
+        },
+        "debt": {
+          "title": "Salir de deudas",
+          "desc": "Terminar de pagar tarjetas, cuotas y préstamos."
+        },
+        "invest": {
+          "title": "Ahorrar para invertir",
+          "desc": "Apartar cada mes para invertirlo donde tú decidas."
+        }
+      }
+    },
+    "percent": {
+      "example": "{{pct}} %",
+      "other": "Otro",
+      "customLabel": "Tu porcentaje",
+      "invalid": "Pon un porcentaje entre 0 y 100."
+    },
+    "generosity": {
+      "title": "¿Quieres reservar una parte para dar?",
+      "subtitle": "Un porcentaje de lo que entra en tu hogar, para dar donde tú quieras.",
+      "desc": "Es la primera línea de tu presupuesto. Es opcional: elige el porcentaje que quieras, o «Ahora no», y cámbialo cuando quieras. Si vuestros ingresos cambian, se mantiene el mismo porcentaje.",
+      "notNow": "Ahora no",
+      "gives": "Das {{amount}} al mes.",
+      "givesNothing": "Por ahora no reservas nada para dar. Puedes cambiarlo cuando quieras.",
+      "noIncome": "Cuando añadas tus ingresos, calcularemos cuánto es.",
+      "saveFailed": "No se ha podido guardar. Inténtalo de nuevo."
+    }
   },
   "currency": {
     "symbol": "€",

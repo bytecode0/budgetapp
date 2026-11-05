@@ -77,6 +77,19 @@ model UserSettings {
   // shows again, on any device (Accounts still offers connecting). Per real
   // person (authUserId), not per pool. server/lib/banking/prompt.ts
   bankPromptDismissedAt DateTime?
+  // Onboarding (LPBETA-07/10), all on the POOL's row (req.userId), like the
+  // income baseline they are measured against. Percentages are basis points
+  // (1000 = 10 %), integers like every amount. Null = never chosen.
+  // onboardingGoal: the opening question — "steady" | "emergency" | "debt" | "invest".
+  onboardingGoal      String?
+  // "Págate a ti primero": the share of the household's income to set aside on payday.
+  payYourselfFirstBps Int?
+  // When that share was chosen or last changed: months that ended before it
+  // are not judged by it (shared/incomeShare.ts monthLight).
+  payYourselfFirstSetAt DateTime?
+  // The Generosity line's share of the household's income; its amount follows
+  // the income. Null = a fixed amount typed on the budget (server/lib/generosity.ts).
+  generosityBps       Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

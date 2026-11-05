@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  deriveOnboardingStatus, isUntouchedDefaultAccount, computeOnboardingResult, DEFAULT_ACCOUNT_NAME,
+  deriveOnboardingStatus, isUntouchedDefaultAccount, computeOnboardingResult, DEFAULT_ACCOUNT_NAME, parseOnboardingGoal,
   type StatusInput, type StatusAccount, type ResultDebt,
 } from "./onboarding.js";
 import { owedNow, startingBalanceFor, type LedgerDebt } from "./debtBalance.js";
@@ -22,6 +22,7 @@ const fresh: StatusInput = {
   allocations: [{ type: "fixed", allocatedAmount: 0 }, { type: "flexible", allocatedAmount: 0 }],
   noCards: false,
   noLoans: false,
+  goal: null,
 };
 
 test("a brand-new user needs the onboarding and is missing every step", () => {
@@ -66,7 +67,7 @@ test("answering \"no cards\" / \"no loans\" marks those steps done", () => {
   assert.equal(s.checklist.hasCards, true);
   assert.equal(s.checklist.hasDebts, false);
   assert.deepEqual(s.missing, ["income", "bank", "loans", "fixed"]);
-  assert.deepEqual(s.answers, { noCards: true, noLoans: false });
+  assert.deepEqual(s.answers, { noCards: true, noLoans: false, goal: null });
   const both = deriveOnboardingStatus({ ...fresh, noCards: true, noLoans: true });
   assert.deepEqual(both.missing, ["income", "bank", "fixed"]);
   // An answer means the user went through the wizard: no full wizard again.
@@ -181,6 +182,43 @@ test("plan §3.3: futuro comprometido = (300 + 50) / 2000 = 17.5 %", () => {
   assert.deepEqual(r.payoffOrder.map(p => p.name).sort(), ["Klarna", "PASS"]);
 });
 
+test("emergency fund: 3 months of debt payments and expense lines, never saving or giving", () => {
+  const r = computeOnboardingResult({
+    debts: [pass, klarna],
+    monthlyIncome: 200000,
+    cycleStartDay: 1,
+    allocations: [
+      { type: "debt", allocatedAmount: 30000 },
+      { type: "debt", allocatedAmount: 5000 },
+      { type: "fixed", allocatedAmount: 70000 },
+      { type: "flexible", allocatedAmount: 30000 },
+      { type: "plan", allocatedAmount: 20000 },       // saving: not an expense
+      { type: "generosity", allocatedAmount: 10000 }, // giving: not an expense
+    ],
+    savedSoFar: 150000,
+    hasEmergencyPlan: false,
+    payYourselfFirstBps: 1000,
+    goal: "emergency",
+  });
+  // 350 debt + 700 + 300 = 1,350 a month → 4,050.
+  assert.equal(r.monthlyExpenses, 135000);
+  assert.equal(r.emergencyFundSuggested, 405000);
+  assert.equal(r.savedSoFar, 150000);
+  assert.equal(r.payYourselfFirstBps, 1000);
+  assert.equal(r.goal, "emergency");
+  // The plan and generosity lines are still budgeted money.
+  assert.equal(r.leftover, 200000 - 35000 - 130000);
+});
+
+test("the result's goal fields default to nothing chosen", () => {
+  const r = computeOnboardingResult({ debts: [], monthlyIncome: 0, cycleStartDay: 1, allocations: [] });
+  assert.equal(r.emergencyFundSuggested, 0);
+  assert.equal(r.savedSoFar, 0);
+  assert.equal(r.hasEmergencyPlan, false);
+  assert.equal(r.payYourselfFirstBps, null);
+  assert.equal(r.goal, null);
+});
+
 test("an installment plan entered with only its cuota still owes its remaining cuotas", () => {
   const noBalance = created({ id: "k", kind: "bnpl", installmentAmount: 5000, installmentsTotal: 6, installmentsPaid: 2 }, "Klarna");
   const r = computeOnboardingResult({ debts: [noBalance], monthlyIncome: 200000, cycleStartDay: 1, allocations: [] });
@@ -258,4 +296,13 @@ test("no consumer debt: the flag is off", () => {
   const r = computeOnboardingResult({ debts: [], monthlyIncome: 200000, cycleStartDay: 1, allocations: [] });
   assert.equal(r.hasConsumerDebt, false);
   assert.equal(r.freedomMonths, null);
+});
+
+test("the opening goal: only the four known answers are kept", () => {
+  assert.equal(parseOnboardingGoal("debt"), "debt");
+  assert.equal(parseOnboardingGoal("invest"), "invest");
+  assert.equal(parseOnboardingGoal("lottery"), null);
+  assert.equal(parseOnboardingGoal(null), null);
+  assert.equal(deriveOnboardingStatus({ ...fresh, goal: "steady" }).answers.goal, "steady");
+  assert.equal(deriveOnboardingStatus({ ...fresh, goal: "junk" }).answers.goal, null);
 });

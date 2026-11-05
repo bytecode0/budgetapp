@@ -7,6 +7,7 @@ import { ALLOCATION_NOT_FOUND, allocationsInPool, hiddenCommitted, hiddenLineIds
 import { countedAmounts, debtCommitments } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { householdBaselineIncome, householdMonthIncome } from "../lib/householdIncome.js";
+import { GENEROSITY_TYPE, applyGenerosity, generosityBps, generosityForMonth, householdIncomeFor } from "../lib/generosity.js";
 
 export const monthlyBudgetsRouter = Router();
 
@@ -41,10 +42,16 @@ monthlyBudgetsRouter.get("/", requireAuth, async (req: AuthRequest, res: Respons
 
     // If nothing saved, fall back to current allocation settings
     if (saved.length === 0) {
-      const allocations = await prisma.allocation.findMany({
-        where: { userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
-        orderBy: { sortOrder: "asc" },
-      });
+      // A Generosity line with a share: that share of THIS month's household
+      // income (server/lib/generosity.ts). It has no debt, so it is never hidden.
+      const [stored, bps] = await Promise.all([
+        prisma.allocation.findMany({
+          where: { userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
+          orderBy: { sortOrder: "asc" },
+        }),
+        generosityBps(req.userId!),
+      ]);
+      const allocations = applyGenerosity(stored, bps, bps === null ? 0 : await householdIncomeFor(req.userId!, periodBounds(month, cycleStartDay)));
       return res.json({ ...serializeMoney({
         budgets: allocations.map(a => ({
           allocationId: a.id,
@@ -56,7 +63,21 @@ monthlyBudgetsRouter.get("/", requireAuth, async (req: AuthRequest, res: Respons
       }), hiddenCommitted: hiddenCommittedEuros });
     }
 
-    return res.json({ ...serializeMoney({ budgets: saved.filter(b => !hidden.has(b.allocationId)).map(b => ({ ...b, saved: true })) }), hiddenCommitted: hiddenCommittedEuros });
+    // A saved month without a row for the Generosity line: its amount for
+    // that month as the review and Home count it (the share of that month's
+    // income, else the line's fixed amount), so every screen agrees. The
+    // Generosity line has no debt, so it is never one of the hidden lines.
+    const budgets: unknown[] = saved.filter(b => !hidden.has(b.allocationId)).map(b => ({ ...b, saved: true }));
+    const generosityLine = await prisma.allocation.findFirst({
+      where: { userId: req.userId!, type: GENEROSITY_TYPE, ...notOnHiddenDebt(req.authUserId!) },
+      select: { id: true, name: true, icon: true, type: true, sortOrder: true },
+      orderBy: { sortOrder: "asc" },
+    });
+    if (generosityLine && !saved.some(b => b.allocationId === generosityLine.id)) {
+      const { amount } = await generosityForMonth(req.userId!, month, periodBounds(month, cycleStartDay));
+      budgets.push({ allocationId: generosityLine.id, month, allocatedAmount: amount, allocation: generosityLine, saved: false });
+    }
+    return res.json({ ...serializeMoney({ budgets }), hiddenCommitted: hiddenCommittedEuros });
   } catch (err) {
     console.error("[monthly-budgets/GET]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -127,7 +148,7 @@ monthlyBudgetsRouter.get("/review", requireAuth, async (req: AuthRequest, res: R
       where: { userId: req.userId!, month },
     });
 
-    const allocations = await prisma.allocation.findMany({
+    const storedAllocations = await prisma.allocation.findMany({
       where: { userId: req.userId! },
       orderBy: { sortOrder: "asc" },
     });
@@ -159,6 +180,17 @@ monthlyBudgetsRouter.get("/review", requireAuth, async (req: AuthRequest, res: R
       budgetMap[b.allocationId] = b.allocatedAmount;
     }
 
+    // The household's income for the month, over the whole pool (not the
+    // viewer-filtered /api/income list): what Home compares the budget with,
+    // and what a Generosity share is a share of (server/lib/generosity.ts).
+    const [recorded, baseline, bps] = await Promise.all([
+      prisma.income.findMany({ where: { userId: req.userId!, date: { gte: monthStart, lt: monthEnd } }, select: { amount: true } }),
+      householdBaselineIncome(req.userId!),
+      generosityBps(req.userId!),
+    ]);
+    const income = householdMonthIncome(recorded.map(i => i.amount), baseline);
+    const allocations = applyGenerosity(storedAllocations, bps, income.cents);
+
     const review = allocations.map(a => {
       const fallback = a.type === "debt" && a.debtId ? commitments.get(a.debtId) ?? a.allocatedAmount : a.allocatedAmount;
       const budgeted = budgetMap[a.id] ?? fallback;
@@ -174,14 +206,6 @@ monthlyBudgetsRouter.get("/review", requireAuth, async (req: AuthRequest, res: R
         hasSavedBudget: !!budgetMap[a.id],
       };
     });
-
-    // The household's income for the month, over the whole pool (not the
-    // viewer-filtered /api/income list): what Home compares the budget with.
-    const [recorded, baseline] = await Promise.all([
-      prisma.income.findMany({ where: { userId: req.userId!, date: { gte: monthStart, lt: monthEnd } }, select: { amount: true } }),
-      householdBaselineIncome(req.userId!),
-    ]);
-    const income = householdMonthIncome(recorded.map(i => i.amount), baseline);
 
     const unassigned    = actualByAllocation["__unassigned__"] ?? 0;
     // Totals over every line; the line of a debt hidden from the caller still

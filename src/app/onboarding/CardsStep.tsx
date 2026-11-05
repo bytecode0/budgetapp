@@ -11,7 +11,12 @@ import { NoneAnswer } from './NoneAnswer';
 
 // Credit cards, exactly as in Accounts: a card is an account (type "card") and
 // the server creates its debt and budget line behind it (server/lib/cardDebt.ts).
-export function CardsStep() {
+interface CardsStepProps {
+  /** Debt isn't the user's goal: offer "No tengo" first (LPBETA-07). */
+  quiet?: boolean;
+}
+
+export function CardsStep({ quiet = false }: CardsStepProps) {
   const { t } = useTranslation();
   const { fmt } = useMoney();
   const { accounts, createAccount, deleteAccount } = useAccounts();
@@ -47,8 +52,18 @@ export function CardsStep() {
     if (result.error) toast.error(apiErrorMessage(t, result));
   };
 
+  const noneAnswer = cards.length === 0 && !adding && (
+    <NoneAnswer
+      answer="noCards"
+      hintKey="onboarding.cards.noCards"
+      buttonKey="onboarding.cards.noCardsButton"
+      answeredKey="onboarding.cards.noCardsAnswered"
+    />
+  );
+
   return (
     <div>
+      {quiet && <div className="mb-6">{noneAnswer}</div>}
       <div className="space-y-3 mb-4">
         {cards.map(a => (
           <div key={a.id} className="bg-card p-5 rounded-2xl border border-border flex items-center gap-4">
@@ -108,14 +123,7 @@ export function CardsStep() {
         </button>
       )}
 
-      {cards.length === 0 && !adding && (
-        <NoneAnswer
-          answer="noCards"
-          hintKey="onboarding.cards.noCards"
-          buttonKey="onboarding.cards.noCardsButton"
-          answeredKey="onboarding.cards.noCardsAnswered"
-        />
-      )}
+      {!quiet && noneAnswer}
     </div>
   );
 }

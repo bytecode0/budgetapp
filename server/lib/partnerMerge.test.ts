@@ -44,6 +44,18 @@ test("untouched default lines merge into the pool's matching line instead of dup
   assert.deepEqual([...plan.allocationRemap], [["m-fixed", "p-fixed"], ["m-flex", "p-flex"]]);
 });
 
+test("her Generosity line always merges into the pool's one, even if she used it", () => {
+  const gen = line({ id: "m-gen", name: "Generosidad", type: "generosity", isDefault: false, allocatedAmount: 5000, hasBudgetedMonth: true });
+  const plan = planPoolMerge({
+    ...base,
+    memberAllocations: [gen],
+    poolAllocations: [...base.poolAllocations, { id: "p-gen", type: "generosity", isDefault: false }],
+  });
+  assert.deepEqual([...plan.allocationRemap], [["m-gen", "p-gen"]]);
+  // A pool without one: hers moves and becomes the pool's.
+  assert.equal(planPoolMerge({ ...base, memberAllocations: [gen] }).allocationRemap.size, 0);
+});
+
 test("a line she configured is kept (moved), not merged", () => {
   const plan = planPoolMerge({
     ...base,

@@ -25,8 +25,8 @@ export function NoneAnswer({ answer, hintKey, buttonKey, answeredKey }: NoneAnsw
 
   if (answered) {
     return (
-      <div className="mt-6 bg-emerald-50 dark:bg-emerald-950/20 border-2 border-emerald-200 dark:border-emerald-800 rounded-2xl p-5 flex items-center gap-3 text-sm">
-        <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+      <div className="mt-6 bg-reed-soft text-reed rounded-2xl p-5 flex items-center gap-3 text-sm">
+        <Check className="w-4 h-4 shrink-0" />
         <p className="flex-1">{t(answeredKey)}</p>
         <button
           onClick={() => toggle(false)}

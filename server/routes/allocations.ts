@@ -9,6 +9,8 @@ import { debtCommitments } from "../lib/debtBalance.js";
 import { incomeBaselines } from "../lib/householdIncome.js";
 import { visibleToWhere } from "../lib/ownership.js";
 import { hiddenCommitted, notOnHiddenDebt } from "../lib/poolRefs.js";
+import { getCycleStartDay } from "../lib/getCycleStartDay.js";
+import { GENEROSITY_TYPE, clearGenerosityShare, ensureGenerosityLine, isEchoedGenerosityShare, syncGenerosity } from "../lib/generosity.js";
 
 export const allocationsRouter = Router();
 
@@ -17,6 +19,12 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
   try {
     // Ensure defaults exist for this user
     await createDefaultAllocations(req.userId!);
+    // Every budget has its Generosity line (LPBETA-10): created at 0 for
+    // users from before it, and with a share set its amount follows this
+    // period's household income (server/lib/generosity.ts).
+    await ensureGenerosityLine(req.userId!);
+    const poolCycle = await getCycleStartDay(req.userId!);
+    const generosity = await syncGenerosity(req.userId!, periodBounds(currentPeriodKey(poolCycle), poolCycle));
 
     const [allocations, settings, baselines] = await Promise.all([
       // Not the line of a debt hidden from the caller (server/lib/poolRefs.ts).
@@ -45,6 +53,7 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
         : a);
 
     // The lines left out above, as one figure (euros) for the client totals.
+    // Never the Generosity line: it has no debt, so it is never hidden.
     const hidden = await hiddenCommitted(req.userId!, req.authUserId!, commitments);
 
     return res.json({
@@ -54,6 +63,7 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
         darkMode: ownSettings?.darkMode ?? false,
         language: ownSettings?.language ?? 'es',
         cycleStartDay: settings?.cycleStartDay ?? 1,
+        generosityBps: generosity.bps, // null: the line holds a fixed amount
       }),
       hiddenCommitted: toEuros(hidden),
     });
@@ -69,6 +79,8 @@ allocationsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response)
     const { name, icon, type, allocatedAmount, actualAmount, lifePlanId, debtId } = req.body;
 
     if (!name) return res.status(400).json({ error: "Name is required" });
+    // The budget's one Generosity line already exists (server/lib/generosity.ts).
+    if (type === GENEROSITY_TYPE) return res.status(400).json({ error: "La línea de generosidad ya existe" });
 
     // Validate lifePlanId belongs to user if provided
     if (lifePlanId) {
@@ -194,8 +206,10 @@ allocationsRouter.patch("/budgets", requireAuth, async (req: AuthRequest, res: R
     );
     if (valid.length === 0) return res.status(400).json({ error: "No valid budgets" });
 
+    // The Generosity line is never set in batch (it is a share the user
+    // chose, not a spending suggestion): it is skipped.
     const owned = await prisma.allocation.findMany({
-      where: { id: { in: valid.map(b => b.id!) }, userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
+      where: { id: { in: valid.map(b => b.id!) }, userId: req.userId!, type: { not: GENEROSITY_TYPE }, ...notOnHiddenDebt(req.authUserId!) },
       select: { id: true },
     });
     const ownedIds = new Set(owned.map(a => a.id));
@@ -225,7 +239,8 @@ allocationsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respo
     const existing = await prisma.allocation.findFirst({ where: { id, userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) } });
     if (!existing) return res.status(404).json({ error: "Allocation not found" });
 
-    const { name, icon, type, allocatedAmount, actualAmount, sortOrder, lifePlanId } = req.body;
+    const { name, icon, type, actualAmount, sortOrder, lifePlanId, month } = req.body;
+    let { allocatedAmount } = req.body;
 
     // Validate lifePlanId if provided
     if (lifePlanId) {
@@ -238,6 +253,21 @@ allocationsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respo
     // it isn't independently editable, to avoid it drifting from the real cuota.
     if (existing.type === "debt" && allocatedAmount !== undefined) {
       return res.status(400).json({ error: "El importe de una línea de deuda se edita desde la deuda vinculada" });
+    }
+
+    // Generosity stays a Generosity line, and no other line becomes one
+    // (Método Ruta R1: it could then be deleted, or there'd be two).
+    if (type !== undefined && type !== existing.type && (existing.type === GENEROSITY_TYPE || type === GENEROSITY_TYPE)) {
+      return res.status(400).json({ error: "El tipo de la línea de generosidad no se puede cambiar" });
+    }
+
+    // The Generosity line with a share: its own derived amount sent back is
+    // ignored; a different amount is typed by the user and replaces the share.
+    let generosityTyped = false;
+    if (existing.type === GENEROSITY_TYPE && allocatedAmount !== undefined) {
+      const { hasShare, echoed } = await isEchoedGenerosityShare(req.userId!, toCents(allocatedAmount), typeof month === "string" ? month : undefined);
+      if (echoed) allocatedAmount = undefined;
+      else generosityTyped = hasShare;
     }
 
     const newType = type ?? existing.type;
@@ -257,6 +287,7 @@ allocationsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respo
         ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
       },
     });
+    if (generosityTyped) await clearGenerosityShare(req.userId!);
 
     return res.json(serializeMoney({ allocation }));
   } catch (err) {

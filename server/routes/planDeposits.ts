@@ -2,6 +2,7 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { toCents, serializeMoney } from "../lib/money.js";
+import { withPlanContributions } from "../lib/planLedger.js";
 
 export const planDepositsRouter = Router();
 
@@ -25,7 +26,9 @@ planDepositsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response)
 });
 
 // POST /api/plan-deposits/confirm
-// Batch upsert deposits for a month, then recalculate currentAmount for each plan
+// Batch upsert deposits for a month (each the month's total for its plan); each
+// plan's currentAmount moves by the change in its month contribution
+// (server/lib/planLedger.ts)
 planDepositsRouter.post("/confirm", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { month, deposits } = req.body as {
@@ -48,37 +51,29 @@ planDepositsRouter.post("/confirm", requireAuth, async (req: AuthRequest, res: R
       return res.status(403).json({ error: "One or more plans not found" });
     }
 
-    // Upsert each deposit
-    await Promise.all(
-      deposits.map(d =>
-        prisma.planDeposit.upsert({
-          where: { planId_month: { planId: d.planId, month } },
-          update: { amount: toCents(d.amount), note: d.note ?? "", byUserId: req.authUserId! },
-          create: {
-            userId: req.userId!,
-            byUserId: req.authUserId!,
-            planId: d.planId,
-            month,
-            amount: toCents(d.amount),
-            note: d.note ?? "",
-          },
-        })
-      )
-    );
-
-    // Recalculate currentAmount for each affected plan = sum of all deposits
-    await Promise.all(
-      planIds.map(async planId => {
-        const { _sum } = await prisma.planDeposit.aggregate({
-          where: { planId },
-          _sum: { amount: true },
-        });
-        await prisma.lifePlan.update({
-          where: { id: planId },
-          data: { currentAmount: _sum.amount ?? 0 },
-        });
-      })
-    );
+    // Upsert each deposit (the month's total for its plan). currentAmount
+    // moves by the change in the plan's month contribution, with the plans
+    // locked (server/lib/planLedger.ts): money already booked on the plan's
+    // line isn't counted twice, and the plan's starting amount and other
+    // contributions are never overwritten. The last entry wins when a plan
+    // appears twice.
+    if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: "month must be YYYY-MM" });
+    const byPlan = new Map(deposits.map(d => [d.planId, d]));
+    await prisma.$transaction(tx => withPlanContributions(
+      tx,
+      req.userId!,
+      [...byPlan.keys()].map(planId => ({ planId, month })),
+      async () => {
+        for (const d of byPlan.values()) {
+          const amount = toCents(d.amount);
+          await tx.planDeposit.upsert({
+            where: { planId_month: { planId: d.planId, month } },
+            update: { amount, note: d.note ?? "", byUserId: req.authUserId! },
+            create: { userId: req.userId!, byUserId: req.authUserId!, planId: d.planId, month, amount, note: d.note ?? "" },
+          });
+        }
+      },
+    ));
 
     // Return updated deposits with plan info
     const updated = await prisma.planDeposit.findMany({

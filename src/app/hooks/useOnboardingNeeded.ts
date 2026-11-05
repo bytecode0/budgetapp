@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-// Wizard steps by index — mirrors ONBOARDING_STEPS in server/lib/onboarding.ts.
+// Wizard steps in order — mirrors ONBOARDING_STEPS in server/lib/onboarding.ts.
 export const ONBOARDING_STEPS = [
-  'welcome', 'income', 'savings', 'bank', 'cards', 'loans', 'fixed', 'flexible', 'result',
+  'welcome', 'goal', 'income', 'savings', 'bank', 'cards', 'loans', 'generosity', 'fixed', 'flexible', 'result',
 ] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 
@@ -24,6 +24,52 @@ export async function setOnboardingAnswer(answer: OnboardingAnswer, value: boole
     return {};
   } catch {
     return { error: 'Failed to save' };
+  }
+}
+
+// The opening question (LPBETA-07) — mirrors ONBOARDING_GOALS on the server.
+export const ONBOARDING_GOALS = ['steady', 'emergency', 'debt', 'invest'] as const;
+export type OnboardingGoal = (typeof ONBOARDING_GOALS)[number];
+
+async function patchJson(url: string, body: unknown): Promise<{ data?: any; error?: string }> {
+  try {
+    const res = await fetch(url, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: typeof json.error === 'string' ? json.error : 'Failed to save' };
+    return { data: json.data };
+  } catch {
+    return { error: 'Failed to save' };
+  }
+}
+
+export function setOnboardingGoal(goal: OnboardingGoal | null) {
+  return patchJson('/api/onboarding/answers', { goal });
+}
+
+/** The Generosity line's share of the household's income, in percent (0 = "ahora no"). */
+export function setGenerosityPct(pct: number) {
+  return patchJson('/api/onboarding/preferences', { generosityPct: pct });
+}
+
+/** The "Págate a ti primero" share, in percent (null = not chosen). */
+export function setPayYourselfFirstPct(pct: number | null) {
+  return patchJson('/api/onboarding/preferences', { payYourselfFirstPct: pct });
+}
+
+/** The stored goal, read once from the status (null when unanswered or on error). */
+export async function fetchOnboardingGoal(): Promise<OnboardingGoal | null> {
+  try {
+    const res = await fetch('/api/onboarding/status', { credentials: 'include' });
+    if (!res.ok) return null;
+    const goal = (await res.json())?.data?.answers?.goal;
+    return (ONBOARDING_GOALS as readonly string[]).includes(goal) ? goal : null;
+  } catch {
+    return null;
   }
 }
 

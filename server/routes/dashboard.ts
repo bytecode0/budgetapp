@@ -1,14 +1,43 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
-import { toEuros } from "../lib/money.js";
+import { serializeMoney, toEuros } from "../lib/money.js";
 import { periodBounds } from "../lib/period.js";
 import { spentByPerson } from "../lib/personSpending.js";
 import { countedAmounts } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { hiddenLineIds } from "../lib/poolRefs.js";
+import { monthSavings } from "../lib/payYourselfFirst.js";
+import { generosityForMonth } from "../lib/generosity.js";
 
 export const dashboardRouter = Router();
+
+// GET /api/dashboard/month?month=YYYY-MM (LPBETA-07)
+// Home's top card: "Te has pagado X de Y este mes" — set aside for yourself
+// vs the "Págate a ti primero" share of the household's income
+// (server/lib/payYourselfFirst.ts) — and "Das X al mes", the Generosity
+// line's amount this month (LPBETA-10). Pool-level totals only.
+dashboardRouter.get("/month", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const month = typeof req.query.month === "string" ? req.query.month : "";
+    if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: "month is required (YYYY-MM)" });
+    const cycleStartDay = await getCycleStartDay(req.userId!);
+    const bounds = periodBounds(month, cycleStartDay);
+    const [savings, generosity] = await Promise.all([
+      monthSavings(req.userId!, month, bounds),
+      generosityForMonth(req.userId!, month, bounds),
+    ]);
+    return res.json({ data: serializeMoney({
+      month,
+      ...savings,
+      generosityAmount: generosity.amount,
+      generosityBps: generosity.bps,
+    }) });
+  } catch (err) {
+    console.error("[dashboard/month]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 // GET /api/dashboard/household?period=YYYY-MM (Epic H8)
 // Household-level aggregates: financial health, per-person breakdown and per-
