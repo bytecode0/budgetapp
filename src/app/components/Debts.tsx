@@ -4,7 +4,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, X, GripVertical, Pencil, Trash2, CheckCircle2, RotateCcw, Banknote,
-  CreditCard, Loader2, TrendingDown, Flame, Sunrise,
+  CreditCard, Loader2, TrendingDown, Flame, Sunrise, Route, ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -69,7 +69,7 @@ function DraggableRow({
   );
 }
 
-export function Debts() {
+export function Debts({ onOpenDebt, onOpenPlan }: { onOpenDebt: (id: string) => void; onOpenPlan: () => void }) {
   const { t } = useTranslation();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
@@ -194,6 +194,12 @@ export function Debts() {
             <GripVertical className="w-4 h-4" />
           </div>
         )}
+        {/* Tapping the debt opens its detail (LPBETA-02). */}
+        <button
+          onClick={() => onOpenDebt(d.id)}
+          title={t('debtDetail.open', { name: d.name })}
+          className="flex-1 min-w-0 flex items-center gap-4 text-left rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
         <div className="w-11 h-11 rounded-2xl bg-surface-sunk flex items-center justify-center text-muted-foreground shrink-0">
           <Icon className="w-5 h-5" />
         </div>
@@ -219,6 +225,8 @@ export function Debts() {
             </p>
           )}
         </div>
+        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+        </button>
         <div className="flex items-center gap-1 shrink-0">
           {d.status === 'active' && (
             <button onClick={() => openPay(d)} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-pool-soft transition-colors" title={t('debts.recordPayment')} aria-label={t('debts.recordPayment')}>
@@ -308,9 +316,14 @@ export function Debts() {
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           className="bg-card border border-border rounded-3xl p-6 space-y-5"
         >
-          <div>
-            <h2 className="text-xl font-display">{t('debts.payoffTitle')}</h2>
-            <p className="text-sm text-muted-foreground">{t('debts.payoffSubtitle')}</p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-display">{t('debts.payoffTitle')}</h2>
+              <p className="text-sm text-muted-foreground">{t('debts.payoffSubtitle')}</p>
+            </div>
+            <button onClick={onOpenPlan} className="px-4 py-2 border border-border rounded-xl hover:bg-muted transition-colors text-sm inline-flex items-center gap-2 shrink-0">
+              <Route className="w-4 h-4" />{t('payoffPlan.open')}
+            </button>
           </div>
 
           <div className="flex items-center gap-3">

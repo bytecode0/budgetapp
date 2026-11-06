@@ -14,6 +14,8 @@ import { PlanningSettings } from './components/PlanningSettings';
 import { Activity } from './components/Activity';
 import { Accounts } from './components/Accounts';
 import { Debts } from './components/Debts';
+import { DebtDetail } from './components/DebtDetail';
+import { PayoffPlan } from './components/PayoffPlan';
 import { FamilyDashboard } from './components/FamilyDashboard';
 import { AddExpense } from './components/AddExpense';
 import { DeletionBanner } from './components/DeletionBanner';
@@ -37,7 +39,7 @@ import { InstallHint } from './components/shared/InstallHint';
 import { markSignedIn } from './lib/installPrompt';
 import { takeBankReturn, type BankReturnScreen } from './components/banking/bankReturn';
 
-type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'household' | 'settings';
+type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'debt-detail' | 'payoff-plan' | 'household' | 'settings';
 
 // The partner invite token survives the full-page Google OAuth redirect in
 // sessionStorage (React state is wiped by it). Storage may be unavailable
@@ -85,6 +87,9 @@ function AppInner() {
     : t('sidebar.offTrack');
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [selectedDebtId, setSelectedDebtId] = useState<string | null>(null);
+  // The debt sub-screens keep "Deudas" highlighted in the navigation.
+  const navScreen: Screen = currentScreen === 'debt-detail' || currentScreen === 'payoff-plan' ? 'debts' : currentScreen;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
 
@@ -190,6 +195,11 @@ function AppInner() {
     { id: 'settings' as Screen,   label: t('nav.settings'),  icon: Settings },
   ];
 
+  const handleViewDebt = (debtId: string) => {
+    setSelectedDebtId(debtId);
+    setCurrentScreen('debt-detail');
+  };
+
   const handleViewPlan = (planId: string) => {
     setSelectedPlanId(planId);
     setCurrentScreen('plan-detail');
@@ -222,7 +232,15 @@ function AppInner() {
           />
         );
       case 'debts':
-        return <Debts />;
+        return <Debts onOpenDebt={handleViewDebt} onOpenPlan={() => setCurrentScreen('payoff-plan')} />;
+      case 'debt-detail':
+        return selectedDebtId ? (
+          <DebtDetail key={selectedDebtId} debtId={selectedDebtId} onBack={() => setCurrentScreen('debts')} onOpenPlan={() => setCurrentScreen('payoff-plan')} />
+        ) : (
+          <Debts onOpenDebt={handleViewDebt} onOpenPlan={() => setCurrentScreen('payoff-plan')} />
+        );
+      case 'payoff-plan':
+        return <PayoffPlan onBack={() => setCurrentScreen('debts')} onOpenDebt={handleViewDebt} />;
       case 'household':
         return <FamilyDashboard />;
       case 'settings':
@@ -375,7 +393,7 @@ function AppInner() {
                 </div>
                 {navigation.map((item) => {
                   const Icon = item.icon;
-                  const isActive = currentScreen === item.id;
+                  const isActive = navScreen === item.id;
                   return (
                     <button
                       key={item.id}
@@ -438,7 +456,7 @@ function AppInner() {
         <nav className="p-4 space-y-2">
           {navigation.map((item) => {
             const Icon = item.icon;
-            const isActive = currentScreen === item.id;
+            const isActive = navScreen === item.id;
             return (
               <motion.button
                 key={item.id}
