@@ -1226,6 +1226,10 @@
       "mortgage": "Mortgage",
       "other": "Other"
     },
+    "planSummary": "With {{method}}: debt-free in {{date}}, in {{months}}, with {{interest}} in interest.",
+    "planNeedsData": "Some of your debts are missing a figure the plan needs. Open it to see which.",
+    "planExcluded_one": "{{count}} debt is left out of the plan: a figure is missing or it's paid in full every month.",
+    "planExcluded_other": "{{count}} debts are left out of the plan: a figure is missing or they're paid in full every month.",
     "payoffTitle": "Payoff planner",
     "payoffSubtitle": "Compare two strategies for becoming debt-free.",
     "extraPaymentLabel": "Extra payment per period",
@@ -1233,11 +1237,6 @@
       "snowball": "Snowball",
       "avalanche": "Avalanche"
     },
-    "lessInterest": "Less interest",
-    "monthsToDebtFree": "months to debt-free",
-    "totalInterest": "Total interest",
-    "month": "month {{count}}",
-    "month_other": "month {{count}}",
     "paymentModeLabel": "How you pay it",
     "paymentMode": {
       "full": "In full at month end",
@@ -1952,6 +1951,12 @@
     "historyTitle": "Payments and purchases",
     "historyHint": "Paid counts from when the debt was added to the app.",
     "historyEmpty": "No payments or purchases on this debt yet.",
+    "errors": {
+      "invalid_amount": "Enter an amount of 0 or more (up to 100,000 a month and 10,000,000 one-off).",
+      "invalid_month": "The one-off payment has to fall in {{month}} or later.",
+      "invalid_method": "Pick snowball or avalanche.",
+      "generic": "This couldn't be worked out with these figures."
+    },
     "historyType": {
       "payment": "Payment",
       "purchase": "Purchase",

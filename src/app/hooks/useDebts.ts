@@ -85,14 +85,6 @@ export interface TimelinePeriod {
 }
 
 export type PayoffMethod = 'snowball' | 'avalanche';
-export interface PayoffOrderEntry { id: string; name: string | null; monthPaidOff: number }
-export interface PayoffSummary {
-  method: PayoffMethod;
-  months: number;
-  totalInterestPaid: number; // euros
-  totalPaid: number; // euros
-  payoffOrder: PayoffOrderEntry[];
-}
 
 export function useDebts() {
   const [debts, setDebts] = useState<Debt[]>([]);
@@ -204,20 +196,8 @@ export function useDebts() {
     return result;
   };
 
-  const fetchPayoff = async (extra = 0, scope?: 'consumer'): Promise<{ snowball: PayoffSummary | null; avalanche: PayoffSummary | null } | null> => {
-    try {
-      const params = new URLSearchParams({ extra: String(extra) });
-      if (scope) params.set('scope', scope);
-      const res = await fetch(`/api/debts/payoff?${params}`, { credentials: 'include' });
-      if (!res.ok) return null;
-      return await res.json();
-    } catch {
-      return null;
-    }
-  };
-
   return {
     debts, totalOwed, totalMinimums, timeline, loading, error,
-    fetchDebts, createDebt, updateDebt, deleteDebt, reorderDebts, fetchTimeline, fetchPayoff, recordPayment,
+    fetchDebts, createDebt, updateDebt, deleteDebt, reorderDebts, fetchTimeline, recordPayment,
   };
 }

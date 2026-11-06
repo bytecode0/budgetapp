@@ -1226,6 +1226,10 @@
       "mortgage": "Hipoteca",
       "other": "Otro"
     },
+    "planSummary": "Con {{method}}: sin deudas en {{date}}, en {{months}}, con {{interest}} de intereses.",
+    "planNeedsData": "Para calcular el plan falta algún dato en tus deudas. Ábrelo para ver cuál.",
+    "planExcluded_one": "{{count}} deuda queda fuera del plan: falta un dato o se paga entera cada mes.",
+    "planExcluded_other": "{{count}} deudas quedan fuera del plan: falta un dato o se pagan enteras cada mes.",
     "payoffTitle": "Plan de pago",
     "payoffSubtitle": "Compara dos estrategias para quedarte sin deudas.",
     "extraPaymentLabel": "Pago extra por período",
@@ -1233,11 +1237,6 @@
       "snowball": "Bola de nieve",
       "avalanche": "Avalancha"
     },
-    "lessInterest": "Menos interés",
-    "monthsToDebtFree": "meses para estar libre de deudas",
-    "totalInterest": "Interés total",
-    "month": "mes {{count}}",
-    "month_other": "mes {{count}}",
     "paymentModeLabel": "Cómo la pagas",
     "paymentMode": {
       "full": "Contado a fin de mes",
@@ -1952,6 +1951,12 @@
     "historyTitle": "Pagos y compras",
     "historyHint": "Lo pagado cuenta desde que la deuda está en la app.",
     "historyEmpty": "Aún no hay pagos ni compras en esta deuda.",
+    "errors": {
+      "invalid_amount": "Escribe una cantidad de 0 o más (hasta 100.000 al mes y 10.000.000 de pago único).",
+      "invalid_month": "El pago único tiene que caer de {{month}} en adelante.",
+      "invalid_method": "Elige bola de nieve o avalancha.",
+      "generic": "No se ha podido calcular con estos datos."
+    },
     "historyType": {
       "payment": "Pago",
       "purchase": "Compra",

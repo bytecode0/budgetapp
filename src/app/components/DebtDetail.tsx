@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  ArrowLeft, X, Loader2, Info, PencilLine, Banknote, ShoppingBag, RotateCcw, SlidersHorizontal, Route,
+  ArrowLeft, X, Loader2, Info, AlertCircle, PencilLine, Banknote, ShoppingBag, RotateCcw, SlidersHorizontal, Route,
 } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -11,7 +11,9 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useMoney } from '../onboarding/useMoney';
 import { useDebts } from '../hooks/useDebts';
-import { useDebtDetail, monthLabel, nextMonthKey, type DebtDetailData, type MissingField } from '../hooks/useDebtProjection';
+import {
+  useDebtDetail, monthLabel, addMonthKey, MAX_EXTRA, MAX_ONE_OFF, ONE_OFF_HORIZON_MONTHS, type DebtDetailData, type MissingField,
+} from '../hooks/useDebtProjection';
 import { DebtFormFields, EMPTY_DEBT_FORM, debtFormFromDebt, debtPayloadFromForm, kindIcon, type DebtFormState } from './shared/DebtFormFields';
 import { apiErrorMessage } from '../lib/apiErrors';
 
@@ -42,7 +44,23 @@ export function DebtDetail({ debtId, onBack, onOpenPlan }: { debtId: string; onB
   const [oneOff, setOneOff] = useState('0');
   const [oneOffMonth, setOneOffMonth] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
-  const { data, loading, failed } = useDebtDetail(debtId, { extra: num(extra), oneOff: num(oneOff), oneOffMonth }, refreshKey);
+  // The first projected month (this month while its payment is pending), as
+  // last answered: the one-off can't be earlier.
+  const [firstMonth, setFirstMonth] = useState<string | null>(null);
+  const extraN = num(extra);
+  const oneOffN = num(oneOff);
+  const oneOffMax = firstMonth ? addMonthKey(firstMonth, ONE_OFF_HORIZON_MONTHS) : null;
+  // Checked here first, so a value the server would refuse isn't sent.
+  const clientError = extraN > MAX_EXTRA || oneOffN > MAX_ONE_OFF ? 'invalid_amount'
+    : oneOffN > 0 && oneOffMonth && firstMonth && oneOffMax && (oneOffMonth < firstMonth || oneOffMonth > oneOffMax) ? 'invalid_month'
+    : null;
+  const { data, loading, failed, inputError } = useDebtDetail(
+    debtId,
+    clientError ? {} : { extra: extraN, oneOff: oneOffN, oneOffMonth },
+    refreshKey,
+  );
+  useEffect(() => { if (data) setFirstMonth(data.projection.firstMonth); }, [data]);
+  const simError = clientError ?? (inputError ? inputError.code ?? 'generic' : null);
 
   const [form, setForm] = useState<DebtFormState>(EMPTY_DEBT_FORM);
   const [editing, setEditing] = useState(false);
@@ -78,7 +96,7 @@ export function DebtDetail({ debtId, onBack, onOpenPlan }: { debtId: string; onB
   const isOwner = debt.ownerUserId === user?.id;
   const base = projection.base;
   const sim = projection.simulated;
-  const simulating = num(extra) > 0 || (num(oneOff) > 0 && !!oneOffMonth);
+  const simulating = !simError && (extraN > 0 || (oneOffN > 0 && !!oneOffMonth));
 
   return (
     <div className="space-y-6 pb-8">
@@ -154,13 +172,21 @@ export function DebtDetail({ debtId, onBack, onOpenPlan }: { debtId: string; onB
             </label>
             <label className="space-y-1.5 block" htmlFor="sim-oneoff-month">
               <span className="text-xs text-muted-foreground">{t('debtDetail.simOneOffMonth')}</span>
-              <input id="sim-oneoff-month" type="month" min={nextMonthKey(data.startMonth)} value={oneOffMonth}
-                onChange={e => setOneOffMonth(e.target.value)} className={`${inputClass} px-4`} />
+              <input id="sim-oneoff-month" type="month" min={projection.firstMonth} max={addMonthKey(projection.firstMonth, ONE_OFF_HORIZON_MONTHS)} value={oneOffMonth}
+                disabled={oneOffN === 0} aria-invalid={simError === 'invalid_month'}
+                onChange={e => setOneOffMonth(e.target.value)} className={`${inputClass} px-4 disabled:opacity-50`} />
             </label>
           </div>
           <div className="flex items-center gap-2 min-h-6" aria-live="polite">
             {loading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0" />}
-            <SimResult base={base} sim={simulating ? sim : null} needsMonth={num(oneOff) > 0 && !oneOffMonth} fmt={fmt} locale={locale} />
+            {simError ? (
+              <p role="alert" className="text-sm bg-alert-soft text-alert rounded-xl px-4 py-2 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                {t(`debtDetail.errors.${simError}`, { defaultValue: t('debtDetail.errors.generic'), month: monthLabel(projection.firstMonth, locale) })}
+              </p>
+            ) : (
+              <SimResult base={base} sim={simulating ? sim : null} needsMonth={oneOffN > 0 && !oneOffMonth} fmt={fmt} locale={locale} />
+            )}
           </div>
           <button onClick={onOpenPlan} className="px-5 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors text-sm inline-flex items-center gap-2">
             <Route className="w-4 h-4" />{t('debtDetail.seePlan')}

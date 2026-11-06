@@ -3,20 +3,24 @@
 // serializeMoney converts at the response edge.
 //
 // Rules:
-//  1. Months. Simulated month k is calendar month (current month + k), the
-//     same convention the Debts screen has always used for "debt-free by".
-//     The current month is the last month of the real past.
+//  1. Months. The projection starts in the CURRENT month when this budget
+//     period's payment of a debt (monthlyCommitment) isn't paid yet, else in
+//     the next one. In a plan, a debt already paid this period sits out the
+//     current month. So a BNPL with its Nov/Dec/Jan cuotas unpaid ends in
+//     January both before and after paying November. The one-off month
+//     counts from that first projected month.
 //  2. What can be projected. A debt needs a monthly payment (minimumPayment,
 //     else installmentAmount, > 0). A debt paid by its minimum also needs its
 //     APR (TAE): without it the simulation would invent a date. An installment
-//     plan doesn't: its cuotas already carry the interest, so a missing APR
-//     counts as 0. A missing one is reported (`missing`), never guessed.
+//     plan never uses its APR: its cuotas already carry the interest. With its
+//     cuota count known it ends exactly after its remaining cuotas (the last
+//     may be smaller). A missing datum is reported (`missing`), never guessed.
 //  3. A debt in "full" payment mode (a card paid in full every month) isn't
 //     debt to pay down over time: it's left out of every projection.
 //  4. Cards: the projection assumes no new purchases (the UI says so).
 //  5. The simulator is only for looking: nothing here writes anything.
 import type { DebtLedger } from "./debtBalance.js";
-import { debtState, owedNow } from "./debtBalance.js";
+import { debtState, monthlyCommitment, owedNow } from "./debtBalance.js";
 import {
   simulatePayoffSeries, PAYOFF_MAX_MONTHS,
   type PayoffDebtInput, type PayoffMethod, type PayoffOptions, type PayoffSeries,
@@ -50,8 +54,7 @@ export const MAX_ONE_OFF_CENTS = 10_000_000_00; // 10 million once
 export interface SimulatorInput {
   method: PayoffMethod;
   extraCents: number;
-  oneOff: { month: number; amountCents: number } | null; // month in simulated months (≥ 1)
-  oneOffMonth: string | null; // "YYYY-MM", echoed back
+  oneOff: { monthKey: string; amountCents: number } | null; // "YYYY-MM"
 }
 
 export type SimulatorInputError = { error: string; code: "invalid_amount" | "invalid_month" | "invalid_method" };
@@ -76,13 +79,35 @@ export function parseSimulatorQuery(query: Record<string, unknown>, now: Date): 
   if (extraCents === null) return { error: "extra must be an amount between 0 and 100000", code: "invalid_amount" };
   const oneOffCents = amountCents(query.oneOff, MAX_ONE_OFF_CENTS);
   if (oneOffCents === null) return { error: "oneOff must be an amount between 0 and 10000000", code: "invalid_amount" };
-  if (oneOffCents === 0) return { method, extraCents, oneOff: null, oneOffMonth: null };
+  if (oneOffCents === 0) return { method, extraCents, oneOff: null };
 
   const raw = query.oneOffMonth;
   if (typeof raw !== "string" || !MONTH.test(raw)) return { error: "oneOffMonth must be YYYY-MM", code: "invalid_month" };
+  // Checked again against the first projected month (oneOffAt).
   const month = monthsBetween(monthKeyOf(now), raw);
-  if (month < 1 || month > PAYOFF_MAX_MONTHS) return { error: "oneOffMonth must be from next month on", code: "invalid_month" };
-  return { method, extraCents, oneOff: { month, amountCents: oneOffCents }, oneOffMonth: raw };
+  if (month < 0 || month >= PAYOFF_MAX_MONTHS) return { error: "oneOffMonth must be from this month on", code: "invalid_month" };
+  return { method, extraCents, oneOff: { monthKey: raw, amountCents: oneOffCents } };
+}
+
+const ONE_OFF_TOO_EARLY: SimulatorInputError = { error: "oneOffMonth is before the first projected month", code: "invalid_month" };
+
+/** The engine's one-off (simulated month ≥ 1 counted from `firstMonth`), or
+ *  an error when it falls before it (this month's payment is already made). */
+function oneOffAt(input: SimulatorInput, firstMonth: string): PayoffOptions["oneOff"] | SimulatorInputError {
+  if (!input.oneOff) return null;
+  const month = monthsBetween(firstMonth, input.oneOff.monthKey) + 1;
+  return month < 1 ? ONE_OFF_TOO_EARLY : { month, amountCents: input.oneOff.amountCents };
+}
+
+// ── This period's payment ─────────────────────────────────────────────────
+
+/** Whether this budget period's payment of the debt is made: payments booked
+ *  in the period cover its commitment (server/lib/debtBalance.ts). A debt
+ *  committing nothing this period has nothing pending. */
+export function paidThisPeriod(ledger: DebtLedger, period: { start: Date; end: Date }): boolean {
+  const due = monthlyCommitment(ledger, period);
+  const paid = ledger.payments.filter(p => p.date >= period.start && p.date < period.end).reduce((s, p) => s + p.amount, 0);
+  return due <= 0 || paid >= due;
 }
 
 // ── What can be projected ─────────────────────────────────────────────────
@@ -94,6 +119,7 @@ export interface ProjectableDebt {
   apr: number | null;
   minimumPayment: number | null; // cents
   installmentAmount: number | null; // cents
+  installmentsTotal?: number | null;
 }
 
 export type MissingField = "apr" | "minimum";
@@ -103,8 +129,9 @@ export type Projectability =
   | { status: "nothing_owed" }
   | { status: "needs_data"; missing: MissingField[] };
 
-/** Rules 2 and 3 for one debt owing `owedCents`. */
-export function projectability(d: ProjectableDebt, owedCents: number): Projectability {
+/** Rules 2 and 3 for one debt owing `owedCents`, with `installmentsPaid`
+ *  cuotas paid (live count, debtState). */
+export function projectability(d: ProjectableDebt, owedCents: number, installmentsPaid = 0): Projectability {
   if (d.paymentMode === "full") return { status: "paid_in_full" };
   if (owedCents <= 0) return { status: "nothing_owed" };
   const minimum = d.minimumPayment ?? d.installmentAmount;
@@ -112,11 +139,18 @@ export function projectability(d: ProjectableDebt, owedCents: number): Projectab
   if (d.paymentMode !== "installments" && d.apr == null) missing.push("apr");
   if (!minimum || minimum <= 0) missing.push("minimum");
   if (missing.length > 0) return { status: "needs_data", missing };
+  const installments = d.paymentMode === "installments";
   return {
     status: "ok",
-    input: { id: d.id, currentBalance: owedCents, apr: d.apr ?? 0, minimumPayment: minimum!, installmentAmount: null },
+    input: {
+      id: d.id, currentBalance: owedCents, apr: installments ? 0 : d.apr ?? 0, minimumPayment: minimum!, installmentAmount: null,
+      paymentsLeft: installments && d.installmentsTotal != null ? Math.max(1, d.installmentsTotal - installmentsPaid) : null,
+    },
   };
 }
+
+const projectabilityOf = (d: ProjectableDebt, ledger: DebtLedger) =>
+  projectability(d, owedNow(ledger), debtState(ledger).installmentsPaid);
 
 // ── Scenario (one simulation, dated) ──────────────────────────────────────
 
@@ -128,17 +162,26 @@ export interface Scenario {
   totalPaid: number;
 }
 
-export function scenarioOf(sim: PayoffSeries, startMonth: string): Scenario {
+/** Simulated month k is calendar month firstMonth + k − 1. */
+export function scenarioOf(sim: PayoffSeries, firstMonth: string): Scenario {
   return {
     months: sim.months,
     converged: sim.converged,
-    payoffMonth: sim.converged ? addMonths(startMonth, sim.months) : null,
+    payoffMonth: sim.converged && sim.months > 0 ? addMonths(firstMonth, sim.months - 1) : null,
     totalInterestPaid: sim.totalInterestPaid,
     totalPaid: sim.totalPaid,
   };
 }
 
-const simOptions = (input: SimulatorInput): PayoffOptions => ({ extraPaymentCents: input.extraCents, oneOff: input.oneOff });
+const isError = (x: unknown): x is SimulatorInputError => !!x && typeof x === "object" && "code" in x;
+
+/** The dated points of a simulation for a chart: today's balance in the
+ *  current month, then each later month's end balance. */
+function datedSeries<T extends { month: number }>(sim: { series: T[] }, firstMonth: string, current: string) {
+  return sim.series
+    .map(m => ({ key: addMonths(firstMonth, m.month - 1), m }))
+    .filter(x => x.key > current);
+}
 
 // ── Debt detail ───────────────────────────────────────────────────────────
 
@@ -161,6 +204,7 @@ export function pastBalances(ledger: DebtLedger, now: Date): { month: string; ow
 
 export interface DetailProjection {
   status: Projectability["status"];
+  firstMonth: string; // the first projected month: this month while its payment is pending
   missing: MissingField[];
   base: (Scenario & { series: { month: string; owed: number }[] }) | null;      // minimum only
   simulated: (Scenario & { series: { month: string; owed: number }[] }) | null; // with extra / one-off
@@ -168,21 +212,26 @@ export interface DetailProjection {
 
 /** The projection of one debt: as it goes (its own payment) and with the
  *  simulator's extra and one-off. Each series starts at the current month. */
-export function debtProjection(d: ProjectableDebt, ledger: DebtLedger, input: SimulatorInput, now: Date): DetailProjection {
+export function debtProjection(
+  d: ProjectableDebt, ledger: DebtLedger, input: SimulatorInput, now: Date, period: { start: Date; end: Date },
+): DetailProjection | SimulatorInputError {
   const owed = owedNow(ledger);
-  const p = projectability(d, owed);
-  if (p.status !== "ok") return { status: p.status, missing: p.status === "needs_data" ? p.missing : [], base: null, simulated: null };
-  const start = monthKeyOf(now);
+  const current = monthKeyOf(now);
+  const firstMonth = paidThisPeriod(ledger, period) ? addMonths(current, 1) : current;
+  const oneOff = oneOffAt(input, firstMonth);
+  if (isError(oneOff)) return oneOff;
+  const p = projectabilityOf(d, ledger);
+  if (p.status !== "ok") return { status: p.status, firstMonth, missing: p.status === "needs_data" ? p.missing : [], base: null, simulated: null };
   const run = (options: PayoffOptions) => {
     const sim = simulatePayoffSeries([p.input], "avalanche", options);
     return {
-      ...scenarioOf(sim, start),
-      series: [{ month: start, owed }, ...sim.series.map(m => ({ month: addMonths(start, m.month), owed: m.owed }))],
+      ...scenarioOf(sim, firstMonth),
+      series: [{ month: current, owed }, ...datedSeries(sim, firstMonth, current).map(x => ({ month: x.key, owed: x.m.owed }))],
     };
   };
-  const simulating = input.extraCents > 0 || input.oneOff !== null;
+  const simulating = input.extraCents > 0 || oneOff !== null;
   const base = run({});
-  return { status: "ok", missing: [], base, simulated: simulating ? run(simOptions(input)) : base };
+  return { status: "ok", firstMonth, missing: [], base, simulated: simulating ? run({ extraPaymentCents: input.extraCents, oneOff }) : base };
 }
 
 // ── Payoff plan ───────────────────────────────────────────────────────────
@@ -192,6 +241,7 @@ export interface PlanDebt extends ProjectableDebt { name: string }
 export interface PayoffPlan {
   method: PayoffMethod;
   startMonth: string;
+  firstMonth: string; // the first projected month: this month while any payment is pending
   included: { id: string; name: string; kind: string; owed: number; apr: number | null; minimumPayment: number }[];
   excluded: { id: string; name: string; kind: string; reason: "paid_in_full" | "needs_data"; missing: MissingField[] }[];
   plan: (Scenario & {
@@ -205,7 +255,9 @@ export interface PayoffPlan {
 /** The plan for every visible active debt: the chosen method's series per
  *  debt, the other method's summary for the one-line comparison, and the
  *  "solo mínimos" reference (no extra, no one-off, nothing cascades). */
-export function payoffPlan(debts: { debt: PlanDebt; ledger: DebtLedger }[], input: SimulatorInput, now: Date): PayoffPlan {
+export function payoffPlan(
+  debts: { debt: PlanDebt; ledger: DebtLedger }[], input: SimulatorInput, now: Date, period: { start: Date; end: Date },
+): PayoffPlan | SimulatorInputError {
   const startMonth = monthKeyOf(now);
   const included: PayoffPlan["included"] = [];
   const excluded: PayoffPlan["excluded"] = [];
@@ -213,42 +265,51 @@ export function payoffPlan(debts: { debt: PlanDebt; ledger: DebtLedger }[], inpu
   const names = new Map<string, string>();
   for (const { debt, ledger } of debts) {
     const owed = owedNow(ledger);
-    const p = projectability(debt, owed);
+    const p = projectabilityOf(debt, ledger);
     if (p.status === "ok") {
-      inputs.push(p.input);
+      inputs.push({ ...p.input, skipFirstMonth: paidThisPeriod(ledger, period) });
       names.set(debt.id, debt.name);
       included.push({ id: debt.id, name: debt.name, kind: debt.kind, owed, apr: debt.apr, minimumPayment: p.input.minimumPayment! });
     } else if (p.status === "paid_in_full" || p.status === "needs_data") {
       excluded.push({ id: debt.id, name: debt.name, kind: debt.kind, reason: p.status, missing: p.status === "needs_data" ? p.missing : [] });
     }
   }
-  if (inputs.length === 0) return { method: input.method, startMonth, included, excluded, plan: null, other: null, minimumsOnly: null };
+  // Starts this month while any debt's payment is pending; if all are paid,
+  // next month, with nobody sitting out.
+  const pending = inputs.some(i => !i.skipFirstMonth);
+  const firstMonth = pending ? startMonth : addMonths(startMonth, 1);
+  if (!pending) for (const i of inputs) i.skipFirstMonth = false;
+  const oneOff = oneOffAt(input, firstMonth);
+  if (isError(oneOff)) return oneOff;
+  if (inputs.length === 0) return { method: input.method, startMonth, firstMonth, included, excluded, plan: null, other: null, minimumsOnly: null };
 
+  const options: PayoffOptions = { extraPaymentCents: input.extraCents, oneOff };
   const otherMethod: PayoffMethod = input.method === "snowball" ? "avalanche" : "snowball";
-  const chosen = simulatePayoffSeries(inputs, input.method, simOptions(input));
-  const other = simulatePayoffSeries(inputs, otherMethod, simOptions(input));
+  const chosen = simulatePayoffSeries(inputs, input.method, options);
+  const other = simulatePayoffSeries(inputs, otherMethod, options);
   const minimums = simulatePayoffSeries(inputs, input.method, { cascade: false });
   const totalOwed = included.reduce((s, d) => s + d.owed, 0);
 
   return {
     method: input.method,
     startMonth,
+    firstMonth,
     included,
     excluded,
     plan: {
-      ...scenarioOf(chosen, startMonth),
+      ...scenarioOf(chosen, firstMonth),
       payoffOrder: chosen.payoffOrder.map(p => ({
-        id: p.id, name: names.get(p.id) ?? "", monthPaidOff: p.monthPaidOff, payoffMonth: addMonths(startMonth, p.monthPaidOff),
+        id: p.id, name: names.get(p.id) ?? "", monthPaidOff: p.monthPaidOff, payoffMonth: addMonths(firstMonth, p.monthPaidOff - 1),
       })),
       series: [
         { month: startMonth, owed: totalOwed, debts: included.map(d => ({ id: d.id, owed: d.owed })) },
-        ...chosen.series.map(m => ({ month: addMonths(startMonth, m.month), owed: m.owed, debts: m.debts.map(x => ({ id: x.id, owed: x.owed })) })),
+        ...datedSeries(chosen, firstMonth, startMonth).map(({ key, m }) => ({ month: key, owed: m.owed, debts: m.debts.map(x => ({ id: x.id, owed: x.owed })) })),
       ],
     },
-    other: { method: otherMethod, ...scenarioOf(other, startMonth) },
+    other: { method: otherMethod, ...scenarioOf(other, firstMonth) },
     minimumsOnly: {
-      ...scenarioOf(minimums, startMonth),
-      series: [{ month: startMonth, owed: totalOwed }, ...minimums.series.map(m => ({ month: addMonths(startMonth, m.month), owed: m.owed }))],
+      ...scenarioOf(minimums, firstMonth),
+      series: [{ month: startMonth, owed: totalOwed }, ...datedSeries(minimums, firstMonth, startMonth).map(({ key, m }) => ({ month: key, owed: m.owed }))],
     },
   };
 }

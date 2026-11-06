@@ -28,6 +28,7 @@ export interface DebtDetailData {
   past: MonthPoint[];
   projection: {
     status: 'ok' | 'paid_in_full' | 'nothing_owed' | 'needs_data';
+    firstMonth: string; // first projected month: this month while its payment is pending
     missing: MissingField[];
     base: (Scenario & { series: MonthPoint[] }) | null;
     simulated: (Scenario & { series: MonthPoint[] }) | null;
@@ -38,6 +39,7 @@ export interface DebtDetailData {
 export interface PayoffPlanData {
   method: PayoffMethod;
   startMonth: string;
+  firstMonth: string;
   included: { id: string; name: string; kind: DebtKind; owed: number; apr: number | null; minimumPayment: number }[];
   excluded: { id: string; name: string; kind: DebtKind; reason: 'paid_in_full' | 'needs_data'; missing: MissingField[] }[];
   plan: (Scenario & {
@@ -67,13 +69,19 @@ function query(p: SimulatorParams): string {
   return q.toString();
 }
 
+/** A refused simulator input (400): its code (invalid_amount, invalid_month,
+ *  invalid_method) and the server's English text as a fallback. */
+export interface SimulatorError { code: string | null; message: string }
+
 // Fetches `path` whenever the key changes, after a short pause so typing in
 // the simulator doesn't send a request per keystroke. The last answer stays
-// on screen while the next one loads.
-function useLive<T>(path: string | null, refreshKey: number) {
+// on screen while the next one loads; a refused input sets `inputError`
+// (the screen hides the stale result).
+function useLive<T>(path: string | null, refreshKey: number | string) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [inputError, setInputError] = useState<SimulatorError | null>(null);
 
   useEffect(() => {
     if (!path) return;
@@ -82,9 +90,15 @@ function useLive<T>(path: string | null, refreshKey: number) {
     const timer = window.setTimeout(async () => {
       try {
         const res = await fetch(path, { credentials: 'include', signal: ctrl.signal });
+        if (res.status === 400) {
+          const body = await res.json().catch(() => ({}));
+          setInputError({ code: typeof body.code === 'string' ? body.code : null, message: String(body.error ?? '') });
+          return;
+        }
         if (!res.ok) throw new Error(String(res.status));
         const body = await res.json();
         setData(body.data as T);
+        setInputError(null);
         setFailed(false);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') setFailed(true);
@@ -95,15 +109,15 @@ function useLive<T>(path: string | null, refreshKey: number) {
     return () => { ctrl.abort(); window.clearTimeout(timer); };
   }, [path, refreshKey]);
 
-  return { data, loading, failed };
+  return { data, loading, failed, inputError };
 }
 
 export function useDebtDetail(debtId: string, sim: SimulatorParams, refreshKey = 0) {
   return useLive<DebtDetailData>(`/api/debts/${encodeURIComponent(debtId)}/detail?${query(sim)}`, refreshKey);
 }
 
-export function usePayoffPlan(sim: SimulatorParams) {
-  return useLive<PayoffPlanData>(`/api/debts/plan?${query(sim)}`, 0);
+export function usePayoffPlan(sim: SimulatorParams, refreshKey: number | string = 0) {
+  return useLive<PayoffPlanData>(`/api/debts/plan?${query(sim)}`, refreshKey);
 }
 
 /** "YYYY-MM" → "noviembre de 2026" / "nov 26" in the user's locale. */
@@ -114,11 +128,16 @@ export function monthLabel(key: string, locale: string, short = false): string {
     : { month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
-/** The month after `key`, as an <input type="month"> min. */
-export function nextMonthKey(key: string): string {
+/** "YYYY-MM" `n` months after `key` (an <input type="month"> min/max). */
+export function addMonthKey(key: string, n: number): string {
   const [y, m] = key.split('-').map(Number);
-  return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
+  return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 7);
 }
+
+/** The simulator's limits, as the server checks them (server/lib/debtProjection.ts). */
+export const MAX_EXTRA = 100_000;
+export const MAX_ONE_OFF = 10_000_000;
+export const ONE_OFF_HORIZON_MONTHS = 599;
 
 // Debt colours in the charts: the design system's chart tokens (light and
 // dark in src/styles/theme.css), in fixed order by the debt's place in the

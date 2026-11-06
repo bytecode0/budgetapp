@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Loader2, Info, Flame, TrendingDown, Route, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Info, AlertCircle, Flame, TrendingDown, Route, ChevronRight, CheckCircle2 } from 'lucide-react';
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import { useMoney } from '../onboarding/useMoney';
 import type { PayoffMethod } from '../hooks/useDebts';
-import { usePayoffPlan, monthLabel, DEBT_CHART_COLORS, type PayoffPlanData } from '../hooks/useDebtProjection';
+import { usePayoffPlan, monthLabel, DEBT_CHART_COLORS, MAX_EXTRA, type PayoffPlanData } from '../hooks/useDebtProjection';
 
 // The payoff plan (LPBETA-02): every visible active debt paid down month by
 // month with the chosen method and extra, until the freedom date. Neither the
@@ -21,7 +21,11 @@ export function PayoffPlan({ onBack, onOpenDebt }: { onBack: () => void; onOpenD
   const { fmt, currency, locale } = useMoney();
   const [method, setMethod] = useState<PayoffMethod>('snowball');
   const [extra, setExtra] = useState('0');
-  const { data, loading, failed } = usePayoffPlan({ method, extra: Math.max(0, parseFloat(extra) || 0) });
+  const extraN = Math.max(0, parseFloat(extra) || 0);
+  const clientError = extraN > MAX_EXTRA ? 'invalid_amount' : null;
+  const { data, loading, failed, inputError } = usePayoffPlan({ method, extra: clientError ? 0 : extraN });
+  // A refused input hides the plan computed for the previous one.
+  const planError = clientError ?? (inputError ? inputError.code ?? 'generic' : null);
 
   return (
     <div className="space-y-6 pb-8">
@@ -67,14 +71,20 @@ export function PayoffPlan({ onBack, onOpenDebt }: { onBack: () => void; onOpenD
               <label htmlFor="plan-extra" className="text-sm font-medium shrink-0">{t('debts.extraPaymentLabel')}</label>
               <div className="relative flex-1 max-w-40">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
-                <input id="plan-extra" type="number" inputMode="decimal" min={0} value={extra} onChange={e => setExtra(e.target.value)}
+                <input id="plan-extra" type="number" inputMode="decimal" min={0} max={MAX_EXTRA} aria-invalid={!!planError} value={extra} onChange={e => setExtra(e.target.value)}
                   className="w-full h-11 pl-8 pr-4 border border-line-strong rounded-xl bg-background outline-none focus:border-primary text-sm tabular-nums" />
               </div>
               {loading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
             </div>
+            {planError && (
+              <p role="alert" className="text-sm bg-alert-soft text-alert rounded-xl px-4 py-2 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                {t(`debtDetail.errors.${planError}`, { defaultValue: t('debtDetail.errors.generic'), month: '' })}
+              </p>
+            )}
           </motion.div>
 
-          {data.plan && <PlanBody data={data} fmt={fmt} locale={locale} />}
+          {data.plan && !planError && <PlanBody data={data} fmt={fmt} locale={locale} />}
 
           {data.excluded.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.2, ease: 'easeOut' }}

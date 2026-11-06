@@ -152,6 +152,54 @@ describe("debt detail and payoff plan (integration, real Postgres)", { skip: !TE
     assert.equal(data.projection.base, null);
   });
 
+  it("month 0: a BNPL with Nov/Dec/Jan unpaid ends in January before and after paying November; a November one-off only while it's pending", async () => {
+    const A = (await signUp("Hugo")).id;
+    const { debt } = await ok(A, "POST", "/api/debts", {
+      name: "Zapatillas", kind: "bnpl", paymentMode: "installments", installmentAmount: 50, installmentsTotal: 3, apr: 25,
+    });
+    await prisma.debt.update({ where: { id: debt.id }, data: { balanceAsOf: D("2026-10-20") } });
+
+    const before = (await ok(A, "GET", `/api/debts/${debt.id}/detail`)).data;
+    assert.equal(before.debt.owed, 150);
+    assert.equal(before.projection.firstMonth, "2026-11");
+    assert.equal(before.projection.base.months, 3);
+    assert.equal(before.projection.base.payoffMonth, "2027-01");
+    assert.equal(before.projection.base.totalInterestPaid, 0); // cuotas carry the interest
+    assert.equal((await call(A, "GET", `/api/debts/${debt.id}/detail?oneOff=50&oneOffMonth=2026-11`)).status, 200);
+    const planBefore = (await ok(A, "GET", "/api/debts/plan")).data;
+    assert.equal(planBefore.plan.payoffMonth, "2027-01");
+
+    await pay(A, debt.id, 50, D("2026-11-03"));
+    const after = (await ok(A, "GET", `/api/debts/${debt.id}/detail`)).data;
+    assert.equal(after.projection.firstMonth, "2026-12");
+    assert.equal(after.projection.base.months, 2);
+    assert.equal(after.projection.base.payoffMonth, "2027-01");
+    const refused = await call(A, "GET", `/api/debts/${debt.id}/detail?oneOff=50&oneOffMonth=2026-11`);
+    assert.equal(refused.status, 400);
+    assert.equal(refused.body.code, "invalid_month");
+    assert.equal((await call(A, "GET", "/api/debts/plan?oneOff=50&oneOffMonth=2026-11")).body.code, "invalid_month");
+    assert.equal((await ok(A, "GET", "/api/debts/plan")).data.plan.payoffMonth, "2027-01");
+  });
+
+  it("history: the 200 most recent across payments and adjustments, newest first", async () => {
+    const A = (await signUp("Irene")).id;
+    const id = await loan(A, "Préstamo", 100000, { minimumPayment: 1 }, D("2020-01-01"));
+    const pool = (await prisma.debt.findUniqueOrThrow({ where: { id } })).userId;
+    const bank = await prisma.account.findFirstOrThrow({ where: { userId: pool, type: { not: "card" } } });
+    // 150 payments (2020-…) and 150 adjustments, interleaved by day.
+    const day = (i: number) => new Date(Date.UTC(2020, 1, 1 + i));
+    await prisma.expense.createMany({ data: Array.from({ length: 150 }, (_, i) => ({ userId: pool, amount: 100, description: `p${i}`, debtId: id, accountId: bank.id, date: day(2 * i) })) });
+    await prisma.debtAdjustment.createMany({ data: Array.from({ length: 150 }, (_, i) => ({ userId: pool, debtId: id, amount: 1, date: day(2 * i + 1) })) });
+    const { history } = (await ok(A, "GET", `/api/debts/${id}/detail`)).data;
+    assert.equal(history.length, 200);
+    const dates = history.map((h: any) => h.date);
+    assert.deepEqual(dates, [...dates].sort().reverse());
+    assert.equal(history[0].type, "adjustment");
+    assert.equal(history[0].date, iso(day(299))); // the newest adjustment
+    assert.equal(history.filter((h: any) => h.type === "payment").length, 100);
+    assert.equal(history.filter((h: any) => h.type === "adjustment").length, 100);
+  });
+
   // ── visibility ─────────────────────────────────────────────────────────
 
   it("a partner's private debt never reaches B: not in B's plan, its detail is a 404", async () => {
@@ -204,7 +252,7 @@ describe("debt detail and payoff plan (integration, real Postgres)", { skip: !TE
   it("validates the simulator inputs", async () => {
     const A = (await signUp("Fran")).id;
     const id = await loan(A, "Préstamo", 1000);
-    for (const q of ["extra=-1", "extra=abc", "extra=100001", "oneOff=50000000", "oneOff=100", "oneOff=100&oneOffMonth=2026-11", "oneOff=100&oneOffMonth=2026-13"]) {
+    for (const q of ["extra=-1", "extra=abc", "extra=100001", "oneOff=50000000", "oneOff=100", "oneOff=100&oneOffMonth=2026-10", "oneOff=100&oneOffMonth=2026-13"]) {
       const r = await call(A, "GET", `/api/debts/plan?${q}`);
       assert.equal(r.status, 400, q);
       assert.ok(["invalid_amount", "invalid_month"].includes(r.body.code), q);

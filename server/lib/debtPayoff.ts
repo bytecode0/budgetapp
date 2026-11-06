@@ -15,6 +15,13 @@ export interface PayoffDebtInput {
   apr: number | null; // annual percentage, e.g. 21.9
   minimumPayment: number | null; // cents
   installmentAmount: number | null; // cents
+  // An installment plan with a known count: the payment numbered
+  // `paymentsLeft` settles the whole remaining balance (the last cuota may be
+  // smaller), so the plan ends exactly after its remaining cuotas.
+  paymentsLeft?: number | null;
+  // Already paid this month: simulated month 1 neither accrues interest nor
+  // pays it; it starts in month 2.
+  skipFirstMonth?: boolean;
 }
 
 export interface PayoffOrderEntry { id: string; monthPaidOff: number }
@@ -91,10 +98,16 @@ export function simulatePayoffSeries(
   const balances = new Map(debts.map(d => [d.id, d.currentBalance]));
   const rates = new Map(debts.map(d => [d.id, monthlyRate(d.apr)]));
   const minimums = new Map(debts.map(d => [d.id, d.minimumPayment ?? d.installmentAmount ?? 0]));
+  const paymentsLeft = new Map(debts.map(d => [d.id, d.paymentsLeft ?? null]));
+  const paymentsMade = new Map(debts.map(d => [d.id, 0]));
+  const skipsFirst = new Set(debts.filter(d => d.skipFirstMonth).map(d => d.id));
   const order = priorityOrder(debts, method);
   // The fixed monthly budget the user commits to debt payoff. As debts close,
   // their minimum is no longer spent there — it rolls into the cascade below.
+  // A debt already paid this month has spent its minimum: month 1's budget
+  // leaves it out.
   const totalMonthlyBudget = [...minimums.values()].reduce((s, m) => s + m, 0) + extraPaymentCents;
+  const skippedMinimums = [...skipsFirst].reduce((s, id) => s + (minimums.get(id) ?? 0), 0);
 
   let totalInterestPaid = 0;
   let totalPaid = 0;
@@ -114,20 +127,25 @@ export function simulatePayoffSeries(
       totalPaid += amount;
     };
 
+    const skipped = (id: string) => month === 1 && skipsFirst.has(id);
+
     // 1. Accrue interest on every open balance.
     for (const [id, bal] of balances) {
-      if (bal <= 0) continue;
+      if (bal <= 0 || skipped(id)) continue;
       const interest = Math.round(bal * (rates.get(id) ?? 0));
       balances.set(id, bal + interest);
       interestNow.set(id, interest);
       totalInterestPaid += interest;
     }
 
-    // 2. Pay each open debt's own minimum.
+    // 2. Pay each open debt's own minimum (the whole rest on its last cuota).
     let budgetUsed = 0;
     for (const [id, bal] of balances) {
-      if (bal <= 0) continue;
-      const min = Math.min(bal, minimums.get(id) ?? 0);
+      if (bal <= 0 || skipped(id)) continue;
+      const made = paymentsMade.get(id)! + 1;
+      paymentsMade.set(id, made);
+      const left = paymentsLeft.get(id);
+      const min = left != null && made >= left ? bal : Math.min(bal, minimums.get(id) ?? 0);
       pay(id, min);
       budgetUsed += min;
     }
@@ -135,11 +153,11 @@ export function simulatePayoffSeries(
     // 3. Cascade whatever's left of the fixed budget (plus this month's
     //    one-off) onto the top-priority debt.
     if (cascade) {
-      let remaining = totalMonthlyBudget - budgetUsed + (oneOff && oneOff.month === month ? oneOff.amountCents : 0);
+      let remaining = totalMonthlyBudget - (month === 1 ? skippedMinimums : 0) - budgetUsed + (oneOff && oneOff.month === month ? oneOff.amountCents : 0);
       for (const id of order) {
         if (remaining <= 0) break;
         const bal = balances.get(id)!;
-        if (bal <= 0) continue;
+        if (bal <= 0 || skipped(id)) continue;
         const amount = Math.min(bal, remaining);
         pay(id, amount);
         remaining -= amount;
