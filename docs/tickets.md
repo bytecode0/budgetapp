@@ -32,6 +32,7 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 | LPBETA-25 | Dominio de la BETA: `app.luisvespa.com` | Refinado — decidido el 4 nov | No |
 | LPBETA-26 | Nuevo nombre de la app: **Remanso** | **Hecho y desplegado** (PR #10, 4 nov). Falta buscar la marca en la OEPM/EUIPO y que Luis cambie `EMAIL_FROM` en Vercel | No |
 | LPBETA-27 | Rediseño de toda la app para Remanso | Fase 1 (PR #9) y fase 2 de Actividad (#12), Deudas (#15), Planes (#19), Cuentas (#21), Hogar y Ajustes (#22) hechas y desplegadas. **Falta Partidas** (`AllocationFlow`), ya desbloqueada | No |
+| LPBETA-28 | Pantalla de administración con las estadísticas de uso | Refinado — **Prioridad baja** (decidido 6 nov) | Probablemente sí (aditivo: marca de administrador) |
 
 ### Orden de ejecución (4 nov, sustituye al de abajo)
 
@@ -806,3 +807,20 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 2. ¿Logo: lo encargas, o Claude prepara una propuesta provisional?
 3. ¿Hay que parecerse al canal de YouTube (colores o miniaturas actuales), o el canal se adaptará a Remanso?
 4. ¿Modo oscuro desde el principio, o solo claro en la primera versión?
+
+---
+
+## LPBETA-28 · Pantalla de administración con las estadísticas de uso — REFINADO · Prioridad BAJA (decidido el 6 nov)
+
+**Por qué:** Luis quiere ver los usuarios activos (LPBETA-05) sin tener un entorno local. Hoy hay dos formas: `npm run stats:active` (necesita el proyecto en local) o pegar una consulta en el SQL Editor de Neon (lo que usa por ahora). Opción elegida entre "email semanal" y "pantalla": **la pantalla** (6 nov).
+
+**Propuesta:**
+- Una pantalla **solo para administradores** con los mismos números que `stats:active`: registrados (total, 7 y 30 días), activos (7 y 30 días), hogares de 2, con plan y con aportación en 30 días, y retención por semana de alta. Reutiliza `computeActiveStats` (`server/lib/activeStats.ts`).
+- **Solo números**, nunca nombres, emails, importes ni ids (la misma regla que el script). Con menos de 5 personas en un grupo, mostrar "menos de 5" en lugar del número exacto, para no identificar a nadie en una comunidad pequeña.
+- **Quién es administrador:** una lista de emails en una variable de entorno (`ADMIN_EMAILS`, como `BANKING_ALLOWED_EMAILS`) o una marca en `User` (schema aditivo). Recomendado: la variable, sin schema. El control va en el servidor (la ruta responde 404 a quien no es administrador, sin revelar que existe) y en el frontend (la entrada al menú no aparece).
+- `GET /api/admin/stats` detrás de `requireAuth` + la comprobación de administrador.
+- Tests: un no administrador recibe 404; el administrador recibe solo números; el umbral de 5.
+
+**Cuidado:** toca la autenticación (lista de "no modificar sin preguntar"). Este ticket es esa pregunta.
+
+**Mientras tanto:** la consulta para el SQL Editor de Neon está en la conversación del 6 nov (cuenta igual que `stats:active`).
