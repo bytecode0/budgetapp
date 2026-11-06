@@ -11,6 +11,8 @@ import { clampCycleStartDay, currentPeriodKey, periodBounds, periodKeyOffset } f
 import { cardCycleSummary, isoDay } from "../lib/cardCycle.js";
 import { now as clockNow } from "../lib/clock.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
+import { visibleExpenseWhere } from "../lib/poolRefs.js";
+import { debtProjection, monthKeyOf, parseSimulatorQuery, pastBalances, payoffPlan, type SimulatorInput } from "../lib/debtProjection.js";
 import {
   loadDebtLedgers, debtState, owedNow, monthlyCommitment, setLiveValues, syncDebtAllocations, syncDebtStatus, ensureDebtLine,
   startingBalanceFor, paidOffByHand, type DebtLedger,
@@ -232,6 +234,106 @@ debtsRouter.get("/payoff", requireAuth, async (req: AuthRequest, res: Response) 
     return res.json(serializeMoney({ snowball, avalanche }));
   } catch (err) {
     console.error("[debts/payoff]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+const PROJECTION_DEBT_SELECT = {
+  id: true, name: true, kind: true, status: true, paymentMode: true, apr: true,
+  minimumPayment: true, installmentAmount: true, ownerUserId: true, accountId: true,
+} as const;
+
+const simulatorEcho = (input: SimulatorInput) => ({
+  method: input.method,
+  extraPayment: input.extraCents,
+  oneOffAmount: input.oneOff?.amountCents ?? 0,
+  oneOffMonth: input.oneOffMonth,
+});
+
+// GET /api/debts/plan?method=snowball|avalanche&extra=&oneOff=&oneOffMonth=YYYY-MM
+// The payoff plan screen (LPBETA-02): every active debt the caller can see
+// (another member's private debt never enters), month by month until zero,
+// the other method's summary and the "solo mínimos" reference. Only for
+// looking: nothing is saved (server/lib/debtProjection.ts).
+debtsRouter.get("/plan", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const now = clockNow();
+    const input = parseSimulatorQuery(req.query, now);
+    if ("error" in input) return res.status(400).json(input);
+
+    const debts = await prisma.debt.findMany({
+      where: { userId: req.userId!, status: "active", ...visibleToWhere(req.authUserId!) },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: PROJECTION_DEBT_SELECT,
+    });
+    const ledgers = debts.length ? await ledgersById(req.userId!) : new Map<string, DebtLedger>();
+    const withLedgers = debts.flatMap(debt => {
+      const ledger = ledgers.get(debt.id);
+      return ledger ? [{ debt, ledger }] : [];
+    });
+
+    return res.json(serializeMoney({ data: { ...payoffPlan(withLedgers, input, now), simulator: simulatorEcho(input) } }));
+  } catch (err) {
+    console.error("[debts/plan]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/debts/:id/detail?extra=&oneOff=&oneOffMonth=YYYY-MM
+// One debt's detail screen: its real past balance (from its ledger), the
+// projection with and without the simulator's extra / one-off, and its
+// payment and purchase history. A debt hidden from the caller answers 404.
+debtsRouter.get("/:id/detail", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const now = clockNow();
+    const input = parseSimulatorQuery(req.query, now);
+    if ("error" in input) return res.status(400).json(input);
+
+    const debt = await prisma.debt.findFirst({
+      where: { id: req.params.id, userId: req.userId!, ...visibleToWhere(req.authUserId!) },
+      select: PROJECTION_DEBT_SELECT,
+    });
+    if (!debt) return res.status(404).json({ error: "Debt not found" });
+    const [ledger] = await loadDebtLedgers(req.userId!, [debt.id]);
+    if (!ledger) return res.status(404).json({ error: "Debt not found" });
+
+    const state = debtState(ledger);
+    const kindOf = new Map<string, "payment" | "purchase">([
+      ...ledger.payments.map(m => [m.id, "payment"] as const),
+      ...ledger.purchases.map(m => [m.id, "purchase"] as const),
+    ]);
+    const expenses = kindOf.size
+      ? await prisma.expense.findMany({
+        where: { userId: req.userId!, id: { in: [...kindOf.keys()] }, ...visibleExpenseWhere(req.authUserId!) },
+        select: { id: true, amount: true, date: true, description: true, kind: true },
+        orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+        take: 200,
+      })
+      : [];
+    const history = [
+      ...expenses.map(e => ({
+        id: e.id,
+        type: e.kind === "refund" ? "refund" : kindOf.get(e.id)!,
+        amount: e.amount,
+        date: isoDay(e.date),
+        description: e.description,
+      })),
+      ...ledger.adjustments.map(a => ({ id: a.id, type: "adjustment", amount: a.amount, date: isoDay(a.date), description: null })),
+    ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 200);
+
+    return res.json(serializeMoney({
+      data: {
+        debt: { ...debt, owed: owedNow(ledger), paymentsTotal: state.paymentsTotal, purchasesTotal: state.purchasesTotal },
+        startMonth: monthKeyOf(now),
+        assumesNoNewPurchases: debt.kind === "credit_card",
+        past: pastBalances(ledger, now),
+        projection: debtProjection(debt, ledger, input, now),
+        history,
+        simulator: simulatorEcho(input),
+      },
+    }));
+  } catch (err) {
+    console.error("[debts/detail]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
