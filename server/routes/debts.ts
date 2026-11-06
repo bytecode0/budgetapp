@@ -5,12 +5,13 @@ import { mutationAccess, reorderableEntries, visibleToWhere } from "../lib/owner
 import { toCents, serializeMoney } from "../lib/money.js";
 import { buildDebtTimeline, timelineInput } from "../lib/debtTimeline.js";
 import { householdBaselineIncome } from "../lib/householdIncome.js";
-import { simulatePayoff, type PayoffMethod } from "../lib/debtPayoff.js";
 import { debtAccountLinkError, cardDebtKindLocked, creditCardOnNonCardAccount, type DebtAccountLinkError } from "../lib/debtAccountLink.js";
 import { clampCycleStartDay, currentPeriodKey, periodBounds, periodKeyOffset } from "../lib/period.js";
 import { cardCycleSummary, isoDay } from "../lib/cardCycle.js";
 import { now as clockNow } from "../lib/clock.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
+import { visibleExpenseWhere } from "../lib/poolRefs.js";
+import { debtProjection, monthKeyOf, parseSimulatorQuery, pastBalances, payoffPlan, type SimulatorInput } from "../lib/debtProjection.js";
 import {
   loadDebtLedgers, debtState, owedNow, monthlyCommitment, setLiveValues, syncDebtAllocations, syncDebtStatus, ensureDebtLine,
   startingBalanceFor, paidOffByHand, type DebtLedger,
@@ -22,13 +23,6 @@ const DEBT_KINDS = new Set(["credit_card", "installment", "bnpl", "payday_loan",
 const DEBT_STATUSES = new Set(["active", "paid_off", "archived"]);
 const VISIBILITIES = new Set(["private", "household"]);
 const PAYMENT_MODES = new Set(["full", "installments", "minimum"]);
-
-// Método Ruta R3: the debt frontier is by TYPE of debt, never by interest rate.
-// Consumer/depreciating-asset debt (R3.1) is always inadmissible and always the
-// snowball's attack target — an existing student loan isn't asset-backed, so it
-// sits here too. "mortgage" (R3.2, appreciating/producing asset) and "other"
-// (unclassified) sit outside the attack list — see scope=consumer below.
-const CONSUMER_DEBT_KINDS = new Set(["credit_card", "installment", "bnpl", "payday_loan", "auto_loan", "student_loan"]);
 
 async function currentPeriod(userId: string): Promise<{ start: Date; end: Date }> {
   const day = await getCycleStartDay(userId);
@@ -188,50 +182,120 @@ debtsRouter.get("/timeline", requireAuth, async (req: AuthRequest, res: Response
   }
 });
 
-// GET /api/debts/payoff?extra=50  — snowball vs avalanche comparison for the
-// user's active debts, with an optional extra monthly payment (euros).
-// ?scope=consumer restricts the simulation to R3.1 kinds only (Método Ruta):
-// a mortgage sitting in the same cascade would push "months to zero" out by
-// decades, when R4.4-R4.6 only care about consumer debt reaching zero.
-debtsRouter.get("/payoff", requireAuth, async (req: AuthRequest, res: Response) => {
+const PROJECTION_DEBT_SELECT = {
+  id: true, name: true, kind: true, status: true, paymentMode: true, apr: true,
+  minimumPayment: true, installmentAmount: true, installmentsTotal: true, ownerUserId: true, accountId: true,
+} as const;
+
+const HISTORY_CAP = 200;
+
+const simulatorEcho = (input: SimulatorInput) => ({
+  method: input.method,
+  extraPayment: input.extraCents,
+  oneOffAmount: input.oneOff?.amountCents ?? 0,
+  oneOffMonth: input.oneOff?.monthKey ?? null,
+});
+
+// GET /api/debts/plan?method=snowball|avalanche&extra=&oneOff=&oneOffMonth=YYYY-MM
+// The payoff plan screen (LPBETA-02): every active debt the caller can see
+// (another member's private debt never enters), month by month until zero,
+// the other method's summary and the "solo mínimos" reference. Only for
+// looking: nothing is saved (server/lib/debtProjection.ts).
+debtsRouter.get("/plan", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    // Express types a query param as string | string[] | ParsedQs — only a plain
-    // string is a meaningful amount here (same narrowing as /banking/institutions).
-    const extraPaymentCents = toCents(typeof req.query.extra === "string" ? req.query.extra : 0);
-    const scope = typeof req.query.scope === "string" ? req.query.scope : undefined;
+    const now = clockNow();
+    const input = parseSimulatorQuery(req.query, now);
+    if ("error" in input) return res.status(400).json(input);
 
     const debts = await prisma.debt.findMany({
-      where: {
-        userId: req.userId!, status: "active",
-        OR: [{ ownerUserId: req.authUserId! }, { visibility: "household" }],
-        ...(scope === "consumer" && { kind: { in: [...CONSUMER_DEBT_KINDS] } }),
-      },
-      select: { id: true, name: true, currentBalance: true, apr: true, minimumPayment: true, installmentAmount: true, paymentMode: true },
+      where: { userId: req.userId!, status: "active", ...visibleToWhere(req.authUserId!) },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: PROJECTION_DEBT_SELECT,
+    });
+    const [ledgers, period] = await Promise.all([
+      debts.length ? ledgersById(req.userId!) : new Map<string, DebtLedger>(),
+      currentPeriod(req.userId!),
+    ]);
+    const withLedgers = debts.flatMap(debt => {
+      const ledger = ledgers.get(debt.id);
+      return ledger ? [{ debt, ledger }] : [];
     });
 
-    if (debts.length === 0) return res.json({ snowball: null, avalanche: null });
-
-    // Simulate on live balances. A card paid in full clears its whole balance
-    // each month, so that's its "minimum" for the cascade.
-    const ledgers = await ledgersById(req.userId!);
-    const live = debts.map(({ paymentMode, ...d }) => {
-      const ledger = ledgers.get(d.id);
-      const balance = ledger ? owedNow(ledger) : d.currentBalance;
-      return { ...d, currentBalance: balance, ...(paymentMode === "full" && { minimumPayment: balance }) };
-    });
-
-    const nameById = Object.fromEntries(debts.map(d => [d.id, d.name]));
-    const withNames = (r: ReturnType<typeof simulatePayoff>) => ({
-      ...r,
-      payoffOrder: r.payoffOrder.map(p => ({ ...p, name: nameById[p.id] ?? null })),
-    });
-
-    const methods: PayoffMethod[] = ["snowball", "avalanche"];
-    const [snowball, avalanche] = methods.map(m => withNames(simulatePayoff(live, m, extraPaymentCents)));
-
-    return res.json(serializeMoney({ snowball, avalanche }));
+    const plan = payoffPlan(withLedgers, input, now, period);
+    if ("code" in plan) return res.status(400).json(plan);
+    return res.json(serializeMoney({ data: { ...plan, simulator: simulatorEcho(input) } }));
   } catch (err) {
-    console.error("[debts/payoff]", err);
+    console.error("[debts/plan]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/debts/:id/detail?extra=&oneOff=&oneOffMonth=YYYY-MM
+// One debt's detail screen: its real past balance (from its ledger), the
+// projection with and without the simulator's extra / one-off, and its
+// payment and purchase history. A debt hidden from the caller answers 404.
+debtsRouter.get("/:id/detail", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const now = clockNow();
+    const input = parseSimulatorQuery(req.query, now);
+    if ("error" in input) return res.status(400).json(input);
+
+    const debt = await prisma.debt.findFirst({
+      where: { id: req.params.id, userId: req.userId!, ...visibleToWhere(req.authUserId!) },
+      select: PROJECTION_DEBT_SELECT,
+    });
+    if (!debt) return res.status(404).json({ error: "Debt not found" });
+    const [ledger] = await loadDebtLedgers(req.userId!, [debt.id]);
+    if (!ledger) return res.status(404).json({ error: "Debt not found" });
+
+    const projection = debtProjection(debt, ledger, input, now, await currentPeriod(req.userId!));
+    if ("code" in projection) return res.status(400).json(projection);
+
+    // Payments, purchases and adjustments: the HISTORY_CAP most recent
+    // across all three, newest first (date, then when it was recorded).
+    const state = debtState(ledger);
+    const kindOf = new Map<string, "payment" | "purchase">([
+      ...ledger.payments.map(m => [m.id, "payment"] as const),
+      ...ledger.purchases.map(m => [m.id, "purchase"] as const),
+    ]);
+    const newestFirst = [{ date: "desc" as const }, { createdAt: "desc" as const }];
+    const [expenses, adjustments] = await Promise.all([
+      kindOf.size
+        ? prisma.expense.findMany({
+          where: { userId: req.userId!, id: { in: [...kindOf.keys()] }, ...visibleExpenseWhere(req.authUserId!) },
+          select: { id: true, amount: true, date: true, createdAt: true, description: true, kind: true },
+          orderBy: newestFirst,
+          take: HISTORY_CAP,
+        })
+        : Promise.resolve([]),
+      prisma.debtAdjustment.findMany({
+        where: { userId: req.userId!, debtId: debt.id },
+        select: { id: true, amount: true, date: true, createdAt: true },
+        orderBy: newestFirst,
+        take: HISTORY_CAP,
+      }),
+    ]);
+    const history = [
+      ...expenses.map(e => ({ ...e, type: e.kind === "refund" ? "refund" : kindOf.get(e.id)! })),
+      ...adjustments.map(a => ({ ...a, type: "adjustment", description: null })),
+    ]
+      .sort((a, b) => b.date.getTime() - a.date.getTime() || b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, HISTORY_CAP)
+      .map(h => ({ id: h.id, type: h.type, amount: h.amount, date: isoDay(h.date), description: h.description }));
+
+    return res.json(serializeMoney({
+      data: {
+        debt: { ...debt, owed: owedNow(ledger), paymentsTotal: state.paymentsTotal, purchasesTotal: state.purchasesTotal },
+        startMonth: monthKeyOf(now),
+        assumesNoNewPurchases: debt.kind === "credit_card",
+        past: pastBalances(ledger, now),
+        projection,
+        history,
+        simulator: simulatorEcho(input),
+      },
+    }));
+  } catch (err) {
+    console.error("[debts/detail]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

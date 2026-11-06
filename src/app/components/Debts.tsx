@@ -4,13 +4,14 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, X, GripVertical, Pencil, Trash2, CheckCircle2, RotateCcw, Banknote,
-  CreditCard, Loader2, TrendingDown, Flame, Sunrise,
+  CreditCard, Loader2, Sunrise, Route, ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
-import { useDebts, type Debt, type PayoffSummary } from '../hooks/useDebts';
+import { useDebts, type Debt } from '../hooks/useDebts';
+import { usePayoffPlan, monthLabel } from '../hooks/useDebtProjection';
 import { DebtFormFields, EMPTY_DEBT_FORM, debtFormFromDebt, debtPayloadFromForm, kindIcon, type DebtFormState } from './shared/DebtFormFields';
 import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSheet';
 import { CardCycleLine } from './shared/CardCycleLine';
@@ -69,11 +70,11 @@ function DraggableRow({
   );
 }
 
-export function Debts() {
+export function Debts({ onOpenDebt, onOpenPlan }: { onOpenDebt: (id: string) => void; onOpenPlan: () => void }) {
   const { t } = useTranslation();
   const { language } = useLanguage();
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
-  const { debts, totalOwed, totalMinimums, loading, createDebt, updateDebt, deleteDebt, reorderDebts, fetchPayoff, fetchDebts } = useDebts();
+  const { debts, totalOwed, totalMinimums, loading, createDebt, updateDebt, deleteDebt, reorderDebts, fetchDebts } = useDebts();
   const currency = t('currency.symbol');
   const { user } = useAuth();
 
@@ -84,22 +85,10 @@ export function Debts() {
   const [saving, setSaving] = useState(false);
   const [showPaidOff, setShowPaidOff] = useState(false);
 
-  // Payoff planner — snowball vs avalanche comparison for the active debts.
-  const [extraPayment, setExtraPayment] = useState('0');
-  const [payoff, setPayoff] = useState<{ snowball: PayoffSummary | null; avalanche: PayoffSummary | null } | null>(null);
-  const [loadingPayoff, setLoadingPayoff] = useState(false);
-
-  const loadPayoff = useCallback(async (extra: number) => {
-    setLoadingPayoff(true);
-    const result = await fetchPayoff(extra);
-    setPayoff(result);
-    setLoadingPayoff(false);
-  }, [fetchPayoff]);
-
-  useEffect(() => {
-    if (debts.filter(d => d.status === 'active').length > 0) loadPayoff(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debts.length]);
+  // The payoff plan at its defaults (snowball, no extra): the same answer as
+  // the plan screen (GET /api/debts/plan), re-read whenever a debt changes.
+  const planKey = debts.map(d => `${d.id}:${d.status}:${d.owed}:${d.minimumPayment}:${d.installmentAmount}:${d.apr}:${d.paymentMode}`).join('|');
+  const { data: plan } = usePayoffPlan({ method: 'snowball' }, planKey);
 
   // Local copy for drag reordering of active debts.
   const [local, setLocal] = useState<Debt[]>([]);
@@ -111,14 +100,8 @@ export function Debts() {
   const active = local.filter(d => d.status === 'active');
   const paidOff = local.filter(d => d.status !== 'active');
 
-  // The debt-free month of the faster of the two plans, at the extra payment
-  // currently in the simulator (0 by default).
-  const fastestMonths = payoff?.snowball && payoff?.avalanche
-    ? Math.min(payoff.snowball.months, payoff.avalanche.months)
-    : null;
-  const debtFreeLabel = fastestMonths != null && fastestMonths > 0 && fastestMonths < 600
-    ? (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + fastestMonths); return d.toLocaleDateString(locale, { month: 'long', year: 'numeric' }); })()
-    : null;
+  const freedom = plan?.plan?.converged ? plan.plan : null;
+  const debtFreeLabel = freedom?.payoffMonth ? monthLabel(freedom.payoffMonth, locale) : null;
 
   const fmtEuro = (v: number) =>
     `${currency}${v.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -194,6 +177,12 @@ export function Debts() {
             <GripVertical className="w-4 h-4" />
           </div>
         )}
+        {/* Tapping the debt opens its detail (LPBETA-02). */}
+        <button
+          onClick={() => onOpenDebt(d.id)}
+          title={t('debtDetail.open', { name: d.name })}
+          className="flex-1 min-w-0 flex items-center gap-4 text-left rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
         <div className="w-11 h-11 rounded-2xl bg-surface-sunk flex items-center justify-center text-muted-foreground shrink-0">
           <Icon className="w-5 h-5" />
         </div>
@@ -219,6 +208,8 @@ export function Debts() {
             </p>
           )}
         </div>
+        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+        </button>
         <div className="flex items-center gap-1 shrink-0">
           {d.status === 'active' && (
             <button onClick={() => openPay(d)} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-pool-soft transition-colors" title={t('debts.recordPayment')} aria-label={t('debts.recordPayment')}>
@@ -302,69 +293,37 @@ export function Debts() {
         </DndProvider>
       )}
 
-      {/* Payoff planner — snowball vs avalanche */}
+      {/* Payoff plan: a compact summary; the whole plan has its own screen. */}
       {active.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          className="bg-card border border-border rounded-3xl p-6 space-y-5"
+          className="bg-card border border-border rounded-3xl p-6 space-y-4"
         >
-          <div>
-            <h2 className="text-xl font-display">{t('debts.payoffTitle')}</h2>
-            <p className="text-sm text-muted-foreground">{t('debts.payoffSubtitle')}</p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <label htmlFor="debts-extra" className="text-sm font-medium shrink-0">{t('debts.extraPaymentLabel')}</label>
-            <div className="relative flex-1 max-w-40">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{currency}</span>
-              <input
-                id="debts-extra"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                value={extraPayment}
-                onChange={e => setExtraPayment(e.target.value)}
-                onBlur={() => loadPayoff(parseFloat(extraPayment) || 0)}
-                onKeyDown={e => { if (e.key === 'Enter') loadPayoff(parseFloat(extraPayment) || 0); }}
-                className="w-full h-11 pl-8 pr-4 border border-line-strong rounded-xl bg-background outline-none focus:border-primary text-sm tabular-nums"
-              />
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-display">{t('debts.payoffTitle')}</h2>
+              <p className="text-sm text-muted-foreground">{t('debts.payoffSubtitle')}</p>
             </div>
-            {loadingPayoff && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+            <button onClick={onOpenPlan} className="px-4 py-2 border border-border rounded-xl hover:bg-muted transition-colors text-sm inline-flex items-center gap-2 shrink-0">
+              <Route className="w-4 h-4" />{t('payoffPlan.open')}
+            </button>
           </div>
-
-          {payoff?.snowball && payoff?.avalanche && (
-            <div className="grid sm:grid-cols-2 gap-4">
-              {([
-                { method: 'snowball' as const, icon: Flame, summary: payoff.snowball },
-                { method: 'avalanche' as const, icon: TrendingDown, summary: payoff.avalanche },
-              ]).map(({ method, icon: Icon, summary }) => {
-                const isBetter = payoff.snowball && payoff.avalanche
-                  && summary.totalInterestPaid <= Math.min(payoff.snowball.totalInterestPaid, payoff.avalanche.totalInterestPaid);
-                return (
-                  <div key={method} className={`rounded-2xl border p-5 ${isBetter ? 'border-primary bg-pool-soft' : 'border-border'}`}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Icon className="w-4 h-4 text-primary" />
-                      <p className="font-semibold">{t(`debts.method.${method}`)}</p>
-                      {isBetter && <span className="text-xs px-2 py-0.5 rounded-full bg-primary text-primary-foreground">{t('debts.lessInterest')}</span>}
-                    </div>
-                    <p className="text-2xl font-display">{summary.months} <span className="text-sm text-muted-foreground">{t('debts.monthsToDebtFree')}</span></p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {t('debts.totalInterest')}: {fmtEuro(Math.round(summary.totalInterestPaid))}
-                    </p>
-                    {summary.payoffOrder.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-border space-y-1">
-                        {summary.payoffOrder.map((p, i) => (
-                          <div key={p.id} className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>{i + 1}. {p.name}</span>
-                            <span>{t('debts.month', { count: p.monthPaidOff })}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
+          {freedom?.payoffMonth ? (
+            <p className="text-sm">
+              {t('debts.planSummary', {
+                method: t('debts.method.snowball'),
+                date: monthLabel(freedom.payoffMonth, locale),
+                months: t('debtDetail.monthsCount', { count: freedom.months }),
+                interest: fmtEuro(freedom.totalInterestPaid),
               })}
-            </div>
+            </p>
+          ) : plan?.plan ? (
+            <p className="text-sm text-muted-foreground">{t('payoffPlan.neverEnds')}</p>
+          ) : plan && plan.excluded.length > 0 ? (
+            <p className="text-sm text-muted-foreground">{t('debts.planNeedsData')}</p>
+          ) : null}
+          {plan?.plan && plan.excluded.length > 0 && (
+            <p className="text-xs text-muted-foreground">{t('debts.planExcluded', { count: plan.excluded.length })}</p>
           )}
         </motion.div>
       )}

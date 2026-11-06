@@ -189,7 +189,7 @@ export function computeOnboardingResult(input: ResultInput): OnboardingResult {
 
   const totalOwed = sumOwed(input.debts.map(d => d.ledger));
 
-  // Snowball over consumer debt, as GET /api/debts/payoff?scope=consumer: a
+  // Snowball over consumer debt (simulatePayoff): a
   // card paid in full clears its whole balance each month.
   const consumer = active
     .filter(d => CONSUMER_DEBT_KINDS.has(d.ledger.debt.kind))
