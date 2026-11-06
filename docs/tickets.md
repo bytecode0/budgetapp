@@ -1,37 +1,37 @@
-# Tickets de LifePlan
+# Tickets de Remanso
 
 Backlog de tickets refinados. **Ninguno se implementa hasta que Luis lo pida**, y el orden lo decide él.
 Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deudas-y-onboarding.md).
 
 | # | Ticket | Estado | Schema |
 |---|---|---|---|
-| LPBETA-01 | Ciclo de facturación de la tarjeta | Refinado (plan 1.9) | No |
+| LPBETA-01 | Ciclo de facturación de la tarjeta | **Hecho y desplegado** (PR #26, 5 nov). El ciclo solo cambia la línea "Vence el…" de Deudas y los meses futuros del futuro comprometido; la partida mensual se calcula como antes. Falta: día de corte desde Cuentas y onboarding, días 29–31 | No |
 | LPBETA-02 | Gráficas de deudas, detalle y plan de pago | Refinado | No |
 | LPBETA-03 | Stripe y control de acceso Premium | Refinado | No |
 | LPBETA-04 | Pequeños pendientes | **Hecho y desplegado** (PR #14, 4 nov). Incluye `npm run backfill:legacy-owners`: Luis lo ejecuta en su terminal, primero sin `--apply` | — |
 | LPBETA-05 | Medir usuarios activos | **Hecho y desplegado** (PR #8, 4 nov) | Sí (aditivo: `User.lastBankReviewAt`, `PlanDeposit.byUserId`) |
 | LPBETA-06 | Remanso no asesora sobre inversiones (simulador con aviso) | **Hecho y desplegado** (PR #13, 4 nov) | No |
-| LPBETA-07 | Inicio y onboarding para el nuevo cliente | Refinado — **va antes de la BETA** | Por confirmar al diseñar |
+| LPBETA-07 | Inicio y onboarding para el nuevo cliente | **Hecho y desplegado** (PR #25, 5 nov). Ver seguimientos abajo (saldo de planes en 3 casos raros) | Sí (aditivo: `UserSettings.onboardingGoal`, `payYourselfFirstBps`, `payYourselfFirstSetAt`) |
 | LPBETA-08 | Enlace de invitación para amigos | Aplazado (después de la BETA) | Sí (aditivo) |
-| LPBETA-09 | Borrar la cuenta, exportar los datos y promesa de privacidad | Refinado — **bloquea la BETA** | Sí (aditivo) |
-| LPBETA-10 | Línea de generosidad en el onboarding | Refinado | No |
+| LPBETA-09 | Borrar la cuenta, exportar los datos y promesa de privacidad | **Hecho y desplegado** (PR #27, 5 nov). Falta que Luis revise el texto de `/privacy-promise` y pruebe exportar/borrar en el navegador | Sí (aditivo: `User.deletionRequestedAt`, `deletionStartedAt`) |
+| LPBETA-10 | Línea de generosidad en el onboarding | **Hecho y desplegado** (PR #25, 5 nov) | Sí (aditivo: `UserSettings.generosityBps`) |
 | LPBETA-11 | Instalable en el móvil (PWA) y página de bienvenida | **Hecho y desplegado** (PR #16, 4 nov). Bienvenida pública; PWA sin service worker. Falta probar en un móvil real: login con Google y vuelta del banco desde la app instalada | No |
 | LPBETA-12 | Detección de suscripciones y gastos hormiga | Refinado | Sí (aditivo, pequeño) |
 | LPBETA-13 | Celebrar los hitos | En refinamiento | Probablemente sí (aditivo, solo "ya visto") |
 | LPBETA-14 | Seguridad del acceso (códigos y contraseñas) | **Hecho y desplegado** (PR #7, 4 nov) | Sí (aditivo, aplicado en el schema) |
-| LPBETA-15 | Robo de cuenta preparado de antemano (registro + Google) | En revisión (`feature/seguridad-alta`). **Espera el `db push` de `RateLimitHit` de Luis** | No |
-| LPBETA-16 | Límite al envío de códigos por email | En revisión (`feature/seguridad-alta`). **Espera el `db push` de `RateLimitHit` de Luis** | Sí (aditivo: tabla `RateLimitHit`) |
-| LPBETA-17 | Límite de uso de la IA (coste) | En revisión (`feature/seguridad-alta`). **Espera el `db push` de `RateLimitHit` de Luis** | No (usa la tabla del 16) |
+| LPBETA-15 | Robo de cuenta preparado de antemano (registro + Google) | **Hecho y desplegado** (PR #24, 5 nov) | No |
+| LPBETA-16 | Límite al envío de códigos por email | **Hecho y desplegado** (PR #24, 5 nov). Límites: 3/h y 10/día por email, 20/h y 50/día por IP (IPv6 por /64), 80/día global | Sí (aditivo: tabla `RateLimitHit`) |
+| LPBETA-17 | Límite de uso de la IA (coste) | **Hecho y desplegado** (PR #24, 5 nov). 30/h y 100/día por persona. Luis: poner un tope de gasto en la consola de Anthropic | No (usa la tabla del 16) |
 | LPBETA-18 | Salir del hogar no quita el acceso a los datos de la pareja | **Hecho y desplegado** (PR #20, 4 nov). Decidido 4 nov: lo privado de un miembro se oculta a la pareja en todos los niveles (también el transparente); los totales lo cuentan como "Compromisos privados de tu pareja" | No |
 | LPBETA-19 | Las deudas y cuentas privadas se ven y se modifican desde la pareja | **Hecho y desplegado** (PR #20, 4 nov). Decidido 4 nov: lo privado de un miembro se oculta a la pareja en todos los niveles (también el transparente); los totales lo cuentan como "Compromisos privados de tu pareja" | No |
 | LPBETA-20 | La invitación de pareja no está ligada al email invitado | **Hecho y desplegado** (PR #20, 4 nov). Decidido 4 nov: lo privado de un miembro se oculta a la pareja en todos los niveles (también el transparente); los totales lo cuentan como "Compromisos privados de tu pareja" | No |
 | LPBETA-21 | Cerrar todas las sesiones (sesiones revocables) | Refinado — Media | Sí (aditivo, un campo) |
 | LPBETA-22 | Dependencias con vulnerabilidades conocidas | **Hecho y desplegado** (PR #18, 4 nov) | No |
-| LPBETA-23 | Endurecimiento menor de seguridad | Refinado — Baja | No |
+| LPBETA-23 | Endurecimiento menor de seguridad | **En parte** (PR #23, 5 nov): puntos 3, 4 y 7 hechos (la CSP de la web va en `Report-Only` hasta revisarla en el navegador); 8 hecho con el 10. Pendientes: 2, 5 y 6; el 1 va con LPBETA-03 | No |
 | LPBETA-24 | Medir la paz: una pregunta al mes | En refinamiento | Sí (aditivo: una tabla pequeña) |
 | LPBETA-25 | Dominio de la BETA: `app.luisvespa.com` | Refinado — decidido el 4 nov | No |
 | LPBETA-26 | Nuevo nombre de la app: **Remanso** | **Hecho y desplegado** (PR #10, 4 nov). Falta buscar la marca en la OEPM/EUIPO y que Luis cambie `EMAIL_FROM` en Vercel | No |
-| LPBETA-27 | Rediseño de toda la app para Remanso | Fase 1 hecha y desplegada (PR #9). Fase 2: Actividad (PR #12), Deudas (PR #15) y Planes (PR #19) en revisión; faltan Cuentas, Partidas, Hogar y Ajustes | No |
+| LPBETA-27 | Rediseño de toda la app para Remanso | Fase 1 (PR #9) y fase 2 de Actividad (#12), Deudas (#15), Planes (#19), Cuentas (#21), Hogar y Ajustes (#22) hechas y desplegadas. **Falta Partidas** (`AllocationFlow`), ya desbloqueada | No |
 
 ### Orden de ejecución (4 nov, sustituye al de abajo)
 
@@ -48,23 +48,32 @@ Reparto (4 nov): la sesión de **rebranding** hace 24–27; la **otra sesión** 
 | ✓ | LPBETA-27 · Rediseño, fase 1 (sistema de diseño, modo claro/oscuro) | rebranding | Hecho y desplegado (PR #9). |
 | ✓ | LPBETA-26 · Nombre Remanso y logo | rebranding | Hecho y desplegado (PR #10). Falta buscar la marca en la OEPM/EUIPO. |
 | ✓ | LPBETA-04 · Pequeños pendientes | otra | Hecho y desplegado (PR #14). |
-| 3 | LPBETA-15, 16, 17 · Seguridad ALTA | otra | En revisión; espera el `db push` de Luis. Antes de invitar a nadie. |
-| 4 | LPBETA-09 · Borrar cuenta, exportar y privacidad | otra | Confianza y RGPD. |
+| ✓ | LPBETA-15, 16, 17 · Seguridad ALTA | otra | Hecho y desplegado (PR #24, 5 nov). |
+| ✓ | LPBETA-09 · Borrar cuenta, exportar y privacidad | otra | Hecho y desplegado (PR #27, 5 nov). |
 | ✓ | LPBETA-06 · Aviso de inversiones | otra | Hecho y desplegado (PR #13). |
 | ✓ | LPBETA-18 · Seguridad MEDIA (salir del hogar) | otra | Hecho y desplegado con 19 y 20 (PR #20). |
 | 7 | LPBETA-25 · Dominio `app.luisvespa.com` | rebranding + Luis | Los paneles los hace Luis; los textos, Claude. |
-| 8 | LPBETA-07 · Inicio y onboarding | otra | Con el diseño nuevo (pautas de `CLAUDE.md`), después de fusionar el 26. |
-| 9 | LPBETA-10 · Generosidad | otra | El mismo flujo de onboarding que el 07. |
+| ✓ | LPBETA-07 · Inicio y onboarding | otra | Hecho y desplegado (PR #25, 5 nov). |
+| ✓ | LPBETA-10 · Generosidad | otra | Hecho y desplegado (PR #25, 5 nov). |
 | 10 | LPBETA-24 · Medir la paz | rebranding | Una tarjeta en el Inicio nuevo, después del 07. |
 | ✓ | LPBETA-11 · PWA y bienvenida | otra | Hecho y desplegado (PR #16). Falta probarla en un móvil real. |
-| 12 | LPBETA-27 · Rediseño, fase 2 (pantallas sin ticket propio) | rebranding | Actividad (PR #12), Deudas (PR #15) y Planes (PR #19) en revisión. Después: Cuentas, Partidas (tras el 07), Hogar y Ajustes (tras el 09). |
-| 13 | LPBETA-19 a 23 · Seguridad MEDIA y BAJA | otra | 19, 20 (PR #20) y 22 (PR #18) hechos y desplegados; 21 y 23 pendientes. |
+| 12 | LPBETA-27 · Rediseño, fase 2 (pantallas sin ticket propio) | rebranding | Actividad, Deudas, Planes, Cuentas, Hogar y Ajustes hechos (#12, #15, #19, #21, #22). Falta Partidas. |
+| 13 | LPBETA-19 a 23 · Seguridad MEDIA y BAJA | otra | 19, 20 (PR #20), 22 (PR #18) y 23 en parte (PR #23) hechos y desplegados; pendientes el 21 y los puntos 2, 5 y 6 del 23. |
 | 14 | LPBETA-12 · Suscripciones y gastos hormiga | otra | Pantallas nuevas, ya con el diseño nuevo. |
 | 15 | LPBETA-13 · Celebrar los hitos | otra | Ídem. |
 | 16 | LPBETA-02 · Gráficas de deudas | otra | Ídem. |
-| 17 | LPBETA-01 · Ciclo de facturación de la tarjeta | otra | Sobre todo servidor. |
+| ✓ | LPBETA-01 · Ciclo de facturación de la tarjeta | otra | Hecho y desplegado (PR #26, 5 nov). |
 | 18 | LPBETA-08 · Invitación | otra | Si entra. |
 | 19 | LPBETA-03 · Stripe y Premium | otra | El último, como pidió Luis, si entra. |
+
+**Incidente del 5 nov (base de datos de producción):** hasta el 5 nov, `DATABASE_URL` en Vercel apuntaba a una base distinta de la que exponen las variables `BUDGET_…` de la integración de Neon, así que los `db push` de Luis no llegaban a la base que usaba la app (el registro, la recuperación de contraseña y la IA fallaron unas horas tras el PR #24). Ahora `DATABASE_URL` apunta a **`neon-pink-pebble`** (Neon, US East 1) y su esquema se puso al día con SQL idempotente en el SQL Editor de Neon. Para futuros cambios de schema: SQL generado con `prisma migrate diff … --script`, hecho idempotente y ejecutado por Luis en Neon; después, comprobar desde fuera (`POST /api/auth/send-reset` con un email inexistente → 200). **Pendiente de Luis:** cambiar la contraseña de esa base (se pegó en el chat).
+
+### Seguimientos (5 nov)
+- **Saldo de los planes (de LPBETA-07):** no se recalcula cuando una pareja se separa y mueve gastos de una partida de plan, al borrar una partida de plan ni al cambiar el plan enlazado de una partida.
+- **Ciclo de la tarjeta (de LPBETA-01):** poner el día de corte desde Cuentas y en el onboarding; permitir días 29–31.
+- **CSP (de LPBETA-23):** pasar de `Content-Security-Policy-Report-Only` a `Content-Security-Policy` cuando la consola del navegador no muestre avisos.
+- **`xlsx` (de LPBETA-22):** la versión de npm no recibe parches; decidir si se usa la del CDN de SheetJS.
+- **Luis:** ejecutar `npm run backfill:legacy-owners` (primero sin `--apply`) y `npm run stats:active`, ambos con la URL de `neon-pink-pebble` entre comillas en su terminal.
 
 **Renumeración (4 nov, decisión de Luis):** los tickets de seguridad de la auditoría conservan LPBETA-15 a 23. Los de marca pasan a **24** (paz, antes 15), **25** (dominio, antes 16), **26** (Remanso, antes 17) y **27** (rediseño, antes 18). Los commits y PR anteriores al 4 nov por la tarde (PR #9 y #10) los citan con el número antiguo.
 
