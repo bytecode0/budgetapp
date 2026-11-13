@@ -66,24 +66,27 @@ export function BudgetSuggestions({ isOpen, onClose, onApplied }: BudgetSuggesti
       {isOpen && (
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-scrim flex items-end md:items-center justify-center p-4"
           onClick={e => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.div
-            initial={{ opacity: 0, y: 40, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 40, scale: 0.95 }}
-            className="bg-card border border-border rounded-2xl p-6 w-full max-w-md space-y-5 max-h-[88vh] overflow-y-auto"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="bg-card border border-border rounded-3xl shadow-soft p-6 w-full max-w-md space-y-5 max-h-[88vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Wallet className="w-5 h-5 text-primary" />
+              <div className="flex items-center gap-3">
+                <span className="w-10 h-10 rounded-2xl bg-pool-soft text-pool flex items-center justify-center shrink-0">
+                  <Wallet className="w-5 h-5" aria-hidden="true" />
+                </span>
                 <div>
                   <h2 className="text-2xl font-display">{t('budgets.title')}</h2>
                   <p className="text-xs text-muted-foreground">{t('budgets.subtitle')}</p>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted transition-colors">
+              <button onClick={onClose} aria-label={t('budgets.close')} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-muted transition-colors shrink-0">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -92,19 +95,19 @@ export function BudgetSuggestions({ isOpen, onClose, onApplied }: BudgetSuggesti
               <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
             ) : rows.length === 0 ? (
               <div className="text-center py-10 space-y-2">
-                <div className="w-14 h-14 bg-muted rounded-2xl flex items-center justify-center mx-auto">
-                  <Wallet className="w-7 h-7 text-muted-foreground" />
+                <div className="w-14 h-14 bg-pool-soft text-pool rounded-3xl flex items-center justify-center mx-auto">
+                  <Wallet className="w-7 h-7" />
                 </div>
                 <p className="text-sm text-muted-foreground">{t('budgets.none')}</p>
               </div>
             ) : (
               <>
-                <div className="border border-border rounded-xl divide-y divide-border max-h-[52vh] overflow-y-auto">
+                <div className="border border-border rounded-2xl divide-y divide-border max-h-[52vh] overflow-y-auto">
                   {rows.map(r => (
-                    <label key={r.allocationId} className="flex items-center gap-3 p-3 cursor-pointer">
+                    <label key={r.allocationId} className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors">
                       <input
                         type="checkbox"
-                        className="accent-primary shrink-0"
+                        className="w-4 h-4 accent-primary shrink-0"
                         checked={selected.has(r.allocationId)}
                         onChange={() => toggle(r.allocationId)}
                       />
@@ -113,7 +116,7 @@ export function BudgetSuggestions({ isOpen, onClose, onApplied }: BudgetSuggesti
                         <p className="text-sm truncate flex items-center gap-1.5">
                           {r.name}
                           {r.confidence === 'low' && (
-                            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                            <span className="shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full bg-sun-soft text-sun-ink">
                               {t('budgets.lowConfidence')}
                             </span>
                           )}
@@ -124,16 +127,16 @@ export function BudgetSuggestions({ isOpen, onClose, onApplied }: BudgetSuggesti
                       </div>
                       <div className="text-right shrink-0">
                         {r.current > 0 && (
-                          <p className="text-[11px] text-muted-foreground line-through">{fmt(r.current)}</p>
+                          <p className="text-xs text-muted-foreground line-through tabular-nums">{fmt(r.current)}</p>
                         )}
-                        <p className="text-sm font-display">{fmt(r.suggested)}</p>
+                        <p className="text-sm font-semibold tabular-nums">{fmt(r.suggested)}</p>
                       </div>
                     </label>
                   ))}
                 </div>
 
                 {overIncome && (
-                  <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400">
+                  <div className="flex items-center gap-2 px-4 py-3 bg-sun-soft text-sun-ink rounded-2xl text-sm">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     {t('budgets.overIncome', { total: fmt(selectedTotal), income: fmt(monthlyIncome) })}
                   </div>
@@ -142,7 +145,7 @@ export function BudgetSuggestions({ isOpen, onClose, onApplied }: BudgetSuggesti
                 <button
                   onClick={handleApply}
                   disabled={applying || selected.size === 0}
-                  className="w-full py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full h-12 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {applying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                   {t('budgets.apply', { count: selected.size })}
