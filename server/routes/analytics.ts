@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { serializeMoney } from "../lib/money.js";
 import { periodBounds, periodKeyFor, enumeratePeriods } from "../lib/period.js";
-import { countedAmounts, debtCommitments } from "../lib/debtBalance.js";
+import { countedAmounts, debtCommitments, lineBudget } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { hiddenLineIds } from "../lib/poolRefs.js";
 
@@ -126,15 +126,11 @@ analyticsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
         select: { id: true, amount: true },
       }),
     ]);
-    const budgetMap: Record<string, number> = Object.fromEntries(
-      savedBudgets.map(b => [b.allocationId, b.allocatedAmount])
-    );
+    const savedBy = new Map(savedBudgets.map(b => [b.allocationId, b.allocatedAmount]));
     // Budget = saved month budgets, or the current allocation amounts as a
-    // fallback (a debt line's being its commitment for that period).
+    // fallback; a debt line's is always its commitment for that period.
     const commitments = await debtCommitments(userId, toBounds);
-    const totalBudgeted = allocations.reduce(
-      (s, a) => s + (budgetMap[a.id] ?? (a.type === "debt" && a.debtId ? commitments.get(a.debtId) : undefined) ?? a.allocatedAmount), 0
-    );
+    const totalBudgeted = allocations.reduce((s, a) => s + lineBudget(a, savedBy, commitments), 0);
     const totalActual = toExpenses.reduce((s, e) => s + spent(e), 0);
     const overspend = Math.max(0, totalActual - totalBudgeted);
     const pct = totalBudgeted > 0

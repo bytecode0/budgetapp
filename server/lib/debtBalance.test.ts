@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   debtState, splitPayments, monthlyCommitment, inLedger, owedNow, sumOwed, startingBalanceFor, isPaidOff, paidOffByHand,
-  buildLedgers, countedFrom,
+  buildLedgers, countedFrom, lineBudget,
   type DebtLedger, type LedgerDebt,
 } from "./debtBalance.js";
 
@@ -250,4 +250,14 @@ test("countedFrom: refunds count negative, partial card payments count their pre
   assert.equal(counted.get("pay"), 30000);
   assert.equal(counted.get("r1"), -1250);
   assert.equal(counted.has("super"), false);
+});
+
+test("lineBudget: a debt line is its commitment even over a saved row; other lines saved, else stored", () => {
+  const saved = new Map([["debt-line", 9999], ["rent", 80000]]);
+  const commitments = new Map([["loan", 15000]]);
+  assert.equal(lineBudget({ id: "debt-line", type: "debt", debtId: "loan", allocatedAmount: 1 }, saved, commitments), 15000);
+  assert.equal(lineBudget({ id: "rent", type: "fixed", debtId: null, allocatedAmount: 90000 }, saved, commitments), 80000);
+  assert.equal(lineBudget({ id: "gym", type: "fixed", debtId: null, allocatedAmount: 3000 }, saved, commitments), 3000);
+  // A debt with no commitment known falls back like any line.
+  assert.equal(lineBudget({ id: "debt-line", type: "debt", debtId: "gone", allocatedAmount: 1 }, saved, commitments), 9999);
 });

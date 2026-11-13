@@ -5,6 +5,7 @@
 // code the client translates (src/app/lib/apiErrors.ts), never a 500.
 import { prisma } from "./prisma.js";
 import { visibleToWhere } from "./ownership.js";
+import { lineBudget } from "./debtBalance.js";
 
 export const ALLOCATION_NOT_FOUND = { error: "Category not found", code: "allocation_not_found" };
 export const ACCOUNT_NOT_FOUND = { error: "Account not found", code: "account_not_found" };
@@ -68,14 +69,14 @@ export async function hiddenCommitted(
 ): Promise<number> {
   const lines = await prisma.allocation.findMany({
     where: { userId, ...onHiddenDebt(authUserId) },
-    select: { id: true, debtId: true, allocatedAmount: true },
+    select: { id: true, type: true, debtId: true, allocatedAmount: true },
   });
   if (lines.length === 0) return 0;
   const saved = month
     ? await prisma.monthlyBudget.findMany({ where: { month, allocationId: { in: lines.map(l => l.id) } }, select: { allocationId: true, allocatedAmount: true } })
     : [];
   const savedBy = new Map(saved.map(b => [b.allocationId, b.allocatedAmount]));
-  return lines.reduce((s, l) => s + (savedBy.get(l.id) ?? (l.debtId ? commitments.get(l.debtId) : undefined) ?? l.allocatedAmount), 0);
+  return lines.reduce((s, l) => s + lineBudget(l, savedBy, commitments), 0);
 }
 
 /** True when every id given (null/undefined/"" = no category, skipped) is a

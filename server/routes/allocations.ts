@@ -10,7 +10,7 @@ import { incomeBaselines } from "../lib/householdIncome.js";
 import { visibleToWhere } from "../lib/ownership.js";
 import { hiddenCommitted, notOnHiddenDebt } from "../lib/poolRefs.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
-import { GENEROSITY_TYPE, clearGenerosityShare, ensureGenerosityLine, isEchoedGenerosityShare, syncGenerosity } from "../lib/generosity.js";
+import { GENEROSITY_TYPE, clearGenerosityShare, ensureGenerosityLine, isEchoedGenerosityShare, keepGenerosityFirst, syncGenerosity } from "../lib/generosity.js";
 
 export const allocationsRouter = Router();
 
@@ -23,6 +23,7 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
     // users from before it, and with a share set its amount follows this
     // period's household income (server/lib/generosity.ts).
     await ensureGenerosityLine(req.userId!);
+    await keepGenerosityFirst(req.userId!);
     const poolCycle = await getCycleStartDay(req.userId!);
     const generosity = await syncGenerosity(req.userId!, periodBounds(currentPeriodKey(poolCycle), poolCycle));
 
@@ -145,6 +146,8 @@ allocationsRouter.patch("/reorder", requireAuth, async (req: AuthRequest, res: R
         })
       )
     );
+    // Whatever order was sent, the Generosity line stays first (Método Ruta R1).
+    await keepGenerosityFirst(req.userId!);
 
     return res.json({ success: true });
   } catch (err) {

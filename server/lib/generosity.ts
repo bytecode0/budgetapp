@@ -50,6 +50,31 @@ export function firstSortOrder(sortOrders: number[]): number {
   return sortOrders.length === 0 ? 0 : Math.min(...sortOrders) - 1;
 }
 
+/** Lines in display order → the sortOrder updates that put the Generosity
+ *  line first and keep the rest in their order (0..n-1). Empty when it is
+ *  already strictly first, so applying it twice changes nothing. Pure. */
+export function generosityFirstOrder(lines: { id: string; type: string; sortOrder: number }[]): { id: string; sortOrder: number }[] {
+  const g = lines.findIndex(l => l.type === GENEROSITY_TYPE);
+  if (g === -1) return [];
+  const gen = lines[g];
+  if (lines.every((l, i) => i === g || l.sortOrder > gen.sortOrder)) return [];
+  const ordered = [gen, ...lines.filter((_, i) => i !== g)];
+  return ordered.flatMap((l, i) => (l.sortOrder === i ? [] : [{ id: l.id, sortOrder: i }]));
+}
+
+/** Puts the pool's Generosity line back first when another line is at or
+ *  before it (an old reorder, or one sent in any order). Idempotent. */
+export async function keepGenerosityFirst(poolUserId: string): Promise<void> {
+  const lines = await prisma.allocation.findMany({
+    where: { userId: poolUserId },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    select: { id: true, type: true, sortOrder: true },
+  });
+  const updates = generosityFirstOrder(lines);
+  if (updates.length === 0) return;
+  await prisma.$transaction(updates.map(u => prisma.allocation.update({ where: { id: u.id }, data: { sortOrder: u.sortOrder } })));
+}
+
 /** Creates the pool's Generosity line at 0 when it has none. Idempotent. */
 export async function ensureGenerosityLine(poolUserId: string): Promise<void> {
   // Signup seeds the default lines only into an empty budget: seed them first

@@ -383,13 +383,15 @@ describe("household security (integration, real Postgres)", { skip: !TEST_DATABA
     const bMonth = await ok(c.B, "GET", `/api/monthly-budgets?month=${month}`);
     const bReview = await ok(c.B, "GET", `/api/monthly-budgets/review?month=${month}`);
     assert.equal(sum(bMonth.budgets, "allocatedAmount") + Math.round(bMonth.hiddenCommitted * 100), Math.round(bReview.totalBudgeted * 100));
-    // A month budget saved for the hidden line counts as saved.
+    // A debt line's month budget is its cuota: an amount saved for the hidden
+    // line is not stored, and an old saved row is ignored (lineBudget).
     const aMonth = await ok(c.A, "POST", "/api/monthly-budgets/save", { month, budgets: [{ allocationId: c.line, allocatedAmount: 400 }] });
-    assert.ok(aMonth.budgets.some((b: any) => b.allocationId === c.line));
+    assert.ok(!aMonth.budgets.some((b: any) => b.allocationId === c.line));
+    await prisma.monthlyBudget.create({ data: { userId: c.A, allocationId: c.line, month, allocatedAmount: 40000 } });
     const bMonth2 = await ok(c.B, "GET", `/api/monthly-budgets?month=${month}`);
     assert.ok(!JSON.stringify(bMonth2).includes(c.line));
     const bReview2 = await ok(c.B, "GET", `/api/monthly-budgets/review?month=${month}`);
-    assert.equal(Math.round((bMonth2.hiddenCommitted - bMonth.hiddenCommitted) * 100), 40000 - 15000, "the saved 400 replaces the 150 cuota");
+    assert.equal(bMonth2.hiddenCommitted, bMonth.hiddenCommitted, "the 150 cuota still counts, not the old saved 400");
     assert.equal(sum(bMonth2.budgets, "allocatedAmount") + Math.round(bMonth2.hiddenCommitted * 100), Math.round(bReview2.totalBudgeted * 100));
   });
 
