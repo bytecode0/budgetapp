@@ -4,7 +4,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useTranslation } from 'react-i18next';
 import {
   Lightbulb, CheckCircle2, Plus, Trash2, Scale,
-  Pencil, X, Check, Loader2, CalendarCheck, GripVertical, Repeat, Wallet, Lock,
+  Pencil, X, Check, Loader2, CalendarCheck, GripVertical, Repeat, Wallet, Lock, ArrowRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -112,6 +112,7 @@ function DraggableRow({
 interface LocalAllocation {
   id: string; name: string; icon: string; type: string;
   lifePlanId: string | null;
+  debtId: string | null;
   allocatedAmount: number; actualAmount: number; isDefault: boolean;
   dirty: boolean;
   // Track what changed so saves route correctly: amounts are per-month
@@ -120,7 +121,8 @@ interface LocalAllocation {
   amountDirty: boolean; metaDirty: boolean;
 }
 
-export function AllocationFlow() {
+/** A debt line's amount is changed on its debt: opens that debt (or the Debts list). */
+export function AllocationFlow({ onOpenDebt }: { onOpenDebt: (debtId: string | null) => void }) {
   const { t } = useTranslation();
   const { fmt, currency } = useMoney();
   const { language } = useLanguage();
@@ -180,6 +182,7 @@ export function AllocationFlow() {
     setLocal(rawAllocations.map(a => ({
       id: a.id, name: a.name, icon: a.icon, type: a.type,
       lifePlanId: a.lifePlanId ?? null,
+      debtId: a.debtId ?? null,
       allocatedAmount: amountByAlloc.has(a.id) ? amountByAlloc.get(a.id)! : a.allocatedAmount,
       actualAmount: a.actualAmount,
       isDefault: a.isDefault,
@@ -220,7 +223,8 @@ export function AllocationFlow() {
       // would overwrite a derived one (the Generosity share, LPBETA-10).
       dirty.map(a => updateAllocation(a.id, {
         name: a.name, icon: a.icon, type: a.type, lifePlanId: a.lifePlanId,
-        ...(a.amountDirty && { allocatedAmount: a.allocatedAmount, month: selectedMonth }),
+        // Never for a debt line: its amount follows the debt (server/routes/allocations.ts).
+        ...(a.amountDirty && a.type !== 'debt' && { allocatedAmount: a.allocatedAmount, month: selectedMonth }),
       }))
     );
     setSaving(false);
@@ -320,7 +324,7 @@ export function AllocationFlow() {
     );
 
     const amountEntries = local
-      .filter(a => a.amountDirty)
+      .filter(a => a.amountDirty && a.type !== 'debt') // a debt line's amount follows its debt
       .map(a => ({ allocationId: a.id, allocatedAmount: a.allocatedAmount }));
     const budgetResult = amountEntries.length > 0
       ? await saveBudgets(amountEntries)
@@ -694,27 +698,42 @@ export function AllocationFlow() {
                         )}
                       </div>
 
-                      <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2">
-                        <div className="relative shrink-0">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{currency}</span>
+                      {isDebt ? (
+                        /* Read-only: a debt line's amount follows its debt */
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="text-sm font-semibold tabular-nums">{fmt(item.allocatedAmount)}</span>
+                          <span className="text-xs text-muted-foreground tabular-nums">{pct}%</span>
+                          <span className="text-xs text-muted-foreground">{t('allocation.debtAmountHint')}</span>
+                          <button
+                            onClick={() => onOpenDebt(item.debtId)}
+                            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                          >
+                            {t('allocation.changeOnDebt')} <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2">
+                          <div className="relative shrink-0">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{currency}</span>
+                            <input
+                              type="number" min="0" step="50" inputMode="decimal"
+                              aria-label={t('allocation.amountFor', { name: item.name })}
+                              className="w-32 h-10 pl-8 pr-3 text-right text-sm font-semibold tabular-nums border border-border rounded-xl outline-none focus:border-primary bg-background"
+                              value={item.allocatedAmount}
+                              onChange={e => updateLocal(item.id, { allocatedAmount: Math.max(0, parseInt(e.target.value) || 0) })}
+                            />
+                          </div>
+                          <span className="text-xs text-muted-foreground tabular-nums w-10 text-right shrink-0 sm:order-last">{pct}%</span>
                           <input
-                            type="number" min="0" step="50" inputMode="decimal"
-                            aria-label={t('allocation.amountFor', { name: item.name })}
-                            className="w-32 h-10 pl-8 pr-3 text-right text-sm font-semibold tabular-nums border border-border rounded-xl outline-none focus:border-primary bg-background"
+                            type="range" min="0" max={sliderMax} step="50"
                             value={item.allocatedAmount}
-                            onChange={e => updateLocal(item.id, { allocatedAmount: Math.max(0, parseInt(e.target.value) || 0) })}
+                            onChange={e => updateLocal(item.id, { allocatedAmount: parseInt(e.target.value) })}
+                            aria-label={t('allocation.amountFor', { name: item.name })}
+                            className="w-full sm:flex-1 h-2 rounded-full appearance-none cursor-pointer"
+                            style={{ background: `linear-gradient(to right, ${color} 0%, ${color} ${sliderPct}%, var(--surface-sunk) ${sliderPct}%, var(--surface-sunk) 100%)` }}
                           />
                         </div>
-                        <span className="text-xs text-muted-foreground tabular-nums w-10 text-right shrink-0 sm:order-last">{pct}%</span>
-                        <input
-                          type="range" min="0" max={sliderMax} step="50"
-                          value={item.allocatedAmount}
-                          onChange={e => updateLocal(item.id, { allocatedAmount: parseInt(e.target.value) })}
-                          aria-label={t('allocation.amountFor', { name: item.name })}
-                          className="w-full sm:flex-1 h-2 rounded-full appearance-none cursor-pointer"
-                          style={{ background: `linear-gradient(to right, ${color} 0%, ${color} ${sliderPct}%, var(--surface-sunk) ${sliderPct}%, var(--surface-sunk) 100%)` }}
-                        />
-                      </div>
+                      )}
 
                       {/* Inline plan progress bar */}
                       {linkedPlan && (

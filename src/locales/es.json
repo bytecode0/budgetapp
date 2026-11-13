@@ -577,7 +577,9 @@
     "amountFor": "Importe de {{name}}",
     "namePlaceholderFixed": "p. ej. Gimnasio",
     "namePlaceholderFlexible": "p. ej. Comer fuera",
-    "namePlaceholderPlan": "p. ej. Fondo de emergencia"
+    "namePlaceholderPlan": "p. ej. Fondo de emergencia",
+    "debtAmountHint": "Sigue a la deuda",
+    "changeOnDebt": "Se cambia desde la deuda"
   },
   "addExpense": {
     "title": "Añadir Gasto",

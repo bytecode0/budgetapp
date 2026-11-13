@@ -577,7 +577,9 @@
     "amountFor": "Amount for {{name}}",
     "namePlaceholderFixed": "e.g. Gym membership",
     "namePlaceholderFlexible": "e.g. Eating out",
-    "namePlaceholderPlan": "e.g. Emergency fund"
+    "namePlaceholderPlan": "e.g. Emergency fund",
+    "debtAmountHint": "Follows the debt",
+    "changeOnDebt": "Change it on the debt"
   },
   "addExpense": {
     "title": "Add Expense",
