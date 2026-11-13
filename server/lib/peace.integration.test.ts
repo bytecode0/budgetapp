@@ -2,7 +2,8 @@
 // API: one answer per period (a second one replaces the score), the period
 // follows the household's payday, a partner never reads or overwrites the
 // other's answer, answers go with the user, and answering counts as activity
-// (LPBETA-05). Opt-in: skipped unless TEST_DATABASE_URL is set.
+// (LPBETA-05), purging an account removes only that person's answers, and a
+// missing table never breaks the active-users report. Opt-in: skipped unless TEST_DATABASE_URL is set.
 //
 //   TEST_DATABASE_URL=postgresql://postgres@localhost:55450/budget_test npm run test:integration
 //
@@ -19,6 +20,7 @@ describe("peace check-ins (integration, real Postgres)", { skip: !TEST_DATABASE_
   let signToken: typeof import("./jwt.js").signToken;
   let currentPeriodKey: typeof import("./period.js").currentPeriodKey;
   let stats: typeof import("./activeStats.js");
+  let deletion: typeof import("./accountDeletion.js");
   let server: Server;
   let base: string;
 
@@ -34,6 +36,7 @@ describe("peace check-ins (integration, real Postgres)", { skip: !TEST_DATABASE_
     ({ signToken } = await import("./jwt.js"));
     ({ currentPeriodKey } = await import("./period.js"));
     stats = await import("./activeStats.js");
+    deletion = await import("./accountDeletion.js");
     const app = (await import("../app.js")).default;
 
     const tables = await prisma.$queryRaw<{ tablename: string }[]>`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`;
@@ -143,6 +146,53 @@ describe("peace check-ins (integration, real Postgres)", { skip: !TEST_DATABASE_
     await prisma.user.delete({ where: { id: partner.id } });
     assert.equal(await prisma.peaceCheckin.count({ where: { userId: partner.id } }), 0);
     assert.equal(await prisma.peaceCheckin.count({ where: { userId: owner.id } }), 1, "the other member's answer stays");
+  });
+
+  it("the account purge removes the deleted person's answers and keeps the survivor's", async () => {
+    const { owner, partner } = await couple("purge");
+    await call(owner.id, "POST", { score: 4 });
+    await call(partner.id, "POST", { score: 2 });
+    await prisma.peaceCheckin.create({ data: { userId: partner.id, period: "2026-01", score: 1 } });
+    const now = new Date();
+    await prisma.user.update({ where: { id: partner.id }, data: { deletionRequestedAt: new Date(now.getTime() - 25 * 3_600_000) } });
+    const outcome = await deletion.purgeUser(prisma, partner.id, {
+      now, banking: null, deleteStripeCustomer: null, sendDeletedEmail: async () => {},
+    });
+    assert.equal(outcome, "deleted");
+    assert.equal(await prisma.peaceCheckin.count({ where: { userId: partner.id } }), 0);
+    const kept = await prisma.peaceCheckin.findMany({ where: { userId: owner.id } });
+    assert.deepEqual(kept.map(c => c.score), [4]);
+  });
+
+  it("orders answers by when they were given, not by period label (payday change)", async () => {
+    const { owner } = await couple("backwards");
+    const r0 = await call(owner.id, "GET");
+    const current: string = r0.json.data.period;
+    // Answered last month under a later label (e.g. before a payday change or
+    // while in a partner's pool with another payday).
+    const [y, m] = current.split("-").map(Number);
+    const laterLabel = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}`;
+    await prisma.peaceCheckin.create({ data: { userId: owner.id, period: laterLabel, score: 1, createdAt: new Date(Date.now() - 40 * 86_400_000) } });
+    await call(owner.id, "POST", { score: 5 });
+    const r = await call(owner.id, "GET");
+    assert.deepEqual(r.json.data.checkins.map((c: any) => [c.period, c.score]), [[laterLabel, 1], [current, 5]],
+      "the answer just given is the latest, though its label is earlier");
+    assert.equal(r.json.data.current, 5);
+  });
+
+  it("without the table, the active-users report still runs and the API says it clearly", async () => {
+    const { owner } = await couple("missing");
+    await prisma.$executeRawUnsafe(`ALTER TABLE "PeaceCheckin" RENAME TO "PeaceCheckin_hidden"`);
+    try {
+      const input = await stats.loadActivity(prisma, new Date());
+      assert.equal(input.notes?.length, 1);
+      assert.match(stats.formatActiveStats(stats.computeActiveStats(input, new Date()), new Date()), /PeaceCheckin no existe/);
+      const peace = await import("./peace.js");
+      assert.equal(await peace.loadPeaceRows(prisma), null);
+      assert.equal((await call(owner.id, "GET")).status, 503);
+    } finally {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "PeaceCheckin_hidden" RENAME TO "PeaceCheckin"`);
+    }
   });
 
   it("answering counts as activity, for the person who answered", async () => {

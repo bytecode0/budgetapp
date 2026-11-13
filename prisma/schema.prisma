@@ -565,8 +565,8 @@ model RateLimitHit {
 // a partner never sees it. `period` is the "YYYY-MM" budget period the answer
 // was given in (server/lib/period.ts, the pool's cycleStartDay); it is stored
 // because the uniqueness needs it, so a later payday change leaves old answers
-// in their original period. Luis only sees aggregates of 5 or more answers
-// (server/lib/peace.ts). Deleted with the user.
+// in their original period. Luis only sees aggregates of closed months with
+// 5 or more people (server/lib/peace.ts). Deleted with the user.
 model PeaceCheckin {
   id        String   @id @default(cuid())
   userId    String

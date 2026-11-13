@@ -205,7 +205,7 @@ export async function buildJsonExport(db: PrismaClient, me: string, now = new Da
         subscription: { select: { plan: true, status: true, currentPeriodEnd: true, cancelAtPeriodEnd: true } },
         householdMemberships: { select: { role: true, status: true, joinedAt: true, household: { select: { name: true } } } },
         // My answers to the monthly peace question (LPBETA-24): always the person's own.
-        peaceCheckins: { select: { period: true, score: true, createdAt: true }, orderBy: { period: "asc" } },
+        peaceCheckins: { select: { period: true, score: true, createdAt: true }, orderBy: { createdAt: "asc" } },
       },
     }),
     loadRecords(db, own),

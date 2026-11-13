@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { currentPeriodKey } from "../lib/period.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
-import { isPeaceScore } from "../lib/peace.js";
+import { isMissingTable, isPeaceScore } from "../lib/peace.js";
 
 // "¿Cómo te sientes hoy con tu dinero?" (LPBETA-24, server/lib/peace.ts).
 // Every read and write is keyed by the real person (req.authUserId), never by
@@ -14,23 +14,33 @@ export const checkinsRouter = Router();
 
 const select = { period: true, score: true, createdAt: true } as const;
 
+function fail(res: Response, where: string, err: unknown) {
+  if (isMissingTable(err)) {
+    console.error(`[checkins/${where}] the PeaceCheckin table does not exist: apply the LPBETA-24 SQL`);
+    return res.status(503).json({ error: "unavailable" });
+  }
+  console.error(`[checkins/${where}]`, err);
+  return res.status(500).json({ error: "Internal server error" });
+}
+
 async function periodNow(req: AuthRequest) {
   return currentPeriodKey(await getCycleStartDay(req.userId!));
 }
 
 // GET /api/checkins → { data: { period, current, ask, checkins } }
-// checkins: my answers, oldest period first. ask: no answer this period yet.
+// checkins: my answers, oldest first by when they were given (not by period
+// label: a payday change or leaving a household can make a later answer's
+// label earlier). ask: no answer this period yet.
 checkinsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const [period, checkins] = await Promise.all([
       periodNow(req),
-      prisma.peaceCheckin.findMany({ where: { userId: req.authUserId! }, select, orderBy: { period: "asc" } }),
+      prisma.peaceCheckin.findMany({ where: { userId: req.authUserId! }, select, orderBy: { createdAt: "asc" } }),
     ]);
     const current = checkins.find(c => c.period === period)?.score ?? null;
     return res.json({ data: { period, current, ask: current === null, checkins } });
   } catch (err) {
-    console.error("[checkins/get]", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return fail(res, "get", err);
   }
 });
 
@@ -52,7 +62,6 @@ checkinsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
     });
     return res.json({ data: checkin });
   } catch (err) {
-    console.error("[checkins/post]", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return fail(res, "post", err);
   }
 });

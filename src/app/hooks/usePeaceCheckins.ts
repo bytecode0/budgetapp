@@ -8,7 +8,7 @@ export interface PeaceState {
   period: string;          // this budget period, "YYYY-MM"
   current: number | null;  // my answer this period
   ask: boolean;            // no answer yet this period
-  checkins: PeaceCheckin[]; // oldest period first
+  checkins: PeaceCheckin[]; // oldest first, by when given
 }
 
 export function usePeaceCheckins() {
@@ -38,7 +38,7 @@ export function usePeaceCheckins() {
         ...s,
         current: data.score,
         ask: false,
-        checkins: [...s.checkins.filter(c => c.period !== data.period), data].sort((a, b) => a.period.localeCompare(b.period)),
+        checkins: [...s.checkins.filter(c => c.period !== data.period), data].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
       });
       return true;
     } catch {

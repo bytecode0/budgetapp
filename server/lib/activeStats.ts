@@ -10,6 +10,7 @@
 // Counts only: nothing here reads or returns names, emails, amounts or
 // descriptions. The loader selects ids and dates; the report is numbers.
 import type { PrismaClient } from "@prisma/client";
+import { isMissingTable, MISSING_TABLE_NOTE } from "./peace.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -22,6 +23,8 @@ export interface ActivityInput {
   deposits: { userId: string; at: Date }[];
   // Member count of each household.
   householdSizes: number[];
+  // Sources skipped (e.g. a table whose SQL isn't applied yet), said in the report.
+  notes?: string[];
 }
 
 export interface CohortRow { weekStart: string; registered: number; active30: number }
@@ -33,6 +36,7 @@ export interface ActiveStats {
   withPlan: number;
   depositedLast30: number;
   cohorts: CohortRow[]; // oldest first
+  notes?: string[];
 }
 
 // Monday (UTC) of the week a date falls in, as YYYY-MM-DD.
@@ -80,6 +84,7 @@ export function computeActiveStats(input: ActivityInput, now: Date): ActiveStats
     withPlan: new Set(input.planOwners.filter(id => known.has(id))).size,
     depositedLast30: depositors.size,
     cohorts: [...cohorts.values()].sort((a, b) => a.weekStart.localeCompare(b.weekStart)),
+    notes: input.notes ?? [],
   };
 }
 
@@ -111,14 +116,16 @@ export async function loadActivity(prisma: PrismaClient, now: Date): Promise<Act
     }),
     prisma.householdMember.groupBy({ by: ["householdId"], _count: { userId: true } }),
     // Always the person who answered (PeaceCheckin.userId is never the pool).
-    prisma.peaceCheckin.groupBy({ by: ["userId"], where: { createdAt: { gte: from } }, _max: { createdAt: true } }),
+    // A missing table (its SQL not applied yet) never fails the report.
+    prisma.peaceCheckin.groupBy({ by: ["userId"], where: { createdAt: { gte: from } }, _max: { createdAt: true } })
+      .catch(err => { if (isMissingTable(err)) return null; throw err; }),
   ]);
 
   const activity: ActivityInput["activity"] = [];
   for (const e of expenses) if (e._max.createdAt) activity.push({ userId: e.createdByUserId ?? e.userId, at: e._max.createdAt });
   for (const i of incomes) if (i._max.createdAt) activity.push({ userId: i.ownerUserId, at: i._max.createdAt });
   for (const r of reviewers) if (r.lastBankReviewAt) activity.push({ userId: r.id, at: r.lastBankReviewAt });
-  for (const c of checkins) if (c._max.createdAt) activity.push({ userId: c.userId, at: c._max.createdAt });
+  for (const c of checkins ?? []) if (c._max.createdAt) activity.push({ userId: c.userId, at: c._max.createdAt });
   const depositRows = deposits.map(d => ({ userId: d.byUserId ?? d.plan.ownerUserId ?? d.userId, at: d.updatedAt }));
   activity.push(...depositRows);
 
@@ -128,6 +135,7 @@ export async function loadActivity(prisma: PrismaClient, now: Date): Promise<Act
     planOwners: plans.map(p => p.ownerUserId ?? p.userId),
     deposits: depositRows,
     householdSizes: households.map(h => h._count.userId),
+    notes: checkins ? [] : [`Respuestas de paz no contadas como actividad: ${MISSING_TABLE_NOTE}`],
   };
 }
 
@@ -146,6 +154,7 @@ export function formatActiveStats(s: ActiveStats, now: Date): string {
     ...(s.cohorts.length === 0
       ? ["  (nadie registrado todavía)"]
       : s.cohorts.map(c => `  semana del ${c.weekStart}: ${c.active30}/${c.registered}${pct(c.active30, c.registered)}`)),
+    ...(s.notes?.length ? ["", ...s.notes.map(n => `Nota: ${n}`)] : []),
   ];
   return lines.join("\n");
 }

@@ -24,7 +24,7 @@ function errorTag(e: unknown): string {
 export async function activeStats(now = new Date()): Promise<string> {
   const [input, peace] = await Promise.all([loadActivity(prisma, now), loadPeaceRows(prisma)]);
   // The peace aggregates (LPBETA-24) only for groups of 5 or more: server/lib/peace.ts.
-  return `${formatActiveStats(computeActiveStats(input, now), now)}\n\n${formatPeaceStats(computePeaceStats(peace, now))}`;
+  return `${formatActiveStats(computeActiveStats(input, now), now)}\n\n${formatPeaceStats(peace && computePeaceStats(peace, now))}`;
 }
 
 // Run as a script (npm run stats:active), not when imported.
