@@ -6,18 +6,18 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 | # | Ticket | Estado | Schema |
 |---|---|---|---|
 | LPBETA-01 | Ciclo de facturación de la tarjeta | **Hecho y desplegado** (PR #26, 5 nov). El ciclo solo cambia la línea "Vence el…" de Deudas y los meses futuros del futuro comprometido; la partida mensual se calcula como antes. Falta: día de corte desde Cuentas y onboarding, días 29–31 | No |
-| LPBETA-02 | Gráficas de deudas, detalle y plan de pago | Refinado | No |
-| LPBETA-03 | Stripe y control de acceso Premium | Refinado | No |
+| LPBETA-02 | Gráficas de deudas, detalle y plan de pago | **Hecho y desplegado** (PR #30, 6 nov). Detalle de cada deuda con gráfica y simulador; plan de pago en su pantalla; una sola fecha de libertad; `GET /api/debts/payoff` eliminado | No |
+| LPBETA-03 | Stripe y control de acceso Premium | Refinado — **decidido 13 nov: entra en esta tanda, en modo prueba**. Cambio Premium→Hogar a mitad de año con prorrateo. Luis crea en Stripe (modo test) los dos precios anuales y el webhook, y pone las claves en Vercel | No |
 | LPBETA-04 | Pequeños pendientes | **Hecho y desplegado** (PR #14, 4 nov). Incluye `npm run backfill:legacy-owners`: Luis lo ejecuta en su terminal, primero sin `--apply` | — |
 | LPBETA-05 | Medir usuarios activos | **Hecho y desplegado** (PR #8, 4 nov) | Sí (aditivo: `User.lastBankReviewAt`, `PlanDeposit.byUserId`) |
 | LPBETA-06 | Remanso no asesora sobre inversiones (simulador con aviso) | **Hecho y desplegado** (PR #13, 4 nov) | No |
 | LPBETA-07 | Inicio y onboarding para el nuevo cliente | **Hecho y desplegado** (PR #25, 5 nov). Ver seguimientos abajo (saldo de planes en 3 casos raros) | Sí (aditivo: `UserSettings.onboardingGoal`, `payYourselfFirstBps`, `payYourselfFirstSetAt`) |
-| LPBETA-08 | Enlace de invitación para amigos | Aplazado (después de la BETA) | Sí (aditivo) |
+| LPBETA-08 | Enlace de invitación para amigos | Refinado — descuento decidido 13 nov: **50 % el primer año** de Premium al invitar a 5 personas activas 30 días. Va después del 03 | Sí (aditivo) |
 | LPBETA-09 | Borrar la cuenta, exportar los datos y promesa de privacidad | **Hecho y desplegado** (PR #27, 5 nov). Falta que Luis revise el texto de `/privacy-promise` y pruebe exportar/borrar en el navegador | Sí (aditivo: `User.deletionRequestedAt`, `deletionStartedAt`) |
 | LPBETA-10 | Línea de generosidad en el onboarding | **Hecho y desplegado** (PR #25, 5 nov) | Sí (aditivo: `UserSettings.generosityBps`) |
 | LPBETA-11 | Instalable en el móvil (PWA) y página de bienvenida | **Hecho y desplegado** (PR #16, 4 nov). Bienvenida pública; PWA sin service worker. Falta probar en un móvil real: login con Google y vuelta del banco desde la app instalada | No |
 | LPBETA-12 | Detección de suscripciones y gastos hormiga | Refinado | Sí (aditivo, pequeño) |
-| LPBETA-13 | Celebrar los hitos | En refinamiento | Probablemente sí (aditivo, solo "ya visto") |
+| LPBETA-13 | Celebrar los hitos | Refinado — decidido 13 nov: **sobrio, sin compartir**; los interruptores de notificaciones de Ajustes **se quitan ya** | Sí (aditivo: "ya visto") |
 | LPBETA-14 | Seguridad del acceso (códigos y contraseñas) | **Hecho y desplegado** (PR #7, 4 nov) | Sí (aditivo, aplicado en el schema) |
 | LPBETA-15 | Robo de cuenta preparado de antemano (registro + Google) | **Hecho y desplegado** (PR #24, 5 nov) | No |
 | LPBETA-16 | Límite al envío de códigos por email | **Hecho y desplegado** (PR #24, 5 nov). Límites: 3/h y 10/día por email, 20/h y 50/día por IP (IPv6 por /64), 80/día global | Sí (aditivo: tabla `RateLimitHit`) |
@@ -27,11 +27,11 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 | LPBETA-20 | La invitación de pareja no está ligada al email invitado | **Hecho y desplegado** (PR #20, 4 nov). Decidido 4 nov: lo privado de un miembro se oculta a la pareja en todos los niveles (también el transparente); los totales lo cuentan como "Compromisos privados de tu pareja" | No |
 | LPBETA-21 | Cerrar todas las sesiones (sesiones revocables) | Refinado — Media | Sí (aditivo, un campo) |
 | LPBETA-22 | Dependencias con vulnerabilidades conocidas | **Hecho y desplegado** (PR #18, 4 nov) | No |
-| LPBETA-23 | Endurecimiento menor de seguridad | **En parte** (PR #23, 5 nov): puntos 3, 4 y 7 hechos (la CSP de la web va en `Report-Only` hasta revisarla en el navegador); 8 hecho con el 10. Pendientes: 2, 5 y 6; el 1 va con LPBETA-03 | No |
-| LPBETA-24 | Medir la paz: una pregunta al mes | En refinamiento | Sí (aditivo: una tabla pequeña) |
+| LPBETA-23 | Endurecimiento menor de seguridad | **En parte** (PR #23, 5 nov): 3, 4, 7 y 8 hechos. Pendientes 2, 5 y 6 — decidido 13 nov para el 5: **el registro responde siempre igual y, si la cuenta ya existía, el email dice "ya tienes cuenta"**. El 1 va con LPBETA-03 | No |
+| LPBETA-24 | Medir la paz: una pregunta al mes | Refinado — decidido 13 nov: **caras/emojis** en lugar de números, y el usuario **ve su evolución** | Sí (aditivo: tabla `PeaceCheckin`) |
 | LPBETA-25 | Dominio de la BETA: `app.luisvespa.com` | Refinado — decidido el 4 nov | No |
 | LPBETA-26 | Nuevo nombre de la app: **Remanso** | **Hecho y desplegado** (PR #10, 4 nov). Falta buscar la marca en la OEPM/EUIPO y que Luis cambie `EMAIL_FROM` en Vercel | No |
-| LPBETA-27 | Rediseño de toda la app para Remanso | Fase 1 (PR #9) y fase 2 de Actividad (#12), Deudas (#15), Planes (#19), Cuentas (#21), Hogar y Ajustes (#22) hechas y desplegadas. **Falta Partidas** (`AllocationFlow`), ya desbloqueada | No |
+| LPBETA-27 | Rediseño de toda la app para Remanso | Fase 1 y fase 2 hechas salvo **Partidas** (`AllocationFlow`), que hace la sesión principal en esta tanda (la de rebranding ya no está activa) | No |
 | LPBETA-28 | Pantalla de administración con las estadísticas de uso | Refinado — **Prioridad baja** (decidido 6 nov) | Probablemente sí (aditivo: marca de administrador) |
 
 ### Orden de ejecución (4 nov, sustituye al de abajo)
@@ -68,6 +68,10 @@ Reparto (4 nov): la sesión de **rebranding** hace 24–27; la **otra sesión** 
 | 19 | LPBETA-03 · Stripe y Premium | otra | El último, como pidió Luis, si entra. |
 
 **Incidente del 5 nov (base de datos de producción):** hasta el 5 nov, `DATABASE_URL` en Vercel apuntaba a una base distinta de la que exponen las variables `BUDGET_…` de la integración de Neon, así que los `db push` de Luis no llegaban a la base que usaba la app (el registro, la recuperación de contraseña y la IA fallaron unas horas tras el PR #24). Ahora `DATABASE_URL` apunta a **`neon-pink-pebble`** (Neon, US East 1) y su esquema se puso al día con SQL idempotente en el SQL Editor de Neon. Para futuros cambios de schema: SQL generado con `prisma migrate diff … --script`, hecho idempotente y ejecutado por Luis en Neon; después, comprobar desde fuera (`POST /api/auth/send-reset` con un email inexistente → 200). **Pendiente de Luis:** cambiar la contraseña de esa base (se pegó en el chat).
+
+### Tanda del 13 nov (decisión de Luis: refinar y desarrollar todo hasta LPBETA-27)
+
+Orden: **21 + 23** (seguridad que falta) → **25** (dominio, parte de Claude; los paneles los hace Luis) → **27 Partidas** → **24** (paz) → **13** (hitos) → **12** (suscripciones y gastos hormiga) → **03** (Stripe en modo prueba) → **08** (invitaciones, depende del 03) → seguimientos pequeños. Cada ticket en su rama y su PR, con revisión independiente antes de fusionar. Los cambios de schema se aplican en producción con SQL idempotente en el SQL Editor de Neon (ver el incidente del 5 nov), y se comprueba desde fuera antes de fusionar.
 
 ### Seguimientos (5 nov)
 - **Saldo de los planes (de LPBETA-07):** no se recalcula cuando una pareja se separa y mueve gastos de una partida de plan, al borrar una partida de plan ni al cambiar el plan enlazado de una partida.
@@ -694,9 +698,9 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 - Textos en es y en, y tests de la detección de eventos (en céntimos, con datos de hogar).
 
 **Preguntas abiertas para Luis:**
-1. ¿Botón de "compartir" (imagen o texto para WhatsApp)? Si lo hay, por defecto **sin importes** ("¡Hemos cerrado una deuda!"), para que nadie de la comunidad vea las cifras de otro.
-2. ¿Tono: sobrio (tarjeta) o festivo (confeti)?
-3. ¿Los interruptores de notificaciones: se quitan ya o se dejan para cuando este ticket esté hecho?
+1. ~~¿Compartir?~~ → decidido 13 nov: **no**, sin botón de compartir.
+2. ~~¿Tono?~~ → decidido 13 nov: **sobrio** (tarjeta).
+3. ~~¿Interruptores?~~ → decidido 13 nov: **se quitan ya**.
 4. ¿Antes o después de la BETA?
 
 ---
@@ -719,8 +723,8 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 - Textos en es y en. Tests: una respuesta por periodo, el umbral de 5 en las estadísticas, y que la pareja no ve la respuesta.
 
 **Preguntas abiertas para Luis:**
-1. ¿Te vale la frase *"¿Cómo te sientes hoy con tu dinero?"* y la escala de 1 a 5? (Alternativa: caras o emojis en vez de números.)
-2. ¿El usuario ve su propia evolución, o solo la pregunta?
+1. ~~¿Frase y escala?~~ → decidido 13 nov: la frase sí, con **5 caras/emojis** en lugar de números (internamente 1–5).
+2. ~~¿Evolución?~~ → decidido 13 nov: **sí, ve su evolución**.
 3. ¿Dónde lo colocas en el orden? (Propuesta: después del 09, antes de la primera ola de amigos.)
 
 ---
