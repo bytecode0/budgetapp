@@ -542,7 +542,7 @@
     "updateMonthSnapshot": "Update {{month}} snapshot",
     "saveBudgetFor": "Save budget for {{month}}",
     "howItWorks": "How it works",
-    "howItWorksDesc": "Assign every euro to a destination — Fixed for recurring costs, Flexible for variable spending, and Plan for life goals (Emergency Fund, Savings, Investments). Expenses recorded against a Plan allocation automatically contribute to that life plan.",
+    "howItWorksDesc": "Give every part of your income a purpose: Fixed for recurring costs, Flexible for variable spending, and Plan for your goals (emergency fund, savings, investing). What you record on a Plan line counts as a contribution to that plan.",
     "newAllocation": "New line",
     "type": "Type",
     "fixedDesc": "Regular fixed costs — rent, insurance, subscriptions.",

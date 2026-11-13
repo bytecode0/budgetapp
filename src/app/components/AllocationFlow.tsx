@@ -444,9 +444,9 @@ export function AllocationFlow({ onOpenDebt }: { onOpenDebt: (debtId: string | n
             <button
               className="text-5xl font-display tabular-nums hover:text-primary transition-colors flex items-center gap-3 group text-left rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => { setIncomeInput(String(ownMonthlyIncome)); setEditingIncome(true); }}
-              aria-label={t('allocation.editIncome')}
             >
               {fmt(monthlyIncome)}
+              <span className="sr-only">{t('allocation.editIncome')}</span>
               <Pencil className="w-5 h-5 text-muted-foreground opacity-60 group-hover:opacity-100 transition-opacity" />
             </button>
           )}
@@ -846,10 +846,10 @@ export function AllocationFlow({ onOpenDebt }: { onOpenDebt: (debtId: string | n
                 {/* Type selector */}
                 <div>
                   <label className="text-sm text-muted-foreground mb-2 block">{t('allocation.type')}</label>
-                  <div className="flex gap-2" role="radiogroup" aria-label={t('allocation.type')}>
+                  <div className="flex gap-2">
                     {TYPE_OPTIONS.map(opt => (
                       <button
-                        key={opt} role="radio" aria-checked={newType === opt}
+                        key={opt} aria-pressed={newType === opt}
                         onClick={() => { setNewType(opt); if (opt !== 'plan') setNewLifePlanId(''); }}
                         className={`flex-1 h-11 rounded-xl text-sm font-medium transition-colors border flex items-center justify-center gap-1.5 ${
                           newType === opt

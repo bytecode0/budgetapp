@@ -542,7 +542,7 @@
     "updateMonthSnapshot": "Actualizar instantánea de {{month}}",
     "saveBudgetFor": "Guardar presupuesto para {{month}}",
     "howItWorks": "Cómo funciona",
-    "howItWorksDesc": "Asigna cada euro a un destino — Fijo para costes recurrentes, Flexible para gastos variables y Plan para objetivos de vida (Fondo de Emergencia, Ahorros, Inversiones). Los gastos registrados contra una asignación de Plan contribuyen automáticamente a ese plan de vida.",
+    "howItWorksDesc": "Da a cada parte de tus ingresos un destino: Fijo para los costes que se repiten, Flexible para el gasto variable y Plan para tus objetivos (fondo de emergencia, ahorro, inversión). Lo que registres en una partida de Plan cuenta como aportación a ese plan.",
     "newAllocation": "Nueva partida",
     "type": "Tipo",
     "fixedDesc": "Costes fijos regulares — alquiler, seguros, suscripciones.",
