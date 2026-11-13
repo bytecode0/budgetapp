@@ -14,3 +14,4 @@ export { bankConsentExpiringEmail, type BankConsentExpiringData } from "./bankCo
 export { accountDeletionCodeEmail, type AccountDeletionCodeData } from "./accountDeletionCode.js";
 export { accountDeletionRequestedEmail, type AccountDeletionRequestedData } from "./accountDeletionRequested.js";
 export { accountDeletedEmail, type AccountDeletedData } from "./accountDeleted.js";
+export { accountExistsEmail, type AccountExistsData } from "./accountExists.js";

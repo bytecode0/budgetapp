@@ -192,8 +192,10 @@ describe("security limits (integration, real Postgres)", { skip: !TEST_DATABASE_
     const r = await login();
     assert.equal(r.status, 401, "the attacker's password no longer signs in");
 
-    // And registering again can't put a password back on the verified account.
-    assert.equal((await post("/api/auth/register", { name: "Attacker", email: "friend@test.local", password: "attacker-pass" })).status, 409);
+    // And registering again can't put a password back on the verified account
+    // (it answers like any sign-up, LPBETA-23, and the owner gets "you already have an account").
+    assert.equal((await post("/api/auth/register", { name: "Attacker", email: "friend@test.local", password: "attacker-pass" })).status, 200);
+    assert.equal((await login()).status, 401, "still no password on it");
   });
 
   it("register: a later register can't plant its password on the account its owner then verifies", async () => {

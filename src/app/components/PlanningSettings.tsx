@@ -8,6 +8,7 @@ import { usePlans } from '../hooks/usePlans';
 import { usePartner } from '../hooks/usePartner';
 import { HouseholdPanel } from './HouseholdPanel';
 import { AccountDataPanel } from './AccountDataPanel';
+import { SignOutEverywhere } from './SignOutEverywhere';
 import { useLanguage } from '../context/LanguageContext';
 import { useBillingEnabled } from '../hooks/useBillingEnabled';
 import {
@@ -765,6 +766,9 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
 
       {/* Privacy promise, export my data, delete my account (LPBETA-09) */}
       <AccountDataPanel />
+
+      {/* End every session but this one (LPBETA-21) */}
+      <SignOutEverywhere />
 
       {/* Sign Out */}
       <motion.div

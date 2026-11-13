@@ -143,6 +143,17 @@ export const es = {
     cta: "Ir a Cuentas",
     privacy: "Por ley (PSD2) los bancos piden renovar este permiso cada cierto tiempo. Si no quieres renovarlo, no hagas nada.",
   },
+  accountExists: {
+    subject: "Ya tienes una cuenta en {product}",
+    preheader: "Entra con tu contraseña o recupérala si no la recuerdas.",
+    heading: "Ya tienes una cuenta en {product}",
+    introNamed: "Hola, {name}: alguien, seguramente tú, ha intentado crear una cuenta en {product} con este correo, pero ya tienes una. No hemos cambiado nada en ella.",
+    intro: "Alguien, seguramente tú, ha intentado crear una cuenta en {product} con este correo, pero ya tienes una. No hemos cambiado nada en ella.",
+    cta: "Entrar en {product}",
+    forgot: "¿No recuerdas la contraseña? En la pantalla de entrada, pulsa «¿Olvidaste la contraseña?» y te enviaremos un código para crear una nueva. Si entras con Google, usa «Continuar con Google».",
+    notYouTitle: "¿No has sido tú?",
+    notYouBody: "Puedes ignorar este correo: con él nadie puede entrar en tu cuenta.",
+  },
   accountDeletionCode: {
     subject: "{otp} es tu código para borrar tu cuenta de {product}",
     preheader: "Introdúcelo en Ajustes para confirmar el borrado. Caduca en 15 minutos.",

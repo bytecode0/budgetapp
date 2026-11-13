@@ -13,9 +13,9 @@ function fakeDb(rows: Row[]) {
   const matches = (r: Row, where: Record<string, unknown>) =>
     Object.entries(where).every(([k, v]) => (r as Record<string, unknown>)[k] === v);
   const user = {
-    async findUnique({ where }: { where: { email: string } }) {
-      calls.push("findUnique");
-      return rows.find(r => r.email === where.email) ?? null;
+    async update({ where, data }: { where: { id: string }; data: Partial<Row> }) {
+      calls.push("update");
+      return Object.assign(rows.find(r => r.id === where.id)!, data);
     },
     async upsert({ where, update, create }: { where: { email: string }; update: Partial<Row>; create: Omit<Row, "id" | "passwordHash" | "emailVerified"> & Partial<Row> }) {
       calls.push("upsert");
@@ -42,7 +42,13 @@ function fakeDb(rows: Row[]) {
       return create;
     },
   };
-  return { db: { user, userSettings } as unknown as Parameters<typeof googleSignIn>[0], calls, settings };
+  // findUserIdByEmail (server/lib/emailAddress.ts): its only value is the normalised address.
+  const $queryRaw = async (sql: { values: unknown[] }) => {
+    calls.push("lookup");
+    const row = rows.find(r => r.email.trim().toLowerCase() === sql.values[0]);
+    return row ? [{ id: row.id }] : [];
+  };
+  return { db: { user, userSettings, $queryRaw } as unknown as Parameters<typeof googleSignIn>[0], calls, settings };
 }
 
 const NOW = new Date("2026-11-04T10:00:00Z");
@@ -90,4 +96,16 @@ test("a new email becomes a verified account with no password", async () => {
   assert.ok("userId" in result && result.isNewUser && !result.claimed);
   assert.equal(rows[0].emailVerified, NOW);
   assert.equal(rows[0].passwordHash, null);
+});
+
+test("the email is trimmed and lowercased, and finds an older account stored with capitals", async () => {
+  const rows: Row[] = [{ id: "u1", email: "Ana@Example.com", name: "Ana", emailVerified: NOW, passwordHash: "h" }];
+  const { db } = fakeDb(rows);
+  const result = await googleSignIn(db, { email: "  ANA@example.COM ", verified_email: true }, null, NOW);
+  assert.ok("userId" in result && result.userId === "u1" && !result.isNewUser);
+  assert.equal(rows.length, 1, "no second account");
+
+  const fresh = await googleSignIn(db, { email: " New@Example.com", verified_email: true }, null, NOW);
+  assert.ok("userId" in fresh && fresh.isNewUser);
+  assert.equal(rows[1].email, "new@example.com");
 });

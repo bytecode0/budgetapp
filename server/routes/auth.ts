@@ -2,14 +2,18 @@ import { Router, Request, Response } from "express";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { OAuth2Client } from "google-auth-library";
+import type { PrismaClient } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import { signToken, verifyToken } from "../lib/jwt.js";
+import { sessionVersionMatches, signSessionToken, signToken, verifyToken } from "../lib/jwt.js";
 import { consumeOtp, generateOtp, hashOtp, type OtpResult } from "../lib/otp.js";
-import { clearLoginFailures, reserveLoginAttempt } from "../lib/loginThrottle.js";
+import { clearLoginFailures, reserveLoginAttempt, reserveUnknownLoginAttempt } from "../lib/loginThrottle.js";
+import { findUserIdByEmail, normalizeEmail } from "../lib/emailAddress.js";
+import { requireAuth, type AuthRequest } from "../middleware/auth.js";
 import { createDefaultAllocations } from "../lib/defaults.js";
 import { googleSignIn } from "../lib/googleSignIn.js";
 import { codeSendChecks, prismaRateLimitStore, takeRateLimit } from "../lib/rateLimit.js";
 import {
+  sendAccountExistsEmail,
   sendVerificationEmail,
   sendPasswordChangedEmail,
   sendPasswordResetEmail,
@@ -32,21 +36,54 @@ export function missingGoogleEnv(env: Record<string, string | undefined> = proce
 // Map en memoria — en Vercel el callback y el exchange pueden caer en instancias
 // distintas. Lleva el usuario en `sub` y NO en `userId`, para que requireAuth
 // nunca lo acepte como cookie de sesión.
+//
+// Single use (LPBETA-23 item 2): the token travels in the URL, so it can end
+// up in the browser history or a log. It carries a random `jti` whose hash is
+// stored as an OtpToken row of type "google_exchange" (no schema of its own);
+// the exchange deletes that row, and only the request that deletes it gets a
+// session. A copied URL is dead once the app has used it.
 const GOOGLE_EXCHANGE_PURPOSE = "google_exchange";
+const GOOGLE_EXCHANGE_TTL_MS = 2 * 60 * 1000;
+const hashJti = (jti: string) => createHash("sha256").update(jti).digest("hex");
 
-export function createGoogleSession(userId: string): string {
-  return signToken({ purpose: GOOGLE_EXCHANGE_PURPOSE, sub: userId }, "2m");
+export function signGoogleSession(userId: string, jti: string): string {
+  return signToken({ purpose: GOOGLE_EXCHANGE_PURPOSE, sub: userId, jti }, "2m");
 }
 
-/** The userId inside a valid, unexpired exchange token; null otherwise. */
-export function readGoogleSession(token: string): string | null {
+/** The user and jti inside a valid, unexpired exchange token; null otherwise. */
+export function readGoogleSession(token: string): { userId: string; jti: string } | null {
   try {
     const payload = verifyToken(token);
-    if (payload?.purpose !== GOOGLE_EXCHANGE_PURPOSE || typeof payload.sub !== "string") return null;
-    return payload.sub;
+    if (payload?.purpose !== GOOGLE_EXCHANGE_PURPOSE || typeof payload.sub !== "string" || typeof payload.jti !== "string") {
+      return null;
+    }
+    return { userId: payload.sub, jti: payload.jti };
   } catch {
     return null;
   }
+}
+
+type ExchangeDb = Pick<PrismaClient, "otpToken">;
+
+/** A new single-use exchange token for `userId` (its row is what makes it usable). */
+export async function issueGoogleSession(db: ExchangeDb, userId: string, email: string, now: Date = new Date()): Promise<string> {
+  const jti = randomBytes(32).toString("base64url");
+  // Unused tokens of anyone, past their 2 minutes: nothing else deletes them.
+  await db.otpToken.deleteMany({ where: { type: GOOGLE_EXCHANGE_PURPOSE, expiresAt: { lt: now } } });
+  await db.otpToken.create({
+    data: { email: normalizeEmail(email), type: GOOGLE_EXCHANGE_PURPOSE, tokenHash: hashJti(jti), expiresAt: new Date(now.getTime() + GOOGLE_EXCHANGE_TTL_MS) },
+  });
+  return signGoogleSession(userId, jti);
+}
+
+/** The userId for a valid exchange token, spending it; null if invalid, expired or already used. */
+export async function consumeGoogleSession(db: ExchangeDb, token: string, now: Date = new Date()): Promise<string | null> {
+  const session = readGoogleSession(token);
+  if (!session) return null;
+  const { count } = await db.otpToken.deleteMany({
+    where: { type: GOOGLE_EXCHANGE_PURPOSE, tokenHash: hashJti(session.jti), expiresAt: { gt: now } },
+  });
+  return count === 1 ? session.userId : null;
 }
 
 // OAuth CSRF protection: GET /google puts a random nonce in an httpOnly cookie
@@ -112,10 +149,16 @@ const COOKIE_OPTS = {
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
-function setAuthCookie(res: Response, userId: string) {
-  const token = signToken({ userId });
-  res.cookie("token", token, COOKIE_OPTS);
+/** The session cookie, carrying the user's current session version (LPBETA-21). */
+function setAuthCookie(res: Response, user: { id: string; tokenVersion: number }) {
+  res.cookie("token", signSessionToken(user.id, user.tokenVersion), COOKIE_OPTS);
 }
+
+const CLEAR_COOKIE_OPTS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+};
 
 // ── Google OAuth ──────────────────────────────────────────────
 
@@ -190,7 +233,7 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
       );
     }
 
-    const sessionToken = createGoogleSession(signIn.userId);
+    const sessionToken = await issueGoogleSession(prisma, signIn.userId, signIn.email);
     return res.redirect(`${appUrl}/auth/google/callback?token=${sessionToken}`);
   } catch (err) {
     console.error("[auth/google/callback]", err);
@@ -203,7 +246,7 @@ authRouter.post("/google/exchange", async (req: Request, res: Response) => {
 
   if (!token) return res.status(400).json({ error: "Token is required" });
 
-  const sessionUserId = typeof token === "string" ? readGoogleSession(token) : null;
+  const sessionUserId = typeof token === "string" ? await consumeGoogleSession(prisma, token) : null;
   if (!sessionUserId) {
     return res.status(400).json({ error: "Invalid or expired session token" });
   }
@@ -215,7 +258,7 @@ authRouter.post("/google/exchange", async (req: Request, res: Response) => {
 
   if (!user) return res.status(400).json({ error: "User not found" });
 
-  setAuthCookie(res, user.id);
+  setAuthCookie(res, user);
 
   return res.json({
     user: {
@@ -278,17 +321,24 @@ function allowCodeSend(email: string, req: Request): Promise<boolean> {
 
 const OTP_TYPES = new Set(["email_verification", "password_reset"]);
 
-// Register
+// Register. One answer whether or not the email already has an account
+// (LPBETA-23 item 5): a new or unverified account gets a code; a verified one
+// gets an email saying it already exists ("sign in or reset your password")
+// and nothing about it changes. Both go through the same code limits
+// (LPBETA-16), so this can't be used to flood an inbox either.
+const REGISTER_SENT = { message: "Verification email sent" };
 authRouter.post("/register", async (req: Request, res: Response) => {
   try {
-    const { name, email, password, language } = req.body;
+    const { name, password, language } = req.body;
 
-    if (!name || !email || !password) {
+    if (!name || !req.body.email || !password) {
       return res.status(400).json({ error: "Name, email and password are required" });
     }
-    if (typeof email !== "string" || typeof password !== "string") {
+    if (typeof req.body.email !== "string" || typeof password !== "string") {
       return res.status(400).json({ error: "Email and password must be text" });
     }
+    const email = normalizeEmail(req.body.email);
+    if (!email) return res.status(400).json({ error: "Name, email and password are required" });
 
     // Optional: the UI language at sign-up, used for the verification email and
     // saved to UserSettings below (createDefaultAllocations keeps it on verify).
@@ -305,12 +355,19 @@ authRouter.post("/register", async (req: Request, res: Response) => {
       return res.status(429).json({ error: "Too many codes requested, try again later", code: "rate_limited" });
     }
 
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing?.emailVerified) {
-      return res.status(409).json({ error: "An account with this email already exists" });
-    }
-
+    const existingId = await findUserIdByEmail(prisma, email);
+    const existing = existingId ? await prisma.user.findUnique({
+      where: { id: existingId },
+      include: { settings: { select: { language: true } } },
+    }) : null;
+    // Hashed in every case, so an existing account doesn't answer faster.
     const passwordHash = await bcrypt.hash(password, 10);
+
+    const accountExists = async (account: NonNullable<typeof existing>) => {
+      await sendAccountExistsEmail(account.email ?? email, account.name ?? "", resolveLocale(account.settings?.language));
+      return res.json(REGISTER_SENT);
+    };
+    if (existing?.emailVerified) return accountExists(existing);
 
     // Only while the account is still unverified: if it was verified since the
     // check above (by its code or by Google), its password is not ours to set.
@@ -319,9 +376,7 @@ authRouter.post("/register", async (req: Request, res: Response) => {
         where: { id: existing.id, emailVerified: null },
         data: { name, passwordHash },
       });
-      if (updated.count !== 1) {
-        return res.status(409).json({ error: "An account with this email already exists" });
-      }
+      if (updated.count !== 1) return accountExists(existing);
     }
     const userId = existing ? existing.id : (await prisma.user.create({ data: { name, email, passwordHash } })).id;
     await prisma.userSettings.upsert({
@@ -333,7 +388,7 @@ authRouter.post("/register", async (req: Request, res: Response) => {
     const otp = await createOtp(email, "email_verification");
     await sendVerificationEmail(email, name, otp, locale);
 
-    return res.json({ message: "Verification email sent" });
+    return res.json(REGISTER_SENT);
   } catch (err) {
     console.error("[auth/register]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -367,8 +422,12 @@ authRouter.post("/verify-email", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
-    const result = await consumeOtp(prisma, String(email), "email_verification", String(otp));
+    const address = normalizeEmail(String(email));
+    const result = await consumeOtp(prisma, address, "email_verification", String(otp));
     if (result !== "ok") return otpFailure(res, result);
+    const foundId = await findUserIdByEmail(prisma, address);
+    if (!foundId) return otpFailure(res, "invalid");
+    const found = { id: foundId };
 
     // Verifying sets the password, in the same conditional update as the
     // verification: the stored hash is whatever the LAST register wrote, and
@@ -379,7 +438,7 @@ authRouter.post("/verify-email", async (req: Request, res: Response) => {
     // was already verified keeps its password.
     const passwordHash = typeof password === "string" && password ? await bcrypt.hash(password, 10) : null;
     const verified = await prisma.user.updateMany({
-      where: { email: String(email), emailVerified: null },
+      where: { id: found.id, emailVerified: null },
       data: {
         emailVerified: new Date(),
         passwordHash,
@@ -388,8 +447,6 @@ authRouter.post("/verify-email", async (req: Request, res: Response) => {
         loginLockedUntil: null,
       },
     });
-    const found = await prisma.user.findUnique({ where: { email: String(email) }, select: { id: true } });
-    if (!found) return otpFailure(res, "invalid");
     if (verified.count === 1) {
       // Only on the unverified → verified step: a verified account keeps its settings.
       await prisma.userSettings.upsert({
@@ -403,7 +460,7 @@ authRouter.post("/verify-email", async (req: Request, res: Response) => {
       include: { settings: { select: { language: true } } },
     });
 
-    setAuthCookie(res, user.id);
+    setAuthCookie(res, user);
 
     sendWelcomeEmail(user.email!, user.name ?? "", resolveLocale(user.settings?.language)).catch((e) =>
       console.error("[auth/verify-email] welcome email failed:", e)
@@ -452,21 +509,23 @@ authRouter.post("/verify-email", async (req: Request, res: Response) => {
 const RESEND_SENT = { message: "If an account exists, a new code was sent" };
 authRouter.post("/resend-otp", async (req: Request, res: Response) => {
   try {
-    const { email, type } = req.body;
+    const { type } = req.body;
 
-    if (!email || !type) {
+    if (!req.body.email || !type) {
       return res.status(400).json({ error: "Email and type are required" });
     }
-    if (typeof email !== "string" || !OTP_TYPES.has(type)) {
+    if (typeof req.body.email !== "string" || !OTP_TYPES.has(type)) {
       return res.status(400).json({ error: "Invalid email or code type" });
     }
+    const email = normalizeEmail(req.body.email);
 
     if (!(await allowCodeSend(email, req))) return res.json(RESEND_SENT);
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const userId = await findUserIdByEmail(prisma, email);
+    const user = userId ? await prisma.user.findUnique({
+      where: { id: userId },
       include: { settings: { select: { language: true } } },
-    });
+    }) : null;
     if (!user) return res.json(RESEND_SENT);
 
     const last = await prisma.otpToken.findFirst({
@@ -498,16 +557,17 @@ authRouter.post("/resend-otp", async (req: Request, res: Response) => {
 const RESET_SENT = { message: "If an account exists, a reset code was sent" };
 authRouter.post("/send-reset", async (req: Request, res: Response) => {
   try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: "Email is required" });
-    if (typeof email !== "string") return res.status(400).json({ error: "Invalid email" });
+    if (!req.body.email) return res.status(400).json({ error: "Email is required" });
+    if (typeof req.body.email !== "string") return res.status(400).json({ error: "Invalid email" });
+    const email = normalizeEmail(req.body.email);
 
     if (!(await allowCodeSend(email, req))) return res.json(RESET_SENT);
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const userId = await findUserIdByEmail(prisma, email);
+    const user = userId ? await prisma.user.findUnique({
+      where: { id: userId },
       include: { settings: { select: { language: true } } },
-    });
+    }) : null;
     if (!user) return res.json(RESET_SENT);
 
     const otp = await createOtp(email, "password_reset");
@@ -529,14 +589,16 @@ authRouter.post("/verify-reset-otp", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Email and OTP are required" });
     }
 
-    const result = await consumeOtp(prisma, String(email), "password_reset", String(otp));
+    const address = normalizeEmail(String(email));
+    const result = await consumeOtp(prisma, address, "password_reset", String(otp));
     if (result !== "ok") return otpFailure(res, result);
 
-    const user = await prisma.user.findUnique({ where: { email: String(email) }, select: { passwordHash: true } });
+    const userId = await findUserIdByEmail(prisma, address);
+    const user = userId ? await prisma.user.findUnique({ where: { id: userId }, select: { passwordHash: true } }) : null;
     if (!user) return otpFailure(res, "invalid");
 
     const resetToken = signToken(
-      { email, type: "password_reset", pwf: passwordFingerprint(user.passwordHash) },
+      { email: address, type: "password_reset", pwf: passwordFingerprint(user.passwordHash) },
       "15m",
     );
     return res.json({ resetToken });
@@ -571,10 +633,11 @@ authRouter.post("/reset-password", async (req: Request, res: Response) => {
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    const user = await prisma.user.findUnique({
-      where: { email: payload.email },
+    const userId = await findUserIdByEmail(prisma, String(payload.email));
+    const user = userId ? await prisma.user.findUnique({
+      where: { id: userId },
       select: { id: true, name: true, email: true, passwordHash: true, settings: { select: { language: true } } },
-    });
+    }) : null;
     // The token only works for the password it was issued against: once used
     // (the password changed), it no longer matches.
     if (!user || passwordFingerprint(user.passwordHash) !== payload.pwf) {
@@ -582,14 +645,20 @@ authRouter.post("/reset-password", async (req: Request, res: Response) => {
     }
 
     // Conditional on the password being unchanged since the check above, so
-    // two concurrent uses of the same token can't both succeed.
+    // two concurrent uses of the same token can't both succeed. The session
+    // version goes up with it (LPBETA-21): every open session, wherever it
+    // is, ends, including one an attacker may hold.
     const updated = await prisma.user.updateMany({
       where: { id: user.id, passwordHash: user.passwordHash },
-      data: { passwordHash, failedLogins: 0, loginLockedUntil: null },
+      data: { passwordHash, failedLogins: 0, loginLockedUntil: null, tokenVersion: { increment: 1 } },
     });
     if (updated.count !== 1) {
       return res.status(400).json({ error: "Invalid or expired reset token" });
     }
+    // No new session here: the reset screen sends them to sign in with the
+    // new password (a code proves the inbox, not that this browser should stay
+    // signed in). This browser's old cookie is dead anyway; drop it.
+    res.clearCookie("token", CLEAR_COOKIE_OPTS);
 
     sendPasswordChangedEmail(user.email!, user.name ?? "", resolveLocale(user.settings?.language)).catch((e) =>
       console.error("[auth/reset-password] password changed email failed:", e)
@@ -605,24 +674,31 @@ authRouter.post("/reset-password", async (req: Request, res: Response) => {
 // Login
 authRouter.post("/login", async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
+    const { password } = req.body;
+    const email = normalizeEmail(typeof req.body.email === "string" ? req.body.email : "");
 
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    // The lock answers the same whether or not the email has an account
+    // (LPBETA-23 item 5): an email with no account, or one with no password
+    // (Google only), counts its tries too and gets the same 429 after as many.
+    const locked = () =>
+      res.status(429).json({ error: "Too many failed attempts, try again later", code: "LOGIN_LOCKED" });
+    const userId = await findUserIdByEmail(prisma, email);
+    const user = userId ? await prisma.user.findUnique({
+      where: { id: userId },
       include: { subscription: true },
-    });
+    }) : null;
     if (!user || !user.passwordHash) {
+      const reserved = user ? await reserveLoginAttempt(prisma, user.id) : await reserveUnknownLoginAttempt(prisma, email);
+      if (reserved === "locked") return locked();
       await bcrypt.compare(String(password), await dummyHash()); // same timing as a wrong password
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    if ((await reserveLoginAttempt(prisma, user.id)) === "locked") {
-      return res.status(429).json({ error: "Too many failed attempts, try again later", code: "LOGIN_LOCKED" });
-    }
+    if ((await reserveLoginAttempt(prisma, user.id)) === "locked") return locked();
 
     const valid = await bcrypt.compare(String(password), user.passwordHash);
     if (!valid) {
@@ -637,7 +713,7 @@ authRouter.post("/login", async (req: Request, res: Response) => {
       });
     }
 
-    setAuthCookie(res, user.id);
+    setAuthCookie(res, user);
 
     return res.json({
       user: {
@@ -671,6 +747,8 @@ authRouter.get("/me", async (req: Request, res: Response) => {
     });
 
     if (!user) return res.status(401).json({ error: "User not found" });
+    // Same rule as requireAuth (LPBETA-21): an ended session isn't signed in.
+    if (!sessionVersionMatches(payload, user.tokenVersion)) return res.status(401).json({ error: "Not authenticated" });
 
     return res.json({
       user: {
@@ -691,11 +769,27 @@ authRouter.get("/me", async (req: Request, res: Response) => {
 
 // Logout
 authRouter.post("/logout", (_req: Request, res: Response) => {
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-  });
+  res.clearCookie("token", CLEAR_COOKIE_OPTS);
   res.set("Cache-Control", "no-store");
   return res.json({ success: true });
+});
+
+// Sign out on every device (LPBETA-21): bumps the session version, which ends
+// every session issued before, then gives THIS device a fresh cookie with the
+// new version: whoever pressed the button stays signed in here, everyone
+// else (a lost phone, a shared laptop, a copied cookie) is out.
+authRouter.post("/logout-all", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await prisma.user.update({
+      where: { id: req.authUserId! },
+      data: { tokenVersion: { increment: 1 } },
+      select: { id: true, tokenVersion: true },
+    });
+    setAuthCookie(res, user);
+    res.set("Cache-Control", "no-store");
+    return res.json({ data: { ok: true } });
+  } catch (err) {
+    console.error("[auth/logout-all]", err instanceof Error ? err.message : "unknown error");
+    return res.status(500).json({ error: "Internal server error" });
+  }
 });

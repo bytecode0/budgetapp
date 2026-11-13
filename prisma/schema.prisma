@@ -18,6 +18,12 @@ model User {
   // success or lock, and until when password sign-in is locked.
   failedLogins     Int       @default(0)
   loginLockedUntil DateTime?
+  // Session version (LPBETA-21): every session cookie carries the value it
+  // was issued with (`tv` in the JWT) and requireAuth rejects one that no
+  // longer matches. Bumped by a password reset and by "sign out on every
+  // device", which ends every session issued before it. A cookie without
+  // `tv` (issued before this field existed) counts as version 0.
+  tokenVersion     Int       @default(0)
   // Last time this person reviewed bank movements in the app (POST
   // /api/banking/connections/:id/confirm) — set only by that user action, never
   // by the daily sync, which moves Account.bankReviewedAt on its own. Read by
