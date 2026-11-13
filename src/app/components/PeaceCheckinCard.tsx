@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
-import { usePeaceCheckins } from '../hooks/usePeaceCheckins';
+import { usePeaceCheckins, type PeaceState } from '../hooks/usePeaceCheckins';
 
 // The five faces, stored as 1 (muy intranquilo) to 5 (en paz).
 const FACES = ['😣', '😟', '😐', '🙂', '😌'] as const;
@@ -23,17 +23,23 @@ function writeDismissed(userId: string | undefined, period: string) {
   try { window.localStorage.setItem(dismissKey(userId), period); } catch { /* not remembered */ }
 }
 
-/** Whole months between two "YYYY-MM" labels. */
-function monthsBetween(from: string, to: string): number {
-  const [fy, fm] = from.split('-').map(Number);
-  const [ty, tm] = to.split('-').map(Number);
-  return (ty - fy) * 12 + (tm - fm);
+// The first answer ever given (by when, not by period label: a payday change
+// can make a later answer's label earlier) against the one just given, "hoy".
+function evolutionOf(state: PeaceState): { months: number; from: number; to: number } | null {
+  if (state.current === null) return null;
+  const first = state.checkins.find(c => c.period !== state.period);
+  if (!first) return null;
+  const then = new Date(first.createdAt);
+  const now = new Date();
+  const months = (now.getFullYear() - then.getFullYear()) * 12 + (now.getMonth() - then.getMonth());
+  return { months: Math.max(1, months), from: first.score, to: state.current };
 }
 
-// "¿Cómo te sientes hoy con tu dinero?" on Home (LPBETA-24): once per budget
-// period (the first visit after signing up is the baseline). After answering,
-// with 2+ answers, one plain line with the first answer and today's — no
-// judgement either way. Only the person sees their answers.
+// "¿Cómo te sientes hoy con tu dinero?" on Home (LPBETA-24): shown when the
+// server says this budget period has no answer yet (`ask`), so the first visit
+// after signing up is the baseline. After answering, with an earlier answer,
+// one plain line with the first answer and today's — no judgement either way.
+// Only the person sees their answers.
 export function PeaceCheckinCard() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -42,6 +48,11 @@ export function PeaceCheckinCard() {
   const [saving, setSaving] = useState(false);
   const [justAnswered, setJustAnswered] = useState(false);
   const [closed, setClosed] = useState(false);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  // After answering, focus moves to the close button; the live region (mounted
+  // with the card) says the thanks.
+  useEffect(() => { if (justAnswered) closeRef.current?.focus(); }, [justAnswered]);
 
   if (!state || closed) return null;
   if (!justAnswered && (!state.ask || dismissed === state.period)) return null;
@@ -61,20 +72,26 @@ export function PeaceCheckinCard() {
     setDismissed(state.period);
   };
 
-  const first = state.checkins[0];
-  const latest = state.checkins[state.checkins.length - 1];
-  const evolution = justAnswered && state.checkins.length >= 2 ? { first, latest, months: monthsBetween(first.period, latest.period) } : null;
+  const evolution = justAnswered ? evolutionOf(state) : null;
 
   return (
     <motion.section
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
-      aria-labelledby="peace-question"
+      aria-labelledby="peace-heading"
       className="bg-card border border-border rounded-2xl p-5 space-y-4"
     >
+      {/* Always mounted, so screen readers announce the text when it changes. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {justAnswered ? [
+          t('peace.thanks'),
+          evolution && t('peace.evolution', { count: evolution.months, from: word(evolution.from), to: word(evolution.to) }),
+        ].filter(Boolean).join(' ') : ''}
+      </p>
+
       {!justAnswered ? (
         <>
           <div className="flex items-start justify-between gap-3">
-            <h2 id="peace-question" className="font-display text-lg">{t('peace.question')}</h2>
+            <h2 id="peace-heading" className="font-display text-lg">{t('peace.question')}</h2>
             <button
               onClick={notNow}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0 rounded-lg px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -82,7 +99,7 @@ export function PeaceCheckinCard() {
               {t('peace.notNow')}
             </button>
           </div>
-          <div role="group" aria-labelledby="peace-question" className="grid grid-cols-5 gap-2">
+          <div role="group" aria-labelledby="peace-heading" className="grid grid-cols-5 gap-2">
             {SCORES.map(score => (
               <button
                 key={score}
@@ -98,22 +115,18 @@ export function PeaceCheckinCard() {
           <p className="text-xs text-muted-foreground">{t('peace.private')}</p>
         </>
       ) : (
-        <div className="flex items-start justify-between gap-3" role="status">
+        <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
-            <h2 id="peace-question" className="font-display text-lg">{t('peace.thanks')}</h2>
+            <h2 id="peace-heading" className="font-display text-lg">{t('peace.thanks')}</h2>
             {evolution && (
-              <p className="text-sm">
-                <span aria-hidden="true">
-                  {t('peace.evolution', { count: evolution.months, from: FACES[evolution.first.score - 1], to: FACES[evolution.latest.score - 1] })}
-                </span>
-                <span className="sr-only">
-                  {t('peace.evolution', { count: evolution.months, from: word(evolution.first.score), to: word(evolution.latest.score) })}
-                </span>
+              <p className="text-sm" aria-hidden="true">
+                {t('peace.evolution', { count: evolution.months, from: FACES[evolution.from - 1], to: FACES[evolution.to - 1] })}
               </p>
             )}
             <p className="text-xs text-muted-foreground">{t('peace.private')}</p>
           </div>
           <button
+            ref={closeRef}
             onClick={() => setClosed(true)}
             aria-label={t('peace.close')}
             className="p-2 rounded-lg hover:bg-muted transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
