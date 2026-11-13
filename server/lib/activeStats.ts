@@ -2,7 +2,8 @@
 //
 // An active user has done something in the app in the last 30 days: entered
 // an expense or an income (by hand or a file import), made or changed a plan
-// deposit, or reviewed bank movements. What the daily bank sync writes on its own
+// deposit, reviewed bank movements, or answered the monthly peace question
+// (LPBETA-24). What the daily bank sync writes on its own
 // (source "bank_sync", and the Account.bankReviewedAt cursor it advances) is
 // not the person's activity; their review is, via User.lastBankReviewAt.
 //
@@ -89,7 +90,7 @@ export function computeActiveStats(input: ActivityInput, now: Date): ActiveStats
 // records who edited it, and automated updates move updatedAt too.
 export async function loadActivity(prisma: PrismaClient, now: Date): Promise<ActivityInput> {
   const from = new Date(now.getTime() - 30 * DAY_MS);
-  const [users, expenses, incomes, reviewers, plans, deposits, households] = await Promise.all([
+  const [users, expenses, incomes, reviewers, plans, deposits, households, checkins] = await Promise.all([
     prisma.user.findMany({ select: { id: true, createdAt: true } }),
     prisma.expense.groupBy({
       by: ["userId", "createdByUserId"],
@@ -109,12 +110,15 @@ export async function loadActivity(prisma: PrismaClient, now: Date): Promise<Act
       select: { userId: true, byUserId: true, updatedAt: true, plan: { select: { ownerUserId: true } } },
     }),
     prisma.householdMember.groupBy({ by: ["householdId"], _count: { userId: true } }),
+    // Always the person who answered (PeaceCheckin.userId is never the pool).
+    prisma.peaceCheckin.groupBy({ by: ["userId"], where: { createdAt: { gte: from } }, _max: { createdAt: true } }),
   ]);
 
   const activity: ActivityInput["activity"] = [];
   for (const e of expenses) if (e._max.createdAt) activity.push({ userId: e.createdByUserId ?? e.userId, at: e._max.createdAt });
   for (const i of incomes) if (i._max.createdAt) activity.push({ userId: i.ownerUserId, at: i._max.createdAt });
   for (const r of reviewers) if (r.lastBankReviewAt) activity.push({ userId: r.id, at: r.lastBankReviewAt });
+  for (const c of checkins) if (c._max.createdAt) activity.push({ userId: c.userId, at: c._max.createdAt });
   const depositRows = deposits.map(d => ({ userId: d.byUserId ?? d.plan.ownerUserId ?? d.userId, at: d.updatedAt }));
   activity.push(...depositRows);
 

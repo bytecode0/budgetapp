@@ -18,12 +18,7 @@ interface LegalSection {
 // Public pages (no session) at /privacy, /terms and /privacy-promise (the
 // plain-language privacy promise, LPBETA-09), rendered by App.tsx from the URL
 // path. The text lives in the locales under `legal.*`; Spanish is the source
-// of truth.
-//
-// TODO(LPBETA-24): when the monthly "¿Cómo te sientes hoy con tu dinero?"
-// question exists, add it to legal.promise ("solo tú ves tu respuesta; Luis
-// solo ve medias de grupos de 5 o más"). It is left out until then: the
-// promise only describes what the app really does.
+// of truth. The promise only describes what the app really does.
 export function LegalPage({ page }: { page: LegalPageKind }) {
   const { t } = useTranslation();
   const raw: unknown = t(`legal.${page}.sections`, { returnObjects: true });

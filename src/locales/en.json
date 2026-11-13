@@ -155,6 +155,23 @@
     "emptyTitle": "No data to analyze yet",
     "emptyDesc": "Track a few expenses and contributions to see your trends here."
   },
+  "peace": {
+    "question": "How do you feel about your money today?",
+    "faces": {
+      "1": "Awful",
+      "2": "Uneasy",
+      "3": "So-so",
+      "4": "Fine",
+      "5": "At peace"
+    },
+    "notNow": "Not now",
+    "private": "Only you see your answer.",
+    "thanks": "Thanks for telling us.",
+    "evolution_one": "{{count}} month ago: {{from}} · today: {{to}}",
+    "evolution_other": "{{count}} months ago: {{from}} · today: {{to}}",
+    "close": "Close",
+    "saveFailed": "Your answer couldn't be saved. Please try again."
+  },
   "home": {
     "greetingMorning": "Good morning",
     "greetingAfternoon": "Good afternoon",
@@ -1563,7 +1580,8 @@
           "paragraphs": [
             "In the app, only you see your numbers. Remanso has no dashboards for leaders, groups or organisers: nobody from your church, your community or your group of friends has a way to see them.",
             "If you share your finances with your partner (a household), your partner sees what you share in the household, depending on the privacy level you choose. Nobody else.",
-            "Luis, who maintains the app, has technical access to the database; he doesn't look at it except to support you if you ask him, and the statistics he uses are only counts, with no names or amounts."
+            "Luis, who maintains the app, has technical access to the database; he doesn't look at it except to support you if you ask him, and the statistics he uses are only counts, with no names or amounts.",
+            "Once a month, on Home, we ask how you feel about your money. Only you see your answer, not even your partner; Luis only sees averages of groups of 5 people or more, never anyone's answer."
           ]
         },
         {
@@ -1629,6 +1647,7 @@
             "Bank statements you import: the file (CSV, Excel, Norma 43 or OFX) is read in your browser and only the transactions it contains reach the server (date, amount, description and, if present, balance and status). If your browser can't read it and the file is small, it is sent to the server to be read there, without storing it. We store the transactions you confirm, not the file. If you tell us which column is which, we store that mapping (the column titles) on the account for the next statement.",
             "If you connect your bank (optional): through Enable Banking we read, with the read-only permission you give on your bank's website, the name and type of the accounts and cards you share, their currency, the last four characters of the IBAN, balances and booked transactions (date, amount, description and, when provided, the merchant's or other party's name and the balance after the transaction). Transactions are classified with your own rules; the bank's descriptions are not sent to any AI. We store the transactions you confirm, the balances, the date the permission expires and an identifier of the session with the bank, encrypted. We do not store the full IBAN or your bank credentials: we never see them.",
             "Your household: if you invite someone to share finances, we store their email and the invitation, and send them an email with the link. People in the same household see the shared data according to the household's privacy level.",
+            "Your answer to the monthly question \"How do you feel about your money today?\", if you answer: a face from 1 to 5, no free text, one per period. Only you see it (not the people in your household either); the statistics only use averages of groups of 5 people or more.",
             "Technical data: the logs the server produces while running (for example, errors), which include data such as the request's IP address."
           ]
         },

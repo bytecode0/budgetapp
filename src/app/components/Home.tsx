@@ -19,6 +19,7 @@ import { monthLight } from '../../../shared/incomeShare';
 import { useMonthSavings } from '../hooks/useMonthSavings';
 import { PaidYourselfCard } from './PaidYourselfCard';
 import { MonthLightCard } from './MonthLightCard';
+import { PeaceCheckinCard } from './PeaceCheckinCard';
 
 // Tones as Remanso tokens (shared/budgetStatus.ts decides the tone). Going
 // over is the "watch" state, sun — never red (CLAUDE.md).
@@ -159,6 +160,9 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
           />
         </motion.div>
       )}
+
+      {/* ── "¿Cómo te sientes hoy con tu dinero?", once per period (LPBETA-24) ── */}
+      {isCurrentMonth && <PeaceCheckinCard />}
 
       {/* ── The month's figures ── */}
       {review && (

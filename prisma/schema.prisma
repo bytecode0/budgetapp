@@ -51,6 +51,7 @@ model User {
   sentInvites    PartnerInvite[] @relation("SentInvites")
   householdMemberships HouseholdMember[]
   duplicateDismissals DuplicateDismissal[]
+  peaceCheckins  PeaceCheckin[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -556,6 +557,26 @@ model RateLimitHit {
 
   @@id([key, windowStart])
   @@index([windowStart])
+}
+
+// "¿Cómo te sientes hoy con tu dinero?" (LPBETA-24): one answer per person
+// and budget period, a face from 1 (muy intranquilo) to 5 (en paz). `userId`
+// is the real person (req.authUserId), never the pool: the answer is private,
+// a partner never sees it. `period` is the "YYYY-MM" budget period the answer
+// was given in (server/lib/period.ts, the pool's cycleStartDay); it is stored
+// because the uniqueness needs it, so a later payday change leaves old answers
+// in their original period. Luis only sees aggregates of 5 or more answers
+// (server/lib/peace.ts). Deleted with the user.
+model PeaceCheckin {
+  id        String   @id @default(cuid())
+  userId    String
+  period    String   // "YYYY-MM"
+  score     Int      // 1-5, validated by the API
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, period])
 }
 
 // ── Household (Epic H1) ──────────────────────────────────────────────
