@@ -155,6 +155,23 @@
     "emptyTitle": "Aún no hay datos para analizar",
     "emptyDesc": "Registra algunos gastos y aportaciones para ver tus tendencias aquí."
   },
+  "peace": {
+    "question": "¿Cómo te sientes hoy con tu dinero?",
+    "faces": {
+      "1": "Fatal",
+      "2": "Mal",
+      "3": "Regular",
+      "4": "Bien",
+      "5": "En paz"
+    },
+    "notNow": "Ahora no",
+    "private": "Solo tú ves tu respuesta.",
+    "thanks": "Gracias por contarlo.",
+    "evolution_one": "hace {{count}} mes: {{from}} · hoy: {{to}}",
+    "evolution_other": "hace {{count}} meses: {{from}} · hoy: {{to}}",
+    "close": "Cerrar",
+    "saveFailed": "No se ha podido guardar tu respuesta. Inténtalo de nuevo."
+  },
   "home": {
     "greetingMorning": "Buenos días",
     "greetingAfternoon": "Buenas tardes",
@@ -1549,7 +1566,7 @@
     }
   },
   "legal": {
-    "lastUpdated": "Última actualización: 4 de noviembre de 2026",
+    "lastUpdated": "Última actualización: 13 de noviembre de 2026",
     "backToApp": "Volver a Remanso",
     "privacyLink": "Política de privacidad",
     "termsLink": "Términos del servicio",
@@ -1563,7 +1580,8 @@
           "paragraphs": [
             "En la app, tus números solo los ves tú. Remanso no tiene paneles para líderes, grupos ni organizadores: nadie de tu iglesia, de tu comunidad ni de tu grupo de amigos tiene una forma de verlos.",
             "Si compartes tus finanzas con tu pareja (un hogar), tu pareja ve lo que compartís en el hogar, según el nivel de privacidad que elijáis. Nadie más.",
-            "Luis, que mantiene la app, tiene acceso técnico a la base de datos; no la mira salvo para darte soporte si se lo pides, y las estadísticas que usa son solo recuentos, sin nombres ni importes."
+            "Luis, que mantiene la app, tiene acceso técnico a la base de datos; no la mira salvo para darte soporte si se lo pides, y las estadísticas que usa son solo recuentos, sin nombres ni importes.",
+            "Una vez al mes, en el Inicio, te preguntamos cómo te sientes con tu dinero. Solo tú ves tu respuesta, tampoco tu pareja. Luis solo ve la media de cada mes cerrado cuando han respondido 5 personas o más; nunca la respuesta de nadie."
           ]
         },
         {
@@ -1629,6 +1647,7 @@
             "Extractos bancarios que importas: el archivo (CSV, Excel, Norma 43 u OFX) se lee en tu navegador y al servidor solo llegan los movimientos que contiene (fecha, importe, concepto y, si los trae, saldo y estado). Si tu navegador no consigue leerlo y el archivo es pequeño, se envía al servidor para leerlo allí, sin guardarlo. Guardamos los movimientos que confirmas, no el archivo. Si indicas qué columna es cada una, guardamos esa correspondencia (los títulos de las columnas) en la cuenta para el próximo extracto.",
             "Si conectas tu banco (opcional): a través de Enable Banking leemos, con tu permiso de solo lectura dado en la web de tu banco, el nombre y tipo de las cuentas y tarjetas que compartas, su moneda, los cuatro últimos caracteres del IBAN, los saldos y los movimientos contabilizados (fecha, importe, concepto y, si los trae, el nombre del comercio o de la otra parte y el saldo tras el movimiento). Los movimientos se clasifican con tus propias reglas; los conceptos del banco no se envían a ninguna IA. Guardamos los movimientos que confirmas, los saldos, la fecha en que caduca el permiso y un identificador de la sesión con el banco, cifrado. No guardamos el IBAN completo ni tus credenciales del banco: nunca las vemos.",
             "Tu hogar: si invitas a otra persona a compartir las finanzas, guardamos su email y la invitación, y le enviamos un email con el enlace. Las personas de un mismo hogar ven los datos compartidos según el nivel de privacidad que tenga el hogar.",
+            "Tu respuesta a la pregunta mensual «¿Cómo te sientes hoy con tu dinero?», si respondes: una cara del 1 al 5, sin texto libre, una por periodo. Solo la ves tú (tampoco las personas de tu hogar). Luis solo ve la media de cada mes cerrado cuando han respondido 5 personas o más; nunca la respuesta de nadie.",
             "Datos técnicos: los registros que genera el servidor al funcionar (por ejemplo, errores), que incluyen datos como la dirección IP de la petición."
           ]
         },

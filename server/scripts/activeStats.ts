@@ -1,5 +1,6 @@
-// Active users for the BETA (LPBETA-05): prints counts only — never names,
-// emails, amounts or ids. Read-only. Against production, Luis runs it in his
+// Active users for the BETA (LPBETA-05) and the peace question's aggregates
+// (LPBETA-24): prints counts only — never names, emails, amounts, ids or
+// anyone's answer. Read-only. Against production, Luis runs it in his
 // own terminal with the Neon URL between the quotes:
 //
 //   DATABASE_URL='' npm run stats:active
@@ -7,6 +8,7 @@
 // Definition and sources: server/lib/activeStats.ts.
 import { PrismaClient } from "@prisma/client";
 import { computeActiveStats, formatActiveStats, loadActivity } from "../lib/activeStats.js";
+import { computePeaceStats, formatPeaceStats, loadPeaceRows } from "../lib/peace.js";
 import { pathToFileURL } from "node:url";
 
 // Its own client with Prisma's logging off: Prisma would print full error
@@ -20,8 +22,9 @@ function errorTag(e: unknown): string {
 }
 
 export async function activeStats(now = new Date()): Promise<string> {
-  const input = await loadActivity(prisma, now);
-  return formatActiveStats(computeActiveStats(input, now), now);
+  const [input, peace] = await Promise.all([loadActivity(prisma, now), loadPeaceRows(prisma)]);
+  // The peace aggregates (LPBETA-24) only for groups of 5 or more: server/lib/peace.ts.
+  return `${formatActiveStats(computeActiveStats(input, now), now)}\n\n${formatPeaceStats(peace && computePeaceStats(peace, now))}`;
 }
 
 // Run as a script (npm run stats:active), not when imported.

@@ -204,13 +204,15 @@ export async function buildJsonExport(db: PrismaClient, me: string, now = new Da
         settings: { select: { language: true, darkMode: true, cycleStartDay: true, monthlyIncome: true, noCardsAt: true, noLoansAt: true } },
         subscription: { select: { plan: true, status: true, currentPeriodEnd: true, cancelAtPeriodEnd: true } },
         householdMemberships: { select: { role: true, status: true, joinedAt: true, household: { select: { name: true } } } },
+        // My answers to the monthly peace question (LPBETA-24): always the person's own.
+        peaceCheckins: { select: { period: true, score: true, createdAt: true }, orderBy: { createdAt: "asc" } },
       },
     }),
     loadRecords(db, own),
     countMyExpenses(db, own),
     db.income.count({ where: { ownerUserId: me, ...visibleIncomeWhere(me) } }),
   ]);
-  const { settings, subscription, householdMemberships, ...profile } = user;
+  const { settings, subscription, householdMemberships, peaceCheckins, ...profile } = user;
   return {
     format: "remanso-export",
     version: EXPORT_FORMAT_VERSION,
@@ -219,6 +221,7 @@ export async function buildJsonExport(db: PrismaClient, me: string, now = new Da
       amounts: "Every amount is in integer cents (1234 = 12.34).",
       movements: "Expenses, refunds and income are in the CSV file (movements).",
       household: "Only your own records: what your partner owns is not included.",
+      peaceCheckins: "Your answers to the monthly question about how you feel about your money, one per budget period (YYYY-MM), from 1 (very uneasy) to 5 (at peace).",
       ownerless: "Budget lines (with their monthly budgets), categorisation rules and recurring commitments have no owner: in a household they belong to the shared data and are exported to the person who holds it (the household's owner), except the lines of your own debts and plans. Plans marked ownerless: true were created before plans had an owner and are exported the same way.",
     },
     profile,
@@ -234,6 +237,7 @@ export async function buildJsonExport(db: PrismaClient, me: string, now = new Da
     budgetLines: mine.allocations.map(a => ({ ...strip(a, FOREIGN_KEYS), monthlyBudgets: a.monthlyBudgets.map(m => strip(m, FOREIGN_KEYS)) })),
     categorizationRules: mine.rules.map(r => strip(r, FOREIGN_KEYS)),
     recurringCommitments: mine.recurring.map(r => strip(r, FOREIGN_KEYS)),
+    peaceCheckins,
     movementCounts: { expenses: expenseCount, incomes: incomeCount },
   };
 }
