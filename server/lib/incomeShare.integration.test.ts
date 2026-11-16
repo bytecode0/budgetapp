@@ -183,6 +183,53 @@ describe("income shares and first goals (integration, real Postgres)", { skip: !
     assert.equal(await prisma.allocation.count({ where: { userId: F, type: "generosity" } }), 1);
   });
 
+  it("the Generosity line is put back first on read and stays first whatever order a reorder sends", async () => {
+    const R = await signUp("Rita", "rita@example.com");
+    await ok(R, "GET", "/api/allocations");
+    const [rent, groceries] = await prisma.allocation.findMany({ where: { userId: R, type: { in: ["fixed", "flexible"] } }, orderBy: { type: "asc" } });
+    const gym = (await ok(R, "POST", "/api/allocations", { name: "Gym", type: "fixed", allocatedAmount: 30 })).allocation;
+    const gen = await prisma.allocation.findFirstOrThrow({ where: { userId: R, type: "generosity" } });
+    // An old order from before the server enforced it: [Rent, Groceries, Generosity, Gym].
+    for (const [id, sortOrder] of [[rent.id, 0], [groceries.id, 1], [gen.id, 2], [gym.id, 3]] as const) {
+      await prisma.allocation.update({ where: { id }, data: { sortOrder } });
+    }
+    const ids = async () => ((await ok(R, "GET", "/api/allocations")).allocations as any[]).map(a => a.id);
+    assert.deepEqual(await ids(), [gen.id, rent.id, groceries.id, gym.id]);
+    // Idempotent: a second read changes nothing.
+    const before = await prisma.allocation.findMany({ where: { userId: R }, select: { id: true, sortOrder: true }, orderBy: { id: "asc" } });
+    assert.deepEqual(await ids(), [gen.id, rent.id, groceries.id, gym.id]);
+    assert.deepEqual(await prisma.allocation.findMany({ where: { userId: R }, select: { id: true, sortOrder: true }, orderBy: { id: "asc" } }), before);
+
+    // A reorder that puts it third: the rest follow the order sent, Generosity first.
+    await ok(R, "PATCH", "/api/allocations/reorder", { order: [gym.id, rent.id, gen.id, groceries.id].map((id, i) => ({ id, sortOrder: i })) });
+    assert.deepEqual(await ids(), [gen.id, gym.id, rent.id, groceries.id]);
+  });
+
+  it("a debt line's month budget is its commitment: amounts sent for it are not saved, old saved rows ignored", async () => {
+    const S = await signUp("Sara", "sara@example.com");
+    const loan = (await ok(S, "POST", "/api/debts", {
+      name: "Préstamo", kind: "installment", paymentMode: "installments",
+      installmentAmount: 150, installmentsTotal: 12, installmentsPaid: 0,
+    })).debt.id;
+    const line = await prisma.allocation.findFirstOrThrow({ where: { userId: S, debtId: loan } });
+    const rent = await prisma.allocation.findFirstOrThrow({ where: { userId: S, type: "fixed" } });
+    const m = month();
+    const amountOf = (budgets: any[], id: string) => budgets.find(b => b.allocationId === id)?.allocatedAmount;
+
+    const saved = await ok(S, "POST", "/api/monthly-budgets/save", { month: m, budgets: [
+      { allocationId: line.id, allocatedAmount: 999 }, { allocationId: rent.id, allocatedAmount: 700 },
+    ] });
+    assert.equal(await prisma.monthlyBudget.count({ where: { allocationId: line.id } }), 0, "no row for the debt line");
+    assert.equal(amountOf(saved.budgets, rent.id), 700);
+
+    // A row saved before this fix: GET, the review and the response of a save all show the commitment.
+    await prisma.monthlyBudget.create({ data: { userId: S, allocationId: line.id, month: m, allocatedAmount: 99900 } });
+    assert.equal(amountOf((await ok(S, "GET", `/api/monthly-budgets?month=${m}`)).budgets, line.id), 150);
+    assert.equal(amountOf((await ok(S, "POST", "/api/monthly-budgets/save", { month: m, budgets: [{ allocationId: rent.id, allocatedAmount: 710 }] })).budgets, line.id), 150);
+    const review = await ok(S, "GET", `/api/monthly-budgets/review?month=${m}`);
+    assert.equal(review.review.find((r: any) => r.allocationId === line.id).budgeted, 150);
+  });
+
   it("a share of the household's income keeps its % when the income changes; a typed amount replaces it", async () => {
     const G = await signUp("Gema", "gema@example.com");
     await ok(G, "PATCH", "/api/allocations/settings/income", { monthlyIncome: 3000 });

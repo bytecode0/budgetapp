@@ -5,6 +5,7 @@
 // code the client translates (src/app/lib/apiErrors.ts), never a 500.
 import { prisma } from "./prisma.js";
 import { visibleToWhere } from "./ownership.js";
+import { lineBudget } from "./debtBalance.js";
 
 export const ALLOCATION_NOT_FOUND = { error: "Category not found", code: "allocation_not_found" };
 export const ACCOUNT_NOT_FOUND = { error: "Account not found", code: "account_not_found" };
@@ -60,22 +61,24 @@ export async function hiddenLineIds(userId: string, authUserId: string): Promise
 
 /** What the lines hidden from the caller commit, in cents: one figure, never
  *  their names or ids, so budget totals listed without them still add up to
- *  the household's (/review). A line's budget for `month` when saved, else
- *  its debt's commitment for the period (`commitments`, from debtCommitments,
- *  which the caller has already computed). */
+ *  the household's (/review). Each line's budget for the period as lineBudget
+ *  reads it (`commitments`, from debtCommitments, which the caller has already
+ *  computed; `forMonth`, the month's saved rows and whether it has ended —
+ *  none for the current period's live budget). */
 export async function hiddenCommitted(
-  userId: string, authUserId: string, commitments: ReadonlyMap<string, number>, month?: string,
+  userId: string, authUserId: string, commitments: ReadonlyMap<string, number>,
+  forMonth?: { month: string; ended: boolean },
 ): Promise<number> {
   const lines = await prisma.allocation.findMany({
     where: { userId, ...onHiddenDebt(authUserId) },
-    select: { id: true, debtId: true, allocatedAmount: true },
+    select: { id: true, type: true, debtId: true, allocatedAmount: true },
   });
   if (lines.length === 0) return 0;
-  const saved = month
-    ? await prisma.monthlyBudget.findMany({ where: { month, allocationId: { in: lines.map(l => l.id) } }, select: { allocationId: true, allocatedAmount: true } })
+  const saved = forMonth
+    ? await prisma.monthlyBudget.findMany({ where: { month: forMonth.month, allocationId: { in: lines.map(l => l.id) } }, select: { allocationId: true, allocatedAmount: true } })
     : [];
   const savedBy = new Map(saved.map(b => [b.allocationId, b.allocatedAmount]));
-  return lines.reduce((s, l) => s + (savedBy.get(l.id) ?? (l.debtId ? commitments.get(l.debtId) : undefined) ?? l.allocatedAmount), 0);
+  return lines.reduce((s, l) => s + lineBudget(l, savedBy, commitments, forMonth?.ended ?? false), 0);
 }
 
 /** True when every id given (null/undefined/"" = no category, skipped) is a

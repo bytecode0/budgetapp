@@ -222,7 +222,7 @@ function AppInner() {
           <PlanningDashboard onNavigate={(screen) => setCurrentScreen(screen as Screen)} onViewPlan={handleViewPlan} />
         );
       case 'allocation':
-        return <AllocationFlow />;
+        return <AllocationFlow onOpenDebt={(debtId) => debtId ? handleViewDebt(debtId) : setCurrentScreen('debts')} />;
       case 'accounts':
         return (
           <Accounts

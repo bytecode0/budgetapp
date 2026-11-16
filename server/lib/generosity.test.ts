@@ -1,7 +1,7 @@
 // Run with:  node --import tsx --test server/lib/generosity.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyGenerosity, firstSortOrder } from "./generosity.js";
+import { applyGenerosity, firstSortOrder, generosityFirstOrder } from "./generosity.js";
 
 const lines = [
   { id: "g", type: "generosity", allocatedAmount: 1234 },
@@ -25,4 +25,24 @@ test("the line is created first in the budget", () => {
   assert.equal(firstSortOrder([]), 0);
   assert.equal(firstSortOrder([0, 1, 2]), -1);
   assert.equal(firstSortOrder([3, -2, 5]), -3);
+});
+
+test("Generosity is moved back first, the rest keep their order; already first = no updates", () => {
+  const old = [
+    { id: "rent", type: "fixed", sortOrder: 0 },
+    { id: "groceries", type: "flexible", sortOrder: 1 },
+    { id: "gen", type: "generosity", sortOrder: 2 },
+    { id: "gym", type: "fixed", sortOrder: 3 },
+  ];
+  assert.deepEqual(generosityFirstOrder(old), [
+    { id: "gen", sortOrder: 0 }, { id: "rent", sortOrder: 1 }, { id: "groceries", sortOrder: 2 },
+  ]);
+  assert.deepEqual(generosityFirstOrder([
+    { id: "gen", type: "generosity", sortOrder: -1 }, { id: "rent", type: "fixed", sortOrder: 0 },
+  ]), []);
+  // A tie with another line is not "first": renumbered.
+  assert.deepEqual(generosityFirstOrder([
+    { id: "gen", type: "generosity", sortOrder: 0 }, { id: "rent", type: "fixed", sortOrder: 0 },
+  ]), [{ id: "rent", sortOrder: 1 }]);
+  assert.deepEqual(generosityFirstOrder([{ id: "rent", type: "fixed", sortOrder: 5 }]), []);
 });

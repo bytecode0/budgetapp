@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   debtState, splitPayments, monthlyCommitment, inLedger, owedNow, sumOwed, startingBalanceFor, isPaidOff, paidOffByHand,
-  buildLedgers, countedFrom,
+  buildLedgers, countedFrom, lineBudget,
   type DebtLedger, type LedgerDebt,
 } from "./debtBalance.js";
 
@@ -250,4 +250,24 @@ test("countedFrom: refunds count negative, partial card payments count their pre
   assert.equal(counted.get("pay"), 30000);
   assert.equal(counted.get("r1"), -1250);
   assert.equal(counted.has("super"), false);
+});
+
+test("lineBudget: in a current or future period a debt line is its commitment even over a saved row; other lines saved, else stored", () => {
+  const saved = new Map([["debt-line", 9999], ["rent", 80000]]);
+  const commitments = new Map([["loan", 15000]]);
+  assert.equal(lineBudget({ id: "debt-line", type: "debt", debtId: "loan", allocatedAmount: 1 }, saved, commitments, false), 15000);
+  assert.equal(lineBudget({ id: "rent", type: "fixed", debtId: null, allocatedAmount: 90000 }, saved, commitments, false), 80000);
+  assert.equal(lineBudget({ id: "gym", type: "fixed", debtId: null, allocatedAmount: 3000 }, saved, commitments, false), 3000);
+  // A debt with no commitment known falls back like any line.
+  assert.equal(lineBudget({ id: "debt-line", type: "debt", debtId: "gone", allocatedAmount: 1 }, saved, commitments, false), 9999);
+});
+
+test("lineBudget: in an ended period a debt line's saved row wins over the commitment, so archiving or paying it off later doesn't rewrite the month", () => {
+  const saved = new Map([["debt-line", 12000], ["rent", 80000]]);
+  // Archived since: its commitment for that past period is now 0.
+  const commitments = new Map([["loan", 0], ["car", 25000]]);
+  assert.equal(lineBudget({ id: "debt-line", type: "debt", debtId: "loan", allocatedAmount: 0 }, saved, commitments, true), 12000);
+  // No saved row: the commitment, as before.
+  assert.equal(lineBudget({ id: "car-line", type: "debt", debtId: "car", allocatedAmount: 1 }, saved, commitments, true), 25000);
+  assert.equal(lineBudget({ id: "rent", type: "fixed", debtId: null, allocatedAmount: 90000 }, saved, commitments, true), 80000);
 });
