@@ -830,3 +830,25 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 **Cuidado:** toca la autenticación (lista de "no modificar sin preguntar"). Este ticket es esa pregunta.
 
 **Mientras tanto:** la consulta para el SQL Editor de Neon está en la conversación del 6 nov (cuenta igual que `stats:active`).
+
+---
+
+## LPBETA-29 · Cerrar sesión a mano, sin bajar hasta el final de Ajustes — REFINADO · Prioridad MEDIA (16 nov)
+
+**Problema (Luis, 16 nov):** para salir hay que abrir Ajustes y bajar hasta el final de una pantalla larga. Es una mala experiencia, sobre todo en un móvil compartido o prestado, que es justo cuando más importa poder salir rápido.
+
+**Lo que hay hoy (verificado en `main`):** el único botón de salir está al final de `PlanningSettings.tsx` (`onLogout`). La barra lateral de escritorio y el menú lateral del móvil (`BudgetApp.tsx`) no muestran quién ha iniciado sesión ni tienen forma de salir.
+
+**Propuesta:**
+1. **Bloque de cuenta al pie de la navegación**, igual en la barra lateral de escritorio y en el menú del móvil: inicial o foto de Google, nombre y email (cortado con `…` si es largo) y un botón **"Cerrar sesión"** con el icono `LogOut`. Siempre a la vista, sin desplazarse: en el móvil el menú se desplaza, pero el bloque queda fijo abajo.
+2. **Sin diálogo de confirmación:** salir no borra nada y se vuelve a entrar en segundos. Tras salir se va a la pantalla de entrada con un toast ("Has cerrado la sesión").
+3. **Mientras sale,** el botón se desactiva y muestra un spinner, para que no se pulse dos veces. Si la llamada falla, se borra la sesión local igualmente y se avisa con un toast de error.
+4. **En Ajustes se mantiene** el botón del final, por costumbre, y se añade al principio una tarjeta de cuenta (nombre, email, "Cerrar sesión") para quien lo busque ahí.
+5. Si se fusiona antes LPBETA-21 (cerrar todas las sesiones), "Cerrar sesión en todos los dispositivos" se queda **solo en Ajustes → Seguridad**: es una acción rara y no debe competir con el botón normal.
+6. Textos en `es.json` y `en.json`; colores Remanso (nada rojo para salir: tinta neutra, icono `LogOut`).
+
+**Fuera de alcance:** cambiar de cuenta sin salir, varias cuentas a la vez.
+
+**Verificación (navegador, `npm run dev:all`):** en el móvil (375 px) y en el escritorio, salir desde la navegación con un solo toque, sin desplazarse; la pantalla de entrada aparece; al pulsar "atrás" no se ve ningún dato; un email muy largo no rompe el diseño; modo oscuro.
+
+**Tamaño:** S.
