@@ -98,7 +98,7 @@ Documented in `.env.example`. Relevant ones:
 | `GOOGLE_CLIENT_ID/SECRET`, `GOOGLE_CALLBACK_URL` | Google sign-in; the callback URL must also be registered in Google Cloud Console |
 | `STRIPE_SECRET_KEY`, `STRIPE_PREMIUM_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` | Premium subscription; webhook points at `/api/stripe/webhook`. **Test mode** during the beta. If any is missing, the Stripe routes answer 503; the rest of the app runs |
 | `ENABLE_BANKING_APP_ID`, `ENABLE_BANKING_PRIVATE_KEY` | Bank connection via Enable Banking (`server/lib/banking/`): the application id (JWT `kid`) and its RS256 private key, the full PEM (one-line values with literal `\n` are accepted). The `.pem` never goes in the repo |
-| `BANKING_CALLBACK_URL` | Must equal a redirect URL registered at Enable Banking: `https://budget.luisvespa.com/api/banking/callback` (prod), `http://localhost:3002/api/banking/callback` (local) |
+| `BANKING_CALLBACK_URL` | Must equal a redirect URL registered at Enable Banking: `https://app.luisvespa.com/api/banking/callback` (prod), `http://localhost:3002/api/banking/callback` (local) |
 | `BANKING_ALLOWED_EMAILS` | Comma-separated. While the Enable Banking app is in restricted mode, only these users see or use bank connection (enforced on the server and hidden in the UI). Unset = nobody |
 | `ANTHROPIC_API_KEY` | AI expense classification — see cost note below |
 | `CRON_SECRET` | Authenticates scheduled jobs: Vercel Cron calls `GET /api/banking/cron` (daily, `vercel.json`) with `Authorization: Bearer $CRON_SECRET` |

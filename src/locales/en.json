@@ -1609,7 +1609,7 @@
     },
     "privacy": {
       "title": "Privacy policy",
-      "intro": "This policy explains what data Remanso (budget.luisvespa.com) processes, what it is used for and who it is shared with. Remanso is a free app, in beta, for organising your budget and your debts.",
+      "intro": "This policy explains what data Remanso (app.luisvespa.com) processes, what it is used for and who it is shared with. Remanso is a free app, in beta, for organising your budget and your debts.",
       "sections": [
         {
           "title": "Who is responsible",
@@ -1711,7 +1711,7 @@
     },
     "terms": {
       "title": "Terms of service",
-      "intro": "These terms govern the use of Remanso (budget.luisvespa.com), an app by Luis Vespa for organising your budget and your debts. By creating an account or using the app, you accept them.",
+      "intro": "These terms govern the use of Remanso (app.luisvespa.com), an app by Luis Vespa for organising your budget and your debts. By creating an account or using the app, you accept them.",
       "sections": [
         {
           "title": "A free beta",

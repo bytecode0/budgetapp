@@ -276,10 +276,10 @@ test("getSession reads status, accounts and valid_until; deleteSession sends DEL
 
 test("PSU headers come from the user's request; none without an IP, no multi-line values", () => {
   const h = psuHeadersFrom("81.0.0.1", {
-    "user-agent": "Mozilla/5.0", "accept-language": "es-ES", referer: "https://budget.luisvespa.com/", accept: "*/*", "x-other": "no",
+    "user-agent": "Mozilla/5.0", "accept-language": "es-ES", referer: "https://app.luisvespa.com/", accept: "*/*", "x-other": "no",
   });
   assert.deepEqual(h, {
-    "Psu-Ip-Address": "81.0.0.1", "Psu-User-Agent": "Mozilla/5.0", "Psu-Referer": "https://budget.luisvespa.com/",
+    "Psu-Ip-Address": "81.0.0.1", "Psu-User-Agent": "Mozilla/5.0", "Psu-Referer": "https://app.luisvespa.com/",
     "Psu-Accept": "*/*", "Psu-Accept-language": "es-ES",
   });
   assert.deepEqual(psuHeadersFrom(undefined, { "user-agent": "x" }), {});
