@@ -99,7 +99,7 @@ Todo sin anuncios:
 **Cuenta aproximada:** para llegar a 1.000 activos hacen falta unos 2.000 registros si se retiene a la mitad. Con grupos de 10, son unos 200 grupos a lo largo del año, o lo que sumen las iglesias, las recomendaciones y el contenido. El dato que más importa es la retención de la BETA: si es alta, el boca a boca hace el resto.
 
 ## 8. Premium en este plan
-- Durante la BETA y en `budget.luisvespa.com` (preproducción), **todo es gratis** y la familia y los amigos tienen Premium gratis para siempre.
+- Durante la BETA y en `app.luisvespa.com` (preproducción), **todo es gratis** y la familia y los amigos tienen Premium gratis para siempre.
 - Precios decididos (ticket LPBETA-03): **Premium 24 €/año, Hogar 36 €/año**, solo anual, con precio de fundador. La versión gratis es completa; Premium es comodidad (banca e importación con IA).
 - Cobrar de verdad será en un entorno de producción futuro, no antes de la etapa 2.
 

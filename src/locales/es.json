@@ -1609,7 +1609,7 @@
     },
     "privacy": {
       "title": "Política de privacidad",
-      "intro": "Esta política explica qué datos trata Remanso (budget.luisvespa.com), para qué los usa y con quién se comparten. Remanso es una aplicación gratuita, en fase beta, para organizar tu presupuesto y tus deudas.",
+      "intro": "Esta política explica qué datos trata Remanso (app.luisvespa.com), para qué los usa y con quién se comparten. Remanso es una aplicación gratuita, en fase beta, para organizar tu presupuesto y tus deudas.",
       "sections": [
         {
           "title": "Quién es el responsable",
@@ -1711,7 +1711,7 @@
     },
     "terms": {
       "title": "Términos del servicio",
-      "intro": "Estos términos regulan el uso de Remanso (budget.luisvespa.com), una aplicación de Luis Vespa para organizar tu presupuesto y tus deudas. Al crear una cuenta o usar la aplicación, los aceptas.",
+      "intro": "Estos términos regulan el uso de Remanso (app.luisvespa.com), una aplicación de Luis Vespa para organizar tu presupuesto y tus deudas. Al crear una cuenta o usar la aplicación, los aceptas.",
       "sections": [
         {
           "title": "Una beta gratuita",

@@ -185,7 +185,7 @@ Ninguno: el simulador es solo para mirar (decisión del 3 nov). Si más adelante
 
 Petición de Luis: habilitar el botón Premium y poner control de acceso a importar. Premium incluirá **solo la conexión con bancos y el botón de importar ficheros** (decisión del 3 nov). Tocar Stripe está en "no modificar sin preguntar": este refinamiento es esa pregunta.
 
-**Sin entorno de preproducción (decisión del 3 nov):** `budget.luisvespa.com` hace de preproducción mientras solo la usan la familia de Luis y algunos amigos. Cuando haya usuarios que paguen se revisa si hace falta separar entornos.
+**Sin entorno de preproducción (decisión del 3 nov):** `app.luisvespa.com` hace de preproducción mientras solo la usan la familia de Luis y algunos amigos. Cuando haya usuarios que paguen se revisa si hace falta separar entornos.
 
 ### Lo que ya existe (verificado en el código, 3 nov)
 - Stripe ya está programado (2.9): checkout, confirmación, cancelar/reactivar, cambiar tarjeta, webhook y emails de suscripción. Es perezoso: sin `STRIPE_*`, sus rutas responden 503 y `useBillingEnabled` oculta Premium en el frontend.
@@ -213,10 +213,10 @@ Petición de Luis: habilitar el botón Premium y poner control de acceso a impor
 - Pasar de Premium a Hogar a mitad de año: Stripe prorratea; decidir si se permite desde la app.
 - Textos y emails dicen "al año"; cancelar deja el acceso hasta el final del año pagado.
 
-**Familia y amigos: gratis para siempre** (decisión del 3 nov), porque `budget.luisvespa.com` es el entorno de preproducción; el cobro real será en un entorno de producción futuro. Propuesta: lista de emails con Premium regalado en una variable (`PREMIUM_COMP_EMAILS`, igual que `BANKING_ALLOWED_EMAILS`), sin schema.
+**Familia y amigos: gratis para siempre** (decisión del 3 nov), porque `app.luisvespa.com` es el entorno de preproducción; el cobro real será en un entorno de producción futuro. Propuesta: lista de emails con Premium regalado en una variable (`PREMIUM_COMP_EMAILS`, igual que `BANKING_ALLOWED_EMAILS`), sin schema.
 
-### LPBETA-03.1 Activar Stripe en modo test en budget.luisvespa.com
-- **Luis, en el panel de Stripe (modo test):** producto "LifePlan Premium" con su precio → `STRIPE_PREMIUM_PRICE_ID`; webhook a `https://budget.luisvespa.com/api/stripe/webhook` con los 5 eventos de 2.9 → `STRIPE_WEBHOOK_SECRET`; `STRIPE_SECRET_KEY` de test. Las tres en Vercel y redesplegar.
+### LPBETA-03.1 Activar Stripe en modo test en app.luisvespa.com
+- **Luis, en el panel de Stripe (modo test):** producto "LifePlan Premium" con su precio → `STRIPE_PREMIUM_PRICE_ID`; webhook a `https://app.luisvespa.com/api/stripe/webhook` con los 5 eventos de 2.9 → `STRIPE_WEBHOOK_SECRET`; `STRIPE_SECRET_KEY` de test. Las tres en Vercel y redesplegar.
 - **Claude:** revisar los puntos abiertos de 2.9 antes de activar: cuerpo crudo del webhook en la función de Vercel y `current_period_end` según la versión de la API fijada.
 - En modo test nadie paga dinero real: los usuarios usan la tarjeta de prueba `4242 4242 4242 4242`.
 
@@ -227,7 +227,7 @@ Petición de Luis: habilitar el botón Premium y poner control de acceso a impor
 - Textos: la pantalla y el email de Premium pasan a listar lo que incluye (banca e importar).
 - Tests del control de acceso y de que la app sigue funcionando sin variables de Stripe.
 
-### LPBETA-03.3 Verificación (en budget.luisvespa.com, modo test)
+### LPBETA-03.3 Verificación (en app.luisvespa.com, modo test)
 Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responden error → se hace Premium con `4242…` → vuelve con Premium activo → webhook 200 en el panel de Stripe → email "suscripción activada" → banca e importar funcionan → cancelar → queda "cancela al final del periodo" → reactivar. Con `4000 0000 0000 0341`, email de pago fallido.
 
 ### Antes de cobrar dinero real (fuera de este ticket)
@@ -353,7 +353,7 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 **Lo que ya existe (verificado, 4 nov):** la invitación a la **pareja** (`PartnerInvite`, une el hogar). El registro es abierto (`POST /api/auth/register` y Google). No hay invitación a amigos ni se sabe quién trajo a quién.
 
 **Propuesta:**
-- Cada usuario tiene un **enlace personal** (`budget.luisvespa.com/?ref=CÓDIGO`) para compartir por WhatsApp, con un texto ya escrito.
+- Cada usuario tiene un **enlace personal** (`app.luisvespa.com/?ref=CÓDIGO`) para compartir por WhatsApp, con un texto ya escrito.
 - Al registrarse con ese enlace se guarda quién le invitó. **Schema aditivo:** `User.referralCode` (único) y `User.referredByUserId` (opcional). Se propone antes de aplicarlo.
 - El amigo invitado **no** entra en el hogar ni ve nada del que invita: es solo atribución.
 - `stats:active` (LPBETA-05) cuenta registros y activos que llegan por invitación.
@@ -729,7 +729,7 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 
 ---
 
-## LPBETA-25 · Dominio de la BETA: `app.luisvespa.com` — REFINADO (decidido el 4 nov)
+## LPBETA-25 · Dominio de la BETA: `app.luisvespa.com` — EN CURSO (dominio activo desde el 16 nov)
 
 **Por qué:** "budget" va contra el mensaje (vendemos ahorro y paz, no presupuestos), y `app.` sirve para cualquier nombre que se elija en LPBETA-26. La app sigue colgando de la marca personal (Luis Vespa → Método Ruta → la app).
 
@@ -744,6 +744,8 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 6. Stripe está apagado; cuando se active (LPBETA-03), su webhook ya irá a `app.`.
 
 **Parte de Claude (un PR):** cambiar `budget.` por `app.` en los textos legales (es y en), en `CLAUDE.md`, en `docs/` y en los tests. **El comando `/deploy` vive en `.claude/skills/`, que el sandbox de Claude no deja editar:** o lo cambia Luis, o da permiso para esa edición. Los tests que usan `budget.luisvespa.com` como ejemplo pueden quedarse así.
+
+**Estado (16 nov):** `app.luisvespa.com` responde y Google ya vuelve a `app.…/api/auth/google/callback`. Hecho el PR de Claude (textos legales, `CLAUDE.md`, `docs/`, `/deploy`, tests). Pendiente de Luis: `APP_URL` y `BANKING_CALLBACK_URL` en Vercel siguen con `budget.` (tras el login de Google se vuelve a `budget.`), redesplegar, y volver a añadir `budget.luisvespa.com` como redirección 308 (ahora no responde).
 
 **Efectos para los usuarios:**
 - La sesión es una cookie del dominio antiguo: **los 2 usuarios tendrán que iniciar sesión otra vez**, una sola vez. Avisarles.

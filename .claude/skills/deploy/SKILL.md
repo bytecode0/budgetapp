@@ -1,11 +1,11 @@
 ---
 name: deploy
-description: Deploy the app to production (budget.luisvespa.com on Vercel) by merging a pull request into main. Verifies the build, gates any production schema change behind the user's own `db push`, merges, waits for CI and the Vercel deployment, then smoke-tests production. Use when the user asks to deploy, ship to production, publish, merge a PR to production, or "subir a producción".
+description: Deploy the app to production (app.luisvespa.com on Vercel) by merging a pull request into main. Verifies the build, gates any production schema change behind the user's own `db push`, merges, waits for CI and the Vercel deployment, then smoke-tests production. Use when the user asks to deploy, ship to production, publish, merge a PR to production, or "subir a producción".
 ---
 
 # Deploy to production
 
-Production = `https://budget.luisvespa.com` (it may move to `app.luisvespa.com`, LPBETA-25 in `docs/tickets.md`: use whatever `APP_URL` production answers on). Vercel project linked to GitHub `bytecode0/budgetapp`. Vercel's Git integration deploys every push to `main` on its own. **Deploying = merging a pull request into `main`.** This skill makes that merge safe and confirms it landed.
+Production = `https://app.luisvespa.com` (moved from `budget.luisvespa.com` on 16 Nov 2026, LPBETA-25; the old domain should redirect here). Vercel project linked to GitHub `bytecode0/budgetapp`. Vercel's Git integration deploys every push to `main` on its own. **Deploying = merging a pull request into `main`.** This skill makes that merge safe and confirms it landed.
 
 Stop at the first failed step, say what failed, and don't work around it.
 
@@ -59,7 +59,7 @@ Vercel deploys the merge whether or not CI passes. If CI fails, stop and check `
 Then poll production until it reports the merge commit (up to ~5 minutes):
 
 ```bash
-curl -s https://budget.luisvespa.com/api/health   # → {"ok":true,"commit":"<sha>"}
+curl -s https://app.luisvespa.com/api/health   # → {"ok":true,"commit":"<sha>"}
 ```
 
 `commit` must equal `$MERGE`.
@@ -68,9 +68,9 @@ curl -s https://budget.luisvespa.com/api/health   # → {"ok":true,"commit":"<sh
 
 ```bash
 for p in / /api/debts /api/nope /api/banking/cron; do
-  echo "$p $(curl -s -o /dev/null -w '%{http_code}' https://budget.luisvespa.com$p)"
+  echo "$p $(curl -s -o /dev/null -w '%{http_code}' https://app.luisvespa.com$p)"
 done   # 200 · 401 · 404 · 401 (the cron needs CRON_SECRET; 503 if banking is off in production)
-vercel logs budget.luisvespa.com | grep -iE "error|P20[0-9]{2}" | head
+vercel logs app.luisvespa.com | grep -iE "error|P20[0-9]{2}" | head
 ```
 
 A 500 on `/api/debts` usually means a missing environment variable or a schema not pushed (Prisma `P2022`, column missing). On the Hobby plan `vercel logs` only keeps ~30 minutes and rejects `--since`.

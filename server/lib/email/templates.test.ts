@@ -171,14 +171,14 @@ test("a scheme-less APP_URL or bad LOGO_URL does not stop an OTP email; they are
   const realError = console.error;
   const errors: string[] = [];
   console.error = (...args: unknown[]) => { errors.push(args.map(String).join(" ")); };
-  process.env.APP_URL = "budget.luisvespa.com";
+  process.env.APP_URL = "app.luisvespa.com";
   process.env.LOGO_URL = "javascript:alert(1)";
   try {
     for (const locale of LOCALES) {
       const email = verificationEmail({ name: "Ana", otp: "482915" }, locale);
       assert.ok(email.html.includes("482915"));
-      assert.ok(!email.html.includes("budget.luisvespa.com"));
-      assert.ok(!email.text.includes("budget.luisvespa.com"));
+      assert.ok(!email.html.includes("app.luisvespa.com"));
+      assert.ok(!email.text.includes("app.luisvespa.com"));
       assert.ok(!email.html.includes("javascript:"));
       assert.ok(!email.html.includes("<img"));
       assert.ok(passwordResetEmail({ otp: "482915" }, locale).html.includes("482915"));
@@ -192,7 +192,7 @@ test("a scheme-less APP_URL or bad LOGO_URL does not stop an OTP email; they are
   const logoErrors = errors.filter((e) => e.includes("LOGO_URL"));
   assert.equal(appErrors.length, 1);
   assert.equal(logoErrors.length, 1);
-  assert.ok(!errors.some((e) => e.includes("budget.luisvespa.com")));
+  assert.ok(!errors.some((e) => e.includes("app.luisvespa.com")));
 });
 
 test("a valid LOGO_URL is used in the header", () => {
