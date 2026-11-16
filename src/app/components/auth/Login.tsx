@@ -11,12 +11,10 @@ interface LoginProps {
   onLogin: () => void;
   onSwitchToSignup: () => void;
   onForgotPassword: () => void;
-  /** The password goes on to the code screen: verifying is what sets it. */
-  onNeedVerification: (email: string, password: string) => void;
   googleError?: string | null;
 }
 
-export function Login({ onLogin, onSwitchToSignup, onForgotPassword, onNeedVerification, googleError }: LoginProps) {
+export function Login({ onLogin, onSwitchToSignup, onForgotPassword, googleError }: LoginProps) {
   const { t, i18n } = useTranslation();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
@@ -35,10 +33,9 @@ export function Login({ onLogin, onSwitchToSignup, onForgotPassword, onNeedVerif
     const result = await login(email, password);
     setIsLoading(false);
     if (result.error) {
-      if (result.code === 'EMAIL_NOT_VERIFIED') {
-        toast.info(t('auth.login.verifyEmailFirst'));
-        onNeedVerification(email, password);
-      } else if (result.code === 'LOGIN_LOCKED') {
+      // An unverified account answers like a wrong password (LPBETA-23):
+      // whoever never verified signs up again and gets a fresh code.
+      if (result.code === 'LOGIN_LOCKED') {
         toast.error(t('auth.login.tooManyAttempts'));
       } else {
         toast.error(result.error);

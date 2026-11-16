@@ -51,7 +51,7 @@ class Full extends Error {}
 // The column is `timestamp` (no zone) holding UTC, as Prisma writes it. A Date
 // bound in raw SQL is converted with the session's time zone instead, so it is
 // passed as text and converted to UTC explicitly.
-const utc = (d: Date) => Prisma.sql`(${d.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
+export const utc = (d: Date) => Prisma.sql`(${d.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
 
 export function prismaRateLimitStore(db: Pick<PrismaClient, "$transaction" | "$executeRaw">): RateLimitStore {
   return {

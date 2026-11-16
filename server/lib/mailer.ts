@@ -5,6 +5,7 @@ import { sendEmail } from "./email/index.js";
 import type { EmailLocale } from "./email/locales/index.js";
 import {
   accountDeletedEmail,
+  accountExistsEmail,
   accountDeletionCodeEmail,
   accountDeletionRequestedEmail,
   bankConsentExpiringEmail,
@@ -18,6 +19,11 @@ import {
 
 export async function sendVerificationEmail(email: string, name: string, otp: string, locale: EmailLocale = "es") {
   await sendEmail({ to: email, ...verificationEmail({ name, otp }, locale) });
+}
+
+/** Instead of a code, to a sign-up with an email that already has a verified account (LPBETA-23). */
+export async function sendAccountExistsEmail(email: string, name: string, locale: EmailLocale = "es") {
+  await sendEmail({ to: email, ...accountExistsEmail({ name }, locale) });
 }
 
 export async function sendPasswordResetEmail(email: string, otp: string, locale: EmailLocale = "es") {

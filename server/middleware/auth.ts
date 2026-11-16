@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { verifyToken } from "../lib/jwt.js";
+import { sessionVersionMatches, verifyToken } from "../lib/jwt.js";
 import { prisma } from "../lib/prisma.js";
 
 export interface AuthRequest extends Request {
@@ -22,9 +22,12 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
     // downstream (FK violations on default seeding, etc.).
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { id: true },
+      select: { id: true, tokenVersion: true },
     });
     if (!user) return res.status(401).json({ error: "Not authenticated" });
+    // A session issued before the last password reset or "sign out on every
+    // device" (LPBETA-21) is over.
+    if (!sessionVersionMatches(payload, user.tokenVersion)) return res.status(401).json({ error: "Not authenticated" });
 
     // Legacy pool: if this user has a linkedUserId, data queries use that userId.
     // Kept in parallel with the new Household scope during migration (Epic H1).

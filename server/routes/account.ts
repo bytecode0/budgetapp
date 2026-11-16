@@ -18,6 +18,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { consumeOtp, generateOtp, hashOtp } from "../lib/otp.js";
 import { resolveLocale } from "../lib/email/locales/index.js";
+import { normalizeEmail } from "../lib/emailAddress.js";
 import {
   sendAccountDeletedEmail, sendAccountDeletionCodeEmail, sendAccountDeletionRequestedEmail,
 } from "../lib/mailer.js";
@@ -95,9 +96,11 @@ accountRouter.post("/deletion/code", requireAuth, async (req: AuthRequest, res: 
       select: { email: true, settings: { select: { language: true } } },
     });
     if (!user?.email) return res.status(400).json({ error: "Your account has no email", code: "no_email" });
+    // Codes are keyed by the normalised address, like every other code (LPBETA-23).
+    const codeKey = normalizeEmail(user.email);
 
     const last = await prisma.otpToken.findFirst({
-      where: { email: user.email, type: DELETION_OTP_TYPE, used: false },
+      where: { email: codeKey, type: DELETION_OTP_TYPE, used: false },
       orderBy: { createdAt: "desc" },
       select: { createdAt: true },
     });
@@ -109,10 +112,10 @@ accountRouter.post("/deletion/code", requireAuth, async (req: AuthRequest, res: 
       return res.status(429).json({ error: "Too many codes requested, try again later", code: "rate_limited" });
     }
 
-    await prisma.otpToken.deleteMany({ where: { email: user.email, type: DELETION_OTP_TYPE } });
+    await prisma.otpToken.deleteMany({ where: { email: codeKey, type: DELETION_OTP_TYPE } });
     const otp = generateOtp();
     await prisma.otpToken.create({
-      data: { email: user.email, type: DELETION_OTP_TYPE, tokenHash: hashOtp(otp), expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+      data: { email: codeKey, type: DELETION_OTP_TYPE, tokenHash: hashOtp(otp), expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
     await sendAccountDeletionCodeEmail(user.email, otp, resolveLocale(user.settings?.language));
     return res.json({ data: { sent: true } });
@@ -133,7 +136,7 @@ accountRouter.post("/deletion", requireAuth, async (req: AuthRequest, res: Respo
     // Already asked: nothing to confirm again, the original date stands.
     if (user.deletionRequestedAt) return res.json({ data: deletionState(user.deletionRequestedAt) });
 
-    const result = await consumeOtp(prisma, user.email, DELETION_OTP_TYPE, String(req.body?.code ?? ""));
+    const result = await consumeOtp(prisma, normalizeEmail(user.email), DELETION_OTP_TYPE, String(req.body?.code ?? ""));
     if (result !== "ok") {
       return result === "incorrect"
         ? res.status(400).json({ error: "Incorrect code", code: "otp_incorrect" })

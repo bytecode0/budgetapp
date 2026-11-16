@@ -86,12 +86,6 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
             onLogin={onAuthenticated}
             onSwitchToSignup={() => setCurrentScreen('signup')}
             onForgotPassword={() => setCurrentScreen('forgot-password')}
-            onNeedVerification={(email, password) => {
-              setPendingEmail(email);
-              setPendingPassword(password);
-              setPendingName('');
-              setCurrentScreen('verify-email');
-            }}
             googleError={googleError}
           />
         );
@@ -115,6 +109,7 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
             name={pendingName}
             onVerified={() => { setPendingPassword(''); setPendingName(''); setCurrentScreen('welcome'); }}
             onBack={() => setCurrentScreen('signup')}
+            onSignIn={() => setCurrentScreen('login')}
           />
         );
       case 'forgot-password':

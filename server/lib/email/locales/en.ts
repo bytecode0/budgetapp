@@ -137,6 +137,17 @@ export const en: EmailDictionary = {
     cta: "Go to Accounts",
     privacy: "By law (PSD2) banks ask for this permission to be renewed from time to time. If you don't want to renew it, do nothing.",
   },
+  accountExists: {
+    subject: "You already have a {product} account",
+    preheader: "Sign in with your password, or reset it if you don't remember it.",
+    heading: "You already have a {product} account",
+    introNamed: "Hi {name}, someone, most likely you, tried to create a {product} account with this email, but you already have one. Nothing has changed in it.",
+    intro: "Someone, most likely you, tried to create a {product} account with this email, but you already have one. Nothing has changed in it.",
+    cta: "Sign in to {product}",
+    forgot: "Don't remember your password? On the sign-in screen, tap \"Forgot password?\" and we'll send you a code to create a new one. If you sign in with Google, use \"Continue with Google\".",
+    notYouTitle: "Wasn't you?",
+    notYouBody: "You can ignore this email: nobody can get into your account with it.",
+  },
   accountDeletionCode: {
     subject: "{otp} is your code to delete your {product} account",
     preheader: "Enter it in Settings to confirm the deletion. It expires in 15 minutes.",

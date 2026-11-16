@@ -111,6 +111,16 @@
     "signOut": {
       "button": "Sign Out",
       "subtitle": "You'll need to sign in again"
+    },
+    "signOutAll": {
+      "button": "Sign out on every device",
+      "subtitle": "If you lost a phone or signed in on someone else's computer",
+      "title": "Sign out on every device?",
+      "body": "Every session open with your account will end, on any phone, computer or browser. You'll stay signed in on this device.",
+      "confirm": "End the other sessions",
+      "cancel": "Cancel",
+      "done": "Done: your account is now open only on this device.",
+      "failed": "We couldn't end the sessions. Please try again."
     }
   },
   "household": {
@@ -1007,7 +1017,6 @@
       "terms": "By signing in, you agree to our <terms>Terms of service</terms> and <privacy>Privacy policy</privacy>",
       "googleCancelled": "Google sign-in was cancelled",
       "googleFailed": "Google sign-in failed. Please try again.",
-      "verifyEmailFirst": "Please verify your email first.",
       "welcomeBack": "Welcome back to Remanso!"
     },
     "signup": {
@@ -1027,7 +1036,7 @@
       "freeIncludes": "Free Plan includes:",
       "freeBenefits": "Unlimited life plans · Expense tracking · Smart insights",
       "passwordMismatch": "Passwords do not match",
-      "codeSent": "Verification code sent! Check your email.",
+      "codeSent": "We've sent you an email. Check your inbox.",
       "terms": "By creating an account, you agree to our <terms>Terms of service</terms> and <privacy>Privacy policy</privacy>"
     },
     "forgotPassword": {
@@ -1070,7 +1079,9 @@
       "didntReceive": "Didn't receive it?",
       "resendCode": "Resend code",
       "resendAvailableIn": "Resend available in",
-      "tagline": "Almost there! Verify your email to start planning your financial future."
+      "tagline": "Almost there! Verify your email to start planning your financial future.",
+      "alreadyHaveAccount": "If you already had an account with this email, you won't get a code: the email explains how to sign in.",
+      "goToSignIn": "Go to sign in"
     },
     "welcome": {
       "title": "Welcome to Remanso!",

@@ -7,6 +7,7 @@ import { ensureHousehold } from "../lib/household.js";
 import { mergeMemberIntoPool } from "../lib/partnerMerge.js";
 import { unlinkMemberFromPool } from "../lib/partnerUnlink.js";
 import { lockSettings, acceptBlocker } from "../lib/partnerLink.js";
+import { normalizeEmail } from "../lib/emailAddress.js";
 
 export const partnerRouter = Router();
 
@@ -14,7 +15,6 @@ const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 const APP_URL = process.env.APP_URL ?? "http://localhost:5173";
 
-const normalizeEmail = (email: string | null | undefined) => (email ?? "").trim().toLowerCase();
 
 // ── GET /api/partner/status ──────────────────────────────────────────────────
 // Returns the full partner relationship state for the authenticated user

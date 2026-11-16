@@ -111,6 +111,16 @@
     "signOut": {
       "button": "Cerrar Sesión",
       "subtitle": "Tendrás que iniciar sesión de nuevo"
+    },
+    "signOutAll": {
+      "button": "Cerrar sesión en todos los dispositivos",
+      "subtitle": "Si perdiste un móvil o entraste en un ordenador ajeno",
+      "title": "¿Cerrar sesión en todos los dispositivos?",
+      "body": "Se cerrarán todas las sesiones abiertas con tu cuenta, en cualquier móvil, ordenador o navegador. En este dispositivo seguirás dentro.",
+      "confirm": "Cerrar las demás sesiones",
+      "cancel": "Cancelar",
+      "done": "Listo: tu cuenta solo sigue abierta en este dispositivo.",
+      "failed": "No hemos podido cerrar las sesiones. Inténtalo de nuevo."
     }
   },
   "household": {
@@ -1007,7 +1017,6 @@
       "terms": "Al iniciar sesión, aceptas nuestros <terms>Términos del servicio</terms> y nuestra <privacy>Política de privacidad</privacy>",
       "googleCancelled": "Inicio de sesión con Google cancelado",
       "googleFailed": "Error al iniciar sesión con Google. Inténtalo de nuevo.",
-      "verifyEmailFirst": "Por favor, verifica tu email primero.",
       "welcomeBack": "¡Bienvenido de vuelta a Remanso!"
     },
     "signup": {
@@ -1027,7 +1036,7 @@
       "freeIncludes": "El Plan Gratuito incluye:",
       "freeBenefits": "Planes de vida ilimitados · Seguimiento de gastos · Perspectivas inteligentes",
       "passwordMismatch": "Las contraseñas no coinciden",
-      "codeSent": "¡Código de verificación enviado! Revisa tu email.",
+      "codeSent": "Te hemos enviado un email. Revisa tu bandeja de entrada.",
       "terms": "Al crear una cuenta, aceptas nuestros <terms>Términos del servicio</terms> y nuestra <privacy>Política de privacidad</privacy>"
     },
     "forgotPassword": {
@@ -1070,7 +1079,9 @@
       "didntReceive": "¿No lo recibiste?",
       "resendCode": "Reenviar código",
       "resendAvailableIn": "Reenvío disponible en",
-      "tagline": "¡Casi listo! Verifica tu email para empezar a planificar tu futuro financiero."
+      "tagline": "¡Casi listo! Verifica tu email para empezar a planificar tu futuro financiero.",
+      "alreadyHaveAccount": "Si ya tenías una cuenta con este email, no te llegará un código: el email te explica cómo entrar.",
+      "goToSignIn": "Ir a iniciar sesión"
     },
     "welcome": {
       "title": "¡Bienvenido a Remanso!",

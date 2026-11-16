@@ -12,6 +12,7 @@
 //    language of this sign-in, or the default.
 import type { PrismaClient } from "@prisma/client";
 import type { EmailLocale } from "./email/locales/index.js";
+import { findUserIdByEmail, normalizeEmail } from "./emailAddress.js";
 
 export interface GoogleProfile {
   email?: string;
@@ -32,7 +33,7 @@ export type GoogleSignInResult =
       claimed: boolean;
     };
 
-type Db = Pick<PrismaClient, "user" | "userSettings">;
+type Db = Pick<PrismaClient, "user" | "userSettings" | "$queryRaw">;
 
 export async function googleSignIn(
   db: Db,
@@ -40,17 +41,22 @@ export async function googleSignIn(
   lang: EmailLocale | null = null,
   now: Date = new Date(),
 ): Promise<GoogleSignInResult> {
-  const email = profile.email;
+  const email = normalizeEmail(profile.email);
   if (!email) return { error: "no_email" };
   if (profile.verified_email !== true) return { error: "unverified" };
 
-  const existing = await db.user.findUnique({ where: { email }, select: { id: true } });
-  const user = await db.user.upsert({
-    where: { email },
-    // emailVerified is set below, together with dropping the password, never alone.
-    update: { image: profile.picture },
-    create: { email, name: profile.name, image: profile.picture, emailVerified: now },
-  });
+  // Case-insensitive (an older account may be stored as `Ana@x.com`); a new
+  // one is stored lowercased. emailVerified is set below, together with
+  // dropping the password, never alone.
+  const existingId = await findUserIdByEmail(db, email);
+  const existing = !!existingId;
+  const user = existingId
+    ? await db.user.update({ where: { id: existingId }, data: { image: profile.picture } })
+    : await db.user.upsert({
+        where: { email },
+        update: { image: profile.picture },
+        create: { email, name: profile.name, image: profile.picture, emailVerified: now },
+      });
   // Conditional on the account still being unverified, so it is atomic with
   // the check: a register that races in can't keep its password either (it
   // only writes while the account is unverified, see POST /register).
@@ -75,7 +81,7 @@ export async function googleSignIn(
   }
   return {
     userId: user.id,
-    email,
+    email: user.email ?? email,
     name: isClaimed && profile.name ? profile.name : user.name,
     isNewUser: !existing,
     claimed: isClaimed,

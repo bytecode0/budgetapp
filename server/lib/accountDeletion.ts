@@ -73,6 +73,7 @@ import { decrypt } from "./crypto/secretBox.js";
 import { syncErrorCode } from "./banking/sync.js";
 import type { BankingProviderClient } from "./banking/types.js";
 import { resolveLocale, type EmailLocale } from "./email/locales/index.js";
+import { normalizeEmail } from "./emailAddress.js";
 
 export const DELETION_GRACE_MS = 24 * 60 * 60 * 1000;
 /** Postgres "lock_not_available": what a NOWAIT lock raises while a purge holds the row. */
@@ -411,8 +412,12 @@ export async function eraseReferences(tx: Tx, userId: string, email: string | nu
   await tx.planDeposit.updateMany({ where: { byUserId: userId }, data: { byUserId: null } });
   await tx.lifePlan.updateMany({ where: { ownerUserId: userId, userId: { not: userId } }, data: { ownerUserId: null } });
   if (email) {
-    await tx.partnerInvite.deleteMany({ where: { invitedEmail: { equals: email, mode: "insensitive" } } });
-    await tx.otpToken.deleteMany({ where: { email } });
+    // Exact matches, not `mode: "insensitive"`: that is ILIKE, where a `_` in
+    // the address is a wildcard and would delete someone else's invites and
+    // codes. Both are stored normalised (LPBETA-23); older rows may be as typed.
+    const addresses = [...new Set([email, normalizeEmail(email)])];
+    await tx.partnerInvite.deleteMany({ where: { invitedEmail: { in: addresses } } });
+    await tx.otpToken.deleteMany({ where: { email: { in: addresses } } });
   }
 }
 

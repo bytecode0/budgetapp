@@ -4,6 +4,7 @@ import type { RenderedEmail } from "./components.js";
 import type { EmailLocale } from "./locales/index.js";
 import {
   accountDeletedEmail,
+  accountExistsEmail,
   accountDeletionCodeEmail,
   accountDeletionRequestedEmail,
   bankConsentExpiringEmail,
@@ -35,6 +36,11 @@ export const EMAIL_SAMPLES: EmailSample[] = [
     name: "verification",
     render: (l) => verificationEmail({ name: "Ana García", otp: SAMPLE_OTP }, l),
     mustContain: both(SAMPLE_OTP, "Ana"),
+  },
+  {
+    name: "account-exists",
+    render: (l) => accountExistsEmail({ name: "Ana García" }, l),
+    mustContain: both("Ana", "http://localhost:5173"),
   },
   { name: "password-reset", render: (l) => passwordResetEmail({ otp: SAMPLE_OTP }, l), mustContain: both(SAMPLE_OTP) },
   {
