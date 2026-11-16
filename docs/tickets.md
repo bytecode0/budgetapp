@@ -729,7 +729,7 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 
 ---
 
-## LPBETA-25 · Dominio de la BETA: `app.luisvespa.com` — EN CURSO (dominio activo desde el 16 nov)
+## LPBETA-25 · Dominio de la BETA: `app.luisvespa.com` — HECHO (16 nov)
 
 **Por qué:** "budget" va contra el mensaje (vendemos ahorro y paz, no presupuestos), y `app.` sirve para cualquier nombre que se elija en LPBETA-26. La app sigue colgando de la marca personal (Luis Vespa → Método Ruta → la app).
 
@@ -745,7 +745,7 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 
 **Parte de Claude (un PR):** cambiar `budget.` por `app.` en los textos legales (es y en), en `CLAUDE.md`, en `docs/` y en los tests. **El comando `/deploy` vive en `.claude/skills/`, que el sandbox de Claude no deja editar:** o lo cambia Luis, o da permiso para esa edición. Los tests que usan `budget.luisvespa.com` como ejemplo pueden quedarse así.
 
-**Estado (16 nov):** `app.luisvespa.com` responde y Google ya vuelve a `app.…/api/auth/google/callback`. Hecho el PR de Claude (textos legales, `CLAUDE.md`, `docs/`, `/deploy`, tests). Pendiente de Luis: `APP_URL` y `BANKING_CALLBACK_URL` en Vercel siguen con `budget.` (tras el login de Google se vuelve a `budget.`), redesplegar, y volver a añadir `budget.luisvespa.com` como redirección 308 (ahora no responde).
+**Estado (16 nov): HECHO.** La app vive en `app.luisvespa.com`; Luis cambió las variables (`APP_URL`, callbacks), redesplegó y comprobó el login (también con Google). Textos legales, `CLAUDE.md`, `docs/`, `/deploy` y tests cambiados en el PR #33. `budget.luisvespa.com` ya no existe (sin redirección): decisión de Luis, los enlaces de emails antiguos dejan de funcionar.
 
 **Efectos para los usuarios:**
 - La sesión es una cookie del dominio antiguo: **los 2 usuarios tendrán que iniciar sesión otra vez**, una sola vez. Avisarles.
