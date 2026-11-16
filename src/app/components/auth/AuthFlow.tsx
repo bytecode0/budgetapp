@@ -44,8 +44,6 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
   // then verifies the account without a password).
   const [pendingPassword, setPendingPassword] = useState('');
   const [pendingName, setPendingName] = useState('');
-  // The code screen was reached from the sign-up (not from a login of an unverified account).
-  const [fromSignup, setFromSignup] = useState(false);
   const [googleToken, setGoogleToken] = useState<string | null>(null);
   const [googleError, setGoogleError] = useState<string | null>(null);
 
@@ -88,13 +86,6 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
             onLogin={onAuthenticated}
             onSwitchToSignup={() => setCurrentScreen('signup')}
             onForgotPassword={() => setCurrentScreen('forgot-password')}
-            onNeedVerification={(email, password) => {
-              setPendingEmail(email);
-              setPendingPassword(password);
-              setPendingName('');
-              setFromSignup(false);
-              setCurrentScreen('verify-email');
-            }}
             googleError={googleError}
           />
         );
@@ -105,7 +96,6 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
               setPendingEmail(email);
               setPendingPassword(password);
               setPendingName(name);
-              setFromSignup(true);
               setCurrentScreen('verify-email');
             }}
             onSwitchToLogin={() => setCurrentScreen('login')}
@@ -119,7 +109,7 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
             name={pendingName}
             onVerified={() => { setPendingPassword(''); setPendingName(''); setCurrentScreen('welcome'); }}
             onBack={() => setCurrentScreen('signup')}
-            onSignIn={fromSignup ? () => setCurrentScreen('login') : undefined}
+            onSignIn={() => setCurrentScreen('login')}
           />
         );
       case 'forgot-password':

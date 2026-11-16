@@ -211,7 +211,10 @@ describe("sessions and account emails (integration, real Postgres)", { skip: !TE
     assert.equal(taken.emails[0].to, "owner@test.local");
     assert.match(taken.emails[0].subject, /already have/, "in the account's language");
     assert.doesNotMatch(taken.emails[0].body, /Intruder/, "never the name the sign-up typed");
-    assert.equal(await prisma.otpToken.count({ where: { email: "owner@test.local" } }), 0, "no code for the existing account");
+    // Only the unusable stand-in code (see the wrong-code test below); none is sent.
+    const standIn = await prisma.otpToken.findMany({ where: { email: "owner@test.local" } });
+    assert.equal(standIn.length, 1);
+    assert.ok(!(taken.emails[0].body.match(/\d{6}/g) ?? []).some(c => hashOtp(c) === standIn[0].tokenHash), "no code in the email");
     const after = await prisma.user.findUniqueOrThrow({ where: { id: owner.id } });
     assert.equal(after.name, "Olga");
     assert.ok(await bcrypt.compare("owner-pass-1", after.passwordHash!), "the password is untouched");
@@ -223,6 +226,81 @@ describe("sessions and account emails (integration, real Postgres)", { skip: !TE
     assert.equal(limited.result.status, 429);
     assert.equal(limited.result.body.code, "rate_limited");
     assert.equal(limited.emails.length, 0, "nothing sent over the limit");
+  });
+
+  it("login answers the same for no account, an unverified one (right or wrong password) and a wrong password", async () => {
+    await verifiedUser("verified-cmp@test.local", "verified-pass");
+    await prisma.user.create({ data: { email: "unverified-cmp@test.local", passwordHash: await bcrypt.hash("unverified-pass", 4) } });
+    const answer = async (email: string, password: string) => {
+      const r = await post("/api/auth/login", { email, password });
+      return { status: r.status, body: r.body, cookie: r.cookie };
+    };
+    const unknown = await answer("nobody-cmp@test.local", "whatever-1");
+    assert.equal(unknown.status, 401);
+    assert.equal(unknown.cookie, null);
+    assert.deepEqual(await answer("unverified-cmp@test.local", "unverified-pass"), unknown, "unverified, right password");
+    assert.deepEqual(await answer("unverified-cmp@test.local", "wrong-pass-1"), unknown, "unverified, wrong password");
+    assert.deepEqual(await answer("verified-cmp@test.local", "wrong-pass-1"), unknown, "verified, wrong password");
+    // The right password on an unverified account counts as a failed try too.
+    const unverified = await prisma.user.findFirstOrThrow({ where: { email: "unverified-cmp@test.local" } });
+    assert.equal(unverified.failedLogins, 2);
+  });
+
+  it("whoever never verified signs up again: a fresh code, and verifying sets the password", async () => {
+    const email = "again@test.local";
+    const register = (password: string) => captureEmails(() => post("/api/auth/register", { name: "Again", email, password }));
+    const codeIn = async (body: string) => {
+      const token = await prisma.otpToken.findFirstOrThrow({ where: { email, type: "email_verification" } });
+      return { id: token.id, otp: [...new Set(body.match(/\d{6}/g) ?? [])].find(c => hashOtp(c) === token.tokenHash) };
+    };
+    const first = await register("first-pass-1");
+    const c1 = await codeIn(first.emails[0].body);
+    assert.ok(c1.otp);
+    // Never verified; later tries to sign in, then signs up again.
+    assert.equal((await post("/api/auth/login", { email, password: "first-pass-1" })).status, 401);
+    const second = await register("second-pass-2");
+    assert.equal(second.result.status, 200);
+    assert.equal(second.emails.length, 1);
+    const c2 = await codeIn(second.emails[0].body);
+    assert.ok(c2.otp, "the new email carries a code");
+    assert.notEqual(c2.id, c1.id, "a fresh one: the old code is gone");
+    const verified = await post("/api/auth/verify-email", { email, otp: c2.otp, password: "second-pass-2", name: "Again" });
+    assert.equal(verified.status, 200);
+    assert.equal(verified.body.passwordSet, true);
+    assert.equal((await post("/api/auth/login", { email, password: "first-pass-1" })).status, 401);
+    assert.equal((await post("/api/auth/login", { email, password: "second-pass-2" })).status, 200);
+  });
+
+  it("a wrong code after signing up answers the same for a new email and a verified account", async () => {
+    await verifiedUser("code-owner@test.local", "owner-pass-2");
+    assert.equal((await post("/api/auth/register", { name: "N", email: "code-new@test.local", password: "password123" })).status, 200);
+    assert.equal((await post("/api/auth/register", { name: "N", email: "code-owner@test.local", password: "password123" })).status, 200);
+    // A code no real one could be (both are random): wrong for both.
+    const wrong = async (email: string) => {
+      const token = await prisma.otpToken.findFirstOrThrow({ where: { email, type: "email_verification" } });
+      const guess = ["000000", "000001"].find(c => hashOtp(c) !== token.tokenHash)!;
+      const r = await post("/api/auth/verify-email", { email, otp: guess });
+      return { status: r.status, body: r.body, cookie: r.cookie };
+    };
+    const fresh = await wrong("code-new@test.local");
+    assert.equal(fresh.status, 400);
+    assert.equal(fresh.body.code, "otp_incorrect");
+    assert.deepEqual(await wrong("code-owner@test.local"), fresh, "identical answer");
+    const rows = await prisma.otpToken.findMany({ where: { type: "email_verification", email: { in: ["code-new@test.local", "code-owner@test.local"] } } });
+    assert.deepEqual(rows.map(r => r.attempts), [1, 1], "an attempt spent on each");
+    const newRow = rows.find(r => r.email === "code-new@test.local")!;
+    const dummy = rows.find(r => r.email === "code-owner@test.local")!;
+    assert.ok(Math.abs(dummy.expiresAt.getTime() - newRow.expiresAt.getTime()) < 5_000, "same expiry");
+
+    // The stand-in code matches no code anyone can type.
+    for (let i = 0; i < 1_000_000; i++) {
+      if (hashOtp(String(i).padStart(6, "0")) === dummy.tokenHash) assert.fail("the stand-in code is typeable");
+    }
+    // Spending its attempts gets otp_invalid like any code, and the account stays as it was.
+    for (let i = 0; i < 4; i++) await wrong("code-owner@test.local");
+    const done = await post("/api/auth/verify-email", { email: "code-owner@test.local", otp: "123456" });
+    assert.equal(done.body.code, "otp_invalid");
+    assert.equal(done.cookie, null);
   });
 
   it("the login lock answers the same for an email with no account", async () => {

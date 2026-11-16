@@ -364,6 +364,21 @@ authRouter.post("/register", async (req: Request, res: Response) => {
     const passwordHash = await bcrypt.hash(password, 10);
 
     const accountExists = async (account: NonNullable<typeof existing>) => {
+      // A code that can't be typed, never sent, in the same place a new
+      // account's code goes: a wrong code on /verify-email then answers
+      // otp_incorrect and spends an attempt exactly as for a new account
+      // (with no code there it would say otp_invalid). Its hash is of a
+      // non-digit string, and consumeOtp only compares digit strings, so it
+      // can never verify, whatever is typed.
+      await prisma.otpToken.deleteMany({ where: { email, type: "email_verification" } });
+      await prisma.otpToken.create({
+        data: {
+          email,
+          type: "email_verification",
+          tokenHash: hashOtp(`unusable:${randomBytes(32).toString("base64url")}`),
+          expiresAt: new Date(Date.now() + OTP_TTL_MS),
+        },
+      });
       await sendAccountExistsEmail(account.email ?? email, account.name ?? "", resolveLocale(account.settings?.language));
       return res.json(REGISTER_SENT);
     };
@@ -415,7 +430,7 @@ authRouter.post("/verify-email", async (req: Request, res: Response) => {
     if (!locale) {
       return res.status(400).json({ error: "language must be 'es' or 'en'" });
     }
-    // The password typed at sign-up (or at the login that sent them here).
+    // The password typed at sign-up.
     // Optional: without it the account is verified with no password at all.
     if (password !== undefined && password !== null && password !== "" &&
         (typeof password !== "string" || password.length < 8)) {
@@ -505,7 +520,9 @@ authRouter.post("/verify-email", async (req: Request, res: Response) => {
 // only for a real account. Both still tell, to someone who measures, whether
 // an email has an account. Closing it means answering before sending (send in
 // the background, which a Vercel function may cut off) or padding the time;
-// left for later.
+// left for later. /register has a smaller version of the same gap: both of its
+// cases send an email, but a different one (code vs "you already have an
+// account") after different database work, so the times are close, not equal.
 const RESEND_SENT = { message: "If an account exists, a new code was sent" };
 authRouter.post("/resend-otp", async (req: Request, res: Response) => {
   try {
@@ -700,18 +717,16 @@ authRouter.post("/login", async (req: Request, res: Response) => {
 
     if ((await reserveLoginAttempt(prisma, user.id)) === "locked") return locked();
 
+    // An account nobody verified answers exactly like a wrong password, right
+    // password or not, and the try counts as a failure (LPBETA-23 item 5):
+    // otherwise register + login with the same password would tell a new or
+    // unverified email from a verified account. Whoever never verified signs
+    // up again: register sends a fresh code, and verifying sets the password.
     const valid = await bcrypt.compare(String(password), user.passwordHash);
-    if (!valid) {
+    if (!valid || !user.emailVerified) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
     await clearLoginFailures(prisma, user.id);
-
-    if (!user.emailVerified) {
-      return res.status(403).json({
-        error: "Please verify your email before signing in",
-        code: "EMAIL_NOT_VERIFIED",
-      });
-    }
 
     setAuthCookie(res, user);
 

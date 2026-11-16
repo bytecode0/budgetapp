@@ -12,16 +12,16 @@ import { RemansoMark } from '../shared/RemansoMark';
 
 interface VerifyEmailProps {
   email: string;
-  /** What they typed at sign-up or login; verifying sets it as the password. */
+  /** What they typed at sign-up; verifying sets it as the password. */
   password: string;
-  /** The name typed at sign-up ('' from the login path); verifying sets it. */
+  /** The name typed at sign-up; verifying sets it. */
   name: string;
   onVerified: () => void;
   onBack: () => void;
-  /** Set from the sign-up: it answers the same when the email already has an
-   *  account (that inbox gets "you already have an account", no code), so the
-   *  screen says so and offers the way to sign in. */
-  onSignIn?: () => void;
+  /** The sign-up answers the same when the email already has an account (that
+   *  inbox gets "you already have an account", no code), so the screen says so
+   *  and offers the way to sign in. */
+  onSignIn: () => void;
 }
 
 export function VerifyEmail({ email, password, name, onVerified, onBack, onSignIn }: VerifyEmailProps) {
@@ -203,18 +203,16 @@ export function VerifyEmail({ email, password, name, onVerified, onBack, onSignI
             )}
           </div>
 
-          {onSignIn && (
-            <div className="text-center mt-5 pt-5 border-t border-border space-y-2">
-              <p className="text-xs text-muted-foreground">{t('auth.verifyEmail.alreadyHaveAccount')}</p>
-              <button
-                type="button"
-                onClick={onSignIn}
-                className="text-sm font-display text-primary hover:text-primary/80 transition-colors"
-              >
-                {t('auth.verifyEmail.goToSignIn')}
-              </button>
-            </div>
-          )}
+          <div className="text-center mt-5 pt-5 border-t border-border space-y-2">
+            <p className="text-xs text-muted-foreground">{t('auth.verifyEmail.alreadyHaveAccount')}</p>
+            <button
+              type="button"
+              onClick={onSignIn}
+              className="text-sm font-display text-primary hover:text-primary/80 transition-colors"
+            >
+              {t('auth.verifyEmail.goToSignIn')}
+            </button>
+          </div>
         </motion.div>
 
         <motion.div

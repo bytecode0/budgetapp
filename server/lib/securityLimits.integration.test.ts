@@ -174,7 +174,10 @@ describe("security limits (integration, real Postgres)", { skip: !TEST_DATABASE_
     // The attacker registers the friend's email with their own password.
     assert.equal((await post("/api/auth/register", { name: "Attacker", email: "friend@test.local", password: "attacker-pass", language: "en" })).status, 200);
     const login = () => post("/api/auth/login", { email: "friend@test.local", password: "attacker-pass" });
-    assert.equal((await login()).body.code, "EMAIL_NOT_VERIFIED", "the password is right, only unverified");
+    // The password is right, but an unverified account answers like a wrong one (LPBETA-23).
+    assert.equal((await login()).status, 401);
+    const planted = await prisma.user.findUnique({ where: { email: "friend@test.local" } });
+    assert.ok(await bcrypt.compare("attacker-pass", planted!.passwordHash!), "the attacker's password is on the account");
 
     // Google says the email isn't verified: nothing changes.
     assert.deepEqual(await googleSignIn(prisma, { email: "friend@test.local", verified_email: false }), { error: "unverified" });
