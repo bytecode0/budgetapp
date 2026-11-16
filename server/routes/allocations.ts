@@ -10,7 +10,7 @@ import { incomeBaselines } from "../lib/householdIncome.js";
 import { visibleToWhere } from "../lib/ownership.js";
 import { hiddenCommitted, notOnHiddenDebt } from "../lib/poolRefs.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
-import { GENEROSITY_TYPE, clearGenerosityShare, ensureGenerosityLine, isEchoedGenerosityShare, keepGenerosityFirst, syncGenerosity } from "../lib/generosity.js";
+import { GENEROSITY_TYPE, clearGenerosityShare, ensureGenerosityLine, isEchoedGenerosityShare, keepGenerosityFirst, keepGenerosityFirstIn, lockLineOrder, syncGenerosity } from "../lib/generosity.js";
 
 export const allocationsRouter = Router();
 
@@ -23,7 +23,9 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
     // users from before it, and with a share set its amount follows this
     // period's household income (server/lib/generosity.ts).
     await ensureGenerosityLine(req.userId!);
-    await keepGenerosityFirst(req.userId!);
+    // A repair: if it can't run now (e.g. the lock wait times out behind a
+    // reorder), the next read retries it; it never fails the read.
+    await keepGenerosityFirst(req.userId!).catch(err => console.error("[allocations/GET] keepGenerosityFirst", err));
     const poolCycle = await getCycleStartDay(req.userId!);
     const generosity = await syncGenerosity(req.userId!, periodBounds(currentPeriodKey(poolCycle), poolCycle));
 
@@ -138,16 +140,18 @@ allocationsRouter.patch("/reorder", requireAuth, async (req: AuthRequest, res: R
       return res.status(400).json({ error: "order array is required" });
     }
 
-    await prisma.$transaction(
-      order.map(({ id, sortOrder }) =>
-        prisma.allocation.updateMany({
+    // Whatever order was sent, the Generosity line stays first (Método Ruta
+    // R1) — in the same transaction, under the lock keepGenerosityFirst takes.
+    await prisma.$transaction(async (tx) => {
+      await lockLineOrder(tx, req.userId!);
+      for (const { id, sortOrder } of order) {
+        await tx.allocation.updateMany({
           where: { id, userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
           data: { sortOrder },
-        })
-      )
-    );
-    // Whatever order was sent, the Generosity line stays first (Método Ruta R1).
-    await keepGenerosityFirst(req.userId!);
+        });
+      }
+      await keepGenerosityFirstIn(tx, req.userId!);
+    });
 
     return res.json({ success: true });
   } catch (err) {

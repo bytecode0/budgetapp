@@ -61,6 +61,11 @@ export function periodBounds(periodKey: string, cycleStartDay: number): { start:
   return { start: utcDay(y, m - 2, day), end: utcDay(y, m - 1, day) };
 }
 
+/** Whether the period [start, end) is over at `now`: its last day has passed. */
+export function periodEnded(bounds: { end: Date }, now: Date = new Date()): boolean {
+  return bounds.end.getTime() <= now.getTime();
+}
+
 /** The period label containing "now". */
 export function currentPeriodKey(cycleStartDay: number, now: Date = new Date()): string {
   return periodKeyFor(now, cycleStartDay);

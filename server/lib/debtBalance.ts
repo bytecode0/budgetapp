@@ -331,16 +331,22 @@ export async function countedAmounts(userId: string): Promise<Map<string, number
   return countedFrom(ledgers, refunds);
 }
 
-/** A budget line's amount for a month. A debt line's is always its debt's
- *  commitment for that period: a saved MonthlyBudget row for it (from before
- *  amounts became read-only on debt lines) is ignored. Other lines take the
- *  month's saved amount, else the stored one. Pure. */
+/** A budget line's amount for a month. A debt line's is its debt's
+ *  commitment for that period — except in a period that has already ended
+ *  (`periodEnded`, see period.ts) with a saved MonthlyBudget row for the line:
+ *  that row is what the month budgeted, so archiving or paying off the debt
+ *  later doesn't rewrite it. In the current and future periods a saved row
+ *  for a debt line (from before its amount became read-only) is ignored.
+ *  Other lines take the month's saved amount, else the stored one. Pure. */
 export function lineBudget(
   line: { id: string; type: string; debtId: string | null; allocatedAmount: number },
   saved: ReadonlyMap<string, number>,
   commitments: ReadonlyMap<string, number>,
+  periodEnded: boolean,
 ): number {
-  if (line.type === "debt" && line.debtId && commitments.has(line.debtId)) return commitments.get(line.debtId)!;
+  if (line.type === "debt" && line.debtId && commitments.has(line.debtId)) {
+    return periodEnded && saved.has(line.id) ? saved.get(line.id)! : commitments.get(line.debtId)!;
+  }
   return saved.get(line.id) ?? line.allocatedAmount;
 }
 

@@ -2,7 +2,7 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { toCents, toEuros, serializeMoney } from "../lib/money.js";
-import { periodBounds } from "../lib/period.js";
+import { periodBounds, periodEnded } from "../lib/period.js";
 import { ALLOCATION_NOT_FOUND, allocationsInPool, hiddenCommitted, hiddenLineIds, notOnHiddenDebt } from "../lib/poolRefs.js";
 import { countedAmounts, debtCommitments, lineBudget } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
@@ -13,14 +13,76 @@ export const monthlyBudgetsRouter = Router();
 
 const ROW_ALLOCATION = { id: true, name: true, icon: true, type: true, sortOrder: true, debtId: true } as const;
 
-/** Saved rows with each debt line's amount replaced by its debt's commitment
- *  for the month (lineBudget): an old saved row for a debt line is ignored. */
-function atCommitment<T extends { allocationId: string; allocatedAmount: number; allocation: { type: string; debtId: string | null } }>(
-  rows: T[], commitments: ReadonlyMap<string, number>,
-): T[] {
-  return rows.map(b => b.allocation.type === "debt"
-    ? { ...b, allocatedAmount: lineBudget({ id: b.allocationId, type: "debt", debtId: b.allocation.debtId, allocatedAmount: b.allocatedAmount }, new Map(), commitments) }
-    : b);
+/** The month's budget rows as Partidas, /review, Home and analytics read them,
+ *  for the lines visible to `authUserId`, plus what the hidden ones commit
+ *  (euros, as /review sums them).
+ *  - Nothing saved for the month: every line at its current setting.
+ *  - Saved rows: those rows, plus the lines a saved month has no row for —
+ *    the Generosity line (its amount for that month) and every debt line
+ *    (POST /save never stores one).
+ *  A debt line's amount is lineBudget's: its commitment for THIS month, not
+ *  the stored column (only refreshed when the debt itself is edited). */
+async function monthBudgets(userId: string, authUserId: string, month: string) {
+  const saved = await prisma.monthlyBudget.findMany({
+    where: { userId, month },
+    include: { allocation: { select: ROW_ALLOCATION } },
+  });
+  const cycleStartDay = await getCycleStartDay(userId);
+  const bounds = periodBounds(month, cycleStartDay);
+  const ended = periodEnded(bounds);
+  const [hidden, commitments] = await Promise.all([
+    hiddenLineIds(userId, authUserId),
+    debtCommitments(userId, bounds),
+  ]);
+  const hiddenCommittedEuros = hidden.size > 0
+    ? toEuros(await hiddenCommitted(userId, authUserId, commitments, { month, ended }))
+    : 0;
+
+  // If nothing saved, fall back to current allocation settings
+  if (saved.length === 0) {
+    // A Generosity line with a share: that share of THIS month's household
+    // income (server/lib/generosity.ts). It has no debt, so it is never hidden.
+    const [stored, bps] = await Promise.all([
+      prisma.allocation.findMany({
+        where: { userId, ...notOnHiddenDebt(authUserId) },
+        orderBy: { sortOrder: "asc" },
+      }),
+      generosityBps(userId),
+    ]);
+    const allocations = applyGenerosity(stored, bps, bps === null ? 0 : await householdIncomeFor(userId, bounds));
+    return {
+      budgets: allocations.map(a => ({
+        allocationId: a.id,
+        month,
+        allocatedAmount: lineBudget(a, new Map(), commitments, ended),
+        allocation: { id: a.id, name: a.name, icon: a.icon, type: a.type, sortOrder: a.sortOrder },
+        saved: false, // flag: not yet saved for this specific month
+      })),
+      hiddenCommittedEuros,
+    };
+  }
+
+  const savedBy = new Map(saved.map(b => [b.allocationId, b.allocatedAmount]));
+  const budgets: unknown[] = saved
+    .filter(b => !hidden.has(b.allocationId))
+    .map(b => ({ ...b, allocatedAmount: lineBudget({ ...b.allocation, id: b.allocationId, allocatedAmount: b.allocatedAmount }, savedBy, commitments, ended), saved: true }));
+
+  // The lines a saved month has no row for. The Generosity line at its amount
+  // for that month as the review and Home count it (the share of that month's
+  // income, else the line's fixed amount); a debt line at its commitment for
+  // the month. Neither the line of a debt hidden from the caller.
+  const missing = await prisma.allocation.findMany({
+    where: { userId, type: { in: [GENEROSITY_TYPE, "debt"] }, id: { notIn: [...savedBy.keys()] }, ...notOnHiddenDebt(authUserId) },
+    select: { ...ROW_ALLOCATION, allocatedAmount: true },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+  for (const { allocatedAmount, ...line } of missing) {
+    const amount = line.type === GENEROSITY_TYPE
+      ? (await generosityForMonth(userId, month, bounds)).amount
+      : lineBudget({ ...line, allocatedAmount }, savedBy, commitments, ended);
+    budgets.push({ allocationId: line.id, month, allocatedAmount: amount, allocation: line, saved: false });
+  }
+  return { budgets, hiddenCommittedEuros };
 }
 
 // GET /api/monthly-budgets?month=2026-04
@@ -30,61 +92,7 @@ monthlyBudgetsRouter.get("/", requireAuth, async (req: AuthRequest, res: Respons
     const { month } = req.query as Record<string, string>;
     if (!month) return res.status(400).json({ error: "month is required (YYYY-MM)" });
 
-    const saved = await prisma.monthlyBudget.findMany({
-      where: { userId: req.userId!, month },
-      include: { allocation: { select: ROW_ALLOCATION } },
-    });
-    // The line of a debt hidden from the caller is never listed (poolRefs.ts);
-    // what it commits this month comes as one figure (euros), as /review sums it.
-    // A debt line's amount is its commitment for THIS month, not the stored
-    // column (which is only refreshed when the debt itself is edited) —
-    // computed once, and only when a line needs it.
-    const cycleStartDay = await getCycleStartDay(req.userId!);
-    const hidden = await hiddenLineIds(req.userId!, req.authUserId!);
-    const commitments = saved.length === 0 || hidden.size > 0 || saved.some(b => b.allocation.type === "debt")
-      ? await debtCommitments(req.userId!, periodBounds(month, cycleStartDay))
-      : new Map<string, number>();
-    const hiddenCommittedEuros = hidden.size > 0
-      ? toEuros(await hiddenCommitted(req.userId!, req.authUserId!, commitments, month))
-      : 0;
-
-    // If nothing saved, fall back to current allocation settings
-    if (saved.length === 0) {
-      // A Generosity line with a share: that share of THIS month's household
-      // income (server/lib/generosity.ts). It has no debt, so it is never hidden.
-      const [stored, bps] = await Promise.all([
-        prisma.allocation.findMany({
-          where: { userId: req.userId!, ...notOnHiddenDebt(req.authUserId!) },
-          orderBy: { sortOrder: "asc" },
-        }),
-        generosityBps(req.userId!),
-      ]);
-      const allocations = applyGenerosity(stored, bps, bps === null ? 0 : await householdIncomeFor(req.userId!, periodBounds(month, cycleStartDay)));
-      return res.json({ ...serializeMoney({
-        budgets: allocations.map(a => ({
-          allocationId: a.id,
-          month,
-          allocatedAmount: a.type === "debt" && a.debtId ? commitments.get(a.debtId) ?? a.allocatedAmount : a.allocatedAmount,
-          allocation: { id: a.id, name: a.name, icon: a.icon, type: a.type, sortOrder: a.sortOrder },
-          saved: false, // flag: not yet saved for this specific month
-        })),
-      }), hiddenCommitted: hiddenCommittedEuros });
-    }
-
-    // A saved month without a row for the Generosity line: its amount for
-    // that month as the review and Home count it (the share of that month's
-    // income, else the line's fixed amount), so every screen agrees. The
-    // Generosity line has no debt, so it is never one of the hidden lines.
-    const budgets: unknown[] = atCommitment(saved.filter(b => !hidden.has(b.allocationId)), commitments).map(b => ({ ...b, saved: true }));
-    const generosityLine = await prisma.allocation.findFirst({
-      where: { userId: req.userId!, type: GENEROSITY_TYPE, ...notOnHiddenDebt(req.authUserId!) },
-      select: { id: true, name: true, icon: true, type: true, sortOrder: true },
-      orderBy: { sortOrder: "asc" },
-    });
-    if (generosityLine && !saved.some(b => b.allocationId === generosityLine.id)) {
-      const { amount } = await generosityForMonth(req.userId!, month, periodBounds(month, cycleStartDay));
-      budgets.push({ allocationId: generosityLine.id, month, allocatedAmount: amount, allocation: generosityLine, saved: false });
-    }
+    const { budgets, hiddenCommittedEuros } = await monthBudgets(req.userId!, req.authUserId!, month);
     return res.json({ ...serializeMoney({ budgets }), hiddenCommitted: hiddenCommittedEuros });
   } catch (err) {
     console.error("[monthly-budgets/GET]", err);
@@ -132,15 +140,10 @@ monthlyBudgetsRouter.post("/save", requireAuth, async (req: AuthRequest, res: Re
       )
     );
 
-    const updated = await prisma.monthlyBudget.findMany({
-      where: { userId: req.userId!, month, allocation: notOnHiddenDebt(req.authUserId!) },
-      include: { allocation: { select: ROW_ALLOCATION } },
-    });
-    const commitments = updated.some(b => b.allocation.type === "debt")
-      ? await debtCommitments(req.userId!, periodBounds(month, await getCycleStartDay(req.userId!)))
-      : new Map<string, number>();
-
-    return res.json(serializeMoney({ budgets: atCommitment(updated, commitments).map(b => ({ ...b, saved: true })) }));
+    // The month as GET answers it, so the debt and Generosity lines the save
+    // stored no row for keep this month's amounts on the client.
+    const { budgets: updated, hiddenCommittedEuros } = await monthBudgets(req.userId!, req.authUserId!, month);
+    return res.json({ ...serializeMoney({ budgets: updated }), hiddenCommitted: hiddenCommittedEuros });
   } catch (err) {
     console.error("[monthly-budgets/save]", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -156,6 +159,7 @@ monthlyBudgetsRouter.get("/review", requireAuth, async (req: AuthRequest, res: R
 
     const cycleStartDay = await getCycleStartDay(req.userId!);
     const { start: monthStart, end: monthEnd } = periodBounds(month, cycleStartDay);
+    const ended = periodEnded({ end: monthEnd });
 
     // Get budgets (or fall back to current allocations)
     const savedBudgets = await prisma.monthlyBudget.findMany({
@@ -203,8 +207,9 @@ monthlyBudgetsRouter.get("/review", requireAuth, async (req: AuthRequest, res: R
     const allocations = applyGenerosity(storedAllocations, bps, income.cents);
 
     const review = allocations.map(a => {
-      // A debt line: its commitment, even over an old saved row (lineBudget).
-      const budgeted = lineBudget(a, savedBy, commitments);
+      // A debt line: its commitment, or its saved row once the month has
+      // ended (lineBudget).
+      const budgeted = lineBudget(a, savedBy, commitments, ended);
       const actual   = actualByAllocation[a.id] ?? 0;
       return {
         allocationId: a.id,

@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  periodKeyFor, periodBounds, currentPeriodKey, periodKeyOffset, enumeratePeriods, clampCycleStartDay,
+  periodKeyFor, periodBounds, currentPeriodKey, periodKeyOffset, enumeratePeriods, clampCycleStartDay, periodEnded,
 } from "./period.js";
 
 // Days are midnight UTC, as movements are stored.
@@ -103,4 +103,11 @@ test("bounds are UTC whatever the server's zone: a movement stored on the 1st is
   } finally {
     if (saved === undefined) delete process.env.TZ; else process.env.TZ = saved;
   }
+});
+
+test("periodEnded: a period is over once its exclusive end has arrived", () => {
+  const oct = periodBounds("2026-10", 1);
+  assert.equal(periodEnded(oct, utc(2026, 9, 31)), false);
+  assert.equal(periodEnded(oct, utc(2026, 10, 1)), true);
+  assert.equal(periodEnded(periodBounds("2026-12", 1), utc(2026, 10, 16)), false);
 });

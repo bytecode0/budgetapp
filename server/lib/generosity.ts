@@ -19,6 +19,7 @@
 //   (isEchoedGenerosityShare). The batch PATCH /api/allocations/budgets and
 //   the budget suggestions never touch the line. A month's saved budget
 //   (MonthlyBudget) still wins for that month, as with debt lines.
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { createDefaultAllocations } from "./defaults.js";
 import { householdBaselineIncome, householdMonthIncome } from "./householdIncome.js";
@@ -62,17 +63,36 @@ export function generosityFirstOrder(lines: { id: string; type: string; sortOrde
   return ordered.flatMap((l, i) => (l.sortOrder === i ? [] : [{ id: l.id, sortOrder: i }]));
 }
 
-/** Puts the pool's Generosity line back first when another line is at or
- *  before it (an old reorder, or one sent in any order). Idempotent. */
-export async function keepGenerosityFirst(poolUserId: string): Promise<void> {
-  const lines = await prisma.allocation.findMany({
+/** Serialises, inside `tx`, everything that rewrites the order of the pool's
+ *  lines (keepGenerosityFirst, PATCH /api/allocations/reorder) and the
+ *  Generosity line's creation: one per-pool advisory lock, released at commit.
+ *  Each one reads the order only after taking it, so none of them writes an
+ *  order computed from a read another one has since changed. */
+export async function lockLineOrder(tx: Prisma.TransactionClient, poolUserId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"generosity:" + poolUserId}))`;
+}
+
+/** keepGenerosityFirst inside a transaction that already holds lockLineOrder. */
+export async function keepGenerosityFirstIn(tx: Prisma.TransactionClient, poolUserId: string): Promise<void> {
+  const lines = await tx.allocation.findMany({
     where: { userId: poolUserId },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     select: { id: true, type: true, sortOrder: true },
   });
-  const updates = generosityFirstOrder(lines);
-  if (updates.length === 0) return;
-  await prisma.$transaction(updates.map(u => prisma.allocation.update({ where: { id: u.id }, data: { sortOrder: u.sortOrder } })));
+  for (const u of generosityFirstOrder(lines)) {
+    await tx.allocation.update({ where: { id: u.id }, data: { sortOrder: u.sortOrder } });
+  }
+}
+
+/** Puts the pool's Generosity line back first when another line is at or
+ *  before it (an old reorder, or one sent in any order). Idempotent; the read
+ *  and the renumbering are one transaction under lockLineOrder, so a
+ *  concurrent reorder lands wholly before or after it. */
+export async function keepGenerosityFirst(poolUserId: string): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await lockLineOrder(tx, poolUserId);
+    await keepGenerosityFirstIn(tx, poolUserId);
+  });
 }
 
 /** Creates the pool's Generosity line at 0 when it has none. Idempotent. */
@@ -83,7 +103,7 @@ export async function ensureGenerosityLine(poolUserId: string): Promise<void> {
   if (await prisma.allocation.count({ where: { userId: poolUserId, type: GENEROSITY_TYPE } }) > 0) return;
   await prisma.$transaction(async (tx) => {
     // Serialises concurrent first reads of the same pool (released at commit).
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"generosity:" + poolUserId}))`;
+    await lockLineOrder(tx, poolUserId);
     if (await tx.allocation.count({ where: { userId: poolUserId, type: GENEROSITY_TYPE } }) > 0) return;
     const [settings, lines] = await Promise.all([
       tx.userSettings.findUnique({ where: { userId: poolUserId }, select: { language: true } }),
