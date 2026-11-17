@@ -42,7 +42,7 @@ export function CardsStep({ quiet = false }: CardsStepProps) {
       ...cardSettingsPayload(fields),
     });
     setSaving(false);
-    if ('error' in result) { toast.error(result.error as string); return; }
+    if ('error' in result) { toast.error(apiErrorMessage(t, result)); return; }
     toast.success(t('onboarding.cards.createdOk'));
     reset();
   };

@@ -240,12 +240,58 @@ describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABA
     assert.deepEqual(itemAmounts(tl, shared.debtId), [40, 0, 0]); // due Nov 5, unpaid
   });
 
-  it("statementDay is accepted on PATCH, clamped to 1-28 and clearable", async () => {
+  it("statementDay is accepted on PATCH as 1-31, kept as typed, validated and clearable", async () => {
     setClockForTests(NOV_2);
     const { A } = await couple();
     const c = await card(A, "Clamp", 0, D("2026-10-20"), { statementDay: 31 });
-    assert.equal((await prisma.debt.findUniqueOrThrow({ where: { id: c.debtId } })).statementDay, 28);
+    assert.equal((await prisma.debt.findUniqueOrThrow({ where: { id: c.debtId } })).statementDay, 31);
+    for (const bad of [0, 32, 15.5, "abc"]) {
+      const r = await call(A, "PATCH", `/api/debts/${c.debtId}`, { statementDay: bad });
+      assert.equal(r.status, 400, `statementDay ${bad}`);
+      assert.equal(r.body.code, "invalid_cycle_day");
+    }
+    assert.equal((await call(A, "POST", "/api/debts", { name: "Préstamo", kind: "other", paymentDueDay: 40 })).status, 400);
+    assert.equal((await prisma.debt.findUniqueOrThrow({ where: { id: c.debtId } })).statementDay, 31);
     await ok(A, "PATCH", `/api/debts/${c.debtId}`, { statementDay: null });
     assert.equal((await prisma.debt.findUniqueOrThrow({ where: { id: c.debtId } })).statementDay, null);
+  });
+
+  it("the cycle is set from the card account (Accounts, onboarding): days 29-31 clamp to short months", async () => {
+    setClockForTests(new Date("2027-02-10T12:00:00Z"));
+    const A = (await signUp("Alba")).id;
+    const { account } = await ok(A, "POST", "/api/accounts", {
+      name: "Visa", type: "card", currentBalance: 0, cardPaymentMode: "full", cardStatementDay: 31, cardPaymentDueDay: 30,
+    });
+    const debt = await prisma.debt.findFirstOrThrow({ where: { userId: A, accountId: account.id } });
+    assert.equal(debt.statementDay, 31);
+    assert.equal(debt.paymentDueDay, 30);
+    const listed = (await ok(A, "GET", "/api/accounts")).accounts.find((a: any) => a.id === account.id);
+    assert.equal(listed.card.statementDay, 31);
+    assert.equal(listed.card.paymentDueDay, 30);
+    // January's statement closed Jan 31 and is due "Feb 30" → Feb 28.
+    let cycle = (await debtsOf(A)).find(x => x.id === debt.id).cycle;
+    assert.equal(cycle.closesOn, "2027-01-31");
+    assert.equal(cycle.dueOn, "2027-02-28");
+    assert.equal(cycle.afterCutDueOn, "2027-03-30");
+
+    // Edited from Accounts: the debt follows; invalid days are refused whole.
+    for (const body of [{ cardStatementDay: 32 }, { cardPaymentDueDay: 0 }, { cardStatementDay: "x" }]) {
+      const r = await call(A, "PATCH", `/api/accounts/${account.id}`, body);
+      assert.equal(r.status, 400, JSON.stringify(body));
+      assert.equal(r.body.code, "invalid_cycle_day");
+    }
+    await ok(A, "PATCH", `/api/accounts/${account.id}`, { cardStatementDay: 29, cardPaymentDueDay: 5 });
+    const edited = await prisma.debt.findUniqueOrThrow({ where: { id: debt.id } });
+    assert.equal(edited.statementDay, 29);
+    assert.equal(edited.paymentDueDay, 5);
+    // Cut-off 29, due 5: January's statement (Jan 29) was due Feb 5; next is
+    // February's, closing on its last day.
+    cycle = (await debtsOf(A)).find(x => x.id === debt.id).cycle;
+    assert.equal(cycle.closesOn, "2027-02-28");
+    assert.equal(cycle.dueOn, "2027-03-05");
+    // Cleared from Accounts: no cycle.
+    await ok(A, "PATCH", `/api/accounts/${account.id}`, { cardStatementDay: null });
+    assert.equal((await prisma.debt.findUniqueOrThrow({ where: { id: debt.id } })).statementDay, null);
+    assert.equal((await debtsOf(A)).find(x => x.id === debt.id).cycle, null);
   });
 });

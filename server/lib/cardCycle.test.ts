@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  clampedDay, statementClosingIn, nextStatementDue, cycleDaysOf, cardCycleSummary, isoDay,
+  clampedDay, statementClosingIn, nextStatementDue, cycleDaysOf, cardCycleSummary, isoDay, parseCycleDay,
 } from "./cardCycle.js";
 import { monthlyCommitment, type DebtLedger, type LedgerDebt } from "./debtBalance.js";
 import { buildDebtTimeline, timelineInput } from "./debtTimeline.js";
@@ -335,4 +335,51 @@ test("buildDebtTimeline uses the cycle amounts when given, the payment mode othe
   assert.equal(withCycle[1].pctCommitted, 15);
   const without = buildDebtTimeline([base], 200000, 1, 3, now);
   assert.deepEqual(without.map(p => p.committed), [9999, 0, 0]);
+});
+
+// ── Days 29–31 (set from Accounts and the onboarding) ──────────────────────
+
+test("parseCycleDay: integers 1–31 (numbers or digit strings), null/\"\" clear, the rest is an error", () => {
+  assert.deepEqual(parseCycleDay(1), { day: 1 });
+  assert.deepEqual(parseCycleDay(31), { day: 31 });
+  assert.deepEqual(parseCycleDay("29"), { day: 29 });
+  assert.deepEqual(parseCycleDay(null), { day: null });
+  assert.deepEqual(parseCycleDay(""), { day: null });
+  for (const bad of [0, 32, -1, 15.5, "15.5", "abc", "1e1", true, {}, [], Number.NaN]) {
+    assert.ok("error" in parseCycleDay(bad), `${JSON.stringify(bad)} should be rejected`);
+  }
+});
+
+test("cut-off 31, due 30: each short month clamps both days, dates never go backwards", () => {
+  const days = { statementDay: 31, paymentDueDay: 30 };
+  // January's statement closes Jan 31 and is due "Feb 30" → Feb 28.
+  assert.equal(day(statementClosingIn(2027, 0, days).closesOn), "2027-01-31");
+  assert.equal(day(statementClosingIn(2027, 0, days).dueOn), "2027-02-28");
+  // February's closes on its last day and is due Mar 30.
+  assert.equal(day(statementClosingIn(2027, 1, days).closesOn), "2027-02-28");
+  assert.equal(day(statementClosingIn(2027, 1, days).dueOn), "2027-03-30");
+  // April has 30 days: closes Apr 30, due May 30.
+  assert.equal(day(statementClosingIn(2027, 3, days).closesOn), "2027-04-30");
+  assert.equal(day(nextStatementDue(D("2027-02-28"), days).dueOn), "2027-02-28");
+  assert.equal(day(nextStatementDue(D("2027-03-01"), days).dueOn), "2027-03-30");
+});
+
+test("cut-off 29 in February: the purchase of Feb 28 is in February's statement", () => {
+  const l = ledger(card({ statementDay: 29, paymentDueDay: 10, balanceAsOf: D("2027-01-01") }), {
+    purchases: [mv("feb28", 2000, "2027-02-28"), mv("mar1", 1000, "2027-03-01")],
+  });
+  const s = cardCycleSummary(l, D("2027-03-02"))!;
+  assert.equal(day(s.closesOn), "2027-02-28");
+  assert.equal(day(s.dueOn), "2027-03-10");
+  assert.equal(s.dueAmount, 2000);
+  assert.equal(s.afterCutAmount, 1000);
+  assert.equal(day(s.afterCutDueOn), "2027-04-10");
+});
+
+test("committed future with days 30–31: pre-existing debt lands in the period its clamped due date falls in", () => {
+  // Interest dated Jan 31 is due Feb 28 (not "Feb 30"); dated Mar 1, due Mar 30.
+  const l = ledger(card({ statementDay: 31, paymentDueDay: 30, balanceAsOf: at("2026-09-01T10:00:00Z") }), {
+    adjustments: [mv("jan", 1000, "2027-01-31"), mv("mar", 2000, "2027-03-01")],
+  });
+  assert.deepEqual(committed(l, "2026-12", 4), [0, 0, 1000, 2000]);
 });

@@ -75,7 +75,7 @@ Orden: **21 + 23** (seguridad que falta) → **25** (dominio, parte de Claude; l
 
 ### Seguimientos (5 nov)
 - **Saldo de los planes (de LPBETA-07):** no se recalcula cuando una pareja se separa y mueve gastos de una partida de plan, al borrar una partida de plan ni al cambiar el plan enlazado de una partida.
-- **Ciclo de la tarjeta (de LPBETA-01):** poner el día de corte desde Cuentas y en el onboarding; permitir días 29–31.
+- **Ciclo de la tarjeta (de LPBETA-01):** poner el día de corte desde Cuentas y en el onboarding; permitir días 29–31. **Implementado en la rama `feature/seguimientos-tarjeta-planes`** (sin PR todavía): día de corte y de pago en la tarjeta (Cuentas y onboarding), días 1–31 validados en el servidor; en los meses más cortos cuenta el último día.
 - **CSP (de LPBETA-23):** pasar de `Content-Security-Policy-Report-Only` a `Content-Security-Policy` cuando la consola del navegador no muestre avisos.
 - **`xlsx` (de LPBETA-22):** la versión de npm no recibe parches; decidir si se usa la del CDN de SheetJS.
 - **Luis:** ejecutar `npm run backfill:legacy-owners` (primero sin `--apply`) y `npm run stats:active`, ambos con la URL de `neon-pink-pebble` entre comillas en su terminal.

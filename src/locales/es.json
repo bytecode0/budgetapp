@@ -1230,6 +1230,8 @@
     "paymentDueDayLabel": "Día de pago",
     "statementDayLabel": "Día de corte",
     "statementDayHint": "El día que cierra el extracto. Las compras de después se pagan el mes siguiente.",
+    "cycleDayShortMonthHint": "En los meses más cortos cuenta el último día del mes.",
+    "cycleDayInvalid": "El día tiene que ser un número del 1 al 31.",
     "cycle": {
       "due": "Vence el {{date}}: {{amount}}",
       "dueOpen": "Vence el {{date}}: {{amount}} por ahora (el corte es el {{closes}})",

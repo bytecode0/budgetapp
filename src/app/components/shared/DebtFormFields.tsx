@@ -234,13 +234,13 @@ export function DebtFormFields({ form, setForm }: DebtFormFieldsProps) {
             type="number"
             inputMode="numeric"
             min={1}
-            max={28}
+            max={31}
             value={form.statementDay}
             onChange={e => setForm(f => ({ ...f, statementDay: e.target.value }))}
-            placeholder="1-28"
+            placeholder="1-31"
             className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
           />
-          <p className="text-xs text-muted-foreground">{t('debts.statementDayHint')}</p>
+          <p className="text-xs text-muted-foreground">{t('debts.statementDayHint')} {t('debts.cycleDayShortMonthHint')}</p>
         </div>
       )}
 
@@ -248,11 +248,12 @@ export function DebtFormFields({ form, setForm }: DebtFormFieldsProps) {
         <label className="text-xs text-muted-foreground">{t('debts.paymentDueDayLabel')}</label>
         <input
           type="number"
+          inputMode="numeric"
           min={1}
-          max={28}
+          max={31}
           value={form.paymentDueDay}
           onChange={e => setForm(f => ({ ...f, paymentDueDay: e.target.value }))}
-          placeholder="1-28"
+          placeholder="1-31"
           className="w-full border border-line-strong rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
         />
       </div>

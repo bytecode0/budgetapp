@@ -7,7 +7,7 @@ import { buildDebtTimeline, timelineInput } from "../lib/debtTimeline.js";
 import { householdBaselineIncome } from "../lib/householdIncome.js";
 import { debtAccountLinkError, cardDebtKindLocked, creditCardOnNonCardAccount, type DebtAccountLinkError } from "../lib/debtAccountLink.js";
 import { clampCycleStartDay, currentPeriodKey, periodBounds, periodKeyOffset } from "../lib/period.js";
-import { cardCycleSummary, isoDay } from "../lib/cardCycle.js";
+import { cardCycleSummary, isoDay, parseCycleDay } from "../lib/cardCycle.js";
 import { now as clockNow } from "../lib/clock.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
 import { visibleExpenseWhere } from "../lib/poolRefs.js";
@@ -109,12 +109,6 @@ async function linkableAccount(
 
 function defaultPaymentMode(kind: string | undefined): string {
   return !kind || kind === "credit_card" || kind === "other" ? "minimum" : "installments";
-}
-
-function clampDay(n: unknown): number | null {
-  const v = parseInt(String(n), 10);
-  if (!Number.isFinite(v)) return null;
-  return Math.min(28, Math.max(1, v));
 }
 
 // GET /api/debts  — list (sorted), visible ones only (own + household-shared)
@@ -320,6 +314,10 @@ debtsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     if (visibility !== undefined && !VISIBILITIES.has(visibility)) {
       return res.status(400).json({ error: "Invalid visibility" });
     }
+    const statement = statementDay !== undefined ? parseCycleDay(statementDay) : { day: null };
+    const due = paymentDueDay !== undefined ? parseCycleDay(paymentDueDay) : { day: null };
+    if ("error" in statement) return res.status(400).json({ error: statement.error, code: statement.code });
+    if ("error" in due) return res.status(400).json({ error: due.error, code: due.code });
 
     // A linked account must be in the pool and visible to the caller (another
     // member's private account is as good as nonexistent).
@@ -367,8 +365,8 @@ debtsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
         principal: principal !== undefined ? toCents(principal) : null,
         apr: apr !== undefined && apr !== null ? Number(apr) : null,
         creditLimit: creditLimit !== undefined ? toCents(creditLimit) : null,
-        statementDay: statementDay !== undefined ? clampDay(statementDay) : null,
-        paymentDueDay: paymentDueDay !== undefined ? clampDay(paymentDueDay) : null,
+        statementDay: statement.day,
+        paymentDueDay: due.day,
         minimumPayment: minimumPayment !== undefined ? toCents(minimumPayment) : null,
         installmentAmount: installmentAmountCents,
         installmentsTotal: installmentsTotalN,
@@ -439,6 +437,10 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
     if (paymentMode !== undefined && !PAYMENT_MODES.has(paymentMode)) return res.status(400).json({ error: "Invalid payment mode" });
     if (status !== undefined && !DEBT_STATUSES.has(status)) return res.status(400).json({ error: "Invalid status" });
     if (visibility !== undefined && !VISIBILITIES.has(visibility)) return res.status(400).json({ error: "Invalid visibility" });
+    const statement = statementDay !== undefined ? parseCycleDay(statementDay) : undefined;
+    const due = paymentDueDay !== undefined ? parseCycleDay(paymentDueDay) : undefined;
+    if (statement && "error" in statement) return res.status(400).json({ error: statement.error, code: statement.code });
+    if (due && "error" in due) return res.status(400).json({ error: due.error, code: due.code });
 
     let accountUpdate: { accountId: string | null } | undefined;
     if (accountId !== undefined) {
@@ -519,8 +521,8 @@ debtsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
         ...(principal !== undefined && { principal: principal === null ? null : toCents(principal) }),
         ...(apr !== undefined && { apr: apr === null ? null : Number(apr) }),
         ...(creditLimit !== undefined && { creditLimit: creditLimit === null ? null : toCents(creditLimit) }),
-        ...(statementDay !== undefined && { statementDay: statementDay === null ? null : clampDay(statementDay) }),
-        ...(paymentDueDay !== undefined && { paymentDueDay: paymentDueDay === null ? null : clampDay(paymentDueDay) }),
+        ...(statement && { statementDay: statement.day }),
+        ...(due && { paymentDueDay: due.day }),
         ...(minimumPayment !== undefined && { minimumPayment: minimumPayment === null ? null : toCents(minimumPayment) }),
         ...(installmentAmount !== undefined && { installmentAmount: installmentAmount === null ? null : toCents(installmentAmount) }),
         ...(installmentsTotal !== undefined && { installmentsTotal: installmentsTotal === null ? null : parseInt(installmentsTotal, 10) || null }),

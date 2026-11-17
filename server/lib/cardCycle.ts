@@ -52,6 +52,19 @@ export function clampedDay(y: number, m0: number, day: number): Date {
   return utc(yy, mm, Math.min(Math.max(1, day), daysInMonth(yy, mm)));
 }
 
+/** A statement or payment due day from a request body: an integer 1–31;
+ *  null or "" clears it. Days past a month's end are kept as typed and
+ *  clamped when dates are computed (clampedDay), so 31 means "the last day".
+ *  { error } for anything else. */
+export function parseCycleDay(v: unknown): { day: number | null } | { error: string; code: "invalid_cycle_day" } {
+  if (v === null || v === "") return { day: null };
+  const n = typeof v === "string" && /^\d+$/.test(v.trim()) ? Number(v.trim()) : v;
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > 31) {
+    return { error: "Day must be an integer from 1 to 31", code: "invalid_cycle_day" };
+  }
+  return { day: n };
+}
+
 export interface CardCycleDays { statementDay: number; paymentDueDay: number }
 
 export interface Statement {

@@ -11,6 +11,7 @@ export interface CardInfo {
   paymentMode: CardPaymentMode;
   minimumPayment: number | null; // euros
   paymentDueDay: number | null;
+  statementDay: number | null;
   owed: number; // euros — live: purchases raise it, payments lower it
   monthlyCommitment: number; // euros — this period's budget line
 }
@@ -21,6 +22,7 @@ export interface CardSettingsPayload {
   cardPaymentMode?: CardPaymentMode;
   cardMinimumPayment?: number | null;
   cardPaymentDueDay?: number | null;
+  cardStatementDay?: number | null;
 }
 
 export interface Account {

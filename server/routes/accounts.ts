@@ -12,28 +12,28 @@ import { ownerChangeSplitsDebtLink, mirroredCardDebtId } from "../lib/debtAccoun
 import { parseColumnMapping, storedMapping } from "../../shared/ingest/validate.js";
 import { CARD_PAYMENT_MODES, cardDebtOwnershipChanges, createCardDebt, updateCardDebt, type CardSettings } from "../lib/cardDebt.js";
 import { areActiveMembers } from "../lib/household.js";
+import { parseCycleDay } from "../lib/cardCycle.js";
 
 export const accountsRouter = Router();
 
 const ACCOUNT_TYPES = new Set(["checking", "savings", "cash", "investment", "card"]);
 const VISIBILITIES = new Set(["private", "household"]);
 
-function clampDay(n: unknown): number | null {
-  const v = parseInt(String(n), 10);
-  if (!Number.isFinite(v)) return null;
-  return Math.min(28, Math.max(1, v));
-}
-
 // Card settings sent with a card account (server/lib/cardDebt.ts). For a card,
 // `currentBalance` in the body means what's OWED now, not money in the account.
-function cardSettingsFrom(body: any): CardSettings | { error: string } {
-  const { cardPaymentMode, currentBalance, cardMinimumPayment, cardPaymentDueDay } = body;
+function cardSettingsFrom(body: any): CardSettings | { error: string; code?: string } {
+  const { cardPaymentMode, currentBalance, cardMinimumPayment, cardPaymentDueDay, cardStatementDay } = body;
   if (cardPaymentMode !== undefined && !CARD_PAYMENT_MODES.has(cardPaymentMode)) return { error: "Invalid card payment mode" };
+  const due = cardPaymentDueDay !== undefined ? parseCycleDay(cardPaymentDueDay) : undefined;
+  const statement = cardStatementDay !== undefined ? parseCycleDay(cardStatementDay) : undefined;
+  if (due && "error" in due) return due;
+  if (statement && "error" in statement) return statement;
   return {
     ...(cardPaymentMode !== undefined && { paymentMode: cardPaymentMode }),
     ...(currentBalance !== undefined && { owed: Math.abs(toCents(currentBalance)) }),
     ...(cardMinimumPayment !== undefined && { minimumPayment: cardMinimumPayment === null || cardMinimumPayment === "" ? null : toCents(cardMinimumPayment) }),
-    ...(cardPaymentDueDay !== undefined && { paymentDueDay: cardPaymentDueDay === null || cardPaymentDueDay === "" ? null : clampDay(cardPaymentDueDay) }),
+    ...(due && { paymentDueDay: due.day }),
+    ...(statement && { statementDay: statement.day }),
   };
 }
 
@@ -60,7 +60,7 @@ accountsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
     // this period's budget line.
     const cardDebts = await prisma.debt.findMany({
       where: { userId: req.userId!, kind: "credit_card", accountId: { in: accounts.filter(a => a.type === "card").map(a => a.id) } },
-      select: { id: true, accountId: true, paymentMode: true, minimumPayment: true, paymentDueDay: true },
+      select: { id: true, accountId: true, paymentMode: true, minimumPayment: true, paymentDueDay: true, statementDay: true },
     });
     const ledgers = new Map((await loadDebtLedgers(req.userId!, cardDebts.map(d => d.id))).map(l => [l.debt.id, l]));
     const cycleStartDay = await getCycleStartDay(req.userId!);
@@ -72,6 +72,7 @@ accountsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
         paymentMode: d.paymentMode,
         minimumPayment: d.minimumPayment,
         paymentDueDay: d.paymentDueDay,
+        statementDay: d.statementDay,
         owed: ledger ? owedNow(ledger) : 0,
         monthlyCommitment: ledger ? monthlyCommitment(ledger, period) : 0,
       }];
@@ -97,7 +98,7 @@ accountsRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
       return res.status(400).json({ error: "Invalid visibility" });
     }
     const card = type === "card" ? cardSettingsFrom(req.body) : null;
-    if (card && "error" in card) return res.status(400).json({ error: card.error });
+    if (card && "error" in card) return res.status(400).json({ error: card.error, code: card.code });
 
     const lastOrder = await prisma.account.findFirst({
       where: { userId: req.userId! },
@@ -184,7 +185,7 @@ accountsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
 
     const finalType = type ?? existing.type;
     const card = finalType === "card" ? cardSettingsFrom(req.body) : null;
-    if (card && "error" in card) return res.status(400).json({ error: card.error });
+    if (card && "error" in card) return res.status(400).json({ error: card.error, code: card.code });
     const linkedDebt = await prisma.debt.findFirst({ where: { userId: req.userId!, accountId: id, kind: "credit_card" }, select: { id: true } });
 
     // Any other debt on this account must keep the account's owner
