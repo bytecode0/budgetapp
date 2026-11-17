@@ -1034,6 +1034,7 @@
       "terms": "By signing in, you agree to our <terms>Terms of service</terms> and <privacy>Privacy policy</privacy>",
       "googleCancelled": "Google sign-in was cancelled",
       "googleFailed": "Google sign-in failed. Please try again.",
+      "googleSigningIn": "Signing you in with Google…",
       "welcomeBack": "Welcome back to Remanso!"
     },
     "signup": {

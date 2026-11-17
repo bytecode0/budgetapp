@@ -1034,6 +1034,7 @@
       "terms": "Al iniciar sesión, aceptas nuestros <terms>Términos del servicio</terms> y nuestra <privacy>Política de privacidad</privacy>",
       "googleCancelled": "Inicio de sesión con Google cancelado",
       "googleFailed": "Error al iniciar sesión con Google. Inténtalo de nuevo.",
+      "googleSigningIn": "Iniciando sesión con Google…",
       "welcomeBack": "¡Bienvenido de vuelta a Remanso!"
     },
     "signup": {
