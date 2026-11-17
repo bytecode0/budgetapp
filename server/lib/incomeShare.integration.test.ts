@@ -512,4 +512,74 @@ describe("income shares and first goals (integration, real Postgres)", { skip: !
     await p.consistent(100000 + 5000);
     assert.equal((await ok(Y, "GET", `/api/dashboard/month?month=${month()}`)).data.paidYourself, 50);
   });
+  // ── Plan balances when a plan line goes away or changes plan (seguimiento
+  //    de LPBETA-07): every month of the plan follows the ledger's rule.
+
+  const lastMonthDay = () => periodLib.periodBounds(periodLib.periodKeyOffset(month(), -1), 1).start.toISOString().slice(0, 10);
+
+  it("deleting a plan line takes its booked money out of the plan; deposits stay", async () => {
+    const U = await signUp("Unai", "unai@example.com");
+    const p = await planWithLine(U, 1000);
+    await ok(U, "POST", "/api/plan-deposits/confirm", { month: month(), deposits: [{ planId: p.plan.id, amount: 200 }] });
+    await ok(U, "POST", "/api/expenses", { amount: 150, description: "Transferencia", allocationId: p.line.id });
+    await ok(U, "POST", "/api/expenses", { amount: 300, description: "Transferencia", allocationId: p.line.id, date: lastMonthDay() });
+    await p.consistent(100000 + 20000 + 30000);
+    await ok(U, "DELETE", `/api/allocations/${p.line.id}`);
+    // This month keeps its 200 € deposit; last month's 300 € no longer count.
+    await p.consistent(100000 + 20000);
+    assert.equal(await prisma.expense.count({ where: { userId: U, allocationId: null } }), 2); // the expenses stay
+  });
+
+  it("linking a plan line to another plan moves its booked money; leaving the plan type takes it out", async () => {
+    const V = await signUp("Vicky", "vicky@example.com");
+    const p = await planWithLine(V, 500);
+    const q = await planWithLine(V);
+    await ok(V, "POST", "/api/expenses", { amount: 150, description: "Transferencia", allocationId: p.line.id });
+    await ok(V, "POST", "/api/expenses", { amount: 40, description: "Transferencia", allocationId: p.line.id, date: lastMonthDay() });
+    await p.consistent(50000 + 19000);
+    await q.consistent(0);
+    await ok(V, "PATCH", `/api/allocations/${p.line.id}`, { lifePlanId: q.plan.id });
+    await p.consistent(50000);
+    await q.consistent(19000);
+    // A rename alone leaves both balances alone.
+    await ok(V, "PATCH", `/api/allocations/${p.line.id}`, { name: "Ahorro" });
+    await q.consistent(19000);
+    await ok(V, "PATCH", `/api/allocations/${p.line.id}`, { type: "flexible" });
+    await q.consistent(0);
+    await ok(V, "PATCH", `/api/allocations/${p.line.id}`, { type: "plan", lifePlanId: p.plan.id });
+    await p.consistent(50000 + 19000);
+  });
+
+  it("a couple unlinking: expenses that leave a plan line leave that plan's balance, on both sides", async () => {
+    const A = await signUp("Aitor", "aitor@example.com");
+    const B = await signUp("Berta", "berta@example.com");
+    await ok(A, "POST", "/api/partner/invite", { email: "berta@example.com" });
+    const inv = await prisma.partnerInvite.findFirstOrThrow({ where: { senderId: A, status: "pending" } });
+    await ok(B, "POST", "/api/partner/accept", { token: inv.token });
+
+    const newPlan = async (user: string, title: string) => {
+      const plan = (await ok(user, "POST", "/api/plans", { title, type: "emergency", targetAmount: 6000, monthlyContribution: 100, autoCreateAllocation: true })).plan;
+      const line = await prisma.allocation.findFirstOrThrow({ where: { lifePlanId: plan.id } });
+      return { plan, line };
+    };
+    const balance = async (planId: string) => (await prisma.lifePlan.findUniqueOrThrow({ where: { id: planId } })).currentAmount;
+    const pa = await newPlan(A, "Del pool");
+    const pb = await newPlan(B, "De Berta");
+    assert.equal(pb.line.userId, A); // in the pool while linked
+
+    // Aitor's expense on Berta's plan line stays with the pool; Berta's on
+    // Aitor's plan line goes with her; hers on her own line moves with it.
+    await ok(A, "POST", "/api/expenses", { amount: 100, description: "Transferencia", allocationId: pb.line.id });
+    await ok(B, "POST", "/api/expenses", { amount: 30, description: "Transferencia", allocationId: pa.line.id });
+    await ok(B, "POST", "/api/expenses", { amount: 50, description: "Transferencia", allocationId: pb.line.id });
+    assert.equal(await balance(pb.plan.id), 15000);
+    assert.equal(await balance(pa.plan.id), 3000);
+
+    await ok(B, "DELETE", "/api/partner/unlink");
+    assert.equal((await prisma.lifePlan.findUniqueOrThrow({ where: { id: pb.plan.id } })).userId, B);
+    assert.equal(await balance(pb.plan.id), 5000);
+    assert.equal(await balance(pb.plan.id), await expectedBalance(pb.plan.id, 0));
+    assert.equal(await balance(pa.plan.id), 0);
+    assert.equal(await balance(pa.plan.id), await expectedBalance(pa.plan.id, 0));
+  });
 });

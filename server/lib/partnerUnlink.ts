@@ -55,6 +55,11 @@
 //                       merge for the plans she brought). Plans without an
 //                       owner (made in the pool before the column) stay.
 //   PlanDeposit       → those of her plans (they follow the plan).
+//                       Every plan's balance (LifePlan.currentAmount) follows
+//                       what the unlink does to its plan-line expenses —
+//                       cleared from a line, or read in her scope with her
+//                       budget period — by the ledger's rule
+//                       (server/lib/planLedger.ts, withPlanTotals).
 //   Allocation        → there is no owner on a budget line, so lines stay with
 //                       the pool, except the debt lines of the debts that move
 //                       and the plan lines of her plans (they move, with their
@@ -104,6 +109,7 @@ import type { Prisma } from "@prisma/client";
 import { namespacedExternalId, originalExternalId } from "./partnerMerge.js";
 import { defaultAllocations } from "./defaults.js";
 import { DEFAULT_ACCOUNT_NAME } from "./onboarding.js";
+import { withPlanTotals } from "./planLedger.js";
 
 type Db = Prisma.TransactionClient;
 
@@ -401,7 +407,14 @@ async function inChunks(ids: string[], run: (chunk: string[]) => Promise<unknown
 export async function unlinkMemberFromPool(db: Db, ctx: { memberId: string; poolId: string }): Promise<void> {
   const { memberId, poolId } = ctx;
   if (memberId === poolId) throw new Error("unlinkMemberFromPool: member and pool are the same user");
-  const plan = planUnlink(await loadUnlinkInput(db, memberId, poolId));
+  const input = await loadUnlinkInput(db, memberId, poolId);
+  // Every plan of the pool, hers and the ex's: an expense leaving a plan line
+  // changes that plan's balance, whichever side keeps the plan.
+  await withPlanTotals(db, input.plans.map(p => p.id), () => moveToMember(db, ctx, planUnlink(input)));
+}
+
+async function moveToMember(db: Db, ctx: { memberId: string; poolId: string }, plan: UnlinkPlan): Promise<void> {
+  const { memberId, poolId } = ctx;
   const { move, clear } = plan;
   const toHer = { userId: memberId };
 

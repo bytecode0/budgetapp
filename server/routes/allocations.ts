@@ -10,6 +10,7 @@ import { incomeBaselines } from "../lib/householdIncome.js";
 import { visibleToWhere } from "../lib/ownership.js";
 import { hiddenCommitted, notOnHiddenDebt } from "../lib/poolRefs.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
+import { withPlanTotals } from "../lib/planLedger.js";
 import { GENEROSITY_TYPE, clearGenerosityShare, ensureGenerosityLine, isEchoedGenerosityShare, keepGenerosityFirst, keepGenerosityFirstIn, lockLineOrder, syncGenerosity } from "../lib/generosity.js";
 
 export const allocationsRouter = Router();
@@ -278,22 +279,27 @@ allocationsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respo
     }
 
     const newType = type ?? existing.type;
-    const allocation = await prisma.allocation.update({
-      where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(icon !== undefined && { icon }),
-        ...(type !== undefined && { type }),
-        // If type changes away from plan or lifePlanId explicitly set to null, clear the link
-        ...(lifePlanId !== undefined
-          ? { lifePlanId: (newType === 'plan' && lifePlanId) ? lifePlanId : null }
-          : type === 'plan' ? {} : type !== undefined ? { lifePlanId: null } : {}
-        ),
-        ...(allocatedAmount !== undefined && { allocatedAmount: toCents(allocatedAmount) }),
-        ...(actualAmount !== undefined && { actualAmount: toCents(actualAmount) }),
-        ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
-      },
-    });
+    // If type changes away from plan or lifePlanId explicitly set to null, clear the link
+    const newLifePlanId = lifePlanId !== undefined
+      ? ((newType === 'plan' && lifePlanId) ? lifePlanId : null)
+      : (type === undefined || type === 'plan') ? existing.lifePlanId : null;
+    // The plan this line's expenses count for (server/lib/planLedger.ts),
+    // before and after: when it changes, both plans' balances follow.
+    const planBefore = existing.type === 'plan' ? existing.lifePlanId : null;
+    const planAfter = newType === 'plan' ? newLifePlanId : null;
+    const allocation = await prisma.$transaction(tx => withPlanTotals(tx, planBefore !== planAfter ? [planBefore, planAfter] : [], () =>
+      tx.allocation.update({
+        where: { id },
+        data: {
+          ...(name !== undefined && { name }),
+          ...(icon !== undefined && { icon }),
+          ...(type !== undefined && { type }),
+          lifePlanId: newLifePlanId,
+          ...(allocatedAmount !== undefined && { allocatedAmount: toCents(allocatedAmount) }),
+          ...(actualAmount !== undefined && { actualAmount: toCents(actualAmount) }),
+          ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
+        },
+      })));
     if (generosityTyped) await clearGenerosityShare(req.userId!);
 
     return res.json(serializeMoney({ allocation }));
@@ -316,7 +322,10 @@ allocationsRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Resp
       return res.status(400).json({ error: "La línea de generosidad no se puede eliminar" });
     }
 
-    await prisma.allocation.delete({ where: { id } });
+    // Its expenses stay, uncategorised: a plan line's plan no longer counts
+    // them (server/lib/planLedger.ts).
+    await prisma.$transaction(tx => withPlanTotals(tx, existing.type === "plan" ? [existing.lifePlanId] : [], () =>
+      tx.allocation.delete({ where: { id } })));
     return res.json({ success: true });
   } catch (err) {
     console.error("[allocations/DELETE]", err);
