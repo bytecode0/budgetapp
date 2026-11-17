@@ -17,7 +17,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<{ error?: string; code?: string }>;
   register: (name: string, email: string, password: string) => Promise<{ error?: string; code?: string }>;
-  logout: () => Promise<void>;
+  logout: () => Promise<{ ok: boolean }>;
   refreshUser: () => Promise<void>;
 }
 
@@ -82,9 +82,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return {};
   };
 
+  // Always ends the local session, even if the request fails (offline,
+  // server error): `ok` says whether the server confirmed it.
   const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    let ok = false;
+    try {
+      const res = await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      ok = res.ok;
+    } catch {
+      ok = false;
+    }
     setUser(null);
+    return { ok };
   };
 
   const refreshUser = async () => {

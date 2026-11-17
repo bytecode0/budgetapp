@@ -1553,6 +1553,9 @@
     "perMonthSuffix": "/mo"
   },
   "account": {
+    "signOut": "Sign out",
+    "signedOut": "You have signed out",
+    "signOutFailed": "We couldn't finish signing you out. If this device isn't yours, reload the page and sign out again.",
     "sectionTitle": "Your data and your account",
     "close": "Close",
     "genericError": "Something went wrong. Please try again.",

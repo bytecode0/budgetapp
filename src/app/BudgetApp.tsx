@@ -1,6 +1,6 @@
 // The entire authenticated Remanso app tree — providers, shell, and every
 // screen.
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LayoutDashboard, Sparkles, Wallet, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight, Landmark, Users, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -27,6 +27,7 @@ import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { MonthProvider, useMonth, monthLabel, periodRangeLabel } from './context/MonthContext';
 import { useAllocations } from './hooks/useAllocations';
 import { useAnalytics } from './hooks/useAnalytics';
+import { useSignOut } from './hooks/useSignOut';
 import { useHousehold } from './hooks/useHousehold';
 import { useOnboardingNeeded, type OnboardingStep } from './hooks/useOnboardingNeeded';
 import { useBillingEnabled } from './hooks/useBillingEnabled';
@@ -36,6 +37,7 @@ import { applyDarkMode } from './lib/theme';
 import { ThemeToggle } from './components/shared/ThemeToggle';
 import { RemansoMark } from './components/shared/RemansoMark';
 import { InstallHint } from './components/shared/InstallHint';
+import { AccountBlock } from './components/shared/AccountBlock';
 import { markSignedIn } from './lib/installPrompt';
 import { takeBankReturn, type BankReturnScreen } from './components/banking/bankReturn';
 
@@ -58,7 +60,8 @@ function writePendingInvite(token: string | null): void {
 }
 
 function AppInner() {
-  const { user, loading, logout, refreshUser } = useAuth();
+  const { user, loading, refreshUser } = useAuth();
+  const { signOut, signingOut } = useSignOut();
   // Remember that someone signed in here: the welcome page is then skipped.
   useEffect(() => { if (user) markSignedIn(); }, [user]);
   const { needsOnboarding, missing: setupMissing, loading: onboardingLoading, refresh: refreshOnboardingStatus } = useOnboardingNeeded(Boolean(user));
@@ -92,6 +95,19 @@ function AppInner() {
   const navScreen: Screen = currentScreen === 'debt-detail' || currentScreen === 'payoff-plan' ? 'debts' : currentScreen;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
+
+  // After signing out (LPBETA-29) the next person to sign in on this device
+  // starts on Home with the menu closed, not on the previous one's screen.
+  const hadUser = useRef(false);
+  useEffect(() => {
+    if (user) { hadUser.current = true; return; }
+    if (!hadUser.current) return;
+    hadUser.current = false;
+    setMobileMenuOpen(false);
+    setCurrentScreen('home');
+    setSelectedPlanId(null);
+    setSelectedDebtId(null);
+  }, [user]);
 
   // Partner invite: detect ?invite=TOKEN in URL (or one saved before an OAuth
   // redirect). Kept in state across the auth flow; `inviteChecking` holds the
@@ -249,7 +265,8 @@ function AppInner() {
             darkMode={darkMode}
             onToggleDarkMode={toggleDarkMode}
             onLanguageChange={updateLanguage}
-            onLogout={() => logout()}
+            onLogout={signOut}
+            signingOut={signingOut}
             cycleStartDay={cycleStartDay}
             onUpdatePayday={handleUpdatePayday}
           />
@@ -375,9 +392,10 @@ function AppInner() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25 }}
-              className="lg:hidden fixed left-0 top-16 bottom-0 w-64 bg-card border-r border-border z-40 overflow-y-auto"
+              className="lg:hidden fixed left-0 top-16 bottom-0 w-64 bg-card border-r border-border z-40 flex flex-col"
             >
-              <nav className="p-4 space-y-2">
+              {/* The nav scrolls; the account block stays pinned at the bottom. */}
+              <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
                 {/* Global month selector */}
                 <div className="pb-3 mb-1 border-b border-border">
                   <p className="text-xs text-muted-foreground mb-2 px-1">{t('sidebar.workingMonth')}</p>
@@ -413,109 +431,114 @@ function AppInner() {
                   );
                 })}
               </nav>
+              <AccountBlock />
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
       {/* Desktop Sidebar */}
-      <div className="hidden lg:block fixed left-0 top-0 bottom-0 w-72 bg-card border-r border-border overflow-y-auto">
-        <div className="p-6 border-b border-border">
-          <div className="flex items-center gap-3 mb-2">
-            <RemansoMark className="w-12 h-12" />
-            <div className="min-w-0 flex-1">
-              <h1 className="text-2xl font-display text-primary">remanso</h1>
-              <p className="text-xs text-muted-foreground">{t('sidebar.tagline')}</p>
-            </div>
-          </div>
-          <p className="text-sm text-muted-foreground mt-3">
-            {t('sidebar.planTagline')}
-          </p>
-          <ThemeToggle darkMode={darkMode} onToggle={toggleDarkMode} showLabel className="mt-4" />
-        </div>
-        {/* Global month selector */}
-        <div className="px-4 py-3 border-b border-border">
-          <p className="text-xs text-muted-foreground mb-2">{t('sidebar.workingMonth')}</p>
-          <div className="flex items-center gap-1 bg-muted rounded-xl p-1">
-            <button onClick={() => navigateMonth(-1)} className="w-8 h-8 flex items-center justify-center hover:bg-background rounded-lg transition-colors shrink-0">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <div className="flex-1 text-center">
-              <p className="text-sm font-display capitalize leading-tight">{monthLabel(selectedMonth, locale)}</p>
-              {cycleStartDay !== 1 && (
-                <p className="text-xs text-muted-foreground leading-tight">{periodRangeLabel(selectedMonth, cycleStartDay, locale)}</p>
-              )}
-              {isFutureMonth && <p className="text-xs text-violet-500 leading-tight">{t('monthlyReview.nextMonth')}</p>}
-              {isCurrentMonthSelected && <p className="text-xs text-primary/60 leading-tight">●</p>}
-            </div>
-            <button onClick={() => navigateMonth(1)} disabled={isFutureMonth} className="w-8 h-8 flex items-center justify-center hover:bg-background rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-        <nav className="p-4 space-y-2">
-          {navigation.map((item) => {
-            const Icon = item.icon;
-            const isActive = navScreen === item.id;
-            return (
-              <motion.button
-                key={item.id}
-                onClick={() => setCurrentScreen(item.id)}
-                whileHover={{ scale: isActive ? 1 : 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  isActive
-                    ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'hover:bg-muted text-foreground'
-                }`}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="font-display">{item.label}</span>
-              </motion.button>
-            );
-          })}
-        </nav>
-
-        <div className="p-4 mt-auto space-y-3">
-          {/* Plan badge — the upgrade button only while Premium can be bought */}
-          {user?.plan === 'premium' ? (
-            <div className="bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border border-amber-400/30 rounded-xl p-3 flex items-center gap-2">
-              <Crown className="w-4 h-4 text-amber-500 shrink-0" />
-              <span className="text-sm font-display text-amber-600 dark:text-amber-400">{t('billing.premium')}</span>
-            </div>
-          ) : billingEnabled ? (
-            <button
-              onClick={() => setCurrentScreen('settings')}
-              className="w-full bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl p-3 flex items-center gap-2 hover:shadow-lg transition-all"
-            >
-              <Zap className="w-4 h-4 shrink-0" />
-              <span className="text-sm font-display">{t('billing.upgradeNow')}</span>
-            </button>
-          ) : null}
-
-          {/* Spending Alignment Status */}
-          <div className="bg-card border border-border rounded-xl p-4">
+      <div className="hidden lg:flex flex-col fixed left-0 top-0 bottom-0 w-72 bg-card border-r border-border">
+        {/* Everything above the account block scrolls; the block stays pinned. */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="p-6 border-b border-border">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-2 h-2 bg-secondary rounded-full animate-pulse" />
-              <p className="text-xs text-muted-foreground">{t('sidebar.planStatus')}</p>
+              <RemansoMark className="w-12 h-12" />
+              <div className="min-w-0 flex-1">
+                <h1 className="text-2xl font-display text-primary">remanso</h1>
+                <p className="text-xs text-muted-foreground">{t('sidebar.tagline')}</p>
+              </div>
             </div>
-            <p className="text-sm font-display">{alignmentLabel}</p>
-            <div className="mt-3 h-1.5 bg-muted rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-secondary to-primary rounded-full transition-all"
-                style={{ width: `${alignmentPct ?? 0}%` }}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">{t('sidebar.onTrackPct', { pct: alignmentPct ?? 0 })}</p>
-          </div>
-
-          <div className="bg-gradient-to-br from-secondary/10 to-primary/10 border border-primary/10 rounded-xl p-4">
-            <p className="text-sm font-display mb-2 text-primary">💡 {t('sidebar.planningTip')}</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {t('sidebar.planningTipBody')}
+            <p className="text-sm text-muted-foreground mt-3">
+              {t('sidebar.planTagline')}
             </p>
+            <ThemeToggle darkMode={darkMode} onToggle={toggleDarkMode} showLabel className="mt-4" />
+          </div>
+          {/* Global month selector */}
+          <div className="px-4 py-3 border-b border-border">
+            <p className="text-xs text-muted-foreground mb-2">{t('sidebar.workingMonth')}</p>
+            <div className="flex items-center gap-1 bg-muted rounded-xl p-1">
+              <button onClick={() => navigateMonth(-1)} className="w-8 h-8 flex items-center justify-center hover:bg-background rounded-lg transition-colors shrink-0">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <div className="flex-1 text-center">
+                <p className="text-sm font-display capitalize leading-tight">{monthLabel(selectedMonth, locale)}</p>
+                {cycleStartDay !== 1 && (
+                  <p className="text-xs text-muted-foreground leading-tight">{periodRangeLabel(selectedMonth, cycleStartDay, locale)}</p>
+                )}
+                {isFutureMonth && <p className="text-xs text-violet-500 leading-tight">{t('monthlyReview.nextMonth')}</p>}
+                {isCurrentMonthSelected && <p className="text-xs text-primary/60 leading-tight">●</p>}
+              </div>
+              <button onClick={() => navigateMonth(1)} disabled={isFutureMonth} className="w-8 h-8 flex items-center justify-center hover:bg-background rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <nav className="p-4 space-y-2">
+            {navigation.map((item) => {
+              const Icon = item.icon;
+              const isActive = navScreen === item.id;
+              return (
+                <motion.button
+                  key={item.id}
+                  onClick={() => setCurrentScreen(item.id)}
+                  whileHover={{ scale: isActive ? 1 : 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    isActive
+                      ? 'bg-primary text-primary-foreground shadow-md'
+                      : 'hover:bg-muted text-foreground'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="font-display">{item.label}</span>
+                </motion.button>
+              );
+            })}
+          </nav>
+
+          <div className="p-4 mt-auto space-y-3">
+            {/* Plan badge — the upgrade button only while Premium can be bought */}
+            {user?.plan === 'premium' ? (
+              <div className="bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border border-amber-400/30 rounded-xl p-3 flex items-center gap-2">
+                <Crown className="w-4 h-4 text-amber-500 shrink-0" />
+                <span className="text-sm font-display text-amber-600 dark:text-amber-400">{t('billing.premium')}</span>
+              </div>
+            ) : billingEnabled ? (
+              <button
+                onClick={() => setCurrentScreen('settings')}
+                className="w-full bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl p-3 flex items-center gap-2 hover:shadow-lg transition-all"
+              >
+                <Zap className="w-4 h-4 shrink-0" />
+                <span className="text-sm font-display">{t('billing.upgradeNow')}</span>
+              </button>
+            ) : null}
+
+            {/* Spending Alignment Status */}
+            <div className="bg-card border border-border rounded-xl p-4">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-2 h-2 bg-secondary rounded-full animate-pulse" />
+                <p className="text-xs text-muted-foreground">{t('sidebar.planStatus')}</p>
+              </div>
+              <p className="text-sm font-display">{alignmentLabel}</p>
+              <div className="mt-3 h-1.5 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-secondary to-primary rounded-full transition-all"
+                  style={{ width: `${alignmentPct ?? 0}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">{t('sidebar.onTrackPct', { pct: alignmentPct ?? 0 })}</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-secondary/10 to-primary/10 border border-primary/10 rounded-xl p-4">
+              <p className="text-sm font-display mb-2 text-primary">💡 {t('sidebar.planningTip')}</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t('sidebar.planningTipBody')}
+              </p>
+            </div>
           </div>
         </div>
+        <AccountBlock />
       </div>
 
       {/* Main Content */}

@@ -109,7 +109,7 @@
       "confirmRemoveLink": "Confirmar — esto desvinculará ambas cuentas"
     },
     "signOut": {
-      "button": "Cerrar Sesión",
+      "button": "Cerrar sesión",
       "subtitle": "Tendrás que iniciar sesión de nuevo"
     },
     "signOutAll": {
@@ -1553,6 +1553,9 @@
     "perMonthSuffix": "/mes"
   },
   "account": {
+    "signOut": "Cerrar sesión",
+    "signedOut": "Has cerrado la sesión",
+    "signOutFailed": "No hemos podido terminar de cerrar la sesión. Si este dispositivo no es tuyo, recarga la página y vuelve a cerrarla.",
     "sectionTitle": "Tus datos y tu cuenta",
     "close": "Cerrar",
     "genericError": "Algo ha fallado. Inténtalo de nuevo.",
