@@ -58,6 +58,7 @@ model User {
   householdMemberships HouseholdMember[]
   duplicateDismissals DuplicateDismissal[]
   peaceCheckins  PeaceCheckin[]
+  celebrationsSeen CelebrationSeen[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -583,6 +584,23 @@ model PeaceCheckin {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, period])
+}
+
+// "Celebrar los hitos" (LPBETA-13): which celebrations a person has already
+// seen, so each one shows once, on any device. The celebrations themselves are
+// derived from the data every time (server/lib/celebrations.ts), never stored;
+// only the "seen" mark is. `userId` is the real person (req.authUserId), never
+// the pool: in a household each member closes their own card. `key` names the
+// event, e.g. "debt-paid:<debtId>". Deleted with the user.
+model CelebrationSeen {
+  id     String   @id @default(cuid())
+  userId String
+  key    String
+  seenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
 }
 
 // ── Household (Epic H1) ──────────────────────────────────────────────

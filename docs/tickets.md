@@ -17,7 +17,7 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 | LPBETA-10 | Línea de generosidad en el onboarding | **Hecho y desplegado** (PR #25, 5 nov) | Sí (aditivo: `UserSettings.generosityBps`) |
 | LPBETA-11 | Instalable en el móvil (PWA) y página de bienvenida | **Hecho y desplegado** (PR #16, 4 nov). Bienvenida pública; PWA sin service worker. Falta probar en un móvil real: login con Google y vuelta del banco desde la app instalada | No |
 | LPBETA-12 | Detección de suscripciones y gastos hormiga | Refinado | Sí (aditivo, pequeño) |
-| LPBETA-13 | Celebrar los hitos | Refinado — decidido 13 nov: **sobrio, sin compartir**; los interruptores de notificaciones de Ajustes **se quitan ya** | Sí (aditivo: "ya visto") |
+| LPBETA-13 | Celebrar los hitos | **Implementado** en la rama `feature/lpbeta-13-hitos` (17 nov), pendiente de PR y del `db push` en producción | Sí (aditivo: tabla `CelebrationSeen`) |
 | LPBETA-14 | Seguridad del acceso (códigos y contraseñas) | **Hecho y desplegado** (PR #7, 4 nov) | Sí (aditivo, aplicado en el schema) |
 | LPBETA-15 | Robo de cuenta preparado de antemano (registro + Google) | **Hecho y desplegado** (PR #24, 5 nov) | No |
 | LPBETA-16 | Límite al envío de códigos por email | **Hecho y desplegado** (PR #24, 5 nov). Límites: 3/h y 10/día por email, 20/h y 50/día por IP (IPv6 por /64), 80/día global | Sí (aditivo: tabla `RateLimitHit`) |
@@ -672,7 +672,9 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 
 ---
 
-## LPBETA-13 · Celebrar los hitos — EN REFINAMIENTO
+## LPBETA-13 · Celebrar los hitos — IMPLEMENTADO (rama `feature/lpbeta-13-hitos`, 17 nov)
+
+**Estado (17 nov):** implementado en la rama `feature/lpbeta-13-hitos`, sin PR todavía. Antes de la BETA (decisión de Luis). Tarjeta sobria en Inicio (una por visita, la más importante sin ver, frase corta y "Seguir"), sin compartir. Eventos derivados de los datos en `server/lib/celebrations.ts`; lo "ya visto" se guarda por persona en la tabla nueva `CelebrationSeen` (`userId` + `key`, única, en cascada con el usuario; incluida en la exportación). API: `GET /api/celebrations` y `POST /api/celebrations/seen`. Los interruptores falsos de notificaciones de Ajustes se han quitado. **Falta:** el `db push` en producción (lo hace Luis) y la prueba en el navegador. Sin la tabla, la API responde 503 y la tarjeta no aparece.
 
 **Por qué:** la paz y la disciplina se sostienen viendo el progreso. Los momentos "lo hemos conseguido" (primer mes ahorrando, una deuda cerrada) son los que el usuario recuerda y los que luego cuenta como testimonio en los talleres y en las redes (`vision-y-plan-beta.md` §5 y §7). La app **no enseña** (decisión del 4 nov: enseña la empresa, en los talleres y las redes); celebrar no es enseñar, es reconocer lo que el usuario ya hizo.
 
@@ -701,7 +703,7 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 1. ~~¿Compartir?~~ → decidido 13 nov: **no**, sin botón de compartir.
 2. ~~¿Tono?~~ → decidido 13 nov: **sobrio** (tarjeta).
 3. ~~¿Interruptores?~~ → decidido 13 nov: **se quitan ya**.
-4. ¿Antes o después de la BETA?
+4. ~~¿Antes o después de la BETA?~~ → decidido: **antes**.
 
 ---
 

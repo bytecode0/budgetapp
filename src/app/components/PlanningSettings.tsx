@@ -1,4 +1,4 @@
-import { User, Bell, Moon, Sun, Shield, HelpCircle, LogOut, ChevronRight, Wallet, Heart, Send, X, Loader2, CheckCircle2, AlertTriangle, Link2Off, Globe, Crown, Zap, CreditCard, CalendarClock } from 'lucide-react';
+import { User, Moon, Sun, Shield, HelpCircle, LogOut, ChevronRight, Wallet, Heart, Send, X, Loader2, CheckCircle2, AlertTriangle, Link2Off, Globe, Crown, Zap, CreditCard, CalendarClock } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -176,17 +176,6 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
     setConfirmUnlink(false);
     if (result.error) toast.error(result.error);
     else toast.success(t('toast.accountsUnlinked'));
-  };
-
-  const [notifications, setNotifications] = useState({
-    planMilestones: true,
-    monthlyReminders: true,
-    budgetAlerts: true,
-    smartInsights: true,
-  });
-
-  const handleToggle = (key: string) => {
-    setNotifications(prev => ({ ...prev, [key]: !prev[key as keyof typeof prev] }));
   };
 
   const initials = user?.name
@@ -370,95 +359,6 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
             >
               ES
             </button>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Notifications */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="bg-card border border-border rounded-3xl overflow-hidden"
-      >
-        <div className="px-6 py-4 border-b border-border">
-          <h3 className="text-sm uppercase tracking-wide text-muted-foreground">{t('settings.notifications.sectionTitle')}</h3>
-        </div>
-        <div className="divide-y divide-border">
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                  <Bell className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-display">{t('settings.notifications.planMilestones')}</p>
-                  <p className="text-sm text-muted-foreground">{t('settings.notifications.planMilestonesSubtitle')}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => handleToggle('planMilestones')}
-                className={`relative w-14 h-7 rounded-full transition-colors ${
-                  notifications.planMilestones ? 'bg-primary' : 'bg-muted'
-                }`}
-              >
-                <motion.div
-                  animate={{ x: notifications.planMilestones ? 28 : 2 }}
-                  transition={{ duration: 0.15, ease: 'easeOut' }}
-                  className="absolute top-1 w-5 h-5 bg-white rounded-full shadow-md"
-                />
-              </button>
-            </div>
-          </div>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center">
-                  <Bell className="w-5 h-5 text-secondary" />
-                </div>
-                <div>
-                  <p className="font-display">{t('settings.notifications.monthlyReminders')}</p>
-                  <p className="text-sm text-muted-foreground">{t('settings.notifications.monthlyRemindersSubtitle')}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => handleToggle('monthlyReminders')}
-                className={`relative w-14 h-7 rounded-full transition-colors ${
-                  notifications.monthlyReminders ? 'bg-primary' : 'bg-muted'
-                }`}
-              >
-                <motion.div
-                  animate={{ x: notifications.monthlyReminders ? 28 : 2 }}
-                  transition={{ duration: 0.15, ease: 'easeOut' }}
-                  className="absolute top-1 w-5 h-5 bg-white rounded-full shadow-md"
-                />
-              </button>
-            </div>
-          </div>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center">
-                  <Bell className="w-5 h-5 text-accent" />
-                </div>
-                <div>
-                  <p className="font-display">{t('settings.notifications.smartInsights')}</p>
-                  <p className="text-sm text-muted-foreground">{t('settings.notifications.smartInsightsSubtitle')}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => handleToggle('smartInsights')}
-                className={`relative w-14 h-7 rounded-full transition-colors ${
-                  notifications.smartInsights ? 'bg-primary' : 'bg-muted'
-                }`}
-              >
-                <motion.div
-                  animate={{ x: notifications.smartInsights ? 28 : 2 }}
-                  transition={{ duration: 0.15, ease: 'easeOut' }}
-                  className="absolute top-1 w-5 h-5 bg-white rounded-full shadow-md"
-                />
-              </button>
-            </div>
           </div>
         </div>
       </motion.div>

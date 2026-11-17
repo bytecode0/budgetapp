@@ -20,6 +20,7 @@ import { useMonthSavings } from '../hooks/useMonthSavings';
 import { PaidYourselfCard } from './PaidYourselfCard';
 import { MonthLightCard } from './MonthLightCard';
 import { PeaceCheckinCard } from './PeaceCheckinCard';
+import { CelebrationCard } from './CelebrationCard';
 
 // Tones as Remanso tokens (shared/budgetStatus.ts decides the tone). Going
 // over is the "watch" state, sun — never red (CLAUDE.md).
@@ -136,6 +137,9 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
         <p className="text-sm text-muted-foreground">{isCurrentMonth ? greeting(t) : t('home.reviewingPastMonth')}</p>
         <h1 className="text-4xl tracking-tight font-display capitalize">{monthLabel(month, language)}</h1>
       </motion.div>
+
+      {/* ── "Lo has conseguido": one celebration not seen yet (LPBETA-13) ── */}
+      {isCurrentMonth && <CelebrationCard />}
 
       {/* ── The one answer: "Te has pagado X de Y este mes" ── */}
       {savings && (

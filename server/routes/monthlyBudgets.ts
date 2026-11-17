@@ -4,10 +4,10 @@ import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { toCents, toEuros, serializeMoney } from "../lib/money.js";
 import { periodBounds, periodEnded } from "../lib/period.js";
 import { ALLOCATION_NOT_FOUND, allocationsInPool, hiddenCommitted, hiddenLineIds, notOnHiddenDebt } from "../lib/poolRefs.js";
-import { countedAmounts, debtCommitments, lineBudget } from "../lib/debtBalance.js";
+import { debtCommitments, lineBudget } from "../lib/debtBalance.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
-import { householdBaselineIncome, householdMonthIncome } from "../lib/householdIncome.js";
 import { GENEROSITY_TYPE, applyGenerosity, generosityBps, generosityForMonth, householdIncomeFor } from "../lib/generosity.js";
+import { monthReview } from "../lib/monthReview.js";
 
 export const monthlyBudgetsRouter = Router();
 
@@ -157,82 +157,10 @@ monthlyBudgetsRouter.get("/review", requireAuth, async (req: AuthRequest, res: R
     const { month } = req.query as Record<string, string>;
     if (!month) return res.status(400).json({ error: "month is required" });
 
-    const cycleStartDay = await getCycleStartDay(req.userId!);
-    const { start: monthStart, end: monthEnd } = periodBounds(month, cycleStartDay);
-    const ended = periodEnded({ end: monthEnd });
-
-    // Get budgets (or fall back to current allocations)
-    const savedBudgets = await prisma.monthlyBudget.findMany({
-      where: { userId: req.userId!, month },
-    });
-
-    const storedAllocations = await prisma.allocation.findMany({
-      where: { userId: req.userId! },
-      orderBy: { sortOrder: "asc" },
-    });
-
-    // Actual expenses grouped by allocationId
-    const expenses = await prisma.expense.findMany({
-      where: {
-        userId: req.userId!,
-        date: { gte: monthStart, lt: monthEnd },
-      },
-      select: { id: true, allocationId: true, amount: true },
-    });
-
-    // Card payments count only for the part that pays pre-existing debt; debt
-    // lines without a saved budget take the commitment for THIS period.
-    const [counted, commitments] = await Promise.all([
-      countedAmounts(req.userId!),
-      debtCommitments(req.userId!, { start: monthStart, end: monthEnd }),
-    ]);
-
-    const actualByAllocation: Record<string, number> = {};
-    for (const e of expenses) {
-      const key = e.allocationId ?? "__unassigned__";
-      actualByAllocation[key] = (actualByAllocation[key] ?? 0) + (counted.get(e.id) ?? e.amount);
-    }
-
-    const savedBy = new Map(savedBudgets.map(b => [b.allocationId, b.allocatedAmount]));
-
-    // The household's income for the month, over the whole pool (not the
-    // viewer-filtered /api/income list): what Home compares the budget with,
-    // and what a Generosity share is a share of (server/lib/generosity.ts).
-    const [recorded, baseline, bps] = await Promise.all([
-      prisma.income.findMany({ where: { userId: req.userId!, date: { gte: monthStart, lt: monthEnd } }, select: { amount: true } }),
-      householdBaselineIncome(req.userId!),
-      generosityBps(req.userId!),
-    ]);
-    const income = householdMonthIncome(recorded.map(i => i.amount), baseline);
-    const allocations = applyGenerosity(storedAllocations, bps, income.cents);
-
-    const review = allocations.map(a => {
-      // A debt line: its commitment, or its saved row once the month has
-      // ended (lineBudget).
-      const budgeted = lineBudget(a, savedBy, commitments, ended);
-      const actual   = actualByAllocation[a.id] ?? 0;
-      return {
-        allocationId: a.id,
-        name: a.name,
-        icon: a.icon,
-        type: a.type,
-        budgeted,
-        actual,
-        diff: actual - budgeted, // positive = over budget
-        hasSavedBudget: !!savedBy.get(a.id),
-      };
-    });
-
-    const unassigned    = actualByAllocation["__unassigned__"] ?? 0;
+    const { review, totalBudgeted, totalActual, unassigned, income } = await monthReview(req.userId!, month);
     // Totals over every line; the line of a debt hidden from the caller still
     // counts in them but is not listed (server/lib/poolRefs.ts).
-    const hidden        = await hiddenLineIds(req.userId!, req.authUserId!);
-    const totalBudgeted = review.reduce((s, r) => s + r.budgeted, 0);
-    // Include uncategorized spending in the total so it reconciles with the
-    // Activity list and analytics (which sum every expense regardless of
-    // allocation). `unassigned` is still returned separately so the UI can nudge
-    // the user to categorize it.
-    const totalActual   = review.reduce((s, r) => s + r.actual, 0) + unassigned;
+    const hidden = await hiddenLineIds(req.userId!, req.authUserId!);
 
     return res.json(serializeMoney({ review: review.filter(r => !hidden.has(r.allocationId)), totalBudgeted, totalActual, unassigned, month, householdIncome: income.cents, householdIncomeSource: income.source }));
   } catch (err) {

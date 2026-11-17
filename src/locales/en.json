@@ -72,15 +72,6 @@
       "language": "Language",
       "languageSubtitle": "Choose your preferred language"
     },
-    "notifications": {
-      "sectionTitle": "Notifications",
-      "planMilestones": "Plan Milestones",
-      "planMilestonesSubtitle": "Get notified when you hit progress markers",
-      "monthlyReminders": "Monthly Planning Reminders",
-      "monthlyRemindersSubtitle": "Review your progress each month",
-      "smartInsights": "Smart Insights",
-      "smartInsightsSubtitle": "AI-powered recommendations and tips"
-    },
     "support": {
       "sectionTitle": "Support & Legal",
       "helpCenter": "Help Center",
@@ -181,6 +172,22 @@
     "evolution_other": "{{count}} months ago: {{from}} · today: {{to}}",
     "close": "Close",
     "saveFailed": "Your answer couldn't be saved. Please try again."
+  },
+  "celebrations": {
+    "label": "You did it",
+    "debtPaidOff": "You've closed {{name}}. That frees {{amount}} a month.",
+    "debtPaidOffNoAmount": "You've closed {{name}}. One debt fewer.",
+    "emergencyFundDone": "Your emergency fund is complete.",
+    "planDone": "You've completed {{title}}.",
+    "planMilestonePct": "{{title}} is now at {{pct}}%.",
+    "planMilestoneAmount": "{{title}} has reached {{amount}}.",
+    "planFirstContribution": "First contribution to {{title}}. The first step is taken.",
+    "payYourselfFirstFirst": "You've paid yourself first: you set aside what you planned.",
+    "payYourselfFirstStreak_one": "{{count}} month in a row paying yourself first.",
+    "payYourselfFirstStreak_other": "{{count}} months in a row paying yourself first.",
+    "monthWithinBudget": "You closed {{month}} within budget.",
+    "continue": "Continue",
+    "saveFailed": "Couldn't save. Please try again."
   },
   "home": {
     "greetingMorning": "Good morning",

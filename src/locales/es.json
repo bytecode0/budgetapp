@@ -72,15 +72,6 @@
       "language": "Idioma",
       "languageSubtitle": "Elige tu idioma preferido"
     },
-    "notifications": {
-      "sectionTitle": "Notificaciones",
-      "planMilestones": "Hitos del Plan",
-      "planMilestonesSubtitle": "Recibe notificaciones cuando alcances marcadores de progreso",
-      "monthlyReminders": "Recordatorios Mensuales de Planificación",
-      "monthlyRemindersSubtitle": "Revisa tu progreso cada mes",
-      "smartInsights": "Perspectivas Inteligentes",
-      "smartInsightsSubtitle": "Recomendaciones y consejos impulsados por IA"
-    },
     "support": {
       "sectionTitle": "Soporte y Legal",
       "helpCenter": "Centro de Ayuda",
@@ -181,6 +172,22 @@
     "evolution_other": "hace {{count}} meses: {{from}} · hoy: {{to}}",
     "close": "Cerrar",
     "saveFailed": "No se ha podido guardar tu respuesta. Inténtalo de nuevo."
+  },
+  "celebrations": {
+    "label": "Lo has conseguido",
+    "debtPaidOff": "Has cerrado {{name}}. Liberas {{amount}} al mes.",
+    "debtPaidOffNoAmount": "Has cerrado {{name}}. Una deuda menos.",
+    "emergencyFundDone": "Tu fondo de emergencia está completo.",
+    "planDone": "Has completado {{title}}.",
+    "planMilestonePct": "{{title}} ya va por el {{pct}} %.",
+    "planMilestoneAmount": "{{title}} ya llega a {{amount}}.",
+    "planFirstContribution": "Primera aportación a {{title}}. El primer paso ya está dado.",
+    "payYourselfFirstFirst": "Te has pagado a ti primero: has apartado lo que te propusiste.",
+    "payYourselfFirstStreak_one": "{{count}} mes seguido pagándote a ti primero.",
+    "payYourselfFirstStreak_other": "{{count}} meses seguidos pagándote a ti primero.",
+    "monthWithinBudget": "Has cerrado {{month}} dentro del presupuesto.",
+    "continue": "Seguir",
+    "saveFailed": "No se pudo guardar. Inténtalo de nuevo."
   },
   "home": {
     "greetingMorning": "Buenos días",

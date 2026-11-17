@@ -24,6 +24,7 @@ import { onboardingRouter } from "./routes/onboarding.js";
 import { securityHeaders } from "./middleware/securityHeaders.js";
 import { accountRouter } from "./routes/account.js";
 import { checkinsRouter } from "./routes/checkins.js";
+import { celebrationsRouter } from "./routes/celebrations.js";
 
 // The Express app, without a listener: server/index.ts listens for local dev,
 // and api/index.ts hands it to Vercel as a function.
@@ -90,6 +91,7 @@ app.use("/api/ai", aiRouter);
 app.use("/api/onboarding", onboardingRouter);
 app.use("/api/account", accountRouter);
 app.use("/api/checkins", checkinsRouter);
+app.use("/api/celebrations", celebrationsRouter);
 
 // Anything else under /api is a clean JSON 404 matching the { error } response
 // convention. Never falls through to Express's default HTML error page.
