@@ -1,6 +1,6 @@
 // The entire authenticated Remanso app tree — providers, shell, and every
 // screen.
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LayoutDashboard, Sparkles, Wallet, Settings, Menu, X, Activity as ActivityIcon, Crown, Zap, ChevronLeft, ChevronRight, Landmark, Users, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -44,15 +44,18 @@ import { takeBankReturn, type BankReturnScreen } from './components/banking/bank
 type Screen = 'home' | 'dashboard' | 'create-plan' | 'plan-detail' | 'allocation' | 'activity' | 'accounts' | 'debts' | 'debt-detail' | 'payoff-plan' | 'household' | 'settings';
 
 // The partner invite token survives the full-page Google OAuth redirect in
-// sessionStorage (React state is wiped by it). Storage may be unavailable
-// (private mode, blocked site data): the invite then only lasts this page load.
+// sessionStorage (React state is wiped by it), and the remount of the app on
+// sign-in (see AuthGate). Storage may be unavailable (private mode, blocked
+// site data): the in-memory copy then keeps it for this page load.
 const PENDING_INVITE_KEY = 'pendingInviteToken';
+let memoryInvite: string | null = null;
 
 function readPendingInvite(): string | null {
-  try { return window.sessionStorage.getItem(PENDING_INVITE_KEY); } catch { return null; }
+  try { return window.sessionStorage.getItem(PENDING_INVITE_KEY); } catch { return memoryInvite; }
 }
 
 function writePendingInvite(token: string | null): void {
+  memoryInvite = token;
   try {
     if (token) window.sessionStorage.setItem(PENDING_INVITE_KEY, token);
     else window.sessionStorage.removeItem(PENDING_INVITE_KEY);
@@ -60,7 +63,7 @@ function writePendingInvite(token: string | null): void {
 }
 
 function AppInner() {
-  const { user, loading, refreshUser } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { signOut, signingOut } = useSignOut();
   // Remember that someone signed in here: the welcome page is then skipped.
   useEffect(() => { if (user) markSignedIn(); }, [user]);
@@ -95,19 +98,6 @@ function AppInner() {
   const navScreen: Screen = currentScreen === 'debt-detail' || currentScreen === 'payoff-plan' ? 'debts' : currentScreen;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
-
-  // After signing out (LPBETA-29) the next person to sign in on this device
-  // starts on Home with the menu closed, not on the previous one's screen.
-  const hadUser = useRef(false);
-  useEffect(() => {
-    if (user) { hadUser.current = true; return; }
-    if (!hadUser.current) return;
-    hadUser.current = false;
-    setMobileMenuOpen(false);
-    setCurrentScreen('home');
-    setSelectedPlanId(null);
-    setSelectedDebtId(null);
-  }, [user]);
 
   // Partner invite: detect ?invite=TOKEN in URL (or one saved before an OAuth
   // redirect). Kept in state across the auth flow; `inviteChecking` holds the
@@ -149,6 +139,10 @@ function AppInner() {
       window.history.replaceState({}, '', url.toString());
     }
 
+    // Signed out: leave the bank and ?open= parameters in the URL for the
+    // signed-in mount after sign-in (AuthGate remounts this component).
+    if (!user) return;
+
     // Bank connection: back from the bank (?bankToken=… or ?error=banking_…),
     // or the "renew your connection" email (?open=accounts).
     const bankToken = params.get('bankToken');
@@ -187,9 +181,10 @@ function AppInner() {
     return () => window.removeEventListener('focus', onFocus);
   }, [refreshOnboardingStatus]);
 
-  // Sync DB language to LanguageContext on load
+  // Sync DB language to LanguageContext on load. Signed out there is no saved
+  // language (dbLanguage is only the default): keep the one on screen.
   useEffect(() => {
-    if (dbLanguage) setLanguage(dbLanguage as 'en' | 'es');
+    if (user && dbLanguage) setLanguage(dbLanguage as 'en' | 'es');
   }, [dbLanguage]);
 
   // Apply the person's theme (saved on the server, cached on this device).
@@ -275,24 +270,6 @@ function AppInner() {
         return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} onSetupChanged={refreshOnboardingStatus} />;
     }
   };
-
-  // Show loading screen while checking auth.
-  if (loading) {
-    return (
-      <div className="size-full bg-background flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-          className="text-center"
-        >
-          <RemansoMark className="w-20 h-20 mx-auto mb-4" />
-          <h2 className="text-2xl font-display text-primary mb-2">remanso</h2>
-          <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto" />
-        </motion.div>
-      </div>
-    );
-  }
 
   // Show auth flow if not authenticated
   if (!user) {
@@ -575,11 +552,41 @@ export function BudgetApp() {
   return (
     <LanguageProvider>
       <AuthProvider>
-        <MonthProvider>
-          <Toaster richColors position="top-right" />
-          <AppInner />
-        </MonthProvider>
+        <Toaster richColors position="top-right" />
+        <AuthGate />
       </AuthProvider>
     </LanguageProvider>
+  );
+}
+
+// Everything that holds one person's data (the month and payday, the hooks in
+// AppInner, the screen they were on) is remounted when the signed-in person
+// changes: signing out, or in as someone else, never shows the previous
+// person's state, and a first sign-in loads everything fresh (LPBETA-29).
+function AuthGate() {
+  const { user, loading } = useAuth();
+
+  // Show loading screen while checking auth.
+  if (loading) {
+    return (
+      <div className="size-full bg-background flex items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          className="text-center"
+        >
+          <RemansoMark className="w-20 h-20 mx-auto mb-4" />
+          <h2 className="text-2xl font-display text-primary mb-2">remanso</h2>
+          <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto" />
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <MonthProvider key={user?.id ?? 'signed-out'}>
+      <AppInner />
+    </MonthProvider>
   );
 }
