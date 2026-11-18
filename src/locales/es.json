@@ -109,7 +109,7 @@
       "confirmRemoveLink": "Confirmar — esto desvinculará ambas cuentas"
     },
     "signOut": {
-      "button": "Cerrar Sesión",
+      "button": "Cerrar sesión",
       "subtitle": "Tendrás que iniciar sesión de nuevo"
     },
     "signOutAll": {
@@ -1034,6 +1034,7 @@
       "terms": "Al iniciar sesión, aceptas nuestros <terms>Términos del servicio</terms> y nuestra <privacy>Política de privacidad</privacy>",
       "googleCancelled": "Inicio de sesión con Google cancelado",
       "googleFailed": "Error al iniciar sesión con Google. Inténtalo de nuevo.",
+      "googleSigningIn": "Iniciando sesión con Google…",
       "welcomeBack": "¡Bienvenido de vuelta a Remanso!"
     },
     "signup": {
@@ -1552,6 +1553,9 @@
     "perMonthSuffix": "/mes"
   },
   "account": {
+    "signOut": "Cerrar sesión",
+    "signedOut": "Has cerrado la sesión",
+    "signOutFailed": "No hemos podido terminar de cerrar la sesión. Si este dispositivo no es tuyo, recarga la página y vuelve a cerrarla.",
     "sectionTitle": "Tus datos y tu cuenta",
     "close": "Cerrar",
     "genericError": "Algo ha fallado. Inténtalo de nuevo.",

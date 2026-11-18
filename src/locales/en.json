@@ -1034,6 +1034,7 @@
       "terms": "By signing in, you agree to our <terms>Terms of service</terms> and <privacy>Privacy policy</privacy>",
       "googleCancelled": "Google sign-in was cancelled",
       "googleFailed": "Google sign-in failed. Please try again.",
+      "googleSigningIn": "Signing you in with Google…",
       "welcomeBack": "Welcome back to Remanso!"
     },
     "signup": {
@@ -1552,6 +1553,9 @@
     "perMonthSuffix": "/mo"
   },
   "account": {
+    "signOut": "Sign out",
+    "signedOut": "You have signed out",
+    "signOutFailed": "We couldn't finish signing you out. If this device isn't yours, reload the page and sign out again.",
     "sectionTitle": "Your data and your account",
     "close": "Close",
     "genericError": "Something went wrong. Please try again.",

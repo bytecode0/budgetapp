@@ -833,7 +833,7 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 
 ---
 
-## LPBETA-29 · Cerrar sesión a mano, sin bajar hasta el final de Ajustes — REFINADO · Prioridad MEDIA (16 nov)
+## LPBETA-29 · Cerrar sesión a mano, sin bajar hasta el final de Ajustes — IMPLEMENTADO en la rama `feature/lpbeta-29-salir` (17 nov); falta la pasada en el navegador · Prioridad MEDIA (16 nov)
 
 **Problema (Luis, 16 nov):** para salir hay que abrir Ajustes y bajar hasta el final de una pantalla larga. Es una mala experiencia, sobre todo en un móvil compartido o prestado, que es justo cuando más importa poder salir rápido.
 
@@ -852,3 +852,5 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 **Verificación (navegador, `npm run dev:all`):** en el móvil (375 px) y en el escritorio, salir desde la navegación con un solo toque, sin desplazarse; la pantalla de entrada aparece; al pulsar "atrás" no se ve ningún dato; un email muy largo no rompe el diseño; modo oscuro.
 
 **Tamaño:** S.
+
+**Implementado (17 nov, rama `feature/lpbeta-29-salir`; falta la pasada en el navegador):** bloque de cuenta fijo al pie de la barra lateral y del menú del móvil (`components/shared/AccountBlock.tsx`), con el flujo de salida en `hooks/useSignOut.ts`; tarjeta de perfil de Ajustes con "Cerrar sesión" arriba y el botón del final en tinta neutra. `AuthContext.logout` borra la sesión local aunque falle la llamada y dice si el servidor la confirmó; en ese caso el toast de error avisa de que la cookie puede seguir viva (es `httpOnly`: solo el servidor puede borrarla) y pide recargar y volver a salir. La parte de la app con datos de una persona (mes, día de cobro, hooks de `AppInner`, pantalla) se vuelve a montar al cambiar de usuario (`AuthGate` en `BudgetApp.tsx`): tras salir no queda nada de la persona anterior y quien entra después empieza en Inicio con sus propios datos, tema e idioma. Pendiente: la verificación en el navegador de arriba.

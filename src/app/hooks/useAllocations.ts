@@ -34,7 +34,8 @@ export function useAllocations() {
   const [isCouple, setIsCouple] = useState(false);
   // Start from this device's copy so the theme doesn't flash before the server answers.
   const [darkMode, setDarkMode] = useState(cachedDarkMode);
-  const [dbLanguage, setDbLanguage] = useState<string>('es');
+  // null until the person's settings load: nothing to sync before that.
+  const [dbLanguage, setDbLanguage] = useState<string | null>(null);
   const [cycleStartDay, setCycleStartDay] = useState(1);
   // What the partner's private debt lines commit (euros): not listed, but
   // part of the household's budget (server/lib/poolRefs.ts).

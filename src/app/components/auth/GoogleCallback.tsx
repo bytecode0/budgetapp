@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import { RemansoMark } from '../shared/RemansoMark';
 
 interface GoogleCallbackProps {
@@ -11,6 +11,7 @@ interface GoogleCallbackProps {
 }
 
 export function GoogleCallback({ token, onSuccess, onError }: GoogleCallbackProps) {
+  const { t } = useTranslation();
   useEffect(() => {
     if (!token) {
       onError('google_failed');
@@ -23,13 +24,13 @@ export function GoogleCallback({ token, onSuccess, onError }: GoogleCallbackProp
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
     })
-      .then(async (res) => {
-        if (!res.ok) throw new Error((await res.json()).error ?? 'Exchange failed');
+      .then((res) => {
+        if (!res.ok) throw new Error('google exchange failed');
         // JWT cookie is set — parent will call refreshUser via onSuccess
         onSuccess();
       })
+      // Login shows the translated error toast for google_failed.
       .catch(() => {
-        toast.error('Google sign-in failed. Please try again.');
         onError('google_failed');
       });
   }, [token]);
@@ -45,7 +46,7 @@ export function GoogleCallback({ token, onSuccess, onError }: GoogleCallbackProp
         <RemansoMark className="w-16 h-16 mx-auto mb-4" />
         <h2 className="text-xl font-display text-primary mb-2">remanso</h2>
         <Loader2 className="w-6 h-6 animate-spin text-primary mx-auto mb-2" />
-        <p className="text-sm text-muted-foreground">Signing you in...</p>
+        <p className="text-sm text-muted-foreground">{t('auth.login.googleSigningIn')}</p>
       </motion.div>
     </div>
   );

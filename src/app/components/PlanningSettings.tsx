@@ -20,11 +20,12 @@ import {
   type BillingInfo,
 } from '../../api/stripe';
 
-export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange, onLogout, cycleStartDay, onUpdatePayday }: {
+export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange, onLogout, signingOut = false, cycleStartDay, onUpdatePayday }: {
   darkMode: boolean;
   onToggleDarkMode: () => void;
   onLanguageChange?: (lang: string) => void;
   onLogout?: () => void;
+  signingOut?: boolean;
   cycleStartDay?: number;
   onUpdatePayday?: (day: number) => Promise<{ error?: string }>;
 }) {
@@ -209,7 +210,7 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05, duration: 0.2, ease: 'easeOut' }}
-        className="bg-card border border-border rounded-3xl p-6 md:p-8 flex items-center gap-5"
+        className="bg-card border border-border rounded-3xl p-6 md:p-8 flex items-center gap-5 flex-wrap"
       >
         <div className="w-16 h-16 bg-pool-soft text-pool rounded-full flex items-center justify-center shrink-0 overflow-hidden">
           {user?.image ? (
@@ -228,6 +229,18 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
             {t('settings.profile.activePlans', { count: activePlans })}
           </p>
         </div>
+        {/* Sign out from the top too (LPBETA-29); neutral ink, not red. */}
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            disabled={signingOut}
+            aria-busy={signingOut}
+            className="px-5 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors text-sm flex items-center gap-2 shrink-0 disabled:opacity-50"
+          >
+            {signingOut ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+            {t('account.signOut')}
+          </button>
+        )}
       </motion.div>
 
       {/* Financial Preferences */}
@@ -775,20 +788,22 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6 }}
-        className="bg-card border border-destructive/20 rounded-2xl p-6"
+        className="bg-card border border-border rounded-2xl p-6"
       >
         <button
           onClick={onLogout}
-          className="w-full flex items-center justify-between p-4 bg-destructive/5 hover:bg-destructive/10 rounded-xl transition-colors group"
+          disabled={signingOut}
+          aria-busy={signingOut}
+          className="w-full flex items-center justify-between p-4 bg-muted/30 hover:bg-muted rounded-xl transition-colors group disabled:opacity-50"
         >
           <div className="flex items-center gap-3">
-            <LogOut className="w-5 h-5 text-destructive" />
+            {signingOut ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogOut className="w-5 h-5" />}
             <div className="text-left">
-              <p className="font-display text-destructive">{t('settings.signOut.button')}</p>
+              <p className="font-display">{t('settings.signOut.button')}</p>
               <p className="text-sm text-muted-foreground">{t('settings.signOut.subtitle')}</p>
             </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-destructive group-hover:translate-x-1 transition-transform" />
+          <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
         </button>
       </motion.div>
     </div>

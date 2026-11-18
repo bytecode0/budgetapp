@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import i18n from "i18next";
 
 export interface AuthUser {
@@ -17,7 +17,10 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<{ error?: string; code?: string }>;
   register: (name: string, email: string, password: string) => Promise<{ error?: string; code?: string }>;
-  logout: () => Promise<void>;
+  /** null when a sign-out was already under way (that one reports the result). */
+  logout: () => Promise<{ ok: boolean } | null>;
+  /** True while a sign-out request is in flight, for every sign-out button. */
+  signingOut: boolean;
   refreshUser: () => Promise<void>;
 }
 
@@ -26,6 +29,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signingOut, setSigningOut] = useState(false);
+  const signingOutRef = useRef(false);
 
   const fetchMe = async () => {
     try {
@@ -82,9 +87,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return {};
   };
 
+  // Always ends the local session, even if the request fails (offline,
+  // server error): `ok` says whether the server confirmed it. One at a time:
+  // a second call while one is in flight sends nothing and returns null.
   const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    if (signingOutRef.current) return null;
+    signingOutRef.current = true;
+    setSigningOut(true);
+    let ok = false;
+    try {
+      const res = await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      ok = res.ok;
+    } catch {
+      ok = false;
+    }
+    signingOutRef.current = false;
+    setSigningOut(false);
     setUser(null);
+    return { ok };
   };
 
   const refreshUser = async () => {
@@ -92,7 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, signingOut, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
