@@ -15,3 +15,4 @@ export { accountDeletionCodeEmail, type AccountDeletionCodeData } from "./accoun
 export { accountDeletionRequestedEmail, type AccountDeletionRequestedData } from "./accountDeletionRequested.js";
 export { accountDeletedEmail, type AccountDeletedData } from "./accountDeleted.js";
 export { accountExistsEmail, type AccountExistsData } from "./accountExists.js";
+export { monthlySummaryEmail, type MonthlySummaryData } from "./monthlySummary.js";

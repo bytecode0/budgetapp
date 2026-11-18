@@ -9,12 +9,14 @@ import {
   accountDeletionCodeEmail,
   accountDeletionRequestedEmail,
   bankConsentExpiringEmail,
+  monthlySummaryEmail,
   partnerInviteEmail,
   passwordChangedEmail,
   passwordResetEmail,
   verificationEmail,
   welcomeEmail,
   welcomeGoogleEmail,
+  type MonthlySummaryData,
 } from "./email/templates/index.js";
 
 export async function sendVerificationEmail(email: string, name: string, otp: string, locale: EmailLocale = "es") {
@@ -76,4 +78,9 @@ export async function sendAccountDeletionRequestedEmail(
 
 export async function sendAccountDeletedEmail(email: string, name: string, locale: EmailLocale = "es") {
   await sendEmail({ to: email, ...accountDeletedEmail({ name }, locale) });
+}
+
+/** "Tu mes en Remanso" (LPBETA-12), from the monthly job (server/lib/monthlyEmail.ts). */
+export async function sendMonthlySummaryEmail(email: string, data: MonthlySummaryData, locale: EmailLocale = "es") {
+  await sendEmail({ to: email, ...monthlySummaryEmail(data, locale) });
 }

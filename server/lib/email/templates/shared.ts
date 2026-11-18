@@ -37,17 +37,19 @@ export function featureItems(locale: EmailLocale): ListItem[] {
 
 export function renderEmail(
   locale: EmailLocale,
-  opts: { subject: string; preheader: string; accent: Accent; blocks: Block[] },
+  opts: { subject: string; preheader: string; accent: Accent; blocks: Block[]; unsubscribe?: { label: string; url: string } },
 ): RenderedEmail {
   const { d, t } = strings(locale);
+  const { unsubscribe, ...rest } = opts;
   return layout({
     lang: locale,
-    ...opts,
+    ...rest,
     footer: {
       tagline: t(d.common.tagline),
       reason: t(d.common.footerReason),
       visitLabel: t(d.common.visit),
       supportLabel: t(d.common.support),
+      ...(unsubscribe && { unsubscribe }),
     },
   });
 }

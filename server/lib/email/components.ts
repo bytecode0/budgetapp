@@ -220,7 +220,11 @@ export interface LayoutOptions {
   preheader: string;
   accent: Accent;
   blocks: Block[];
-  footer: { tagline: string; reason: string; visitLabel: string; supportLabel: string };
+  footer: {
+    tagline: string; reason: string; visitLabel: string; supportLabel: string;
+    /** A one-click way out, for emails the person can turn off (the monthly summary). */
+    unsubscribe?: { label: string; url: string };
+  };
 }
 
 /** The shell: preheader, logo header, card with accent bar, footer. */
@@ -270,6 +274,7 @@ export function layout(opts: LayoutOptions): RenderedEmail {
           <a href="${safeUrl(`mailto:${t.supportEmail}`)}" style="color:${t.colors.muted};text-decoration:none;">${escapeHtml(opts.footer.supportLabel)}</a>
         </p>
         <p style="margin:0;font-size:11px;color:${t.colors.subtle};">${escapeHtml(opts.footer.reason)}</p>
+        ${opts.footer.unsubscribe ? `<p style="margin:6px 0 0;font-size:11px;"><a href="${safeUrl(opts.footer.unsubscribe.url)}" style="color:${t.colors.muted};text-decoration:underline;">${escapeHtml(opts.footer.unsubscribe.label)}</a></p>` : ""}
       </td></tr>
     </table>
   </td></tr>
@@ -284,6 +289,7 @@ export function layout(opts: LayoutOptions): RenderedEmail {
     ...(appUrl ? [`${opts.footer.visitLabel}: ${appUrl}`] : []),
     `${opts.footer.supportLabel}: ${t.supportEmail}`,
     opts.footer.reason,
+    ...(opts.footer.unsubscribe ? [`${opts.footer.unsubscribe.label}: ${opts.footer.unsubscribe.url}`] : []),
   ].join("\n");
   const text = `${body}\n\n${footer}\n`;
 

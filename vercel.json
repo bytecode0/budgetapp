@@ -9,7 +9,8 @@
   },
   "crons": [
     { "path": "/api/banking/cron", "schedule": "0 5 * * *" },
-    { "path": "/api/account/cron", "schedule": "0 4 * * *" }
+    { "path": "/api/account/cron", "schedule": "0 4 * * *" },
+    { "path": "/api/insights/cron", "schedule": "0 8 1 * *" }
   ],
   "headers": [
     {

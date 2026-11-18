@@ -8,6 +8,7 @@ import {
   accountDeletionCodeEmail,
   accountDeletionRequestedEmail,
   bankConsentExpiringEmail,
+  monthlySummaryEmail,
   partnerInviteEmail,
   passwordChangedEmail,
   passwordResetEmail,
@@ -27,6 +28,7 @@ export interface EmailSample {
 }
 
 export const SAMPLE_OTP = "482915";
+export const SAMPLE_UNSUBSCRIBE_URL = "https://app.example.com/unsubscribe?token=dXNlcl8x.c2lnbmF0dXJl&lang=es";
 export const SAMPLE_ACCEPT_URL = "https://app.example.com/?invite=0b6f6c1e-2c0a-4b8e-9d55-1f3e4a7c9b21";
 const RENEWAL = new Date(Date.UTC(2026, 10, 23));
 const both = (...values: string[]) => ({ es: values, en: values });
@@ -100,6 +102,21 @@ export const EMAIL_SAMPLES: EmailSample[] = [
     mustContain: {
       es: ["23 de noviembre de 2026", "http://localhost:5173/?open=settings", "Ana", "contact@luisvespa.com"],
       en: ["23 November 2026", "http://localhost:5173/?open=settings", "Ana", "contact@luisvespa.com"],
+    },
+  },
+  {
+    name: "monthly-summary",
+    render: (l) => monthlySummaryEmail({
+      name: "Ana García", period: "2026-11", currency: "EUR",
+      subscriptionsCount: 4, subscriptionsMonthly: 4500, subscriptionsYearly: 54000,
+      smallCount: 2, smallTotal: 5760, smallYearly: 69120, halfYearly: 61560,
+      priceRises: 1, paidYourself: 30000, payYourselfGoal: 40000,
+      unsubscribeUrl: SAMPLE_UNSUBSCRIBE_URL,
+    }, l),
+    // es-ES puts a no-break space between the amount and the symbol.
+    mustContain: {
+      es: ["Ana", "noviembre de 2026", "4 suscripciones", "45,00\u00a0€", "~540\u00a0€", "~691\u00a0€", "http://localhost:5173/?open=hormiga", SAMPLE_UNSUBSCRIBE_URL],
+      en: ["Ana", "November 2026", "4 subscriptions", "€45.00", "~€540", "~€691", "http://localhost:5173/?open=hormiga", SAMPLE_UNSUBSCRIBE_URL],
     },
   },
   {
