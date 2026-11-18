@@ -25,6 +25,7 @@
 //    setLiveValues (a dated adjustment), and only when no movement of that card
 //    is waiting for review — otherwise the adjustment would absorb a purchase
 //    the user is about to confirm, and count it twice.
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { toCents } from "../money.js";
 import { setLiveValues } from "../debtBalance.js";
@@ -101,6 +102,32 @@ export function mergeDismissed(stored: unknown, added: unknown): string[] {
   const fresh = Array.isArray(added) ? added.filter((v): v is string => typeof v === "string" && v.length > 0 && v.length <= 200) : [];
   const all = [...dismissedSet(stored)].filter(id => !fresh.includes(id)).concat(fresh);
   return all.slice(-MAX_DISMISSED_IDS);
+}
+
+/** Bank movements the user deleted must stay deleted. The sync reads every
+ *  window again from a cursor kept OVERLAP_DAYS back (further while something
+ *  waits for review), and a deleted row is "new" to the dedup — so without
+ *  this the next sync writes it again and it counts again in every total.
+ *  Their ids join their account's dismissed ids, as a review's dismissed rows
+ *  do. Rows not from the bank are left alone. Run it in the delete's
+ *  transaction: the account row is locked so a concurrent review's merge
+ *  can't drop the id. */
+export async function dismissDeletedBankRows(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  rows: { source: string; externalId: string | null; accountId: string | null }[],
+): Promise<void> {
+  const byAccount = new Map<string, string[]>();
+  for (const r of rows) {
+    if (r.source !== "bank_sync" || !r.externalId || !r.accountId) continue;
+    byAccount.set(r.accountId, [...(byAccount.get(r.accountId) ?? []), r.externalId]);
+  }
+  for (const [accountId, ids] of byAccount) {
+    await tx.$queryRaw`SELECT "id" FROM "Account" WHERE "id" = ${accountId} FOR UPDATE`;
+    const account = await tx.account.findFirst({ where: { id: accountId, userId }, select: { bankDismissedIds: true } });
+    if (!account) continue;
+    await tx.account.update({ where: { id: accountId }, data: { bankDismissedIds: mergeDismissed(account.bankDismissedIds, ids) } });
+  }
 }
 
 /** A preview without the movements the user already dismissed. */
