@@ -1,21 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { budgetedShareTone, sharePct, spentShareTone, toCents } from "./budgetStatus.js";
+import { budgetedVsIncome, sharePct, spentShareTone, toCents } from "./budgetStatus.js";
 
-test("budgeted share of income: green to 90 %, amber to 100 %, red above", () => {
-  const income = 200_000; // 2,000.00
-  assert.equal(budgetedShareTone(income, 180_000), "good");    // 90 % exactly
-  assert.equal(budgetedShareTone(income, 180_001), "warning"); // 90.0005 %
-  assert.equal(budgetedShareTone(income, 200_000), "warning"); // 100 % exactly
-  assert.equal(budgetedShareTone(income, 200_001), "over");    // one cent more than earned
-  assert.equal(budgetedShareTone(income, 1), "good");
+test("budgeted vs income (LPBETA-30): boundaries in integer cents", () => {
+  const income = 1_000_000; // 10,000.00
+  assert.deepEqual(budgetedVsIncome(income, 849_900), { level: "under", pct: 84 });   // 84.99 %
+  assert.deepEqual(budgetedVsIncome(income, 850_000), { level: "near", pct: 85 });    // 85 % exactly
+  assert.deepEqual(budgetedVsIncome(income, 999_900), { level: "near", pct: 99 });    // 99.99 %
+  assert.deepEqual(budgetedVsIncome(income, 1_000_000), { level: "exact", pct: 100 }); // equal to the cent
+  assert.deepEqual(budgetedVsIncome(income, 1_000_100), { level: "over", pct: 101 }); // 100.01 %
+  assert.deepEqual(budgetedVsIncome(income, 1_000_001), { level: "over", pct: 101 }); // one cent more
+  assert.deepEqual(budgetedVsIncome(income, 999_999), { level: "near", pct: 99 });    // one cent less
+  assert.deepEqual(budgetedVsIncome(income, 0), { level: "under", pct: 0 });
 });
 
-test("budgeted share: a budget with no income is red; no budget is neutral", () => {
-  assert.equal(budgetedShareTone(0, 100_000), "over");
-  assert.equal(budgetedShareTone(-5, 100), "over");
-  assert.equal(budgetedShareTone(200_000, 0), "neutral");
-  assert.equal(budgetedShareTone(0, 0), "neutral");
+test("budgeted vs income: no income is neutral, whatever is budgeted", () => {
+  assert.deepEqual(budgetedVsIncome(0, 100_000), { level: "noIncome", pct: 0 });
+  assert.deepEqual(budgetedVsIncome(0, 0), { level: "noIncome", pct: 0 });
+  assert.deepEqual(budgetedVsIncome(-5, 100), { level: "noIncome", pct: 0 });
 });
 
 test("spent of budgeted: green to 80 %, amber to 100 %, red above", () => {
@@ -46,10 +48,9 @@ test("the % label never contradicts the colour, around every threshold", () => {
     const spent = spentShareTone(part, whole);
     assert.equal(spent === "good", pct <= 80, `spent ${part}: ${pct}% ${spent}`);
     assert.equal(spent === "over", pct > 100, `spent ${part}: ${pct}% ${spent}`);
-    const budgeted = budgetedShareTone(whole, part);
-    if (part === 0) continue; // no budget: neutral
-    const share = sharePct(part, whole);
-    assert.equal(budgeted === "good", share <= 90, `budgeted ${part}: ${share}% ${budgeted}`);
-    assert.equal(budgeted === "over", share > 100, `budgeted ${part}: ${share}% ${budgeted}`);
+    const { level, pct: share } = budgetedVsIncome(whole, part);
+    assert.equal(level === "under", share < 85, `budgeted ${part}: ${share}% ${level}`);
+    assert.equal(level === "exact" || level === "over", share >= 100, `budgeted ${part}: ${share}% ${level}`);
+    assert.equal(level === "over", share > 100, `budgeted ${part}: ${share}% ${level}`);
   }
 });

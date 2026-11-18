@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMonth } from '../context/MonthContext';
 import { motion } from 'motion/react';
-import { AlertTriangle, ArrowRight, CreditCard } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CircleAlert, CircleCheck, CreditCard, Equal, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { MonthlyReview } from './MonthlyReview';
 import { Analytics } from './Analytics';
@@ -14,7 +14,7 @@ import { SetupChecklist } from './SetupChecklist';
 import type { OnboardingStep } from '../hooks/useOnboardingNeeded';
 import { useMoney } from '../onboarding/useMoney';
 import { BankPendingNotice } from './banking/BankPendingNotice';
-import { budgetedShareTone, sharePct, spentShareTone, toCents, type Tone } from '../../../shared/budgetStatus';
+import { budgetedVsIncome, sharePct, spentShareTone, toCents, type IncomeCoverage, type Tone } from '../../../shared/budgetStatus';
 import { monthLight } from '../../../shared/incomeShare';
 import { useMonthSavings } from '../hooks/useMonthSavings';
 import { PaidYourselfCard } from './PaidYourselfCard';
@@ -25,6 +25,14 @@ import { PeaceCheckinCard } from './PeaceCheckinCard';
 // over is the "watch" state, sun — never red (CLAUDE.md).
 const TONE_TEXT: Record<Tone, string> = { good: 'text-reed', warning: 'text-sun-ink', over: 'text-sun-ink', neutral: '' };
 const TONE_BAR: Record<Tone, string> = { good: 'bg-reed', warning: 'bg-sun', over: 'bg-sun-ink', neutral: 'bg-muted-foreground/40' };
+
+// Total budgeted vs income (LPBETA-30). Red above income is Luis's explicit
+// choice for this indicator only (18 nov); everywhere else going over stays sun.
+// Each level also has an icon and a label: never colour alone.
+type Coverage = Exclude<IncomeCoverage, 'noIncome'>;
+const COVERAGE_TEXT: Record<Coverage, string> = { under: 'text-reed', near: 'text-sun-ink', exact: 'text-ember-ink', over: 'text-alert' };
+const COVERAGE_BAR: Record<Coverage, string> = { under: 'bg-reed', near: 'bg-sun', exact: 'bg-ember', over: 'bg-alert' };
+const COVERAGE_ICON: Record<Coverage, LucideIcon> = { under: CircleCheck, near: CircleAlert, exact: Equal, over: AlertTriangle };
 
 function greeting(t: (key: string) => string) {
   const h = new Date().getHours();
@@ -109,11 +117,9 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
   // Income vs what's budgeted: the same income the hero shows (the
   // household's for a couple) and the monthly review's "total budgeted".
   const incomeCents   = toCents(displayIncome);
-  const budgetedTone  = budgetedShareTone(incomeCents, budgetedCents);
-  const budgetedPct   = sharePct(budgetedCents, incomeCents);
+  const coverage      = budgetedVsIncome(incomeCents, budgetedCents);
+  const CoverageIcon  = coverage.level === 'noIncome' ? null : COVERAGE_ICON[coverage.level];
   const budgetGap     = Math.abs(incomeCents - budgetedCents) / 100;
-  // A budget with nothing coming in: the watch state, said plainly (no "% of 0").
-  const noIncome      = budgetedTone !== 'neutral' && incomeCents <= 0;
 
   // The traffic light: spending vs budget first, then "Págate a ti primero"
   // (what it measures and why: shared/incomeShare.ts, monthLight).
@@ -171,29 +177,24 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
         >
           <h2 className="text-lg font-semibold">{t('home.monthTitle')}</h2>
 
-          {/* Income vs total budgeted: how much of what comes in is already assigned */}
+          {/* Income vs total budgeted: how much of what comes in is already assigned (LPBETA-30) */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-muted-foreground">{t('home.incomeVsBudgeted')}</p>
-              {budgetedTone !== 'neutral' && !noIncome && (
-                <p className={`text-sm font-semibold ${TONE_TEXT[budgetedTone]}`}>{t('home.budgetedPct', { pct: budgetedPct })}</p>
-              )}
-            </div>
-            {budgetedTone === 'neutral' ? (
-              <p className="text-sm text-muted-foreground">{t('home.budgetedNeutral')}</p>
+            <p className="text-xs text-muted-foreground">{t('home.incomeVsBudgeted')}</p>
+            {coverage.level === 'noIncome' ? (
+              <p className="text-sm text-muted-foreground">{t('home.budgetedNoIncome')}</p>
             ) : (
               <>
                 <p className="text-2xl font-display tabular-nums">
                   {t('home.budgetedOfIncome', { budgeted: fmt(budgetedCents / 100), income: fmt(incomeCents / 100) })}
                 </p>
                 <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full transition-all ${TONE_BAR[budgetedTone]}`} style={{ width: `${noIncome ? 100 : Math.min(budgetedPct, 100)}%` }} />
+                  <div className={`h-full rounded-full transition-all ${COVERAGE_BAR[coverage.level]}`} style={{ width: `${Math.min(coverage.pct, 100)}%` }} />
                 </div>
-                <p className={`text-xs ${budgetedTone === 'good' ? 'text-muted-foreground' : TONE_TEXT[budgetedTone]}`}>
-                  {noIncome
-                    ? t('home.budgetedNoIncome', { amount: fmt(budgetedCents / 100) })
-                    : t(`home.budgetedTone.${budgetedTone}`, { amount: fmt(budgetGap) })}
+                <p className={`flex items-center gap-1.5 text-sm font-semibold ${COVERAGE_TEXT[coverage.level]}`}>
+                  {CoverageIcon && <CoverageIcon className="w-4 h-4 shrink-0" aria-hidden="true" />}
+                  <span>{t(`home.budgetedCoverage.${coverage.level}.label`)} · {t('home.budgetedPctOfIncome', { pct: coverage.pct })}</span>
                 </p>
+                <p className="text-xs text-muted-foreground">{t(`home.budgetedCoverage.${coverage.level}.desc`, { amount: fmt(budgetGap) })}</p>
               </>
             )}
           </div>

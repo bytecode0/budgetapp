@@ -33,6 +33,7 @@ Contexto general y épicas ya hechas: [`plan-deudas-y-onboarding.md`](plan-deuda
 | LPBETA-26 | Nuevo nombre de la app: **Remanso** | **Hecho y desplegado** (PR #10, 4 nov). Falta buscar la marca en la OEPM/EUIPO y que Luis cambie `EMAIL_FROM` en Vercel | No |
 | LPBETA-27 | Rediseño de toda la app para Remanso | Fase 1 y fase 2 hechas salvo **Partidas** (`AllocationFlow`), que hace la sesión principal en esta tanda (la de rebranding ya no está activa) | No |
 | LPBETA-28 | Pantalla de administración con las estadísticas de uso | Refinado — **Prioridad baja** (decidido 6 nov) | Probablemente sí (aditivo: marca de administrador) |
+| LPBETA-30 | Color del total presupuestado frente a los ingresos | **Hecho** (rama `feature/lpbeta-30-colores-presupuesto`, 18 nov). Decidido 18 nov: verde < 85 %, amarillo 85 %–<100 %, naranja = 100 %, **rojo** > 100 % (solo en este indicador) | No |
 
 ### Orden de ejecución (4 nov, sustituye al de abajo)
 
@@ -854,3 +855,31 @@ Usuario sin Premium ve "Hazte Premium" en banca e importar, y las rutas responde
 **Tamaño:** S.
 
 **Implementado (17 nov, rama `feature/lpbeta-29-salir`; falta la pasada en el navegador):** bloque de cuenta fijo al pie de la barra lateral y del menú del móvil (`components/shared/AccountBlock.tsx`), con el flujo de salida en `hooks/useSignOut.ts`; tarjeta de perfil de Ajustes con "Cerrar sesión" arriba y el botón del final en tinta neutra. `AuthContext.logout` borra la sesión local aunque falle la llamada y dice si el servidor la confirmó; en ese caso el toast de error avisa de que la cookie puede seguir viva (es `httpOnly`: solo el servidor puede borrarla) y pide recargar y volver a salir. La parte de la app con datos de una persona (mes, día de cobro, hooks de `AppInner`, pantalla) se vuelve a montar al cambiar de usuario (`AuthGate` en `BudgetApp.tsx`): tras salir no queda nada de la persona anterior y quien entra después empieza en Inicio con sus propios datos, tema e idioma. Pendiente: la verificación en el navegador de arriba.
+
+---
+
+## LPBETA-30 · Color del total presupuestado frente a los ingresos — decidido 18 nov
+
+**Decisión (Luis, 18 nov):** en el Inicio, el **total presupuestado** del mes (la suma de las partidas) se colorea según cómo se compara con los **ingresos del mes**.
+
+| Estado | Regla (céntimos enteros) | Color |
+|---|---|---|
+| Con margen | presupuestado < 85 % de los ingresos | verde (`reed`) |
+| Casi al límite | 85 % ≤ presupuestado < 100 % | amarillo (`sun`) |
+| Justo al límite | presupuestado = ingresos, al céntimo | naranja (token nuevo `ember`) |
+| Por encima | presupuestado > ingresos | **rojo** (`alert`) |
+| Sin ingresos | ingresos = 0 | neutro: "Añade tus ingresos para ver…" |
+
+**Reglas:**
+1. **Rojo para "por encima" lo eligió Luis expresamente**, en contra de la regla anterior de Remanso ("te has pasado" en `sun-ink`, nunca rojo). **Solo en este indicador:** el resto de la app sigue igual.
+2. **Mismas cifras que ya muestra el Inicio:** los ingresos son `householdIncome` de `/api/monthly-budgets/review` (`householdMonthIncome`: los registrados del mes; si no hay, la base) y el total es su `totalBudgeted`.
+3. Se muestra también **el porcentaje** ("Has presupuestado el 92 % de tus ingresos") y un **texto corto por estado** con su icono: el color nunca va solo (accesibilidad).
+4. **Céntimos enteros y multiplicación cruzada** (`presupuestado × 100` frente a `ingresos × 85`), nunca floats. El porcentaje se redondea hacia abajo hasta el 100 % y hacia arriba por encima, para que la cifra no contradiga el color (84,99 % → "84 %" verde; 100,01 % → "101 %" rojo).
+5. Colores con tokens del tema, para claro y oscuro, sin degradados. No había naranja: se añade `ember` / `ember-ink`.
+6. Textos en `es.json` y `en.json`. Sin cambio de schema.
+
+**Dónde:** la lógica es una función pura con tests (`shared/budgetStatus.ts`, `budgetedVsIncome`; límites 84,99 %, 85 %, 99,99 %, 100 %, 100,01 % e ingresos 0), y la pinta `Home.tsx`, en "Tu mes". Sustituye a los umbrales anteriores de ese bloque (90 % / 100 %, pasarse en `sun-ink`).
+
+**Verificación (navegador, `npm run dev:all`):** un mes con cada uno de los cinco estados, en claro y oscuro, en el móvil y en el escritorio.
+
+**Tamaño:** S.

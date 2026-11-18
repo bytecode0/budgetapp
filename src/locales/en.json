@@ -205,15 +205,27 @@
     "committedFutureSubtitle": "{{pct}}% of your next paycheck is already spoken for by debt",
     "viewDebts": "View debts",
     "incomeVsBudgeted": "Monthly income vs total budgeted",
-    "budgetedPct": "{{pct}}% budgeted",
-    "budgetedOfIncome": "{{budgeted}} of {{income}}",
-    "budgetedNeutral": "Add a budget to see how much of what comes in already has a job.",
-    "budgetedTone": {
-      "good": "{{amount}} left unassigned.",
-      "warning": "Almost everything coming in already has a job: {{amount}} left.",
-      "over": "You're budgeting {{amount}} more than you earn."
+    "budgetedPctOfIncome": "You've budgeted {{pct}}% of your income",
+    "budgetedCoverage": {
+      "under": {
+        "label": "With room",
+        "desc": "{{amount}} left unassigned."
+      },
+      "near": {
+        "label": "Close to the limit",
+        "desc": "Almost everything coming in already has a job: {{amount}} left."
+      },
+      "exact": {
+        "label": "Right at the limit",
+        "desc": "Everything coming in already has a job: nothing left unassigned."
+      },
+      "over": {
+        "label": "Above your income",
+        "desc": "You're budgeting {{amount}} more than you earn."
+      }
     },
-    "budgetedNoIncome": "You have {{amount}} budgeted but no income recorded.",
+    "budgetedNoIncome": "Add your income to see how much of it you've already budgeted.",
+    "budgetedOfIncome": "{{budgeted}} of {{income}}",
     "monthTitle": "Your month",
     "paidYourselfLabel": "You've paid yourself",
     "paidYourselfOf": "of {{goal}} this month · your {{pct}}%",
@@ -1636,7 +1648,7 @@
             "Anthropic (Claude), only if you press a button to classify with AI when importing a statement: it receives the uncategorised merchant descriptions (up to 40 at a time) and the names of your categories. Never amounts, dates, your name, your email or account numbers. Your expense descriptions never go to free models or to other AI providers, and transactions from your connected bank are not sent to any AI.",
             "The AI provider we have configured for reading statements (OpenRouter or Anthropic), only if you ask AI to suggest a statement's columns: it receives the column titles and the format of the values, never your transactions.",
             "Google, only if you sign in with Google. The website also loads its fonts from Google Fonts.",
-      "Stripe, only if you subscribe to Premium: it handles the payment (your email and your card, which we never see). When you delete your account we also delete your customer record at Stripe; Stripe may keep the record of payments for as long as the law requires."
+            "Stripe, only if you subscribe to Premium: it handles the payment (your email and your card, which we never see). When you delete your account we also delete your customer record at Stripe; Stripe may keep the record of payments for as long as the law requires."
           ]
         },
         {

@@ -205,15 +205,27 @@
     "committedFutureSubtitle": "El {{pct}}% de tu próximo cobro ya está destinado a deudas",
     "viewDebts": "Ver deudas",
     "incomeVsBudgeted": "Ingresos mensuales vs total presupuestado",
-    "budgetedPct": "{{pct}}% presupuestado",
-    "budgetedOfIncome": "{{budgeted}} de {{income}}",
-    "budgetedNeutral": "Añade un presupuesto para ver qué parte de lo que entra ya tiene destino.",
-    "budgetedTone": {
-      "good": "Te quedan {{amount}} sin asignar.",
-      "warning": "Casi todo lo que entra ya tiene destino: te quedan {{amount}}.",
-      "over": "Presupuestas {{amount}} más de lo que ingresas."
+    "budgetedPctOfIncome": "Has presupuestado el {{pct}} % de tus ingresos",
+    "budgetedCoverage": {
+      "under": {
+        "label": "Con margen",
+        "desc": "Te quedan {{amount}} sin asignar."
+      },
+      "near": {
+        "label": "Casi al límite",
+        "desc": "Casi todo lo que entra ya tiene destino: te quedan {{amount}}."
+      },
+      "exact": {
+        "label": "Justo al límite",
+        "desc": "Todo lo que entra ya tiene destino: no queda nada sin asignar."
+      },
+      "over": {
+        "label": "Por encima de tus ingresos",
+        "desc": "Presupuestas {{amount}} más de lo que ingresas."
+      }
     },
-    "budgetedNoIncome": "Tienes presupuestado {{amount}} pero no hay ingresos registrados.",
+    "budgetedNoIncome": "Añade tus ingresos para ver qué parte de ellos ya has presupuestado.",
+    "budgetedOfIncome": "{{budgeted}} de {{income}}",
     "monthTitle": "Tu mes",
     "paidYourselfLabel": "Te has pagado",
     "paidYourselfOf": "de {{goal}} este mes · tu {{pct}} %",
