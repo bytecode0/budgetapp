@@ -14,7 +14,7 @@ import { useDebts } from '../hooks/useDebts';
 import {
   useDebtDetail, monthLabel, addMonthKey, MAX_EXTRA, MAX_ONE_OFF, ONE_OFF_HORIZON_MONTHS, type DebtDetailData, type MissingField,
 } from '../hooks/useDebtProjection';
-import { DebtFormFields, EMPTY_DEBT_FORM, debtFormFromDebt, debtPayloadFromForm, kindIcon, type DebtFormState } from './shared/DebtFormFields';
+import { DebtFormFields, EMPTY_DEBT_FORM, debtFormFromDebt, debtFormError, debtPayloadFromForm, kindIcon, type DebtFormState } from './shared/DebtFormFields';
 import { apiErrorMessage } from '../lib/apiErrors';
 
 // One debt (LPBETA-02): what's left, when it ends, its balance over time
@@ -71,6 +71,8 @@ export function DebtDetail({ debtId, onBack, onOpenPlan }: { debtId: string; onB
   const handleSave = async () => {
     if (!form.id) return;
     if (!form.name.trim()) { toast.error(t('debts.nameRequired')); return; }
+    const formError = debtFormError(form);
+    if (formError) { toast.error(t(formError)); return; }
     setSaving(true);
     const result = await updateDebt(form.id, debtPayloadFromForm(form));
     setSaving(false);

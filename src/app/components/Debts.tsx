@@ -12,7 +12,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useDebts, type Debt } from '../hooks/useDebts';
 import { usePayoffPlan, monthLabel } from '../hooks/useDebtProjection';
-import { DebtFormFields, EMPTY_DEBT_FORM, debtFormFromDebt, debtPayloadFromForm, kindIcon, type DebtFormState } from './shared/DebtFormFields';
+import { DebtFormFields, EMPTY_DEBT_FORM, debtFormFromDebt, debtFormError, debtPayloadFromForm, kindIcon, type DebtFormState } from './shared/DebtFormFields';
 import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSheet';
 import { CardCycleLine } from './shared/CardCycleLine';
 import { apiErrorMessage } from '../lib/apiErrors';
@@ -137,6 +137,8 @@ export function Debts({ onOpenDebt, onOpenPlan }: { onOpenDebt: (id: string) => 
 
   const handleSubmit = async () => {
     if (!form.name.trim()) { toast.error(t('debts.nameRequired')); return; }
+    const formError = debtFormError(form);
+    if (formError) { toast.error(t(formError)); return; }
     setSaving(true);
     const payload = debtPayloadFromForm(form);
     const result = form.id

@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isCycleDay } from './CardFields';
 import {
   CreditCard, Calendar, Car, ShoppingBag, AlertCircle, Wallet, Home, GraduationCap,
 } from 'lucide-react';
@@ -84,6 +85,14 @@ export function debtFormFromDebt(d: Debt): DebtFormState {
     loadedInstallmentsPaid: String(d.installmentsPaid ?? 0),
     cardBacked: d.kind === 'credit_card' && d.accountId !== null,
   };
+}
+
+/** i18n key of what's wrong with the form (besides the name), or null.
+ *  Statement and payment days are whole days 1–31, as the server requires. */
+export function debtFormError(form: DebtFormState): string | null {
+  const statementDay = CARD_LIKE.has(form.kind) ? form.statementDay : '';
+  if (!isCycleDay(statementDay) || !isCycleDay(form.paymentDueDay)) return 'debts.cycleDayInvalid';
+  return null;
 }
 
 /** What to send to POST / PATCH /api/debts. Call only with a non-empty name. */

@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { useDebts } from '../hooks/useDebts';
 import { useAuth } from '../context/AuthContext';
 import {
-  DebtFormFields, EMPTY_DEBT_FORM, debtPayloadFromForm, kindIcon, type DebtFormState,
+  DebtFormFields, EMPTY_DEBT_FORM, debtFormError, debtPayloadFromForm, kindIcon, type DebtFormState,
 } from '../components/shared/DebtFormFields';
 import { apiErrorMessage } from '../lib/apiErrors';
 import { useMoney } from './useMoney';
@@ -34,6 +34,8 @@ export function LoansStep({ quiet = false }: LoansStepProps) {
 
   const handleSave = async () => {
     if (!form.name.trim()) { toast.error(t('debts.nameRequired')); return; }
+    const formError = debtFormError(form);
+    if (formError) { toast.error(t(formError)); return; }
     setSaving(true);
     const result = await createDebt(debtPayloadFromForm(form));
     setSaving(false);

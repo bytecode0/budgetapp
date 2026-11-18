@@ -16,7 +16,11 @@
 //     the cut-off day is in that statement. That statement is due on
 //     `paymentDueDay` of M when paymentDueDay > statementDay, else of M+1
 //     (decided on the raw days, then clamped, so each month's statement keeps
-//     a fixed due month and due dates never go backwards).
+//     a fixed due month and due dates never go backwards). If clamping leaves
+//     the due date on or before the cut-off (cut-off 29/30, due 30/31, in
+//     February: both the 28th), it moves to the next month, clamped. Two
+//     statements can then share a due date (Feb's and Mar's, both Mar 31);
+//     the next one due is the later of the two, which holds both (cumulative).
 //  2. What enters each statement. Card purchases (refunds negative) by their
 //     date. The pre-existing debt — the anchor at `balanceAsOf` and dated
 //     adjustments (interest, corrections) — has no purchase date to place it
@@ -77,10 +81,11 @@ export interface Statement {
 export function statementClosingIn(y: number, m0: number, days: CardCycleDays): Statement {
   const closesOn = clampedDay(y, m0, days.statementDay);
   const dueMonth = days.paymentDueDay > days.statementDay ? m0 : m0 + 1;
+  const dueOn = clampedDay(y, dueMonth, days.paymentDueDay);
   return {
     closesOn,
     boundary: new Date(closesOn.getTime() + DAY_MS),
-    dueOn: clampedDay(y, dueMonth, days.paymentDueDay),
+    dueOn: dueOn > closesOn ? dueOn : clampedDay(y, dueMonth + 1, days.paymentDueDay),
   };
 }
 
@@ -90,7 +95,10 @@ export function nextStatementDue(date: Date, days: CardCycleDays): Statement {
   // The statement due in or after today's month closed at most a month before.
   for (let i = -2; i <= 2; i++) {
     const s = statementClosingIn(date.getUTCFullYear(), date.getUTCMonth() + i, days);
-    if (s.dueOn >= today) return s;
+    if (s.dueOn < today) continue;
+    // The following statement due the same day holds this one too (rule 1).
+    const later = statementClosingIn(date.getUTCFullYear(), date.getUTCMonth() + i + 1, days);
+    return later.dueOn.getTime() === s.dueOn.getTime() ? later : s;
   }
   throw new Error("unreachable: a statement is due every month");
 }

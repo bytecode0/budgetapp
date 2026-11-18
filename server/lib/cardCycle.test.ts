@@ -66,16 +66,17 @@ test("day 31 cut-off in February closes on the last day, leap year or not", () =
 
 test("due date crossing the year, and clamped in a short month", () => {
   assert.equal(day(statementClosingIn(2026, 11, C25_5).dueOn), "2027-01-05");
-  // Cut-off 28, due 30: February's statement is due Feb 28 (clamped), still
-  // its own month — due dates never go backwards nor collide.
+  // Cut-off 28, due 30: February's statement would be due Feb 28 (clamped),
+  // the day it closes, so it is due Mar 30 with March's — never backwards.
   const days = { statementDay: 28, paymentDueDay: 30 };
   assert.equal(day(statementClosingIn(2026, 0, days).dueOn), "2026-01-30");
-  assert.equal(day(statementClosingIn(2026, 1, days).dueOn), "2026-02-28");
+  assert.equal(day(statementClosingIn(2026, 1, days).dueOn), "2026-03-30");
   assert.equal(day(statementClosingIn(2026, 2, days).dueOn), "2026-03-30");
-  // Cut-off 30, due 31 (> cut-off): in February both clamp to the 28th.
+  // Cut-off 30, due 31 (> cut-off): in February both would clamp to the
+  // 28th, so the due date moves to the next month (Mar 31).
   const end = { statementDay: 30, paymentDueDay: 31 };
   assert.equal(day(statementClosingIn(2026, 1, end).closesOn), "2026-02-28");
-  assert.equal(day(statementClosingIn(2026, 1, end).dueOn), "2026-02-28");
+  assert.equal(day(statementClosingIn(2026, 1, end).dueOn), "2026-03-31");
 });
 
 test("nextStatementDue: today counts; the day after the due date moves on", () => {
@@ -382,4 +383,25 @@ test("committed future with days 30–31: pre-existing debt lands in the period 
     adjustments: [mv("jan", 1000, "2027-01-31"), mv("mar", 2000, "2027-03-01")],
   });
   assert.deepEqual(committed(l, "2026-12", 4), [0, 0, 1000, 2000]);
+});
+
+test("cut-off 29, due 30 in a non-leap February: never due on the cut-off day", () => {
+  const days = { statementDay: 29, paymentDueDay: 30 };
+  assert.equal(day(statementClosingIn(2027, 0, days).dueOn), "2027-01-30");
+  const feb = statementClosingIn(2027, 1, days);
+  assert.equal(day(feb.closesOn), "2027-02-28");
+  assert.equal(day(feb.dueOn), "2027-03-30");
+  assert.equal(day(statementClosingIn(2027, 2, days).dueOn), "2027-03-30");
+  // February's and March's statements are both due Mar 30: the next one due
+  // is March's, which holds February's purchases too.
+  const next = nextStatementDue(D("2027-03-01"), days);
+  assert.equal(day(next.closesOn), "2027-03-29");
+  assert.equal(day(next.dueOn), "2027-03-30");
+  const l = ledger(card({ statementDay: 29, paymentDueDay: 30, balanceAsOf: D("2027-01-01") }), {
+    purchases: [mv("feb", 2000, "2027-02-20"), mv("mar", 1000, "2027-03-10"), mv("late", 500, "2027-03-31")],
+  });
+  const s = cardCycleSummary(l, D("2027-03-01"))!;
+  assert.equal(s.dueAmount, 3000);
+  assert.equal(s.afterCutAmount, 500);
+  assert.equal(day(s.afterCutDueOn), "2027-04-30");
 });
