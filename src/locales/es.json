@@ -1,4 +1,52 @@
 {
+  "hormiga": {
+    "title": "Gastos hormiga",
+    "button": "Gastos hormiga",
+    "subtitle": "Suscripciones y pequeños gastos que se repiten: el dinero que se va sin que se note.",
+    "close": "Cerrar",
+    "cardMonth": "{{amount}} este mes entre suscripciones y pequeños gastos",
+    "perYear": "~{{amount}} al año",
+    "half": "Si lo reduces a la mitad, son ~{{amount}} al año más para tu plan.",
+    "viewAll": "Ver el detalle",
+    "priceRisesNotice_one": "{{count}} suscripción ha subido de precio",
+    "priceRisesNotice_other": "{{count}} suscripciones han subido de precio",
+    "subscriptionsTitle": "Tus suscripciones",
+    "subscriptionsTotal": "Pagas {{monthly}} al mes en suscripciones: ~{{yearly}} al año.",
+    "subscriptionsEmpty": "No hemos visto suscripciones en tus movimientos.",
+    "cadence": {
+      "weekly": "a la semana",
+      "monthly": "al mes",
+      "yearly": "al año"
+    },
+    "priceRise": "Ha pasado de {{from}} a {{to}}",
+    "new": "Nueva",
+    "newHint": "Ha empezado a cobrarse hace poco: ¿era una prueba gratis?",
+    "keep": "La quiero",
+    "cancel": "Voy a cancelarla",
+    "kept": "La quieres",
+    "toCancel": "Vas a cancelarla",
+    "undo": "Deshacer",
+    "cancelReminder": "Recuerda cancelarla en su web o en su app: Remanso no cancela nada.",
+    "chargedAfterCancel": "Se ha vuelto a cobrar después de que dijeras que ibas a cancelarla.",
+    "decisionFailed": "No se ha podido guardar. Inténtalo de nuevo.",
+    "smallTitle": "Pequeños gastos frecuentes",
+    "smallDesc": "Menos de {{limit}} cada vez, 4 o más veces este mes, en el mismo comercio o la misma categoría.",
+    "smallLine": "{{unit}} × {{count}} = {{total}} este mes → ~{{yearly}} al año",
+    "smallEmpty": "Este mes no hay pequeños gastos que se repitan 4 veces o más.",
+    "emptyTitle": "Nada que señalar",
+    "emptyDesc": "Cuando haya suscripciones o pequeños gastos que se repiten, aparecerán aquí.",
+    "loadFailed": "No se han podido cargar los gastos hormiga."
+  },
+  "unsubscribe": {
+    "title": "¿Dejar de recibir el email mensual?",
+    "desc": "Dejarás de recibir «Tu mes en Remanso». Puedes volver a activarlo cuando quieras en Ajustes.",
+    "confirm": "Darme de baja",
+    "doneTitle": "Hecho",
+    "doneDesc": "Ya no recibirás el email mensual. Puedes volver a activarlo en Ajustes.",
+    "errorTitle": "Este enlace no funciona",
+    "errorDesc": "Puede que esté incompleto. Entra en Remanso y desactívalo en Ajustes.",
+    "backToApp": "Ir a Remanso"
+  },
   "theme": {
     "switchToDark": "Cambiar a modo oscuro",
     "switchToLight": "Cambiar a modo claro",
@@ -71,6 +119,13 @@
       "darkModeOff": "Usando tema claro",
       "language": "Idioma",
       "languageSubtitle": "Elige tu idioma preferido"
+    },
+    "monthlyEmail": {
+      "title": "Email mensual «Tu mes en Remanso»",
+      "subtitle": "Una vez al mes: lo que te has pagado, tus suscripciones y tus gastos hormiga. Sin nombres de comercios.",
+      "on": "Recibirás el email mensual",
+      "off": "Ya no recibirás el email mensual",
+      "failed": "No se ha podido guardar. Inténtalo de nuevo."
     },
     "notifications": {
       "sectionTitle": "Notificaciones",
@@ -786,6 +841,8 @@
     "detected": "Detectados",
     "confirmed": "Confirmados",
     "monthly": "mensual",
+    "weekly": "semanal",
+    "yearly": "anual",
     "confirm": "Confirmar",
     "ignore": "Ignorar",
     "noLink": "Sin asignación enlazada",
@@ -1686,7 +1743,7 @@
         {
           "title": "Para qué los usamos y con qué base",
           "paragraphs": [
-            "Usamos tus datos para prestarte el servicio que pides al registrarte: guardar tu información, calcular tu presupuesto, tu futuro comprometido y tu plan de salida de deudas, y enviarte los emails necesarios (verificación, recuperación de contraseña, bienvenida, invitaciones al hogar y avisos del borrado de tu cuenta). La base jurídica es la ejecución del contrato que aceptas al crear tu cuenta (artículo 6.1.b del RGPD).",
+            "Usamos tus datos para prestarte el servicio que pides al registrarte: guardar tu información, calcular tu presupuesto, tu futuro comprometido y tu plan de salida de deudas, y enviarte los emails necesarios (verificación, recuperación de contraseña, bienvenida, invitaciones al hogar, avisos del borrado de tu cuenta y el resumen mensual «Tu mes en Remanso», del que puedes darte de baja desde el propio email o en Ajustes). La base jurídica es la ejecución del contrato que aceptas al crear tu cuenta (artículo 6.1.b del RGPD).",
             "Los registros técnicos se usan para mantener el servicio funcionando y seguro, sobre la base del interés legítimo (artículo 6.1.f del RGPD)."
           ]
         },

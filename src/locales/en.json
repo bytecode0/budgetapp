@@ -1,4 +1,52 @@
 {
+  "hormiga": {
+    "title": "Little leaks",
+    "button": "Little leaks",
+    "subtitle": "Subscriptions and small expenses that keep coming back: the money that goes without you noticing.",
+    "close": "Close",
+    "cardMonth": "{{amount}} this month in subscriptions and small expenses",
+    "perYear": "~{{amount}} a year",
+    "half": "If you cut it in half, that's ~{{amount}} a year more for your plan.",
+    "viewAll": "See the details",
+    "priceRisesNotice_one": "{{count}} subscription has gone up in price",
+    "priceRisesNotice_other": "{{count}} subscriptions have gone up in price",
+    "subscriptionsTitle": "Your subscriptions",
+    "subscriptionsTotal": "You pay {{monthly}} a month in subscriptions: ~{{yearly}} a year.",
+    "subscriptionsEmpty": "We haven't seen any subscriptions in your transactions.",
+    "cadence": {
+      "weekly": "a week",
+      "monthly": "a month",
+      "yearly": "a year"
+    },
+    "priceRise": "Went up from {{from}} to {{to}}",
+    "new": "New",
+    "newHint": "It started charging recently: was it a free trial?",
+    "keep": "I want it",
+    "cancel": "I'll cancel it",
+    "kept": "You want it",
+    "toCancel": "You'll cancel it",
+    "undo": "Undo",
+    "cancelReminder": "Remember to cancel it on its website or app: Remanso doesn't cancel anything.",
+    "chargedAfterCancel": "It was charged again after you said you'd cancel it.",
+    "decisionFailed": "Couldn't save. Please try again.",
+    "smallTitle": "Small, frequent expenses",
+    "smallDesc": "Under {{limit}} each time, 4 or more times this month, at the same shop or in the same category.",
+    "smallLine": "{{unit}} × {{count}} = {{total}} this month → ~{{yearly}} a year",
+    "smallEmpty": "This month there are no small expenses that repeat 4 times or more.",
+    "emptyTitle": "Nothing to point out",
+    "emptyDesc": "When there are subscriptions or small expenses that keep coming back, they'll show here.",
+    "loadFailed": "Couldn't load your little leaks."
+  },
+  "unsubscribe": {
+    "title": "Stop the monthly email?",
+    "desc": "You'll stop getting \"Your month in Remanso\". You can turn it back on any time in Settings.",
+    "confirm": "Unsubscribe",
+    "doneTitle": "Done",
+    "doneDesc": "You won't get the monthly email any more. You can turn it back on in Settings.",
+    "errorTitle": "This link doesn't work",
+    "errorDesc": "It may be incomplete. Sign in to Remanso and turn it off in Settings.",
+    "backToApp": "Go to Remanso"
+  },
   "theme": {
     "switchToDark": "Switch to dark mode",
     "switchToLight": "Switch to light mode",
@@ -71,6 +119,13 @@
       "darkModeOff": "Using light theme",
       "language": "Language",
       "languageSubtitle": "Choose your preferred language"
+    },
+    "monthlyEmail": {
+      "title": "Monthly email \"Your month in Remanso\"",
+      "subtitle": "Once a month: what you paid yourself, your subscriptions and your little leaks. No shop names.",
+      "on": "You'll get the monthly email",
+      "off": "You won't get the monthly email any more",
+      "failed": "Couldn't save. Please try again."
     },
     "notifications": {
       "sectionTitle": "Notifications",
@@ -786,6 +841,8 @@
     "detected": "Detected",
     "confirmed": "Confirmed",
     "monthly": "monthly",
+    "weekly": "weekly",
+    "yearly": "yearly",
     "confirm": "Confirm",
     "ignore": "Ignore",
     "noLink": "No linked allocation",
@@ -1686,7 +1743,7 @@
         {
           "title": "What we use it for, and on what basis",
           "paragraphs": [
-            "We use your data to provide the service you ask for when you sign up: storing your information, calculating your budget, your committed future and your debt payoff plan, and sending you the necessary emails (verification, password reset, welcome, household invitations and notices about deleting your account). The legal basis is the performance of the contract you accept when creating your account (Article 6(1)(b) GDPR).",
+            "We use your data to provide the service you ask for when you sign up: storing your information, calculating your budget, your committed future and your debt payoff plan, and sending you the necessary emails (verification, password reset, welcome, household invitations, notices about deleting your account and the monthly summary \"Your month in Remanso\", which you can unsubscribe from in the email itself or in Settings). The legal basis is the performance of the contract you accept when creating your account (Article 6(1)(b) GDPR).",
             "Technical logs are used to keep the service running and secure, on the basis of legitimate interest (Article 6(1)(f) GDPR)."
           ]
         },

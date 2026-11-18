@@ -20,6 +20,7 @@ import { useMonthSavings } from '../hooks/useMonthSavings';
 import { PaidYourselfCard } from './PaidYourselfCard';
 import { MonthLightCard } from './MonthLightCard';
 import { PeaceCheckinCard } from './PeaceCheckinCard';
+import { HormigaCard } from './HormigaCard';
 
 // Tones as Remanso tokens (shared/budgetStatus.ts decides the tone). Going
 // over is the "watch" state, sun — never red (CLAUDE.md).
@@ -45,6 +46,8 @@ function shortMonthLabel(key: string, locale: string) {
 
 interface HomeProps {
   onNavigate?: (screen: string) => void;
+  /** Opens the full gastos hormiga view (in Activity). */
+  onOpenHormiga?: () => void;
   /** Setup steps still missing ("Completa tu configuración"). */
   setupMissing?: OnboardingStep[];
   onResumeSetup?: (step: OnboardingStep) => void;
@@ -52,7 +55,7 @@ interface HomeProps {
   onSetupChanged?: () => void;
 }
 
-export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChanged = () => {} }: HomeProps) {
+export function Home({ onNavigate, onOpenHormiga, setupMissing = [], onResumeSetup, onSetupChanged = () => {} }: HomeProps) {
   const { t } = useTranslation();
   const { fmt } = useMoney();
   const { language } = useLanguage();
@@ -230,6 +233,9 @@ export function Home({ onNavigate, setupMissing = [], onResumeSetup, onSetupChan
           )}
         </motion.div>
       )}
+
+      {/* ── Gastos hormiga: subscriptions and small frequent expenses, to the year (LPBETA-12) ── */}
+      {!isFutureMonth && <HormigaCard key={`hormiga-${month}-${refreshKey}`} month={month} onOpen={onOpenHormiga} />}
 
       {/* ── Committed future: debt goes below the month (LPBETA-07) ── */}
       {totalOwed > 0 && timeline.length > 0 && (

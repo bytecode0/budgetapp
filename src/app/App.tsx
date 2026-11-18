@@ -3,6 +3,7 @@ import type { LegalPageKind } from './components/LegalPage';
 
 const BudgetApp = lazy(() => import('./BudgetApp').then((m) => ({ default: m.BudgetApp })));
 const LegalPage = lazy(() => import('./components/LegalPage').then((m) => ({ default: m.LegalPage })));
+const UnsubscribePage = lazy(() => import('./components/UnsubscribePage').then((m) => ({ default: m.UnsubscribePage })));
 
 // Public pages served by path (vercel.json rewrites every path to index.html;
 // there is no router). Everything else is the authenticated app.
@@ -17,10 +18,13 @@ function LoadingSpinner() {
 }
 
 export default function App() {
-  const legalPage = LEGAL_PATHS[window.location.pathname.replace(/\/+$/, '')];
+  const path = window.location.pathname.replace(/\/+$/, '');
+  const legalPage = LEGAL_PATHS[path];
   return (
     <Suspense fallback={<LoadingSpinner />}>
-      {legalPage ? <LegalPage page={legalPage} /> : <BudgetApp />}
+      {legalPage ? <LegalPage page={legalPage} />
+        : path === '/unsubscribe' ? <UnsubscribePage /> // the monthly email's link (LPBETA-12), no session
+        : <BudgetApp />}
     </Suspense>
   );
 }

@@ -14,7 +14,7 @@ export interface RecurringCommitment {
   userId: string;
   merchant: string;
   avgAmount: number; // euros
-  cadence: string; // "monthly"
+  cadence: string; // "weekly" | "monthly" | "yearly"
   allocationId: string | null;
   nextExpectedDate: string | null;
   status: RecurringStatus;

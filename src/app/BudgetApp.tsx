@@ -92,6 +92,11 @@ function AppInner() {
   const navScreen: Screen = currentScreen === 'debt-detail' || currentScreen === 'payoff-plan' ? 'debts' : currentScreen;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
+  // Activity opens with the gastos hormiga view (LPBETA-12): from Home's card
+  // or the monthly email. Cleared on leaving Activity, so it opens only once.
+  const [openHormiga, setOpenHormiga] = useState(false);
+  const openHormigaView = () => { setOpenHormiga(true); setCurrentScreen('activity'); };
+  useEffect(() => { if (currentScreen !== 'activity') setOpenHormiga(false); }, [currentScreen]);
 
   // Partner invite: detect ?invite=TOKEN in URL (or one saved before an OAuth
   // redirect). Kept in state across the auth flow; `inviteChecking` holds the
@@ -150,7 +155,9 @@ function AppInner() {
     }
     // The "your account will be deleted" email links here (?open=settings).
     if (params.get('open') === 'settings') setCurrentScreen('settings');
-    if (bankToken || isBankError || params.get('open') === 'accounts' || params.get('open') === 'settings') {
+    // The monthly email "Tu mes en Remanso" links here (?open=hormiga).
+    if (params.get('open') === 'hormiga') { setOpenHormiga(true); setCurrentScreen('activity'); }
+    if (bankToken || isBankError || ['accounts', 'settings', 'hormiga'].includes(params.get('open') ?? '')) {
       const url = new URL(window.location.href);
       url.searchParams.delete('bankToken');
       url.searchParams.delete('open');
@@ -208,11 +215,11 @@ function AppInner() {
   const renderScreen = () => {
     switch (currentScreen) {
       case 'home':
-        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} onSetupChanged={refreshOnboardingStatus} />;
+        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} onOpenHormiga={openHormigaView} setupMissing={setupMissing} onResumeSetup={setResumeStep} onSetupChanged={refreshOnboardingStatus} />;
       case 'dashboard':
         return <PlanningDashboard onNavigate={(screen) => setCurrentScreen(screen as Screen)} onViewPlan={handleViewPlan} />;
       case 'activity':
-        return <Activity onAddExpense={() => setShowAddExpense(true)} />;
+        return <Activity onAddExpense={() => setShowAddExpense(true)} openHormiga={openHormiga} onHormigaClosed={() => setOpenHormiga(false)} />;
       case 'create-plan':
         return <CreatePlan onBack={() => setCurrentScreen('dashboard')} />;
       case 'plan-detail':
@@ -255,7 +262,7 @@ function AppInner() {
           />
         );
       default:
-        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} setupMissing={setupMissing} onResumeSetup={setResumeStep} onSetupChanged={refreshOnboardingStatus} />;
+        return <Home onNavigate={(screen) => setCurrentScreen(screen as Screen)} onOpenHormiga={openHormigaView} setupMissing={setupMissing} onResumeSetup={setResumeStep} onSetupChanged={refreshOnboardingStatus} />;
     }
   };
 

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, X, TrendingDown, TrendingUp, Trash2, Loader2, Waves, Pencil, Wand2, Copy, Upload, CreditCard } from 'lucide-react';
+import { Plus, X, TrendingDown, TrendingUp, Trash2, Loader2, Waves, Pencil, Wand2, Copy, Upload, CreditCard, Coffee } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +20,7 @@ import { DebtPaymentSheet, type DebtPaymentTarget } from './shared/DebtPaymentSh
 import { useAccounts } from '../hooks/useAccounts';
 import { useMoney } from '../onboarding/useMoney';
 import { BankStrip } from './banking/BankStrip';
+import { HormigaSheet } from './HormigaSheet';
 
 type Movement =
   | { kind: 'expense'; id: string; date: string; amount: number; expense: Expense }
@@ -37,7 +38,12 @@ function getTypeColor(type: string) {
 }
 
 
-export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () => void }) {
+export function Activity({ onAddExpense: _onAddExpense, openHormiga = false, onHormigaClosed }: {
+  onAddExpense?: () => void;
+  /** Open the gastos hormiga view on arrival (from Home or the monthly email). */
+  openHormiga?: boolean;
+  onHormigaClosed?: () => void;
+}) {
   const { t } = useTranslation();
   const { fmt } = useMoney();
   const { language } = useLanguage();
@@ -51,6 +57,7 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
   const [showRules, setShowRules] = useState(false);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showHormiga, setShowHormiga] = useState(openHormiga);
   const [fabOpen, setFabOpen] = useState(false);
   // Paying a card is a movement of the month too: bank → card, partial or full.
   const { accounts, fetchAccounts } = useAccounts();
@@ -159,7 +166,13 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
           <h1 className="text-4xl tracking-tight font-display">{t('activity.title')}</h1>
           <p className="text-muted-foreground">{t('activity.subtitle')}</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            onClick={() => setShowHormiga(true)}
+            className="h-11 px-4 border border-line-strong rounded-xl hover:bg-muted transition-colors text-sm font-medium flex items-center gap-2"
+          >
+            <Coffee className="w-4 h-4" /> {t('hormiga.button')}
+          </button>
           <button
             onClick={() => setShowImport(true)}
             className="h-11 px-4 border border-line-strong rounded-xl hover:bg-muted transition-colors text-sm font-medium flex items-center gap-2"
@@ -522,6 +535,12 @@ export function Activity({ onAddExpense: _onAddExpense }: { onAddExpense?: () =>
       />
 
       <RulesManager isOpen={showRules} onClose={() => setShowRules(false)} />
+
+      <HormigaSheet
+        isOpen={showHormiga}
+        month={currentMonth}
+        onClose={() => { setShowHormiga(false); onHormigaClosed?.(); }}
+      />
 
       <Duplicates
         isOpen={showDuplicates}

@@ -108,7 +108,7 @@ export function RecurringManager({ isOpen, onClose }: RecurringManagerProps) {
                           <div className="min-w-0">
                             <p className="font-medium text-sm truncate capitalize">{c.merchant}</p>
                             <p className="text-xs text-muted-foreground tabular-nums">
-                              {fmt(c.avgAmount)} · {t('recurring.monthly')}
+                              {fmt(c.avgAmount)} · {t(`recurring.${c.cadence}`, { defaultValue: t('recurring.monthly') })}
                             </p>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
@@ -156,7 +156,7 @@ export function RecurringManager({ isOpen, onClose }: RecurringManagerProps) {
                           <div className="min-w-0">
                             <p className="font-medium text-sm truncate capitalize">{c.merchant}</p>
                             <p className="text-xs text-muted-foreground tabular-nums">
-                              {fmt(c.avgAmount)} · {t('recurring.monthly')}
+                              {fmt(c.avgAmount)} · {t(`recurring.${c.cadence}`, { defaultValue: t('recurring.monthly') })}
                               {c.allocation && <> · {c.allocation.icon} {c.allocation.name}</>}
                             </p>
                           </div>

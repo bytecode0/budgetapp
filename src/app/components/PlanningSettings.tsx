@@ -9,6 +9,7 @@ import { usePartner } from '../hooks/usePartner';
 import { HouseholdPanel } from './HouseholdPanel';
 import { AccountDataPanel } from './AccountDataPanel';
 import { SignOutEverywhere } from './SignOutEverywhere';
+import { MonthlyEmailToggle } from './MonthlyEmailToggle';
 import { useLanguage } from '../context/LanguageContext';
 import { useBillingEnabled } from '../hooks/useBillingEnabled';
 import {
@@ -385,6 +386,8 @@ export function PlanningSettings({ darkMode, onToggleDarkMode, onLanguageChange,
           <h3 className="text-sm uppercase tracking-wide text-muted-foreground">{t('settings.notifications.sectionTitle')}</h3>
         </div>
         <div className="divide-y divide-border">
+          {/* "Tu mes en Remanso" (LPBETA-12): the one real switch here */}
+          <MonthlyEmailToggle />
           <div className="p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
