@@ -68,6 +68,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { lockSettings } from "./partnerLink.js";
 import { loadUnlinkInput, planUnlink, unlinkMemberFromPool } from "./partnerUnlink.js";
 import { namespacedExternalId } from "./partnerMerge.js";
+import { withPlanTotals } from "./planLedger.js";
 import { debtState, inLedger, loadDebtLedgers } from "./debtBalance.js";
 import { decrypt } from "./crypto/secretBox.js";
 import { syncErrorCode } from "./banking/sync.js";
@@ -310,6 +311,14 @@ export function clashRenames(
  * partner. Call with lockSettings held, after resolveCrossOwnerPairs.
  */
 export async function transferPool(tx: Tx, ctx: { ownerId: string; partnerId: string }): Promise<void> {
+  // Every plan of the pool: his expenses deleted from its lines, and the
+  // budget period it is read with (now hers), move its balance by the
+  // ledger's rule (server/lib/planLedger.ts), as on unlink.
+  const plans = await tx.lifePlan.findMany({ where: { userId: ctx.ownerId }, select: { id: true } });
+  await withPlanTotals(tx, plans.map(p => p.id), () => handOver(tx, ctx));
+}
+
+async function handOver(tx: Tx, ctx: { ownerId: string; partnerId: string }): Promise<void> {
   const { ownerId, partnerId } = ctx;
   // The owner's own rows: what the unlink would give the owner if HE were the
   // member leaving the pool — except the partner's own movements (she entered

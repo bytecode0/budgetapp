@@ -1834,7 +1834,8 @@
     "refundOnDebtLine": "A refund can't go on a debt line: it undoes a purchase, it doesn't pay the debt.",
     "allocationNotFound": "That category no longer exists. Reload and pick another one.",
     "accountNotFound": "That account isn't available. Reload and pick another one.",
-    "rateLimited": "You've made too many attempts in a row. Wait a while and try again."
+    "rateLimited": "You've made too many attempts in a row. Wait a while and try again.",
+    "planLineChanged": "A plan budget line changed at the same time. Try again."
   },
   "banking": {
     "connectBank": "Connect your bank",

@@ -18,6 +18,7 @@ const ERROR_KEYS: Record<string, string> = {
   allocation_not_found: 'apiErrors.allocationNotFound',
   account_not_found: 'apiErrors.accountNotFound',
   invalid_cycle_day: 'debts.cycleDayInvalid',
+  plan_line_changed: 'apiErrors.planLineChanged',
   // Statement import (shared/ingest/read.ts)
   unrecognized_columns: 'import.unrecognizedColumns',
   too_many_rows: 'import.tooManyRows',

@@ -528,4 +528,21 @@ describe("account export and deletion (integration, real Postgres)", { skip: !TE
     assert.equal((await raw(A, "GET", "/api/account/deletion")).status, 401);
     assert.equal((await raw(B, "GET", "/api/account/deletion")).status, 401);
   });
+  it("deleting the pool owner: his expenses on a plan line leave that plan's balance", async () => {
+    const O = await signUp("Olga", "olga@test.local");
+    const P = await signUp("Pau", "pau@test.local");
+    await link(O, P, "pau@test.local");
+    const plan = (await ok(P, "POST", "/api/plans", { title: "Viaje", type: "travel", targetAmount: 2000, monthlyContribution: 50, autoCreateAllocation: true })).plan;
+    const line = await prisma.allocation.findFirstOrThrow({ where: { lifePlanId: plan.id } });
+    await ok(O, "POST", "/api/expenses", { amount: 100, description: "OLGA-AHORRO", allocationId: line.id });
+    await ok(P, "POST", "/api/expenses", { amount: 40, description: "PAU-AHORRO", allocationId: line.id });
+    const balance = async () => (await prisma.lifePlan.findUniqueOrThrow({ where: { id: plan.id } })).currentAmount;
+    assert.equal(await balance(), 14_000);
+
+    const state = await requestDeletion(O);
+    assert.deepEqual(await deletion.runDeletionPurge(prisma, deps(after25h(state))), summary(1));
+    assert.equal(await prisma.expense.count({ where: { description: "OLGA-AHORRO" } }), 0);
+    assert.equal((await prisma.lifePlan.findUniqueOrThrow({ where: { id: plan.id } })).userId, P);
+    assert.equal(await balance(), 4_000);
+  });
 });

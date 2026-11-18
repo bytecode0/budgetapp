@@ -11,7 +11,7 @@ import { parseNormalizedRows, parseSkippedRows, parseSource } from "../../shared
 import { debtLineError } from "../lib/ingest/writes.js";
 import { confirmImport } from "../lib/ingest/confirm.js";
 import { isGenericMerchant } from "../lib/ingest/learnedPayments.js";
-import { planMonthsOfExpenses, withPlanContributions } from "../lib/planLedger.js";
+import { PLAN_LINE_CHANGED, StalePlanKeys, planMonthsOfExpenses, retryOnStalePlans, withPlanContributions } from "../lib/planLedger.js";
 import type { NormalizedRow, SkippedRow, StatementSource } from "../../shared/ingest/types.js";
 import { aiEnabled, classifyMerchants } from "../lib/ai/classify.js";
 import { suggestCategories } from "../lib/ai/suggestCategories.js";
@@ -207,8 +207,10 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
     // On a plan line, the plan's balance moves by the change in its month
     // contribution (server/lib/planLedger.ts), in one transaction.
     const expenseDate = date ? new Date(date) : new Date();
-    const planKeys = await planMonthsOfExpenses(prisma, req.userId!, [{ date: expenseDate, allocationId: resolvedAllocationId }]);
-    const expense = await prisma.$transaction(tx => withPlanContributions(tx, req.userId!, planKeys, () => tx.expense.create({
+    const planRows = [{ date: expenseDate, allocationId: resolvedAllocationId }];
+    const expense = await retryOnStalePlans(async () => {
+      const planKeys = await planMonthsOfExpenses(prisma, req.userId!, planRows);
+      return prisma.$transaction(tx => withPlanContributions(tx, req.userId!, planKeys, () => tx.expense.create({
       data: {
         userId: req.userId!,
         amount: amountCents,
@@ -229,7 +231,8 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
         allocation: { select: { id: true, name: true, icon: true, type: true, lifePlanId: true } },
         account: { select: { id: true, name: true, type: true } },
       },
-    })));
+    }), { rows: planRows }));
+    });
 
     // Shared expenses get split across household members (residue to the payer).
     if (resolvedScope === "shared" && req.householdId) {
@@ -240,6 +243,7 @@ expensesRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) =>
 
     return res.json(serializeMoney({ expense }));
   } catch (err) {
+    if (err instanceof StalePlanKeys) return res.status(409).json(PLAN_LINE_CHANGED);
     console.error("[expenses/POST]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
@@ -316,13 +320,17 @@ expensesRouter.post("/merge", requireAuth, async (req: AuthRequest, res: Respons
 
     // Their dismissals go with them (DuplicateDismissal cascades). A plan
     // line's plan moves by the change in its month contribution, as on DELETE /:id.
-    const planKeys = await planMonthsOfExpenses(prisma, req.userId!, toRemove);
-    await prisma.$transaction(tx => withPlanContributions(tx, req.userId!, planKeys,
-      () => tx.expense.deleteMany({ where: { id: { in: toRemove.map(e => e.id) }, userId: req.userId! } })));
+    await retryOnStalePlans(async () => {
+      const planKeys = await planMonthsOfExpenses(prisma, req.userId!, toRemove);
+      return prisma.$transaction(tx => withPlanContributions(tx, req.userId!, planKeys,
+        () => tx.expense.deleteMany({ where: { id: { in: toRemove.map(e => e.id) }, userId: req.userId! } }),
+        { rows: toRemove }));
+    });
     await syncDebtStatus(req.userId!, toRemove.map(e => e.debtId));
 
     return res.json({ success: true, removed: toRemove.length });
   } catch (err) {
+    if (err instanceof StalePlanKeys) return res.status(409).json(PLAN_LINE_CHANGED);
     console.error("[expenses/merge]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
@@ -506,6 +514,7 @@ expensesRouter.post("/import/confirm", requireAuth, async (req: AuthRequest, res
     }
     return res.json({ success: true, ...result });
   } catch (err) {
+    if (err instanceof StalePlanKeys) return res.status(409).json(PLAN_LINE_CHANGED);
     console.error("[expenses/import/confirm]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
@@ -626,11 +635,13 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
     // The plan(s) of the old and the new line and month move by the change
     // in their month contribution (server/lib/planLedger.ts).
     const newDate = date !== undefined ? new Date(date) : existing.date;
-    const planKeys = await planMonthsOfExpenses(prisma, req.userId!, [
+    const planRows = [
       { date: existing.date, allocationId: existing.allocationId },
       { date: newDate, allocationId: newAllocId },
-    ]);
-    const expense = await prisma.$transaction(tx => withPlanContributions(tx, req.userId!, planKeys, () => tx.expense.update({
+    ];
+    const expense = await retryOnStalePlans(async () => {
+      const planKeys = await planMonthsOfExpenses(prisma, req.userId!, planRows);
+      return prisma.$transaction(tx => withPlanContributions(tx, req.userId!, planKeys, () => tx.expense.update({
       where: { id },
       data: {
         ...(amount !== undefined && { amount: newAmount }),
@@ -643,7 +654,8 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
         allocation: { select: { id: true, name: true, icon: true, type: true, lifePlanId: true } },
         account: { select: { id: true, name: true, type: true } },
       },
-    })));
+    }), { rows: planRows }));
+    });
 
     // Learn from manual re-assignment: when the user moves an expense to a (real)
     // allocation, remember the merchant -> allocation mapping for next time —
@@ -660,6 +672,7 @@ expensesRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response
 
     return res.json(serializeMoney({ expense }));
   } catch (err) {
+    if (err instanceof StalePlanKeys) return res.status(409).json(PLAN_LINE_CHANGED);
     console.error("[expenses/PATCH]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
@@ -680,12 +693,15 @@ expensesRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Respons
 
     // Its "not duplicates" dismissals go with it (DuplicateDismissal cascades).
     // On a plan line, its plan moves by the change in its month contribution.
-    const planKeys = await planMonthsOfExpenses(prisma, req.userId!, [existing]);
-    await prisma.$transaction(tx => withPlanContributions(tx, req.userId!, planKeys, () => tx.expense.delete({ where: { id } })));
+    await retryOnStalePlans(async () => {
+      const planKeys = await planMonthsOfExpenses(prisma, req.userId!, [existing]);
+      return prisma.$transaction(tx => withPlanContributions(tx, req.userId!, planKeys, () => tx.expense.delete({ where: { id } }), { rows: [existing] }));
+    });
     await syncDebtStatus(req.userId!, [existing.debtId]);
 
     return res.json({ success: true });
   } catch (err) {
+    if (err instanceof StalePlanKeys) return res.status(409).json(PLAN_LINE_CHANGED);
     console.error("[expenses/DELETE]", err);
     return res.status(500).json({ error: "Internal server error" });
   }

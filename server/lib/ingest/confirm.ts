@@ -6,7 +6,7 @@
 // attribution.
 import { prisma } from "../prisma.js";
 import { learnFromCorrection } from "../categorize.js";
-import { planMonthsOfExpenses, withPlanContributions } from "../planLedger.js";
+import { planMonthsOfExpenses, retryOnStalePlans, withPlanContributions } from "../planLedger.js";
 import { rebuildExpenseShares } from "../expenseShares.js";
 import { syncDebtStatus } from "../debtBalance.js";
 import { isGenericMerchant } from "./learnedPayments.js";
@@ -86,19 +86,22 @@ export async function confirmImport(ctx: ConfirmImportContext, rows: ConfirmRow[
   // month contribution, as manual ones do (server/lib/planLedger.ts: a
   // deposit already registered for the month isn't counted twice; refunds
   // take money back out). The plans are locked in sorted id order.
-  const planKeys = await planMonthsOfExpenses(prisma, userId, plan.expenses);
-  const { exp, inc, inserted } = await prisma.$transaction(async tx => {
-    const inserted = await withPlanContributions(tx, userId, planKeys, () => tx.expense.createManyAndReturn({
-      data: plan.expenses.map(e => ({ ...e, userId, source, createdByUserId: authUserId })),
-      skipDuplicates: true, // re-importing the same rows is a no-op
-      select: { kind: true, amount: true, allocationId: true, debtId: true },
-    }));
-    const inc = await tx.income.createMany({
-      data: plan.incomes.map(i => ({ ...i, userId, ownerUserId: authUserId, source })),
-      skipDuplicates: true,
-    });
-    return { exp: { count: inserted.length }, inc, inserted };
-  }, { timeout: 30_000 }); // an interactive transaction defaults to 5 s; a statement may hold 5,000 rows
+  // A plan line relinked meanwhile: retried with fresh keys (planLedger.ts).
+  const { exp, inc, inserted } = await retryOnStalePlans(async () => {
+    const planKeys = await planMonthsOfExpenses(prisma, userId, plan.expenses);
+    return prisma.$transaction(async tx => {
+      const inserted = await withPlanContributions(tx, userId, planKeys, () => tx.expense.createManyAndReturn({
+        data: plan.expenses.map(e => ({ ...e, userId, source, createdByUserId: authUserId })),
+        skipDuplicates: true, // re-importing the same rows is a no-op
+        select: { kind: true, amount: true, allocationId: true, debtId: true },
+      }), { rows: plan.expenses });
+      const inc = await tx.income.createMany({
+        data: plan.incomes.map(i => ({ ...i, userId, ownerUserId: authUserId, source })),
+        skipDuplicates: true,
+      });
+      return { exp: { count: inserted.length }, inc, inserted };
+    }, { timeout: 30_000 }); // an interactive transaction defaults to 5 s; a statement may hold 5,000 rows
+  });
 
   // Learn from the categories assigned: every classified merchant becomes a
   // `learned` rule so future imports and syncs get auto-categorized. Dedupe

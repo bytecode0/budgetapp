@@ -19,7 +19,7 @@
 // withPlanTotals() instead: same idea, over every month of the plan.
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
-import { periodBounds, periodKeyFor } from "./period.js";
+import { clampCycleStartDay, periodBounds, periodKeyFor } from "./period.js";
 import { getCycleStartDay } from "./getCycleStartDay.js";
 import { planContribution } from "./planContribution.js";
 
@@ -101,25 +101,59 @@ async function contributionsOf(tx: Tx, poolUserId: string, keys: PlanMonth[], cy
   return out;
 }
 
+/** The plans a write measured were read before its transaction and a plan
+ *  line changed since (relinked, deleted, out of the plan type): the caller
+ *  retries with fresh reads (retryOnStalePlans). */
+export class StalePlanKeys extends Error {
+  constructor() { super("A plan line changed while writing; retry"); }
+}
+
+/** The answer when the retries run out (409, server/lib/planLedger.ts). */
+export const PLAN_LINE_CHANGED = { error: "A plan budget line changed at the same time; try again", code: "plan_line_changed" };
+
+/** Runs `attempt` again (fresh reads, new transaction) while it throws
+ *  StalePlanKeys, up to `tries` times; then the error goes to the caller. */
+export async function retryOnStalePlans<T>(attempt: () => Promise<T>, tries = 3): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await attempt();
+    } catch (err) {
+      if (!(err instanceof StalePlanKeys) || i >= tries) throw err;
+    }
+  }
+}
+
 /**
  * Runs `write` (inside the caller's transaction `tx`) and moves each
  * affected plan's currentAmount by how much its month contribution changed.
  * `keys` must name every (plan, month) the write can change — for an edit,
  * both before and after. Plans are locked first, in sorted order, so
  * concurrent writes on the same plan apply one at a time.
+ *
+ * `recheck`: the expense rows `keys` were computed from, outside the
+ * transaction. Once the plans are locked their lines are locked FOR KEY SHARE
+ * (a relink takes them FOR UPDATE after its plans, routes/allocations.ts) and
+ * the keys recomputed; a key that wasn't measured throws StalePlanKeys.
  */
 export async function withPlanContributions<T>(
   tx: Tx,
   poolUserId: string,
   keys: (PlanMonth | null)[],
   write: () => Promise<T>,
+  recheck?: { rows: { date: Date; allocationId: string | null }[] },
 ): Promise<T> {
   const unique = new Map<string, PlanMonth>();
   for (const k of keys) if (k) unique.set(`${k.planId}|${k.month}`, k);
-  if (unique.size === 0) return write();
 
   const planIds = [...new Set([...unique.values()].map(k => k.planId))].sort();
   for (const id of planIds) await tx.$queryRaw`SELECT id FROM "LifePlan" WHERE id = ${id} FOR UPDATE`;
+  if (recheck) {
+    const lineIds = [...new Set(recheck.rows.map(r => r.allocationId).filter((id): id is string => !!id))].sort();
+    if (lineIds.length > 0) await tx.$queryRaw`SELECT id FROM "Allocation" WHERE id = ANY(${lineIds}::text[]) FOR KEY SHARE`;
+    const fresh = await planMonthsOfExpenses(tx, poolUserId, recheck.rows);
+    if (fresh.some(k => !unique.has(`${k.planId}|${k.month}`))) throw new StalePlanKeys();
+  }
+  if (unique.size === 0) return write();
   const cycleStartDay = await getCycleStartDay(poolUserId);
 
   const before = await contributionsOf(tx, poolUserId, [...unique.values()], cycleStartDay);
@@ -182,14 +216,17 @@ async function contributionTotalsOf(tx: Tx, planIds: string[]): Promise<Map<stri
   for (const p of plans) byScope.set(p.userId, [...(byScope.get(p.userId) ?? []), p.id]);
   const out = new Map<string, number>();
   for (const [userId, ids] of byScope) {
-    const [cycleStartDay, deposits, expenses] = await Promise.all([
-      getCycleStartDay(userId),
+    // The budget period read in the transaction: the write may change it
+    // (an account deletion hands the pool's period to the partner).
+    const [settings, deposits, expenses] = await Promise.all([
+      tx.userSettings.findUnique({ where: { userId }, select: { cycleStartDay: true } }),
       tx.planDeposit.findMany({ where: { planId: { in: ids } }, select: { planId: true, month: true, amount: true } }),
       tx.expense.findMany({
         where: { userId, allocation: { type: "plan", lifePlanId: { in: ids } } },
         select: { date: true, kind: true, amount: true, allocation: { select: { lifePlanId: true } } },
       }),
     ]);
+    const cycleStartDay = clampCycleStartDay(settings?.cycleStartDay ?? 1);
     const booked = expenses.map(e => ({
       planId: e.allocation!.lifePlanId!, month: periodKeyFor(e.date, cycleStartDay), kind: e.kind, amount: e.amount,
     }));

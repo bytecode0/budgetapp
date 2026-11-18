@@ -1,4 +1,5 @@
 import { Router, Response } from "express";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { createDefaultAllocations } from "../lib/defaults.js";
@@ -10,10 +11,22 @@ import { incomeBaselines } from "../lib/householdIncome.js";
 import { visibleToWhere } from "../lib/ownership.js";
 import { hiddenCommitted, notOnHiddenDebt } from "../lib/poolRefs.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
-import { withPlanTotals } from "../lib/planLedger.js";
+import { PLAN_LINE_CHANGED, StalePlanKeys, retryOnStalePlans, withPlanTotals } from "../lib/planLedger.js";
 import { GENEROSITY_TYPE, clearGenerosityShare, ensureGenerosityLine, isEchoedGenerosityShare, keepGenerosityFirst, keepGenerosityFirstIn, lockLineOrder, syncGenerosity } from "../lib/generosity.js";
 
 export const allocationsRouter = Router();
+
+/**
+ * Locks a budget line (after its plans, which withPlanTotals locked first —
+ * the order expense writes take too: plan, then line) and checks it is still
+ * as read before the transaction. A relink or delete that got in between
+ * throws StalePlanKeys: the caller retries with a fresh read.
+ */
+async function lockLineAsRead(tx: Prisma.TransactionClient, id: string, read: { type: string; lifePlanId: string | null }) {
+  const [now] = await tx.$queryRaw<{ type: string; lifePlanId: string | null }[]>`
+    SELECT type, "lifePlanId" FROM "Allocation" WHERE id = ${id} FOR UPDATE`;
+  if (!now || now.type !== read.type || now.lifePlanId !== read.lifePlanId) throw new StalePlanKeys();
+}
 
 // GET /api/allocations  (also returns income setting)
 allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
@@ -278,32 +291,41 @@ allocationsRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respo
       else generosityTyped = hasShare;
     }
 
-    const newType = type ?? existing.type;
-    // If type changes away from plan or lifePlanId explicitly set to null, clear the link
-    const newLifePlanId = lifePlanId !== undefined
-      ? ((newType === 'plan' && lifePlanId) ? lifePlanId : null)
-      : (type === undefined || type === 'plan') ? existing.lifePlanId : null;
     // The plan this line's expenses count for (server/lib/planLedger.ts),
-    // before and after: when it changes, both plans' balances follow.
-    const planBefore = existing.type === 'plan' ? existing.lifePlanId : null;
-    const planAfter = newType === 'plan' ? newLifePlanId : null;
-    const allocation = await prisma.$transaction(tx => withPlanTotals(tx, planBefore !== planAfter ? [planBefore, planAfter] : [], () =>
-      tx.allocation.update({
-        where: { id },
-        data: {
-          ...(name !== undefined && { name }),
-          ...(icon !== undefined && { icon }),
-          ...(type !== undefined && { type }),
-          lifePlanId: newLifePlanId,
-          ...(allocatedAmount !== undefined && { allocatedAmount: toCents(allocatedAmount) }),
-          ...(actualAmount !== undefined && { actualAmount: toCents(actualAmount) }),
-          ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
-        },
-      })));
+    // before and after: when it changes, both plans' balances follow. Read
+    // again on each attempt: a concurrent relink or delete is retried.
+    const allocation = await retryOnStalePlans(async () => {
+      const line = await prisma.allocation.findUnique({ where: { id }, select: { type: true, lifePlanId: true } });
+      if (!line) return null;
+      const newType = type ?? line.type;
+      // If type changes away from plan or lifePlanId explicitly set to null, clear the link
+      const newLifePlanId = lifePlanId !== undefined
+        ? ((newType === 'plan' && lifePlanId) ? lifePlanId : null)
+        : (type === undefined || type === 'plan') ? line.lifePlanId : null;
+      const planBefore = line.type === 'plan' ? line.lifePlanId : null;
+      const planAfter = newType === 'plan' ? newLifePlanId : null;
+      return prisma.$transaction(tx => withPlanTotals(tx, planBefore !== planAfter ? [planBefore, planAfter] : [], async () => {
+        await lockLineAsRead(tx, id, line);
+        return tx.allocation.update({
+          where: { id },
+          data: {
+            ...(name !== undefined && { name }),
+            ...(icon !== undefined && { icon }),
+            ...(type !== undefined && { type }),
+            lifePlanId: newLifePlanId,
+            ...(allocatedAmount !== undefined && { allocatedAmount: toCents(allocatedAmount) }),
+            ...(actualAmount !== undefined && { actualAmount: toCents(actualAmount) }),
+            ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
+          },
+        });
+      }));
+    });
+    if (!allocation) return res.status(404).json({ error: "Allocation not found" });
     if (generosityTyped) await clearGenerosityShare(req.userId!);
 
     return res.json(serializeMoney({ allocation }));
   } catch (err) {
+    if (err instanceof StalePlanKeys) return res.status(409).json(PLAN_LINE_CHANGED);
     console.error("[allocations/PATCH]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
@@ -324,10 +346,20 @@ allocationsRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Resp
 
     // Its expenses stay, uncategorised: a plan line's plan no longer counts
     // them (server/lib/planLedger.ts).
-    await prisma.$transaction(tx => withPlanTotals(tx, existing.type === "plan" ? [existing.lifePlanId] : [], () =>
-      tx.allocation.delete({ where: { id } })));
+    // Read again on each attempt: a concurrent relink is retried.
+    const deleted = await retryOnStalePlans(async () => {
+      const line = await prisma.allocation.findUnique({ where: { id }, select: { type: true, lifePlanId: true } });
+      if (!line) return false;
+      await prisma.$transaction(tx => withPlanTotals(tx, line.type === "plan" ? [line.lifePlanId] : [], async () => {
+        await lockLineAsRead(tx, id, line);
+        await tx.allocation.delete({ where: { id } });
+      }));
+      return true;
+    });
+    if (!deleted) return res.status(404).json({ error: "Allocation not found" });
     return res.json({ success: true });
   } catch (err) {
+    if (err instanceof StalePlanKeys) return res.status(409).json(PLAN_LINE_CHANGED);
     console.error("[allocations/DELETE]", err);
     return res.status(500).json({ error: "Internal server error" });
   }

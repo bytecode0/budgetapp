@@ -582,4 +582,34 @@ describe("income shares and first goals (integration, real Postgres)", { skip: !
     assert.equal(await balance(pa.plan.id), 0);
     assert.equal(await balance(pa.plan.id), await expectedBalance(pa.plan.id, 0));
   });
+  it("concurrent relinks and deletes of a plan line keep every plan on the rule", async () => {
+    const Z = await signUp("Zoe", "zoe@example.com");
+    const p = await planWithLine(Z);
+    const q = await planWithLine(Z);
+    const r = await planWithLine(Z);
+    for (let round = 0; round < 4; round++) {
+      const line = (await ok(Z, "POST", "/api/allocations", { name: `Ahorro ${round}`, type: "plan", lifePlanId: p.plan.id, allocatedAmount: 0 })).allocation;
+      await ok(Z, "POST", "/api/expenses", { amount: 70, description: "Transferencia", allocationId: line.id });
+      const results = await Promise.all(round % 2 === 0
+        ? [call(Z, "PATCH", `/api/allocations/${line.id}`, { lifePlanId: q.plan.id }), call(Z, "DELETE", `/api/allocations/${line.id}`)]
+        : [call(Z, "PATCH", `/api/allocations/${line.id}`, { lifePlanId: q.plan.id }), call(Z, "PATCH", `/api/allocations/${line.id}`, { lifePlanId: r.plan.id })]);
+      for (const res of results) assert.ok([200, 404, 409].includes(res.status), JSON.stringify(res));
+      for (const plan of [p, q, r]) assert.equal(await plan.balance(), await expectedBalance(plan.plan.id, 0), `round ${round}`);
+    }
+  });
+
+  it("an expense write whose plan line was relinked after reading it is refused, not mis-booked", async () => {
+    const { withPlanContributions, StalePlanKeys } = await import("./planLedger.js");
+    const Q = await signUp("Quique", "quique@example.com");
+    const p = await planWithLine(Q);
+    // Keys read as if the line had no plan: the recheck under the locks sees it has one.
+    await assert.rejects(
+      prisma.$transaction(tx => withPlanContributions(tx, Q, [], () => tx.expense.create({
+        data: { userId: Q, allocationId: p.line.id, amount: 5000, description: "Transfer", createdByUserId: Q, payerUserId: Q },
+      }), { rows: [{ date: new Date(), allocationId: p.line.id }] })),
+      (err: unknown) => err instanceof StalePlanKeys,
+    );
+    assert.equal(await prisma.expense.count({ where: { userId: Q, allocationId: p.line.id } }), 0);
+    await p.consistent(0);
+  });
 });
