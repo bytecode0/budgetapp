@@ -64,7 +64,9 @@ export function AuthFlow({ onAuthenticated, hasInvite = false, inviteBanner }: A
       }
       // Clean up URL
       window.history.replaceState({}, '', '/');
-    } else if (error) {
+    } else if (error?.startsWith('google_')) {
+      // Only Google's codes are ours: a bank error (?error=banking_…) stays in
+      // the URL for the signed-in app, which reports it after sign-in.
       setGoogleError(error);
       setCurrentScreen('login');
       window.history.replaceState({}, '', '/');

@@ -181,10 +181,10 @@ function AppInner() {
     return () => window.removeEventListener('focus', onFocus);
   }, [refreshOnboardingStatus]);
 
-  // Sync DB language to LanguageContext on load. Signed out there is no saved
-  // language (dbLanguage is only the default): keep the one on screen.
+  // Sync the saved language to LanguageContext once it loads (null until then,
+  // and signed out): until then, keep the one on screen.
   useEffect(() => {
-    if (user && dbLanguage) setLanguage(dbLanguage as 'en' | 'es');
+    if (dbLanguage) setLanguage(dbLanguage as 'en' | 'es');
   }, [dbLanguage]);
 
   // Apply the person's theme (saved on the server, cached on this device).
