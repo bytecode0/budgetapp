@@ -25,7 +25,7 @@ import {
   createConnectState, createExchangeToken, newBankingNonce, readConnectState, readExchangeToken,
 } from "../lib/banking/handoff.js";
 import { applyLinks, planLinks, relinkByStableKey, unlinkMissing } from "../lib/banking/link.js";
-import { PROVIDER, advancedCursor, bankWindowFrom, mergeDismissed, previewBankAccount, refreshBalance, syncConnection, syncErrorCode } from "../lib/banking/sync.js";
+import { PROVIDER, addDismissedIds, advancedCursor, bankWindowFrom, previewBankAccount, refreshBalance, syncConnection, syncErrorCode } from "../lib/banking/sync.js";
 import { cronAuthorized, runBankingCron } from "../lib/banking/cron.js";
 import type { BankingProviderClient, BankProviderAccount } from "../lib/banking/types.js";
 
@@ -436,14 +436,18 @@ bankingRouter.post("/connections/:id/confirm", ...guarded, async (req: BankingRe
       }
     }
     // Everything in the review window is now settled: kept, or dismissed.
-    await prisma.account.update({
-      where: { id: account.id },
-      data: {
-        bankReviewedAt: advancedCursor(account.bankReviewedAt, new Date()),
-        bankPendingReview: 0,
-        bankSyncNotice: null,
-        bankDismissedIds: mergeDismissed(account.bankDismissedIds, dismissed),
-      },
+    // The dismissed list is re-read under the row lock (addDismissedIds): the
+    // one read before the import may miss an id a delete added meanwhile.
+    await prisma.$transaction(async tx => {
+      await addDismissedIds(tx, req.userId!, [account.id], Array.isArray(dismissed) ? dismissed : []);
+      await tx.account.update({
+        where: { id: account.id },
+        data: {
+          bankReviewedAt: advancedCursor(account.bankReviewedAt, new Date()),
+          bankPendingReview: 0,
+          bankSyncNotice: null,
+        },
+      });
     });
     // A review is the user's own activity (the daily sync never gets here). It
     // only feeds the active-users count, so it never fails the review.

@@ -27,6 +27,7 @@ import { pickDefaultAccount } from "../lib/defaultAccount.js";
 import { ACCOUNT_NOT_FOUND, ALLOCATION_NOT_FOUND, allocationsInPool, notOnHiddenDebt } from "../lib/poolRefs.js";
 import { visibleToWhere } from "../lib/ownership.js";
 import { areActiveMembers } from "../lib/household.js";
+import { dismissDeletedBankRows } from "../lib/banking/sync.js";
 
 // Payer, beneficiary and share holders must be people of this household
 // (LPBETA-23): an outsider's id would corrupt the household balances.
@@ -317,8 +318,12 @@ expensesRouter.post("/merge", requireAuth, async (req: AuthRequest, res: Respons
     // Their dismissals go with them (DuplicateDismissal cascades). A plan
     // line's plan moves by the change in its month contribution, as on DELETE /:id.
     const planKeys = await planMonthsOfExpenses(prisma, req.userId!, toRemove);
-    await prisma.$transaction(tx => withPlanContributions(tx, req.userId!, planKeys,
-      () => tx.expense.deleteMany({ where: { id: { in: toRemove.map(e => e.id) }, userId: req.userId! } })));
+    // A removed bank movement must not be written again by the next sync.
+    await prisma.$transaction(async tx => {
+      await withPlanContributions(tx, req.userId!, planKeys,
+        () => tx.expense.deleteMany({ where: { id: { in: toRemove.map(e => e.id) }, userId: req.userId! } }));
+      await dismissDeletedBankRows(tx, req.userId!, toRemove);
+    });
     await syncDebtStatus(req.userId!, toRemove.map(e => e.debtId));
 
     return res.json({ success: true, removed: toRemove.length });
@@ -681,7 +686,11 @@ expensesRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Respons
     // Its "not duplicates" dismissals go with it (DuplicateDismissal cascades).
     // On a plan line, its plan moves by the change in its month contribution.
     const planKeys = await planMonthsOfExpenses(prisma, req.userId!, [existing]);
-    await prisma.$transaction(tx => withPlanContributions(tx, req.userId!, planKeys, () => tx.expense.delete({ where: { id } })));
+    // A bank movement deleted here must not be written again by the next sync.
+    await prisma.$transaction(async tx => {
+      await withPlanContributions(tx, req.userId!, planKeys, () => tx.expense.delete({ where: { id } }));
+      await dismissDeletedBankRows(tx, req.userId!, [existing]);
+    });
     await syncDebtStatus(req.userId!, [existing.debtId]);
 
     return res.json({ success: true });

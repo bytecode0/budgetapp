@@ -7,6 +7,7 @@ import { toCents, serializeMoney } from "../lib/money.js";
 import { incomeListingFilter } from "../lib/visibility.js";
 import { periodBounds } from "../lib/period.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
+import { dismissDeletedBankRows } from "../lib/banking/sync.js";
 
 export const incomeRouter = Router();
 
@@ -138,7 +139,11 @@ incomeRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Response)
     if (access === "hidden") return res.status(404).json({ error: "Income not found" });
     if (access === "forbidden") return res.status(403).json({ error: "Only the owner can change this income" });
 
-    await prisma.income.delete({ where: { id } });
+    // A bank movement deleted here must not be written again by the next sync.
+    await prisma.$transaction(async tx => {
+      await tx.income.delete({ where: { id } });
+      await dismissDeletedBankRows(tx, req.userId!, [existing]);
+    });
     return res.json({ success: true });
   } catch (err) {
     console.error("[income/DELETE]", err);

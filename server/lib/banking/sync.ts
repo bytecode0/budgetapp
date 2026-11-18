@@ -25,6 +25,7 @@
 //    setLiveValues (a dated adjustment), and only when no movement of that card
 //    is waiting for review — otherwise the adjustment would absorb a purchase
 //    the user is about to confirm, and count it twice.
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { toCents } from "../money.js";
 import { setLiveValues } from "../debtBalance.js";
@@ -101,6 +102,45 @@ export function mergeDismissed(stored: unknown, added: unknown): string[] {
   const fresh = Array.isArray(added) ? added.filter((v): v is string => typeof v === "string" && v.length > 0 && v.length <= 200) : [];
   const all = [...dismissedSet(stored)].filter(id => !fresh.includes(id)).concat(fresh);
   return all.slice(-MAX_DISMISSED_IDS);
+}
+
+/** Adds `ids` to the dismissed ids of every account in `accountIds` (pool
+ *  `userId`), re-reading each list under a row lock taken in id order, so two
+ *  writers at once (a delete, a review's confirm) never drop each other's ids.
+ *  Must run inside a transaction. */
+export async function addDismissedIds(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  accountIds: Iterable<string>,
+  ids: string[],
+): Promise<void> {
+  for (const accountId of [...new Set(accountIds)].sort()) {
+    const [locked] = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "Account" WHERE "id" = ${accountId} AND "userId" = ${userId} FOR NO KEY UPDATE`;
+    if (!locked) continue;
+    const account = await tx.account.findUniqueOrThrow({ where: { id: accountId }, select: { bankDismissedIds: true } });
+    await tx.account.update({ where: { id: accountId }, data: { bankDismissedIds: mergeDismissed(account.bankDismissedIds, ids) } });
+  }
+}
+
+/** Bank movements the user deleted must stay deleted. The sync reads every
+ *  window again from a cursor kept OVERLAP_DAYS back (further while something
+ *  waits for review), and a deleted row is "new" to the dedup — so without
+ *  this the next sync writes it again and it counts again in every total.
+ *  Their ids join the dismissed ids, as a review's dismissed rows do. The id
+ *  is a hash that names the account the movement came FROM, which the row may
+ *  no longer sit on (the user can move it), so it goes to every bank-linked
+ *  account of the pool and to the row's own. Rows not from the bank are left
+ *  alone. Run it in the delete's transaction. */
+export async function dismissDeletedBankRows(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  rows: { source: string; externalId: string | null; accountId: string | null }[],
+): Promise<void> {
+  const fromBank = rows.filter(r => r.source === "bank_sync" && r.externalId);
+  if (fromBank.length === 0) return;
+  const linked = await tx.account.findMany({ where: { userId, externalAccountId: { not: null } }, select: { id: true } });
+  const accountIds = [...linked.map(a => a.id), ...fromBank.flatMap(r => (r.accountId ? [r.accountId] : []))];
+  await addDismissedIds(tx, userId, accountIds, fromBank.map(r => r.externalId!));
 }
 
 /** A preview without the movements the user already dismissed. */
