@@ -111,9 +111,12 @@ export async function applyLinks(client: BankingProviderClient, ctx: LinkContext
     // Read before anything is unlinked below: the review state carries on only
     // when this account was already linked to this same bank account.
     const before = "accountId" in action
-      ? await prisma.account.findUniqueOrThrow({ where: { id: action.accountId }, select: { bankConnectionId: true, externalAccountId: true } })
+      ? await prisma.account.findUniqueOrThrow({ where: { id: action.accountId }, select: { bankConnectionId: true, externalAccountId: true, externalAccountKey: true } })
       : null;
     const sameLink = !!before && before.bankConnectionId === ctx.connectionId && before.externalAccountId === provider.id;
+    // The same bank account under a new consent (stable key): the movements
+    // the user dismissed or deleted stay out of the sync.
+    const sameBankAccount = sameLink || (!!before && !!provider.stableKey && before.externalAccountKey === provider.stableKey);
 
     // One local account per bank account in a connection.
     await prisma.account.updateMany({
@@ -131,7 +134,8 @@ export async function applyLinks(client: BankingProviderClient, ctx: LinkContext
         where: { id: action.accountId },
         data: {
           ...link,
-          ...(!sameLink && { bankReviewedAt: null, bankPendingReview: 0, bankDismissedIds: [], bankSyncNotice: null }),
+          ...(!sameLink && { bankReviewedAt: null, bankPendingReview: 0, bankSyncNotice: null }),
+          ...(!sameBankAccount && { bankDismissedIds: [] }),
           ...(!isCard && { balanceSource: "bank_sync" }),
         },
       });

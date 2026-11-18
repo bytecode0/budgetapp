@@ -23,6 +23,7 @@ describe("a deleted bank movement stays deleted (integration, real Postgres)", {
   let createDefaultAllocations: typeof import("../defaults.js").createDefaultAllocations;
   let periodLib: typeof import("../period.js");
   let syncAccount: typeof import("./sync.js").syncAccount;
+  let applyLinks: typeof import("./link.js").applyLinks;
   let server: Server;
   let base: string;
 
@@ -43,6 +44,7 @@ describe("a deleted bank movement stays deleted (integration, real Postgres)", {
     ({ createDefaultAllocations } = await import("../defaults.js"));
     periodLib = await import("../period.js");
     ({ syncAccount } = await import("./sync.js"));
+    ({ applyLinks } = await import("./link.js"));
     const app = (await import("../../app.js")).default;
 
     const tables = await prisma.$queryRaw<{ tablename: string }[]>`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`;
@@ -163,5 +165,39 @@ describe("a deleted bank movement stays deleted (integration, real Postgres)", {
     await ok(u.userId, "DELETE", `/api/income/${manual.id}`);
     const account = await prisma.account.findUniqueOrThrow({ where: { id: u.accountId } });
     assert.deepEqual(account.bankDismissedIds, [row.externalId]);
+  });
+
+  it("a bank income moved to another account and then deleted still stays deleted", async () => {
+    const u = await linkedUser("Pablo", "pablo@example.com");
+    const other = await prisma.account.create({ data: { userId: u.userId, ownerUserId: u.userId, name: "Efectivo", type: "cash" } });
+    const bizum = fakeBank([{ id: "tx-bizum-2", date: today(), description: "BIZUM DE PAREJA", amountCents: 20000, currency: "EUR" }]);
+
+    assert.equal((await sync(u, bizum)).written, 1);
+    const row = await prisma.income.findFirstOrThrow({ where: { userId: u.userId, source: "bank_sync" } });
+    await ok(u.userId, "PATCH", `/api/income/${row.id}`, { accountId: other.id });
+    await ok(u.userId, "DELETE", `/api/income/${row.id}`);
+
+    assert.equal((await sync(u, bizum)).written, 0);
+    assert.equal(await prisma.income.count({ where: { userId: u.userId, source: "bank_sync" } }), 0);
+  });
+
+  it("re-linking the same bank account (same stable key) under a new consent keeps the dismissed ids", async () => {
+    const u = await linkedUser("Sara", "sara@example.com");
+    await prisma.account.update({ where: { id: u.accountId }, data: { externalAccountKey: "key-1", bankDismissedIds: ["gone"] } });
+    const consent = await prisma.bankConnection.create({
+      data: { userId: u.userId, ownerUserId: u.userId, institutionId: "Test Bank", institutionName: "Test Bank", requisitionId: "", status: "active" },
+    });
+    const ctx = { userId: u.userId, authUserId: u.userId, householdId: null, connectionId: consent.id };
+    const bank = fakeBank([]);
+
+    await applyLinks(bank, ctx, [{ provider: { id: "acc-2", currency: "EUR", kind: "checking", stableKey: "key-1" }, accountId: u.accountId }], "Cuenta");
+    let account = await prisma.account.findUniqueOrThrow({ where: { id: u.accountId } });
+    assert.deepEqual(account.bankDismissedIds, ["gone"]);
+    assert.equal(account.bankReviewedAt, null); // a new consent is still reviewed again
+
+    // Another bank account linked onto it: its old list means nothing there.
+    await applyLinks(bank, ctx, [{ provider: { id: "acc-3", currency: "EUR", kind: "checking", stableKey: "key-2" }, accountId: u.accountId }], "Cuenta");
+    account = await prisma.account.findUniqueOrThrow({ where: { id: u.accountId } });
+    assert.deepEqual(account.bankDismissedIds, []);
   });
 });
