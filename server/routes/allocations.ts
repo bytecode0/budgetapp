@@ -11,7 +11,7 @@ import { incomeBaselines } from "../lib/householdIncome.js";
 import { visibleToWhere } from "../lib/ownership.js";
 import { hiddenCommitted, notOnHiddenDebt } from "../lib/poolRefs.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
-import { PLAN_LINE_CHANGED, StalePlanKeys, retryOnStalePlans, withPlanTotals } from "../lib/planLedger.js";
+import { PLAN_LINE_CHANGED, StalePlanKeys, keepLineContributions, retryOnStalePlans, withPlanTotals } from "../lib/planLedger.js";
 import { GENEROSITY_TYPE, clearGenerosityShare, ensureGenerosityLine, isEchoedGenerosityShare, keepGenerosityFirst, keepGenerosityFirstIn, lockLineOrder, syncGenerosity } from "../lib/generosity.js";
 
 export const allocationsRouter = Router();
@@ -344,14 +344,18 @@ allocationsRouter.delete("/:id", requireAuth, async (req: AuthRequest, res: Resp
       return res.status(400).json({ error: "La línea de generosidad no se puede eliminar" });
     }
 
-    // Its expenses stay, uncategorised: a plan line's plan no longer counts
-    // them (server/lib/planLedger.ts).
+    // Its expenses stay, uncategorised. A plan line's plan keeps what the
+    // line already contributed (the money was saved): those months are kept
+    // as deposits first, so the plan's balance doesn't drop; only future
+    // contributions through this line stop (server/lib/planLedger.ts).
     // Read again on each attempt: a concurrent relink is retried.
     const deleted = await retryOnStalePlans(async () => {
       const line = await prisma.allocation.findUnique({ where: { id }, select: { type: true, lifePlanId: true } });
       if (!line) return false;
-      await prisma.$transaction(tx => withPlanTotals(tx, line.type === "plan" ? [line.lifePlanId] : [], async () => {
+      const planId = line.type === "plan" ? line.lifePlanId : null;
+      await prisma.$transaction(tx => withPlanTotals(tx, [planId], async () => {
         await lockLineAsRead(tx, id, line);
+        if (planId) await keepLineContributions(tx, req.userId!, planId, id);
         await tx.allocation.delete({ where: { id } });
       }));
       return true;

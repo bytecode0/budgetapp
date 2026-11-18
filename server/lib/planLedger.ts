@@ -17,6 +17,9 @@
 // Writes that can touch any month of a plan at once — deleting or relinking a
 // plan line, a couple unlinking (server/lib/partnerUnlink.ts) — go through
 // withPlanTotals() instead: same idea, over every month of the plan.
+// Deleting a plan line keeps what it contributed (decided by Luis, 18 nov):
+// keepLineContributions() first freezes each month it would lower as that
+// month's deposit, so the delete moves nothing (see there).
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { clampCycleStartDay, periodBounds, periodKeyFor } from "./period.js";
@@ -254,4 +257,63 @@ export async function withPlanTotals<T>(tx: Tx, planIds: (string | null)[], writ
     if (d !== 0) await tx.lifePlan.updateMany({ where: { id }, data: { currentAmount: { increment: d } } });
   }
   return result;
+}
+
+/**
+ * The deposits that keep a plan's months where they are when one of its lines
+ * goes away. Per month: the contribution with the line (`before`) and without
+ * it (`after`, same rule); where the line's removal would lower a positive
+ * month, the month's deposit becomes `before` — max(before, what's left
+ * booked) = before. Expenses later put back on a line of the same plan can't
+ * count twice: the month is max(deposit, booked) again. A month the line only
+ * took money out of (net withdrawal), or one already at or below zero, is
+ * left to the rule. Pure.
+ */
+export function depositsKeepingLine(
+  deposits: { month: string; amount: number }[],
+  booked: { month: string; onLine: boolean; kind?: string | null; amount: number }[],
+): { month: string; amount: number }[] {
+  const deposit = new Map(deposits.map(d => [d.month, d.amount]));
+  const total = new Map<string, number>();
+  const line = new Map<string, number>();
+  for (const b of booked) {
+    total.set(b.month, (total.get(b.month) ?? 0) + planContribution(b));
+    if (b.onLine) line.set(b.month, (line.get(b.month) ?? 0) + planContribution(b));
+  }
+  const out: { month: string; amount: number }[] = [];
+  for (const [month, onLine] of line) {
+    const d = deposit.get(month) ?? null;
+    const before = monthContribution(d, total.get(month)!);
+    const after = monthContribution(d, total.get(month)! - onLine);
+    if (after < before && before > 0) out.push({ month, amount: before });
+  }
+  return out;
+}
+
+/**
+ * Before deleting plan line `lineId` (inside the caller's transaction, with
+ * the plan locked by withPlanTotals): writes the deposits depositsKeepingLine
+ * returns, so what the line contributed stays in the plan. The deposits carry
+ * no author (byUserId null): nobody typed them.
+ */
+export async function keepLineContributions(tx: Tx, poolUserId: string, planId: string, lineId: string): Promise<void> {
+  const [settings, deposits, expenses] = await Promise.all([
+    tx.userSettings.findUnique({ where: { userId: poolUserId }, select: { cycleStartDay: true } }),
+    tx.planDeposit.findMany({ where: { planId }, select: { month: true, amount: true } }),
+    tx.expense.findMany({
+      where: { userId: poolUserId, allocation: { type: "plan", lifePlanId: planId } },
+      select: { date: true, kind: true, amount: true, allocationId: true },
+    }),
+  ]);
+  const cycleStartDay = clampCycleStartDay(settings?.cycleStartDay ?? 1);
+  const keep = depositsKeepingLine(deposits, expenses.map(e => ({
+    month: periodKeyFor(e.date, cycleStartDay), onLine: e.allocationId === lineId, kind: e.kind, amount: e.amount,
+  })));
+  for (const { month, amount } of keep) {
+    await tx.planDeposit.upsert({
+      where: { planId_month: { planId, month } },
+      update: { amount },
+      create: { userId: poolUserId, planId, month, amount, byUserId: null },
+    });
+  }
 }

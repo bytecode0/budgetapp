@@ -1,7 +1,7 @@
 // Run with:  node --import tsx --test server/lib/planLedger.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bookedByPlan, monthContribution, sumContributions, totalContributions } from "./planLedger.js";
+import { bookedByPlan, depositsKeepingLine, monthContribution, sumContributions, totalContributions } from "./planLedger.js";
 
 test("with a deposit: the larger of deposit and booked, never both", () => {
   assert.equal(monthContribution(200, 200), 200);
@@ -58,4 +58,23 @@ test("totals: moving a booking out of a plan (line deleted or relinked) changes 
   ]);
   const after = totalContributions(deposits, []);
   assert.equal(before.get("p1")! - after.get("p1")!, 6000); // October keeps its 100 € deposit
+});
+
+test("deleting a plan line: each month it would lower keeps its contribution as the deposit", () => {
+  const deposits = [{ month: "2026-10", amount: 20000 }, { month: "2026-11", amount: 5000 }];
+  const booked = [
+    { month: "2026-09", onLine: true, amount: 30000 },                    // no deposit: frozen at 300 €
+    { month: "2026-10", onLine: true, amount: 15000 },                    // deposit 200 € covers it: nothing to do
+    { month: "2026-11", onLine: true, amount: 9000 },                     // deposit 50 € below booked: frozen at 90 + 10
+    { month: "2026-11", onLine: false, amount: 1000 },
+    { month: "2026-12", onLine: true, kind: "refund", amount: 4000 },     // a withdrawal: left to the rule
+    { month: "2027-01", onLine: false, amount: 700 },                     // not on the line: untouched
+  ];
+  const keep = depositsKeepingLine(deposits, booked);
+  assert.deepEqual(keep, [{ month: "2026-09", amount: 30000 }, { month: "2026-11", amount: 10000 }]);
+  // With the line gone and those deposits, every month but the withdrawal one is unchanged.
+  const merged = [...deposits.filter(d => !keep.some(k => k.month === d.month)), ...keep];
+  const withLine = totalContributions(merged.map(d => ({ planId: "p", ...d })), booked.map(b => ({ planId: "p", ...b })));
+  const without = totalContributions(merged.map(d => ({ planId: "p", ...d })), booked.filter(b => !b.onLine).map(b => ({ planId: "p", ...b })));
+  assert.equal(without.get("p")! - withLine.get("p")!, 4000); // only the withdrawal stops counting
 });

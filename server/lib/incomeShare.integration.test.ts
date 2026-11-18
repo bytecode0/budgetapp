@@ -517,17 +517,24 @@ describe("income shares and first goals (integration, real Postgres)", { skip: !
 
   const lastMonthDay = () => periodLib.periodBounds(periodLib.periodKeyOffset(month(), -1), 1).start.toISOString().slice(0, 10);
 
-  it("deleting a plan line takes its booked money out of the plan; deposits stay", async () => {
+  it("deleting a plan line keeps what it contributed; moving its expenses back onto the plan doesn't count them twice", async () => {
     const U = await signUp("Unai", "unai@example.com");
     const p = await planWithLine(U, 1000);
     await ok(U, "POST", "/api/plan-deposits/confirm", { month: month(), deposits: [{ planId: p.plan.id, amount: 200 }] });
     await ok(U, "POST", "/api/expenses", { amount: 150, description: "Transferencia", allocationId: p.line.id });
-    await ok(U, "POST", "/api/expenses", { amount: 300, description: "Transferencia", allocationId: p.line.id, date: lastMonthDay() });
+    const old = (await ok(U, "POST", "/api/expenses", { amount: 300, description: "Transferencia", allocationId: p.line.id, date: lastMonthDay() })).expense.id;
     await p.consistent(100000 + 20000 + 30000);
     await ok(U, "DELETE", `/api/allocations/${p.line.id}`);
-    // This month keeps its 200 € deposit; last month's 300 € no longer count.
-    await p.consistent(100000 + 20000);
+    // Nothing drops: this month keeps its 200 € deposit, last month's 300 €
+    // are kept as that month's deposit.
+    await p.consistent(100000 + 20000 + 30000);
     assert.equal(await prisma.expense.count({ where: { userId: U, allocationId: null } }), 2); // the expenses stay
+    const kept = await prisma.planDeposit.findUniqueOrThrow({ where: { planId_month: { planId: p.plan.id, month: periodLib.periodKeyOffset(month(), -1) } } });
+    assert.deepEqual([kept.amount, kept.byUserId], [30000, null]);
+    // Put back on another line of the same plan: max(deposit, booked), once.
+    const again = (await ok(U, "POST", "/api/allocations", { name: "Ahorro", type: "plan", lifePlanId: p.plan.id, allocatedAmount: 0 })).allocation;
+    await ok(U, "PATCH", `/api/expenses/${old}`, { allocationId: again.id });
+    await p.consistent(100000 + 20000 + 30000);
   });
 
   it("linking a plan line to another plan moves its booked money; leaving the plan type takes it out", async () => {
