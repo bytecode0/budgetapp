@@ -92,7 +92,8 @@ describe("celebrations (integration, real Postgres)", { skip: !TEST_DATABASE_URL
     assert.deepEqual(await list(user.id), []);
     assert.deepEqual(await list(user.id), [], "still nothing on the next visit");
     const marks = (await prisma.celebrationSeen.findMany({ where: { userId: user.id } })).map(s => s.key).sort();
-    assert.deepEqual(marks, ["baseline", `plan-done:${old.id}`]);
+    // Every level the plan reaches, not just the biggest: a later drop offers nothing.
+    assert.deepEqual(marks, ["baseline", `plan-done:${old.id}`, ...[25, 50, 75].map(p => `plan-milestone:${old.id}:pct${p}`)]);
   });
 
   it("household: shared things for both, a private debt only for its owner; the freed amount in euros", async () => {
@@ -203,6 +204,37 @@ describe("celebrations (integration, real Postgres)", { skip: !TEST_DATABASE_URL
 
     await prisma.expense.update({ where: { id: spent.id }, data: { amount: 40_001 } });
     assert.deepEqual(await list(owner.id), [], "one cent over: nothing, and no judgement");
+  });
+
+  it("an emergency fund used after its celebration offers no smaller level, for the one who saw it", async () => {
+    const { owner } = await couple("drop");
+    const plan = await prisma.lifePlan.create({ data: { userId: owner.id, title: "Colchón", type: "emergency", targetAmount: 100_000, currentAmount: 100_000 } });
+    await prisma.planDeposit.create({ data: { userId: owner.id, planId: plan.id, month: period.currentPeriodKey(1), amount: 100_000 } });
+    assert.deepEqual(await keys(owner.id), [`emergency-done:${plan.id}`]);
+    assert.equal((await seen(owner.id, `emergency-done:${plan.id}`)).status, 200);
+    for (const amount of [80_000, 40_000, 5_000]) {
+      await prisma.lifePlan.update({ where: { id: plan.id }, data: { currentAmount: amount } });
+      assert.deepEqual(await list(owner.id), [], `at ${amount} cents`);
+    }
+  });
+
+  it("a partner's past joins the pool without being celebrated", async () => {
+    const owner = await prisma.user.create({ data: { email: "merge-owner@test.local" } });
+    const her = await prisma.user.create({ data: { email: "merge-her@test.local" } });
+    await prisma.userSettings.create({ data: { userId: owner.id } });
+    await prisma.userSettings.create({ data: { userId: her.id } });
+    assert.deepEqual(await list(owner.id), []);
+    // Her own account before accepting: a finished plan and a closed debt.
+    await prisma.lifePlan.create({ data: { userId: her.id, ownerUserId: her.id, title: "Suyo", targetAmount: 50_000, currentAmount: 50_000 } });
+    await prisma.debt.create({ data: { userId: her.id, ownerUserId: her.id, name: "Su préstamo", kind: "installment", status: "paid_off", installmentAmount: 9_000 } });
+
+    const { mergeMemberIntoPool } = await import("./partnerMerge.js");
+    await prisma.$transaction(async tx => {
+      await mergeMemberIntoPool(tx, { memberId: her.id, poolId: owner.id, householdId: null });
+      await tx.userSettings.update({ where: { userId: her.id }, data: { linkedUserId: owner.id } });
+    });
+    assert.deepEqual(await list(owner.id), [], "not news for him");
+    assert.deepEqual(await list(her.id), [], "nor for her");
   });
 
   it("the seen marks go with the user", async () => {

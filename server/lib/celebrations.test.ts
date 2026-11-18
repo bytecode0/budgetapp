@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
-  detectCelebrations, unseen, payYourselfStreak, freedMonthly, parseMilestones, isCelebrationKey, planReached,
+  detectCelebrations, unseen, payYourselfStreak, freedMonthly, parseMilestones, isCelebrationKey, planReached, keysSeenWith, baselineKeys,
   PYF_WINDOW, type CelebrationFacts, type PlanFacts, type DebtFacts, type PayYourselfFacts,
 } from "./celebrations.js";
 import { periodKeyOffset } from "./period.js";
@@ -174,5 +174,68 @@ describe("celebrations: order and once only", () => {
     for (const k of ["", "DEBT:x", "debt-paid:x y", "a:b:c:d:e", `x:${"a".repeat(65)}`, 3, null]) {
       assert.equal(isCelebrationKey(k), false, String(k));
     }
+  });
+});
+
+describe("celebrations: a plan whose balance drops later", () => {
+  const atDone = facts({ plans: [plan({ type: "emergency", contributed: true, currentAmount: 100_000 })] });
+  const dropped = (currentAmount: number) => facts({ plans: [plan({ type: "emergency", contributed: true, currentAmount })] });
+
+  it("seeing the biggest closes every level of the plan and its first contribution", () => {
+    assert.deepEqual(keysSeenWith(atDone, "emergency-done:p1").sort(), [
+      "emergency-done:p1", "plan-first:p1", "plan-milestone:p1:pct25", "plan-milestone:p1:pct50", "plan-milestone:p1:pct75",
+    ]);
+    assert.deepEqual(keysSeenWith(atDone, "pyf-first"), ["pyf-first"], "not a plan key: only itself");
+  });
+
+  it("the fund used afterwards offers nothing: no '75 %', no 'first contribution'", () => {
+    const marked = keysSeenWith(atDone, "emergency-done:p1");
+    for (const amount of [80_000, 55_000, 30_000, 10]) {
+      assert.deepEqual(unseen(detectCelebrations(dropped(amount)), marked), [], String(amount));
+    }
+    // Climbing back to the target is not new either.
+    assert.deepEqual(unseen(detectCelebrations(atDone), marked), []);
+  });
+
+  it("the baseline marks every level each plan reaches, so a later drop offers nothing", () => {
+    const base = baselineKeys(atDone);
+    assert.equal(base[0], "baseline");
+    for (const amount of [80_000, 30_000, 1]) assert.deepEqual(unseen(detectCelebrations(dropped(amount)), base), [], String(amount));
+  });
+
+  it("the baseline doesn't mark a first contribution that hasn't happened", () => {
+    const base = baselineKeys(facts({ plans: [plan()] }));
+    assert.deepEqual(base, ["baseline"]);
+    assert.deepEqual(unseen(detectCelebrations(facts({ plans: [plan({ contributed: true })] })), base).map(c => c.key), ["plan-first:p1"]);
+  });
+});
+
+describe("celebrations: a streak shifted by an edited old month", () => {
+  const streak = (key: string, months: number) => ({ key, kind: "payYourselfFirstStreak" as const, months });
+
+  it("the same n reached within n months of one already seen is not offered again", () => {
+    const seen = ["pyf-streak:2026-05:6"];
+    assert.deepEqual(unseen([streak("pyf-streak:2026-04:6", 6)], seen), []);
+    assert.deepEqual(unseen([streak("pyf-streak:2026-08:6", 6)], seen), []);
+    assert.deepEqual(unseen([streak("pyf-streak:2026-11:6", 6)], seen), [], "6 months later: still the same streak");
+  });
+
+  it("a genuinely new streak (after a missed month) is offered", () => {
+    assert.equal(unseen([streak("pyf-streak:2026-12:6", 6)], ["pyf-streak:2026-05:6"]).length, 1);
+    assert.equal(unseen([streak("pyf-streak:2026-06:3", 3)], ["pyf-streak:2026-05:6"]).length, 1, "another length is its own");
+  });
+
+  it("end to end: moving the streak's start by editing an old month says nothing new", () => {
+    const run = (startMonth: string, lastClosed: string) => facts({ payYourselfFirst: {
+      openMet: false,
+      closed: Array.from({ length: PYF_WINDOW }, (_, j) => {
+        const month = periodKeyOffset(lastClosed, -j);
+        return { month, met: month >= startMonth };
+      }),
+    } });
+    const seen = detectCelebrations(run("2026-01", "2026-08")).map(c => c.key); // streak of 8 → 6, reached 2026-06
+    assert.ok(seen.includes("pyf-streak:2026-06:6"));
+    // An old month edited so it now counts too: the 6 is "reached" a month earlier.
+    assert.deepEqual(unseen(detectCelebrations(run("2025-12", "2026-08")), seen), []);
   });
 });

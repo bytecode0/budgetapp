@@ -32,6 +32,7 @@
 // one celebrates only for its owner (visibleToWhere, server/lib/ownership.ts).
 //
 // Never judges: nothing is said when a month is missed. Integer cents.
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { visibleToWhere } from "./ownership.js";
 import { currentPeriodKey, periodBounds, periodKeyFor, periodKeyOffset } from "./period.js";
@@ -226,10 +227,61 @@ export function detectCelebrations(f: CelebrationFacts): Celebration[] {
   return out.sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
 }
 
+const monthIndex = (key: string) => {
+  const [y, m] = key.split("-").map(Number);
+  return y * 12 + (m - 1);
+};
+
+/** A streak of n already celebrated as reached in a month within n months
+ *  of `reachedIn`. Editing an old month can shift when a running streak
+ *  "reached" n; a genuinely new streak of n, after a missed month, reaches
+ *  it at least n + 1 months after the last one. */
+function streakAlreadySeen(reachedIn: string, n: number, seen: Set<string>): boolean {
+  for (const k of seen) {
+    const [name, month, len] = k.split(":");
+    if (name === "pyf-streak" && Number(len) === n && Math.abs(monthIndex(month) - monthIndex(reachedIn)) <= n) return true;
+  }
+  return false;
+}
+
 /** The ones not seen yet, in order. */
 export function unseen(all: Celebration[], seenKeys: Iterable<string>): Celebration[] {
   const seen = new Set(seenKeys);
-  return all.filter(c => !seen.has(c.key));
+  return all.filter(c => {
+    if (seen.has(c.key)) return false;
+    if (c.kind === "payYourselfFirstStreak") return !streakAlreadySeen(c.key.split(":")[1], c.months, seen);
+    return true;
+  });
+}
+
+/** Every key of a plan that seeing one of its celebrations closes: every level
+ *  its balance reaches and its first contribution. Only the biggest is ever
+ *  offered, so without this a balance that later drops (an emergency fund
+ *  used) would offer a smaller level as if new. Pure. */
+export function planKeys(p: PlanAmounts): string[] {
+  return [...planReached(p).map(c => c.key), `plan-first:${p.id}`];
+}
+
+const PLAN_KEY = /^(plan-done|emergency-done|plan-milestone|plan-first):([^:]+)/;
+
+/** The keys to mark when `key` is seen: the key, plus for a plan every key
+ *  of that plan (planKeys). Pure. */
+export function keysSeenWith(facts: CelebrationFacts, key: string): string[] {
+  const planId = PLAN_KEY.exec(key)?.[2];
+  const plan = planId ? facts.plans.find(p => p.id === planId) : undefined;
+  return plan ? [...new Set([key, ...planKeys(plan)])] : [key];
+}
+
+/** What a person's first read marks seen: every current celebration, and for
+ *  every plan each level it already reaches (plus its first contribution when
+ *  it had one), not just the biggest. Pure. */
+export function baselineKeys(facts: CelebrationFacts): string[] {
+  const keys = detectCelebrations(facts).map(c => c.key);
+  for (const p of facts.plans) {
+    keys.push(...planReached(p).map(c => c.key));
+    if (p.contributed) keys.push(`plan-first:${p.id}`);
+  }
+  return [BASELINE_KEY, ...new Set(keys)];
 }
 
 // ── Database side ──────────────────────────────────────────────────────────
@@ -340,13 +392,23 @@ export async function loadCelebrationFacts(poolUserId: string, authUserId: strin
   };
 }
 
+type Db = typeof prisma | Prisma.TransactionClient;
+
 /** Marks `keys` seen for `userIds`; repeats are ignored. */
-async function markSeen(userIds: string[], keys: string[]): Promise<void> {
+async function markSeen(userIds: string[], keys: string[], db: Db = prisma): Promise<void> {
   if (userIds.length === 0 || keys.length === 0) return;
-  await prisma.celebrationSeen.createMany({
+  await db.celebrationSeen.createMany({
     data: userIds.flatMap(userId => keys.map(key => ({ userId, key }))),
     skipDuplicates: true,
   });
+}
+
+/** Marks `keys` seen for everyone in the pool: its owner, every partner
+ *  linked to it, and `alsoUserIds`. */
+async function markSeenForPool(poolUserId: string, alsoUserIds: string[], keys: string[], db: Db = prisma): Promise<void> {
+  if (keys.length === 0) return;
+  const linked = await db.userSettings.findMany({ where: { linkedUserId: poolUserId }, select: { userId: true } });
+  await markSeen([...new Set([poolUserId, ...alsoUserIds, ...linked.map(l => l.userId)])], keys, db);
 }
 
 /** The viewer's celebrations not seen yet, biggest first. On the person's
@@ -356,27 +418,43 @@ export async function loadUnseenCelebrations(poolUserId: string, authUserId: str
     loadCelebrationFacts(poolUserId, authUserId, now),
     prisma.celebrationSeen.findMany({ where: { userId: authUserId }, select: { key: true } }),
   ]);
-  const all = detectCelebrations(facts);
   const seenKeys = seen.map(s => s.key);
   if (!seenKeys.includes(BASELINE_KEY)) {
-    await markSeen([authUserId], [BASELINE_KEY, ...all.map(c => c.key)]);
+    await markSeen([authUserId], baselineKeys(facts));
     return [];
   }
-  return unseen(all, seenKeys);
+  return unseen(detectCelebrations(facts), seenKeys);
 }
 
-/** Whether `key` is one of the viewer's current celebrations (seen or not):
- *  the only keys POST /seen stores. */
-export async function isCurrentCelebration(poolUserId: string, authUserId: string, key: string, now = new Date()): Promise<boolean> {
-  return detectCelebrations(await loadCelebrationFacts(poolUserId, authUserId, now)).some(c => c.key === key);
+/** POST /seen: marks `key` (and, for a plan, every key of that plan) seen for
+ *  the viewer. False when `key` isn't one of the viewer's current
+ *  celebrations (seen or not), the only keys stored. */
+export async function markCelebrationSeen(poolUserId: string, authUserId: string, key: string, now = new Date()): Promise<boolean> {
+  const facts = await loadCelebrationFacts(poolUserId, authUserId, now);
+  if (!detectCelebrations(facts).some(c => c.key === key)) return false;
+  await markSeen([authUserId], keysSeenWith(facts, key));
+  return true;
 }
 
 /** A plan was created or its amounts edited by hand: what its balance already
  *  reaches is not an achievement, so it is marked seen for everyone in the
  *  pool (the pool's owner, every partner linked to it, and the caller). */
 export async function markPlanReachedSeen(poolUserId: string, authUserId: string, plan: PlanAmounts): Promise<void> {
-  const keys = planReached(plan).map(c => c.key);
-  if (keys.length === 0) return;
-  const linked = await prisma.userSettings.findMany({ where: { linkedUserId: poolUserId }, select: { userId: true } });
-  await markSeen([...new Set([poolUserId, authUserId, ...linked.map(l => l.userId)])], keys);
+  await markSeenForPool(poolUserId, [authUserId], planReached(plan).map(c => c.key));
+}
+
+/** A partner's data joins the pool (server/lib/partnerMerge.ts): her plans'
+ *  levels and first contributions, and her paid-off debts, are her past, not
+ *  news for the household. Marked seen for everyone in the pool and for her,
+ *  inside the merge's transaction. */
+export async function markMergedPastSeen(db: Prisma.TransactionClient, memberId: string, poolId: string): Promise<void> {
+  const [plans, debts] = await Promise.all([
+    db.lifePlan.findMany({
+      where: { userId: memberId },
+      select: { id: true, title: true, type: true, goalClass: true, targetAmount: true, currentAmount: true, milestones: true },
+    }),
+    db.debt.findMany({ where: { userId: memberId, status: "paid_off" }, select: { id: true } }),
+  ]);
+  const keys = [...plans.flatMap(planKeys), ...debts.map(d => `debt-paid:${d.id}`)];
+  await markSeenForPool(poolId, [memberId], keys, db);
 }

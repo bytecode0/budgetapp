@@ -48,10 +48,10 @@ export function CelebrationCard() {
 
   const onContinue = async () => {
     setSaving(true);
-    const ok = await markSeen(c.key);
+    const result = await markSeen(c.key);
     setSaving(false);
-    if (ok) setClosed(true);
-    else toast.error(t('celebrations.saveFailed'));
+    if (result === 'failed') toast.error(t('celebrations.saveFailed'));
+    else setClosed(true);
   };
 
   return (

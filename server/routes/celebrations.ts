@@ -1,9 +1,8 @@
 import { Router, Response } from "express";
-import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { serializeMoney } from "../lib/money.js";
 import { isMissingTable } from "../lib/peace.js";
-import { isCelebrationKey, isCurrentCelebration, loadUnseenCelebrations } from "../lib/celebrations.js";
+import { isCelebrationKey, loadUnseenCelebrations, markCelebrationSeen } from "../lib/celebrations.js";
 
 // "Celebrar los hitos" (LPBETA-13, server/lib/celebrations.ts). The
 // celebrations are derived from the pool's data (req.userId) as the viewer may
@@ -34,19 +33,14 @@ celebrationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response)
 
 // POST /api/celebrations/seen { key } → { data: { key } }. Only a key that is
 // one of the caller's current celebrations (400 otherwise). Idempotent: a
-// second tap on one already seen is fine.
+// second tap on one already seen is fine. Seeing a plan's celebration closes
+// every level of that plan (server/lib/celebrations.ts keysSeenWith).
 celebrationsRouter.post("/seen", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const key: unknown = req.body?.key;
-    if (!isCelebrationKey(key) || !(await isCurrentCelebration(req.userId!, req.authUserId!, key))) {
+    if (!isCelebrationKey(key) || !(await markCelebrationSeen(req.userId!, req.authUserId!, key))) {
       return res.status(400).json({ error: "key is invalid" });
     }
-    const userId = req.authUserId!;
-    await prisma.celebrationSeen.upsert({
-      where: { userId_key: { userId, key } },
-      create: { userId, key },
-      update: {},
-    });
     return res.json({ data: { key } });
   } catch (err) {
     return fail(res, "seen", err);

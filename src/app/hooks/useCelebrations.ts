@@ -26,8 +26,9 @@ export function useCelebrations() {
     return () => { alive = false; };
   }, []);
 
-  /** Marks one as seen; true when saved. */
-  const markSeen = useCallback(async (key: string): Promise<boolean> => {
+  /** Marks one as seen. "gone": the server no longer has it as a current
+   *  celebration (400), so there is nothing to keep showing. */
+  const markSeen = useCallback(async (key: string): Promise<'saved' | 'gone' | 'failed'> => {
     try {
       const res = await fetch('/api/celebrations/seen', {
         method: 'POST',
@@ -35,11 +36,11 @@ export function useCelebrations() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key }),
       });
-      if (!res.ok) return false;
+      if (!res.ok && res.status !== 400) return 'failed';
       setCelebrations(list => list.filter(c => c.key !== key));
-      return true;
+      return res.ok ? 'saved' : 'gone';
     } catch {
-      return false;
+      return 'failed';
     }
   }, []);
 

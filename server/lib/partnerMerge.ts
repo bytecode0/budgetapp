@@ -58,6 +58,7 @@
 import type { Prisma } from "@prisma/client";
 import { DEFAULT_ACCOUNT_NAME } from "./onboarding.js";
 import { SEEDED_DEFAULT_ALLOCATION_NAMES } from "./defaults.js";
+import { markMergedPastSeen } from "./celebrations.js";
 
 type Db = Prisma.TransactionClient;
 
@@ -395,6 +396,10 @@ export async function mergeMemberIntoPool(
   if (plan.dropRuleIds.length) await db.categorizationRule.deleteMany({ where: { ...mine, id: { in: plan.dropRuleIds } } });
   if (plan.dropRecurringIds.length) await db.recurringCommitment.deleteMany({ where: { ...mine, id: { in: plan.dropRecurringIds } } });
   if (plan.deleteAccountIds.length) await db.account.deleteMany({ where: { ...mine, id: { in: plan.deleteAccountIds } } });
+
+  // Her plans' levels and her paid-off debts are her past: never celebrated
+  // as news for the household (LPBETA-13).
+  await markMergedPastSeen(db, memberId, poolId);
 
   // 3. Move the rest. Ids don't change, so every foreign key between her rows
   //    (card account ↔ its debt, debt ↔ its budget line, expense ↔ account /
