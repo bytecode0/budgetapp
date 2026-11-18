@@ -201,7 +201,7 @@ export async function buildJsonExport(db: PrismaClient, me: string, now = new Da
       where: { id: me },
       select: {
         name: true, email: true, emailVerified: true, image: true, createdAt: true, deletionRequestedAt: true,
-        settings: { select: { language: true, darkMode: true, cycleStartDay: true, monthlyIncome: true, noCardsAt: true, noLoansAt: true } },
+        settings: { select: { language: true, darkMode: true, cycleStartDay: true, monthlyIncome: true, noCardsAt: true, noLoansAt: true, monthlyEmailOptOut: true, monthlyEmailSentPeriod: true } },
         subscription: { select: { plan: true, status: true, currentPeriodEnd: true, cancelAtPeriodEnd: true } },
         householdMemberships: { select: { role: true, status: true, joinedAt: true, household: { select: { name: true } } } },
         // My answers to the monthly peace question (LPBETA-24): always the person's own.
@@ -222,6 +222,7 @@ export async function buildJsonExport(db: PrismaClient, me: string, now = new Da
       movements: "Expenses, refunds and income are in the CSV file (movements).",
       household: "Only your own records: what your partner owns is not included.",
       peaceCheckins: "Your answers to the monthly question about how you feel about your money, one per budget period (YYYY-MM), from 1 (very uneasy) to 5 (at peace).",
+      monthlyEmail: "settings.monthlyEmailOptOut: true when you turned off the monthly summary email; monthlyEmailSentPeriod: the last budget period (YYYY-MM) it summed up. A recurring commitment's decision is your answer in Your subscriptions: keep or cancel (a reminder only).",
       ownerless: "Budget lines (with their monthly budgets), categorisation rules and recurring commitments have no owner: in a household they belong to the shared data and are exported to the person who holds it (the household's owner), except the lines of your own debts and plans. Plans marked ownerless: true were created before plans had an owner and are exported the same way.",
     },
     profile,

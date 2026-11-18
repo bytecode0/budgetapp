@@ -15,7 +15,12 @@ import { prisma } from "./prisma.js";
 import { AuthRequest } from "../middleware/auth.js";
 import { visibleExpenseWhere, visibleIncomeWhere } from "./poolRefs.js";
 
-async function tier(req: AuthRequest): Promise<string> {
+/** Who is looking: the scope requireAuth resolves for a request. A job with
+ *  no request (the monthly email, server/lib/monthlyEmail.ts) builds the same
+ *  three fields for each person, so it sees exactly what they would. */
+export type Viewer = Pick<AuthRequest, "userId" | "authUserId" | "householdId">;
+
+async function tier(req: Viewer): Promise<string> {
   // Linked to a pool (req.userId is someone else's) but in no household: a
   // leftover link must not open the pool's listings, so the most restrictive
   // tier applies. Alone in her own scope, there is nobody else to hide.
@@ -28,21 +33,21 @@ async function tier(req: AuthRequest): Promise<string> {
 }
 
 /** Whether the viewer is restricted to their own transactions in list views. */
-export async function ownOnlyListings(req: AuthRequest): Promise<boolean> {
+export async function ownOnlyListings(req: Viewer): Promise<boolean> {
   return (await tier(req)) !== "transparent";
 }
 
 /** Prisma `where` fragment for the EXPENSE list (and the rows a caller may
  *  change by id), honoring the visibility tier. In every tier it leaves out
  *  the other member's rows on a private debt or account (poolRefs.ts). */
-export async function expenseListingFilter(req: AuthRequest): Promise<Record<string, unknown>> {
+export async function expenseListingFilter(req: Viewer): Promise<Record<string, unknown>> {
   const hidden = visibleExpenseWhere(req.authUserId!);
   return (await ownOnlyListings(req)) ? { payerUserId: req.authUserId!, ...hidden } : hidden;
 }
 
 /** Prisma `where` fragment for the INCOME list, honoring the visibility tier;
  *  in every tier without the other member's income on a private account. */
-export async function incomeListingFilter(req: AuthRequest): Promise<Record<string, unknown>> {
+export async function incomeListingFilter(req: Viewer): Promise<Record<string, unknown>> {
   const hidden = visibleIncomeWhere(req.authUserId!);
   return (await ownOnlyListings(req)) ? { ownerUserId: req.authUserId!, ...hidden } : hidden;
 }

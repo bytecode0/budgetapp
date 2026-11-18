@@ -24,6 +24,7 @@ import { onboardingRouter } from "./routes/onboarding.js";
 import { securityHeaders } from "./middleware/securityHeaders.js";
 import { accountRouter } from "./routes/account.js";
 import { checkinsRouter } from "./routes/checkins.js";
+import { insightsRouter } from "./routes/insights.js";
 
 // The Express app, without a listener: server/index.ts listens for local dev,
 // and api/index.ts hands it to Vercel as a function.
@@ -68,7 +69,9 @@ app.get("/api/health", (_req, res) => {
 // ---- Routes ----
 // Every route is behind requireAuth internally; the exceptions are the auth
 // endpoints themselves, the Stripe webhook, which verifies its signature, and
-// the daily cron routes (/api/banking/cron, /api/account/cron: CRON_SECRET).
+// the cron routes (/api/banking/cron, /api/account/cron, /api/insights/cron:
+// CRON_SECRET) and the monthly email's unsubscribe link (/api/insights/unsubscribe:
+// a signed token).
 app.use("/api/auth", authRouter);
 app.use("/api/plans", plansRouter);
 app.use("/api/allocations", allocationsRouter);
@@ -90,6 +93,7 @@ app.use("/api/ai", aiRouter);
 app.use("/api/onboarding", onboardingRouter);
 app.use("/api/account", accountRouter);
 app.use("/api/checkins", checkinsRouter);
+app.use("/api/insights", insightsRouter);
 
 // Anything else under /api is a clean JSON 404 matching the { error } response
 // convention. Never falls through to Express's default HTML error page.

@@ -108,6 +108,12 @@ model UserSettings {
   // The Generosity line's share of the household's income; its amount follows
   // the income. Null = a fixed amount typed on the budget (server/lib/generosity.ts).
   generosityBps       Int?
+  // "Tu mes en Remanso" (LPBETA-12), on the PERSON's own row (authUserId):
+  // true = no monthly email (unsubscribed from the email link or Settings).
+  monthlyEmailOptOut     Boolean @default(false)
+  // The "YYYY-MM" budget period the last monthly email summed up, so a
+  // re-run of the job never sends the same month twice.
+  monthlyEmailSentPeriod String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -172,10 +178,15 @@ model RecurringCommitment {
   userId           String
   merchant         String    // normalized merchant the commitment recurs on
   avgAmount        Int       // cents
-  cadence          String    @default("monthly") // monthly (only cadence detected today)
+  cadence          String    @default("monthly") // weekly | monthly | yearly (server/lib/recurring.ts)
   allocationId     String?   // linked fixed allocation once confirmed
   nextExpectedDate DateTime?
   status           String    @default("detected") // detected | confirmed | ignored
+  // "Tus suscripciones" (LPBETA-12): the household's answer, a reminder only
+  // (the app cancels nothing). keep = "la quiero", cancel = "voy a
+  // cancelarla"; null = not answered. decidedAt: when it was last answered.
+  decision         String?
+  decidedAt        DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

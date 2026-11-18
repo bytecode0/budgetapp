@@ -8,6 +8,9 @@ import { detectRecurring } from "../lib/recurring.js";
 export const recurringRouter = Router();
 
 const STATUSES = new Set(["detected", "confirmed", "ignored"]);
+// "Tus suscripciones" (LPBETA-12): "la quiero" / "voy a cancelarla", or null
+// to take the answer back. A reminder only: the app cancels nothing.
+const DECISIONS = new Set(["keep", "cancel"]);
 
 // The commitments as the caller may see them (callers already leave out
 // those on a hidden line). Detection runs over the whole pool, so a merchant
@@ -74,16 +77,20 @@ recurringRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
   }
 });
 
-// PATCH /api/recurring/:id  — confirm / ignore and/or link to a fixed allocation
+// PATCH /api/recurring/:id  — confirm / ignore and/or link to a fixed allocation,
+// and/or answer a subscription (decision: "keep" | "cancel" | null)
 recurringRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const existing = await prisma.recurringCommitment.findFirst({ where: { id, userId: req.userId!, ...notOnHiddenLine(req.authUserId!) } });
     if (!existing || (await visibleCommitments(req, [existing])).length === 0) return res.status(404).json({ error: "Commitment not found" });
 
-    const { status, allocationId } = req.body as { status?: string; allocationId?: string | null };
+    const { status, allocationId, decision } = req.body as { status?: string; allocationId?: string | null; decision?: string | null };
     if (status !== undefined && !STATUSES.has(status)) {
       return res.status(400).json({ error: "Invalid status" });
+    }
+    if (decision !== undefined && decision !== null && !DECISIONS.has(decision)) {
+      return res.status(400).json({ error: "Invalid decision" });
     }
 
     // Validate a linked allocation belongs to the user.
@@ -94,6 +101,7 @@ recurringRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Respons
       data: {
         ...(status !== undefined && { status }),
         ...(allocationId !== undefined && { allocationId: allocationId || null }),
+        ...(decision !== undefined && { decision, decidedAt: decision === null ? null : new Date() }),
       },
       include: { allocation: { select: { id: true, name: true, icon: true, type: true } } },
     });

@@ -82,6 +82,17 @@ const MONEY_KEYS = new Set([
   "afterCutAmount",
   "minimumDue",
   "oneOffAmount",
+  // Gastos hormiga and subscriptions (LPBETA-12, server/lib/hormiga.ts)
+  "monthlyAmount",
+  "yearlyAmount",
+  "previousAmount",
+  "yearlyTotal",
+  "subscriptionsMonthly",
+  "subscriptionsYearly",
+  "smallTotal",
+  "smallYearly",
+  "monthlyTotal",
+  "halfYearly",
 ]);
 
 /**
