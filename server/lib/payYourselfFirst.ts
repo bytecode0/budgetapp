@@ -29,6 +29,34 @@ export function shareApplies(setAt: Date | null, end: Date): boolean {
   return setAt === null || setAt < end;
 }
 
+/** A month's savings figures from its rows, in cents. Pure: monthSavings
+ *  and the celebrations' batched read (server/lib/celebrations.ts) share it. */
+export function savingsFrom(input: {
+  bps: number | null;
+  setAt: Date | null;
+  periodEnd: Date;
+  deposits: { planId: string; amount: number }[];
+  booked: Map<string, number>;
+  recorded: number[];
+  baseline: number;
+}): MonthSavings {
+  const income = householdMonthIncome(input.recorded, input.baseline).cents;
+  const bps = input.bps;
+  return {
+    householdIncome: income,
+    paidYourself: sumContributions(input.deposits, input.booked),
+    payYourselfFirstBps: bps,
+    payYourselfFirstGoal: bps === null ? null : shareOfIncome(income, bps),
+    payYourselfFirstApplies: bps !== null && shareApplies(input.setAt, input.periodEnd),
+  };
+}
+
+/** Whether a month met its "Págate a ti primero" share. Pure. */
+export function payYourselfFirstMet(s: MonthSavings): boolean {
+  return s.payYourselfFirstApplies && s.payYourselfFirstGoal !== null && s.payYourselfFirstGoal > 0
+    && s.paidYourself >= s.payYourselfFirstGoal;
+}
+
 /** The pool's savings figures for `month` (its period is `bounds`). */
 export async function monthSavings(poolUserId: string, month: string, bounds: { start: Date; end: Date }): Promise<MonthSavings> {
   const range = { gte: bounds.start, lt: bounds.end };
@@ -39,13 +67,13 @@ export async function monthSavings(poolUserId: string, month: string, bounds: { 
     prisma.income.findMany({ where: { userId: poolUserId, date: range }, select: { amount: true } }),
     householdBaselineIncome(poolUserId),
   ]);
-  const income = householdMonthIncome(recorded.map(i => i.amount), baseline).cents;
-  const bps = settings?.payYourselfFirstBps ?? null;
-  return {
-    householdIncome: income,
-    paidYourself: sumContributions(deposits, booked),
-    payYourselfFirstBps: bps,
-    payYourselfFirstGoal: bps === null ? null : shareOfIncome(income, bps),
-    payYourselfFirstApplies: bps !== null && shareApplies(settings?.payYourselfFirstSetAt ?? null, bounds.end),
-  };
+  return savingsFrom({
+    bps: settings?.payYourselfFirstBps ?? null,
+    setAt: settings?.payYourselfFirstSetAt ?? null,
+    periodEnd: bounds.end,
+    deposits,
+    booked,
+    recorded: recorded.map(i => i.amount),
+    baseline,
+  });
 }

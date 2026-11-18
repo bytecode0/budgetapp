@@ -10,10 +10,12 @@ import { getCycleStartDay } from "./getCycleStartDay.js";
 import { householdBaselineIncome, householdMonthIncome } from "./householdIncome.js";
 import { applyGenerosity, generosityBps } from "./generosity.js";
 
-export async function monthReview(userId: string, month: string) {
-  const cycleStartDay = await getCycleStartDay(userId);
+/** `opts.cycleStartDay` saves a read when the caller has it; `opts.now` is
+ *  when "ended" is judged. */
+export async function monthReview(userId: string, month: string, opts: { cycleStartDay?: number; now?: Date } = {}) {
+  const cycleStartDay = opts.cycleStartDay ?? await getCycleStartDay(userId);
   const { start: monthStart, end: monthEnd } = periodBounds(month, cycleStartDay);
-  const ended = periodEnded({ end: monthEnd });
+  const ended = periodEnded({ end: monthEnd }, opts.now);
 
   // Get budgets (or fall back to current allocations)
   const savedBudgets = await prisma.monthlyBudget.findMany({

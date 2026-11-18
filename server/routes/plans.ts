@@ -5,6 +5,18 @@ import { toCents, serializeMoney } from "../lib/money.js";
 import { currentPeriodKey, periodBounds } from "../lib/period.js";
 import { loadBookedByPlan, monthContribution } from "../lib/planLedger.js";
 import { getCycleStartDay } from "../lib/getCycleStartDay.js";
+import { markPlanReachedSeen } from "../lib/celebrations.js";
+
+/** A plan's starting balance, or amounts edited by hand, are not celebrated
+ *  (LPBETA-13): what they already reach is marked seen. Never fails the
+ *  request: at worst that celebration shows once. */
+async function skipReachedCelebrations(req: AuthRequest, plan: Parameters<typeof markPlanReachedSeen>[2]) {
+  try {
+    await markPlanReachedSeen(req.userId!, req.authUserId!, plan);
+  } catch (err) {
+    console.error("[plans/celebrations]", err);
+  }
+}
 
 export const plansRouter = Router();
 
@@ -77,6 +89,7 @@ plansRouter.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
 
       return { plan, allocation };
     });
+    await skipReachedCelebrations(req, result.plan);
 
     return res.json(serializeMoney(result));
   } catch (err) {
@@ -172,6 +185,9 @@ plansRouter.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) =
         ...(milestones !== undefined && { milestones }),
       },
     });
+    if ([currentAmount, targetAmount, milestones, goalClass, type].some(v => v !== undefined)) {
+      await skipReachedCelebrations(req, plan);
+    }
 
     // Detect if linked allocation amount is out of sync with the new monthlyContribution
     let allocationOutOfSync = false;

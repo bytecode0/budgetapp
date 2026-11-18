@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, AuthRequest } from "../middleware/auth.js";
 import { serializeMoney } from "../lib/money.js";
 import { isMissingTable } from "../lib/peace.js";
-import { isCelebrationKey, loadUnseenCelebrations } from "../lib/celebrations.js";
+import { isCelebrationKey, isCurrentCelebration, loadUnseenCelebrations } from "../lib/celebrations.js";
 
 // "Celebrar los hitos" (LPBETA-13, server/lib/celebrations.ts). The
 // celebrations are derived from the pool's data (req.userId) as the viewer may
@@ -22,6 +22,7 @@ function fail(res: Response, where: string, err: unknown) {
 
 // GET /api/celebrations → { data: { celebrations } }: the ones not seen yet,
 // biggest first (Home shows the first). Amounts in euros, like every response.
+// A person's first read shows nothing and marks what is already true as seen.
 celebrationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const celebrations = await loadUnseenCelebrations(req.userId!, req.authUserId!);
@@ -31,11 +32,15 @@ celebrationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response)
   }
 });
 
-// POST /api/celebrations/seen { key } → { data: { key } }. Idempotent.
+// POST /api/celebrations/seen { key } → { data: { key } }. Only a key that is
+// one of the caller's current celebrations (400 otherwise). Idempotent: a
+// second tap on one already seen is fine.
 celebrationsRouter.post("/seen", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const key: unknown = req.body?.key;
-    if (!isCelebrationKey(key)) return res.status(400).json({ error: "key is invalid" });
+    if (!isCelebrationKey(key) || !(await isCurrentCelebration(req.userId!, req.authUserId!, key))) {
+      return res.status(400).json({ error: "key is invalid" });
+    }
     const userId = req.authUserId!;
     await prisma.celebrationSeen.upsert({
       where: { userId_key: { userId, key } },
