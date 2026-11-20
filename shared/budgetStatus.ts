@@ -9,15 +9,25 @@ export const toCents = (euros: number): number => Math.round(euros * 100);
 /** part / whole ≤ pct %, compared on integers. */
 const atMost = (part: number, whole: number, pct: number) => part * 100 <= whole * pct;
 
-/** Share of the income already budgeted: ≤ 90 % good, ≤ 100 % warning, more
- *  than the income over. A budget with no income is over (all of it is
- *  unfunded); only no budget at all is nothing to judge. */
-export function budgetedShareTone(incomeCents: number, budgetedCents: number): Tone {
-  if (budgetedCents <= 0) return "neutral";
-  if (incomeCents <= 0) return "over";
-  if (atMost(budgetedCents, incomeCents, 90)) return "good";
-  if (atMost(budgetedCents, incomeCents, 100)) return "warning";
-  return "over";
+/** How the month's total budgeted compares with its income (LPBETA-30). */
+export type IncomeCoverage = "noIncome" | "under" | "near" | "exact" | "over";
+
+/** Total budgeted against income: under 85 % "under", 85 % to just under
+ *  100 % "near", equal to the cent "exact", more "over"; no income is
+ *  "noIncome" (nothing to compare with). Compared by integer
+ *  cross-multiplication. `pct` is the label next to the colour: rounded DOWN
+ *  up to 100 % and UP above it, so it never contradicts the level (84.99 %
+ *  shows "84 %" under, 99.99 % "99 %" near, 100.01 % "101 %" over). */
+export function budgetedVsIncome(incomeCents: number, budgetedCents: number): { level: IncomeCoverage; pct: number } {
+  if (incomeCents <= 0) return { level: "noIncome", pct: 0 };
+  const budgeted = Math.max(0, budgetedCents);
+  const level: IncomeCoverage =
+    budgeted * 100 < incomeCents * 85 ? "under"
+    : budgeted < incomeCents ? "near"
+    : budgeted === incomeCents ? "exact"
+    : "over";
+  const share = (budgeted * 100) / incomeCents;
+  return { level, pct: level === "over" ? Math.ceil(share) : Math.floor(share) };
 }
 
 /** Spent of what was budgeted: ≤ 80 % good, ≤ 100 % warning, more over.
