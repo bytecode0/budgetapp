@@ -22,6 +22,7 @@ The Radiografía Financiera (a public lead magnet) was abandoned and deleted on 
 - **A credit card is an account** (type `card`). Its debt is created and kept in step by the server (`server/lib/cardDebt.ts`) — the user never creates it in Debts. Loans and installment plans are created in Debts.
 - **Balances are derived, never stored** (`server/lib/debtBalance.ts`): live balance = anchor (`Debt.currentBalance` at `balanceAsOf`) + card purchases + dated adjustments − payments. Never read `Debt.currentBalance` raw as "what's owed".
 - **A card payment only counts as spending for the part that pays pre-existing debt**; the rest pays purchases already counted in their own category. Every place that sums expenses must use `countedAmounts()` / `budgetAmount`, or groceries get counted twice.
+- **Exception: a card paid in full with a cut-off and a due day** (`statementDay` + `paymentDueDay`) is budgeted like any other debt: its budget line holds the statement due in the period, purchases included, and its payment counts in full on that line (`server/lib/cardCycle.ts`, rule 5; decided by Luis on 24 Nov 2026). Its purchases still count in their categories in the month they were made.
 
 ---
 

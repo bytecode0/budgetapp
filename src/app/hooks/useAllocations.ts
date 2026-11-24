@@ -14,7 +14,7 @@ export interface Allocation {
   sortOrder: number;
   isDefault: boolean;
   // A card paid in full with a billing cycle: the statement it will be charged
-  // next. A reminder only — those purchases already count in their categories.
+  // next, shown under its line.
   cardStatement?: CardStatement | null;
 }
 

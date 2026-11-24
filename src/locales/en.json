@@ -618,8 +618,8 @@
     "namePlaceholderFlexible": "e.g. Eating out",
     "namePlaceholderPlan": "e.g. Emergency fund",
     "debtAmountHint": "Follows the debt",
-    "cardStatement": "Charged on {{date}}: {{amount}}. Already counted in your lines for the month you bought.",
-    "cardStatementOpen": "Charged on {{date}}: {{amount}} so far (the cut-off is {{closes}}). Already counted in your lines for the month you bought.",
+    "cardStatement": "Statement of {{closes}}: {{amount}}, charged on {{date}}.",
+    "cardStatementOpen": "Current statement: {{amount}} so far; the cut-off is {{closes}}, charged on {{date}}.",
     "changeOnDebt": "Change it on the debt"
   },
   "addExpense": {

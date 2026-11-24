@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   clampedDay, statementClosingIn, nextStatementDue, cycleDaysOf, cardCycleSummary, isoDay,
 } from "./cardCycle.js";
-import { monthlyCommitment, type DebtLedger, type LedgerDebt } from "./debtBalance.js";
+import { monthlyCommitment, splitPayments, type DebtLedger, type LedgerDebt } from "./debtBalance.js";
 import { buildDebtTimeline, timelineInput } from "./debtTimeline.js";
 import { periodBounds, periodKeyOffset } from "./period.js";
 
@@ -227,23 +227,34 @@ function committed(l: DebtLedger, from = "2026-11", n = 3, cycleStartDay = 1): n
   return tl.map(p => p.items.find(i => i.debtId === l.debt.id)?.amount ?? 0);
 }
 
-test("full card with a cycle: purchases are never committed (already spending in their categories)", () => {
+test("full card with a cycle: each statement, purchases included, is committed in the period it falls due", () => {
+  // Oct 10 closes Oct 25, due Nov 5; Oct 28 and Nov 3 close Nov 25, due Dec 5.
   const l = ledger(card(), {
     purchases: [mv("oct", 50000, "2026-10-10"), mv("after", 20000, "2026-10-28"), mv("nov", 10000, "2026-11-03")],
   });
-  assert.equal(monthlyCommitment(l, NOV), 0);
-  assert.deepEqual(committed(l), [0, 0, 0]);
+  assert.equal(monthlyCommitment(l, NOV), 50000);
+  assert.deepEqual(committed(l), [50000, 30000, 0]);
 });
 
-test("full card with a cycle: the budget line ignores the cycle; debt typed after the due date stays in this period", () => {
-  // Typed Nov 20 ("I owe 1,000"): due Dec 5 per the cycle, but the budget line
-  // keeps main's rule — the pre-existing debt at the period start + this
-  // period's corrections — and the current period of the timeline equals it.
+test("full card with a cycle: the statement's payment is budget spending on its line, in full", () => {
+  const l = ledger(card(), {
+    purchases: [mv("oct", 50000, "2026-10-10")],
+    payments: [mv("p", 50000, "2026-11-05")],
+  });
+  assert.deepEqual(splitPayments(l).get("p"), { toPrevious: 50000, toPurchases: 0 });
+  // A card without a cycle keeps the split: the payment paid purchases.
+  const noCycle = ledger(card({ statementDay: null }), { purchases: l.purchases, payments: l.payments });
+  assert.deepEqual(splitPayments(noCycle).get("p"), { toPrevious: 0, toPurchases: 50000 });
+});
+
+test("full card with a cycle: debt typed after the due date goes to the next statement's period", () => {
+  // Typed Nov 20 ("I owe 1,000"): due Dec 5 per the cycle, with the Nov 21
+  // purchase (before the Nov 25 cut-off).
   const l = ledger(card({ currentBalance: 100000, balanceAsOf: at("2026-11-20T10:00:00Z") }), {
     purchases: [mv("nov", 5000, "2026-11-21")],
   });
-  assert.equal(monthlyCommitment(l, NOV), 100000);
-  assert.deepEqual(committed(l), [100000, 0, 0]);
+  assert.equal(monthlyCommitment(l, NOV), 0);
+  assert.deepEqual(committed(l), [0, 105000, 0]);
   assert.equal(day(cardCycleSummary(l, D("2026-11-21"))!.dueOn), "2026-12-05");
 });
 
@@ -252,7 +263,7 @@ test("full card with a cycle: paying during the period doesn't shrink it; paid a
   const during = ledger(debt, { payments: [mv("p", 100000, "2026-12-04")] });
   assert.deepEqual(committed(during, "2026-12", 2), [100000, 0]);
   const ahead = ledger(debt, { payments: [mv("p", 100000, "2026-11-25")] });
-  assert.deepEqual(committed(ahead), [100000, 0, 0]);
+  assert.deepEqual(committed(ahead), [0, 0, 0]);
   assert.equal(monthlyCommitment(ahead, periodBounds("2026-12", 1)), 0);
 });
 
@@ -263,11 +274,11 @@ test("full card with a cycle: debt due after this period goes to the period it f
   });
   assert.equal(monthlyCommitment(l, NOV), 30000);
   assert.deepEqual(committed(l), [30000, 0, 1200]);
-  // Interest dated this period is in this period's line, as on main.
+  // Interest dated Nov 10 is due Dec 5: December's line.
   const now = ledger(card({ currentBalance: 30000, balanceAsOf: at("2026-09-01T10:00:00Z") }), {
     adjustments: [mv("int", 1200, "2026-11-10")],
   });
-  assert.deepEqual(committed(now), [31200, 0, 0]);
+  assert.deepEqual(committed(now), [30000, 1200, 0]);
 });
 
 test("full card with a cycle: later periods never commit more than the live balance", () => {

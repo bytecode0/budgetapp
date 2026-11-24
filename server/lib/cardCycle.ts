@@ -28,14 +28,16 @@
 //     below zero nor above the live balance.
 //  4. Missing statementDay or paymentDueDay, or a card in "installments"
 //     mode: no cycle — every caller falls back to today's behaviour.
-//  5. The budget line (debtBalance.ts, monthlyCommitment) ignores the cycle.
-//     The committed future's current period equals that line; for a card paid
-//     in full, the cycle only places in LATER periods pre-existing debt
-//     (anchor + adjustments) that falls due then and isn't in the current
-//     line, capped at the live balance (debtTimeline.ts, timelineInput).
-//     Purchases are never committed — already spending in their categories
-//     (CLAUDE.md, "How debts work"); they show up only in "lo que vence" on
-//     the Debts screen (cardCycleSummary).
+//  5. A card paid in full WITH a cycle is budgeted like any other debt: its
+//     budget line holds the statement due in the period, purchases included
+//     (cycleCommitment, used by debtBalance.ts monthlyCommitment), and its
+//     payments are budget spending on that line in full, never split (decided
+//     by Luis on 24 Nov 2026: the card is a debt paid whole at month end, so
+//     the statement is a debt line in the month it is paid, like a cuota).
+//     The committed future places each later statement in the period it is
+//     due, capped at the live balance (debtTimeline.ts, timelineInput).
+//     A card in "minimum" mode keeps its minimum as its line, and a card
+//     without a cycle keeps the old rule: only pre-existing debt.
 import type { DebtLedger } from "./debtBalance.js";
 
 const DAY_MS = 86_400_000;
@@ -104,6 +106,36 @@ function chargedBy(ledger: DebtLedger, s: Statement): number {
 
 const live = (ledger: DebtLedger) =>
   ledger.debt.currentBalance + sum(ledger.purchases) + sum(ledger.adjustments) - sum(ledger.payments);
+
+/** The latest statement due before `end`. */
+function lastStatementDueBefore(end: Date, days: CardCycleDays): Statement {
+  for (let i = 1; i >= -3; i--) {
+    const s = statementClosingIn(end.getUTCFullYear(), end.getUTCMonth() + i, days);
+    if (s.dueOn < end) return s;
+  }
+  throw new Error("unreachable: a statement is due every month");
+}
+
+/** Everything charged to the card that is due before `end` (rule 2):
+ *  purchases up to that statement's cut-off, plus the pre-existing debt and
+ *  adjustments due by then. Cumulative, no payments subtracted. */
+export function statementDueBefore(ledger: DebtLedger, end: Date, days: CardCycleDays): number {
+  return chargedBy(ledger, lastStatementDueBefore(end, days));
+}
+
+/** A card paid in full with a cycle: whether rule 5 applies to it. */
+export function isStatementCard(debt: DebtLedger["debt"]): boolean {
+  return debt.paymentMode === "full" && cycleDaysOf(debt) !== null;
+}
+
+/** The budget line of a card paid in full with a cycle for [start, end)
+ *  (rule 5): what falls due in the period, plus anything older still unpaid.
+ *  Measured at the period's START, so paying during it doesn't shrink the
+ *  line it's being paid against. Never more than the card owed by then. */
+export function cycleCommitment(ledger: DebtLedger, period: { start: Date; end: Date }, days: CardCycleDays): number {
+  const paidBefore = sum(ledger.payments.filter(p => p.date < period.start));
+  return Math.max(0, statementDueBefore(ledger, period.end, days) - paidBefore);
+}
 
 /** The pre-existing debt (anchor + adjustments, rule 2) due before `end`,
  *  cumulative, no payments subtracted. Without a `balanceAsOf` (a ledger
