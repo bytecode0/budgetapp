@@ -618,6 +618,8 @@
     "namePlaceholderFlexible": "p. ej. Comer fuera",
     "namePlaceholderPlan": "p. ej. Fondo de emergencia",
     "debtAmountHint": "Sigue a la deuda",
+    "cardStatement": "Se carga el {{date}}: {{amount}}. Ya está contado en tus partidas del mes en que compraste.",
+    "cardStatementOpen": "Se carga el {{date}}: {{amount}} por ahora (el corte es el {{closes}}). Ya está contado en tus partidas del mes en que compraste.",
     "changeOnDebt": "Se cambia desde la deuda"
   },
   "addExpense": {

@@ -13,6 +13,7 @@ export interface CardSettings {
   owed?: number;                  // cents — what's owed now (live)
   minimumPayment?: number | null; // cents
   paymentDueDay?: number | null;  // 1-28
+  statementDay?: number | null;   // 1-28, the cut-off (server/lib/cardCycle.ts)
 }
 
 async function currentPeriod(userId: string) {
@@ -40,6 +41,7 @@ export async function createCardDebt(
       currentBalance: settings.owed ?? 0,
       minimumPayment: settings.minimumPayment ?? null,
       paymentDueDay: settings.paymentDueDay ?? null,
+      statementDay: settings.statementDay ?? null,
       sortOrder: (lastOrder?.sortOrder ?? -1) + 1,
     },
   });
@@ -73,6 +75,7 @@ export async function updateCardDebt(userId: string, debtId: string, changes: Ca
       ...(changes.paymentMode !== undefined && { paymentMode: changes.paymentMode }),
       ...(changes.minimumPayment !== undefined && { minimumPayment: changes.minimumPayment }),
       ...(changes.paymentDueDay !== undefined && { paymentDueDay: changes.paymentDueDay }),
+      ...(changes.statementDay !== undefined && { statementDay: changes.statementDay }),
     },
   });
   if (changes.name !== undefined) {

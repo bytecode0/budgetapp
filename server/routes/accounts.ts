@@ -27,13 +27,14 @@ function clampDay(n: unknown): number | null {
 // Card settings sent with a card account (server/lib/cardDebt.ts). For a card,
 // `currentBalance` in the body means what's OWED now, not money in the account.
 function cardSettingsFrom(body: any): CardSettings | { error: string } {
-  const { cardPaymentMode, currentBalance, cardMinimumPayment, cardPaymentDueDay } = body;
+  const { cardPaymentMode, currentBalance, cardMinimumPayment, cardPaymentDueDay, cardStatementDay } = body;
   if (cardPaymentMode !== undefined && !CARD_PAYMENT_MODES.has(cardPaymentMode)) return { error: "Invalid card payment mode" };
   return {
     ...(cardPaymentMode !== undefined && { paymentMode: cardPaymentMode }),
     ...(currentBalance !== undefined && { owed: Math.abs(toCents(currentBalance)) }),
     ...(cardMinimumPayment !== undefined && { minimumPayment: cardMinimumPayment === null || cardMinimumPayment === "" ? null : toCents(cardMinimumPayment) }),
     ...(cardPaymentDueDay !== undefined && { paymentDueDay: cardPaymentDueDay === null || cardPaymentDueDay === "" ? null : clampDay(cardPaymentDueDay) }),
+    ...(cardStatementDay !== undefined && { statementDay: cardStatementDay === null || cardStatementDay === "" ? null : clampDay(cardStatementDay) }),
   };
 }
 
@@ -60,7 +61,7 @@ accountsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
     // this period's budget line.
     const cardDebts = await prisma.debt.findMany({
       where: { userId: req.userId!, kind: "credit_card", accountId: { in: accounts.filter(a => a.type === "card").map(a => a.id) } },
-      select: { id: true, accountId: true, paymentMode: true, minimumPayment: true, paymentDueDay: true },
+      select: { id: true, accountId: true, paymentMode: true, minimumPayment: true, paymentDueDay: true, statementDay: true },
     });
     const ledgers = new Map((await loadDebtLedgers(req.userId!, cardDebts.map(d => d.id))).map(l => [l.debt.id, l]));
     const cycleStartDay = await getCycleStartDay(req.userId!);
@@ -72,6 +73,7 @@ accountsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) => 
         paymentMode: d.paymentMode,
         minimumPayment: d.minimumPayment,
         paymentDueDay: d.paymentDueDay,
+        statementDay: d.statementDay,
         owed: ledger ? owedNow(ledger) : 0,
         monthlyCommitment: ledger ? monthlyCommitment(ledger, period) : 0,
       }];

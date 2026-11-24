@@ -150,6 +150,7 @@ export function Accounts({ pendingBankToken, onConsumedBankToken, onBankFlowDone
       cardPaymentMode: a.card?.paymentMode ?? 'full',
       cardMinimumPayment: a.card?.minimumPayment != null ? String(a.card.minimumPayment) : '',
       cardPaymentDueDay: a.card?.paymentDueDay != null ? String(a.card.paymentDueDay) : '',
+      cardStatementDay: a.card?.statementDay != null ? String(a.card.statementDay) : '',
       loadedBalance: balance,
       loadedType: a.type,
     });

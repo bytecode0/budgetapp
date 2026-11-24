@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { useAllocations } from '../hooks/useAllocations';
+import { useAllocations, type CardStatement } from '../hooks/useAllocations';
 import { usePlans } from '../hooks/usePlans';
 import { useIncome } from '../hooks/useIncome';
 import { useMonthlyBudget, useMonthlyReview } from '../hooks/useMonthlyBudget';
@@ -114,6 +114,7 @@ interface LocalAllocation {
   lifePlanId: string | null;
   debtId: string | null;
   allocatedAmount: number; actualAmount: number; isDefault: boolean;
+  cardStatement: CardStatement | null;
   dirty: boolean;
   // Track what changed so saves route correctly: amounts are per-month
   // (MonthlyBudget), while name/icon/type/lifePlan are global attributes of the
@@ -126,6 +127,9 @@ export function AllocationFlow({ onOpenDebt }: { onOpenDebt: (debtId: string | n
   const { t } = useTranslation();
   const { fmt, currency } = useMoney();
   const { language } = useLanguage();
+  // The API sends UTC days; format them as such so no timezone shifts the day.
+  const utcDay = (iso: string) =>
+    new Date(`${iso}T00:00:00Z`).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   const locale = language === 'es' ? 'es-ES' : 'en-GB';
 
   const {
@@ -186,6 +190,7 @@ export function AllocationFlow({ onOpenDebt }: { onOpenDebt: (debtId: string | n
       allocatedAmount: amountByAlloc.has(a.id) ? amountByAlloc.get(a.id)! : a.allocatedAmount,
       actualAmount: a.actualAmount,
       isDefault: a.isDefault,
+      cardStatement: a.cardStatement ?? null,
       dirty: false, amountDirty: false, metaDirty: false,
     })));
   }, [rawAllocations, monthlyBudgets, monthlyLoading]);
@@ -710,6 +715,15 @@ export function AllocationFlow({ onOpenDebt }: { onOpenDebt: (debtId: string | n
                           >
                             {t('allocation.changeOnDebt')} <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
+                          {item.cardStatement && (
+                            <p className="w-full text-xs text-muted-foreground">
+                              {t(item.cardStatement.closed ? 'allocation.cardStatement' : 'allocation.cardStatementOpen', {
+                                amount: fmt(item.cardStatement.dueAmount),
+                                date: utcDay(item.cardStatement.dueOn),
+                                closes: utcDay(item.cardStatement.closesOn),
+                              })}
+                            </p>
+                          )}
                         </div>
                       ) : (
                         <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2">
