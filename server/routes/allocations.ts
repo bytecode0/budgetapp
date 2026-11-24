@@ -54,9 +54,8 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
     const ledgers = await loadDebtLedgers(req.userId!);
     const commitments = new Map(ledgers.map(l => [l.debt.id, monthlyCommitment(l, period)]));
     // A card paid in full with a billing cycle: the statement it will be
-    // charged next ("lo que vence", server/lib/cardCycle.ts). Shown under its
-    // line as a reminder only: those purchases are already spending in their
-    // own categories, in the month they were made, so the line never adds them.
+    // charged next ("lo que vence", server/lib/cardCycle.ts), shown under its
+    // line so the user sees which statement and when.
     const now = clockNow();
     const statements = new Map(ledgers.flatMap(l => {
       if (l.debt.status !== "active" || l.debt.paymentMode !== "full") return [];

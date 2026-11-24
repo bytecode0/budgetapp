@@ -5,7 +5,7 @@
 // so it respects the user's payday, not just the calendar month.
 import { periodKeyOffset, currentPeriodKey } from "./period.js";
 import { debtState, monthlyCommitment, previousPaidBefore, type DebtLedger } from "./debtBalance.js";
-import { cycleDaysOf, previousDueBefore } from "./cardCycle.js";
+import { cycleDaysOf, statementDueBefore } from "./cardCycle.js";
 
 export interface TimelineDebtInput {
   id: string;
@@ -49,9 +49,9 @@ function stillDueAt(d: TimelineDebtInput, periodsAhead: number): boolean {
  *  the current period always commits exactly what the debt's budget line
  *  holds (monthlyCommitment), cycle or not.
  *  A card paid in full with a billing cycle (server/lib/cardCycle.ts, rule 5)
- *  also commits, in LATER periods, pre-existing debt that only falls due
- *  then and isn't in the current line yet (e.g. interest recorded with a
- *  later date) — never its purchases, already spending in their categories.
+ *  also commits, in LATER periods, each later statement in the period it
+ *  falls due (purchases after the current one's cut-off, interest recorded
+ *  with a later date).
  *  What earlier periods commit counts as paid, unless the payments recorded
  *  already paid more of that debt; and later periods never commit more than
  *  the live balance minus what the current line still expects. Without a
@@ -72,7 +72,7 @@ export function timelineInput<T extends TimelineDebtInput>(
   let committed = line;
   const cycleAmounts = periods.map((p, i) => {
     if (i === 0) return line;
-    const due = Math.max(0, previousDueBefore(ledger, p.end, days) - Math.max(paidAll, paidBeforeStart + committed));
+    const due = Math.max(0, statementDueBefore(ledger, p.end, days) - Math.max(paidAll, paidBeforeStart + committed));
     const amount = Math.min(due, available);
     committed += amount;
     available -= amount;
@@ -96,10 +96,10 @@ export function buildDebtTimeline(
     const period = periodKeyOffset(current, i);
     const items: TimelinePeriodItem[] = [];
     for (const d of active) {
-      // A card paid in full with a billing cycle: its pre-existing debt in the
+      // A card paid in full with a billing cycle: each statement in the
       // period it falls due (timelineInput). Without one: only the
-      // pre-existing debt, once, now. Never its purchases — they're already
-      // budgeted spending.
+      // pre-existing debt, once, now — its purchases are already budgeted
+      // spending in their categories.
       const amount = d.cycleAmounts
         ? d.cycleAmounts[i] ?? 0
         : d.paymentMode === "full"

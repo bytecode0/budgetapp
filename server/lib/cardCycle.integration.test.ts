@@ -137,7 +137,7 @@ describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABA
 
   // ── the cycle ──────────────────────────────────────────────────────────
 
-  it("splits what's due from purchases after the cut-off; the timeline commits only the earlier debt", async () => {
+  it("splits what's due from purchases after the cut-off; the timeline commits each statement when it's due", async () => {
     setClockForTests(NOV_2);
     const { A } = await couple();
     // Owed 100 on Oct 20 (due Nov 5), 50 bought before the Oct 25 cut-off,
@@ -159,16 +159,17 @@ describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABA
       afterCutDueOn: "2026-12-05",
     });
 
-    // Purchases are spending in their categories, never committed: November
-    // holds the earlier debt due Nov 5 (100; paying during it doesn't shrink
-    // it), exactly the budget line; then nothing.
+    // A card paid whole by its statement is budgeted like a debt (cardCycle.ts,
+    // rule 5): November holds the statement due Nov 5 (100 + 50; paying
+    // during it doesn't shrink it), exactly the budget line; December the
+    // purchase after the cut-off.
     const tl = await timelineOf(A);
     assert.deepEqual(tl.map(p => p.period), ["2026-11", "2026-12", "2027-01"]);
-    assert.deepEqual(itemAmounts(tl, visa.debtId), [100, 0, 0]);
-    assert.equal(d.monthlyCommitment, 100);
+    assert.deepEqual(itemAmounts(tl, visa.debtId), [150, 20, 0]);
+    assert.equal(d.monthlyCommitment, 150);
   });
 
-  it("debt typed after this period's due date: the cycle moves its due date, not the budget line", async () => {
+  it("debt typed after this period's due date: it goes to the next statement's period", async () => {
     setClockForTests(NOV_20);
     const { A } = await couple();
     const visa = await card(A, "Nueva", 1000, NOV_20);
@@ -179,18 +180,18 @@ describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABA
     assert.equal(d.cycle.dueAmount, 1040); // the cut-off (Nov 25) hasn't come: the purchase is in too
     assert.equal(d.cycle.closed, false);
     assert.equal(d.cycle.dueAmount + d.cycle.afterCutAmount, d.owed);
-    // The budget line keeps main's rule; the timeline's current period equals it.
-    assert.equal(d.monthlyCommitment, 1000);
-    assert.deepEqual(itemAmounts(await timelineOf(A), visa.debtId), [1000, 0, 0]);
+    // Nothing is due in November: it's all December's statement.
+    assert.equal(d.monthlyCommitment, 0);
+    assert.deepEqual(itemAmounts(await timelineOf(A), visa.debtId), [0, 1040, 0]);
     const line = await prisma.allocation.findFirstOrThrow({ where: { debtId: visa.debtId } });
-    assert.equal(line.allocatedAmount, 100000); // cents; the stored fallback agrees
+    assert.equal(line.allocatedAmount, 0); // cents; the stored fallback agrees
 
-    // Corrected down to owe only the purchase: the line and the timeline drop to 0.
+    // Corrected down to owe only the purchase: December holds just that.
     await ok(A, "PATCH", `/api/debts/${visa.debtId}`, { currentBalance: 40 });
     const fixed = (await debtsOf(A)).find(x => x.id === visa.debtId);
     assert.equal(fixed.owed, 40);
     assert.equal(fixed.monthlyCommitment, 0);
-    assert.deepEqual(itemAmounts(await timelineOf(A), visa.debtId), [0, 0, 0]);
+    assert.deepEqual(itemAmounts(await timelineOf(A), visa.debtId), [0, 40, 0]);
   });
 
   it("a minimum card shows its minimum due and keeps committing what its budget line holds", async () => {
@@ -230,7 +231,7 @@ describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABA
     const mine = await debtsOf(B);
     assert.equal(mine.find(x => x.id === secret.debtId)?.cycle?.dueAmount, 60);
     assert.equal(mine.find(x => x.id === secret.debtId)?.cycle?.afterCutAmount, 25);
-    assert.deepEqual(itemAmounts(await timelineOf(B), secret.debtId), [60, 0, 0]);
+    assert.deepEqual(itemAmounts(await timelineOf(B), secret.debtId), [0, 60, 25]); // typed Nov 20: due Dec 5; the purchase Jan 5
 
     // The partner: the shared card with its cycle, no trace of the private one.
     const theirs = await debtsOf(A);
@@ -241,7 +242,7 @@ describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABA
     assert.deepEqual(itemAmounts(tl, shared.debtId), [40, 0, 0]); // due Nov 5, unpaid
   });
 
-  it("a card set up from Accounts with its cut-off: its budget line reminds the statement, never adds it", async () => {
+  it("a card set up from Accounts with its cut-off: its budget line holds the statement due in the period", async () => {
     setClockForTests(NOV_22);
     const { A } = await couple();
     // Cut-off on the 20th, charged on the 28th, nothing owed before.
@@ -260,10 +261,10 @@ describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABA
 
     const lines = (await ok(A, "GET", "/api/allocations")).allocations as any[];
     const line = lines.find(l => l.debtId === debt.id);
-    // The purchases are spending in their category: the line adds nothing…
-    assert.equal(line.allocatedAmount, 0);
-    // …and reminds what the Nov 20 statement charges on Nov 28 (not the 40
-    // bought after the cut-off).
+    // The Nov 20 statement, charged Nov 28, is this period's line (not the 40
+    // bought after the cut-off, due in December)…
+    assert.equal(line.allocatedAmount, 300);
+    // …and the line says which statement and when.
     assert.deepEqual(line.cardStatement, { closesOn: "2026-11-20", dueOn: "2026-11-28", closed: true, dueAmount: 300 });
     assert.equal(lines.find(l => l.id === groceries.id).cardStatement, undefined);
 

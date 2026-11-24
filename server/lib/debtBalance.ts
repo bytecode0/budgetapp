@@ -21,6 +21,7 @@
 // adjustment only affects payments made after it — never a closed month.
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
+import { cycleCommitment, cycleDaysOf, isStatementCard } from "./cardCycle.js";
 
 /** The client, or a transaction (to read and write under one lock). */
 type Db = Prisma.TransactionClient;
@@ -96,7 +97,9 @@ function replay(ledger: DebtLedger, before?: Date): { split: Map<string, Payment
       previousLeft += m.amount;
       continue;
     }
-    if (!ledger.debt.accountId) {
+    // A card paid whole each month by its statement (cardCycle.ts, rule 5) is
+    // budgeted like any other debt: its payments are spending on its line.
+    if (!ledger.debt.accountId || isStatementCard(ledger.debt)) {
       split.set(m.id, { toPrevious: m.amount, toPurchases: 0 });
       previousLeft -= m.amount;
       continue;
@@ -208,7 +211,11 @@ export function monthlyCommitment(ledger: DebtLedger, period: { start: Date; end
 
   switch (d.paymentMode) {
     case "full": {
-      // Only the pre-existing debt: new purchases are already budgeted in
+      // A card with a billing cycle: the statement due in the period
+      // (cardCycle.ts, rule 5).
+      const days = cycleDaysOf(d);
+      if (days) return cycleCommitment(ledger, period, days);
+      // Otherwise only the pre-existing debt: new purchases are already budgeted in
       // their own categories. A correction made during the period (interest)
       // is owed this period too. Unfloored running total, as in replay().
       const adjustedDuring = sum(ledger.adjustments.filter(a => a.date >= period.start && a.date < period.end));
