@@ -13,6 +13,16 @@ export interface Allocation {
   actualAmount: number;
   sortOrder: number;
   isDefault: boolean;
+  // A card paid in full with a billing cycle: the statement it will be charged
+  // next. A reminder only — those purchases already count in their categories.
+  cardStatement?: CardStatement | null;
+}
+
+export interface CardStatement {
+  closesOn: string; // YYYY-MM-DD — the statement's cut-off
+  dueOn: string; // YYYY-MM-DD — when it's charged
+  closed: boolean; // false: the cut-off hasn't come yet, the amount can still grow
+  dueAmount: number; // euros
 }
 
 export interface BudgetSuggestionRow {

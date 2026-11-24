@@ -5,7 +5,9 @@ import { createDefaultAllocations } from "../lib/defaults.js";
 import { toCents, toEuros, serializeMoney } from "../lib/money.js";
 import { suggestBudgets } from "../lib/suggestBudgets.js";
 import { clampCycleStartDay, currentPeriodKey, periodBounds } from "../lib/period.js";
-import { debtCommitments } from "../lib/debtBalance.js";
+import { debtCommitments, loadDebtLedgers, monthlyCommitment } from "../lib/debtBalance.js";
+import { cardCycleSummary, isoDay } from "../lib/cardCycle.js";
+import { now as clockNow } from "../lib/clock.js";
 import { incomeBaselines } from "../lib/householdIncome.js";
 import { visibleToWhere } from "../lib/ownership.js";
 import { hiddenCommitted, notOnHiddenDebt } from "../lib/poolRefs.js";
@@ -49,10 +51,21 @@ allocationsRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) 
     // every read rather than trusted from the stored column.
     const cycleStartDay = clampCycleStartDay(settings?.cycleStartDay ?? 1);
     const period = periodBounds(currentPeriodKey(cycleStartDay), cycleStartDay);
-    const commitments = await debtCommitments(req.userId!, period);
+    const ledgers = await loadDebtLedgers(req.userId!);
+    const commitments = new Map(ledgers.map(l => [l.debt.id, monthlyCommitment(l, period)]));
+    // A card paid in full with a billing cycle: the statement it will be
+    // charged next ("lo que vence", server/lib/cardCycle.ts). Shown under its
+    // line as a reminder only: those purchases are already spending in their
+    // own categories, in the month they were made, so the line never adds them.
+    const now = clockNow();
+    const statements = new Map(ledgers.flatMap(l => {
+      if (l.debt.status !== "active" || l.debt.paymentMode !== "full") return [];
+      const c = cardCycleSummary(l, now);
+      return c ? [[l.debt.id, { closesOn: isoDay(c.closesOn), dueOn: isoDay(c.dueOn), closed: c.closed, dueAmount: c.dueAmount }] as const] : [];
+    }));
     const withDebtLines = allocations.map(a =>
       a.type === "debt" && a.debtId && commitments.has(a.debtId)
-        ? { ...a, allocatedAmount: commitments.get(a.debtId)! }
+        ? { ...a, allocatedAmount: commitments.get(a.debtId)!, cardStatement: statements.get(a.debtId) ?? null }
         : a);
 
     // The lines left out above, as one figure (euros) for the client totals.

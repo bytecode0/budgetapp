@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { CardPaymentMode, CardSettingsPayload } from '../../hooks/useAccounts';
 
 // The card part of a card account's form — how it's paid, what's owed now,
-// payment day and minimum. Its debt is created and kept in step by the server
+// cut-off day, payment day and minimum. Its debt is created and kept in step by the server
 // (server/lib/cardDebt.ts). Shared by Accounts and the onboarding's cards step.
 
 export interface CardFieldsValue {
@@ -10,10 +10,11 @@ export interface CardFieldsValue {
   currentBalance: string; // for a card: what's owed now
   cardMinimumPayment: string;
   cardPaymentDueDay: string;
+  cardStatementDay: string;
 }
 
 export const EMPTY_CARD_FIELDS: CardFieldsValue = {
-  cardPaymentMode: 'full', currentBalance: '', cardMinimumPayment: '', cardPaymentDueDay: '',
+  cardPaymentMode: 'full', currentBalance: '', cardMinimumPayment: '', cardPaymentDueDay: '', cardStatementDay: '',
 };
 
 const CARD_PAYMENT_MODES: CardPaymentMode[] = ['full', 'minimum'];
@@ -32,6 +33,7 @@ export function cardSettingsPayload(v: CardFieldsValue): Required<CardSettingsPa
     cardPaymentMode: v.cardPaymentMode,
     cardMinimumPayment: v.cardPaymentMode === 'minimum' && v.cardMinimumPayment ? parseFloat(v.cardMinimumPayment) : null,
     cardPaymentDueDay: v.cardPaymentDueDay ? parseInt(v.cardPaymentDueDay, 10) : null,
+    cardStatementDay: v.cardStatementDay ? parseInt(v.cardStatementDay, 10) : null,
   };
 }
 
@@ -83,6 +85,18 @@ export function CardFields({ value, onChange, editing = false }: CardFieldsProps
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
+          <label className="text-xs text-muted-foreground">{t('debts.statementDayLabel')}</label>
+          <input
+            type="number"
+            min={1}
+            max={28}
+            value={value.cardStatementDay}
+            onChange={e => onChange({ cardStatementDay: e.target.value })}
+            placeholder="1-28"
+            className="w-full border border-border rounded-xl px-4 py-3 bg-background outline-none focus:border-primary text-sm"
+          />
+        </div>
+        <div className="space-y-2">
           <label className="text-xs text-muted-foreground">{t('debts.paymentDueDayLabel')}</label>
           <input
             type="number"
@@ -108,6 +122,7 @@ export function CardFields({ value, onChange, editing = false }: CardFieldsProps
           </div>
         )}
       </div>
+      <p className="text-xs text-muted-foreground -mt-2">{t('debts.statementDayHint')}</p>
     </>
   );
 }

@@ -20,6 +20,7 @@ const D = (s: string) => new Date(`${s}T00:00:00.000Z`);
 // scenarios don't depend on the day the suite runs.
 const NOV_2 = new Date("2026-11-02T12:00:00Z");
 const NOV_20 = new Date("2026-11-20T12:00:00Z");
+const NOV_22 = new Date("2026-11-22T12:00:00Z");
 
 describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABASE_URL && "TEST_DATABASE_URL not set" }, () => {
   let prisma: typeof import("./prisma.js").prisma;
@@ -238,6 +239,41 @@ describe("card billing cycle (integration, real Postgres)", { skip: !TEST_DATABA
     const tl = await timelineOf(A);
     assert.equal(tl.some(p => (p.items as any[]).some(i => i.debtId === secret.debtId || i.name === "Privada")), false);
     assert.deepEqual(itemAmounts(tl, shared.debtId), [40, 0, 0]); // due Nov 5, unpaid
+  });
+
+  it("a card set up from Accounts with its cut-off: its budget line reminds the statement, never adds it", async () => {
+    setClockForTests(NOV_22);
+    const { A } = await couple();
+    // Cut-off on the 20th, charged on the 28th, nothing owed before.
+    const { account } = await ok(A, "POST", "/api/accounts", {
+      name: "Pass", type: "card", currentBalance: 0, cardPaymentMode: "full", cardStatementDay: 20, cardPaymentDueDay: 28,
+    });
+    const accounts = (await ok(A, "GET", "/api/accounts")).accounts as any[];
+    assert.equal(accounts.find(a => a.id === account.id).card.statementDay, 20);
+    const debt = await prisma.debt.findFirstOrThrow({ where: { accountId: account.id } });
+    assert.deepEqual([debt.statementDay, debt.paymentDueDay], [20, 28]);
+    await prisma.debt.update({ where: { id: debt.id }, data: { balanceAsOf: D("2026-10-21") } });
+
+    const groceries = await prisma.allocation.findFirstOrThrow({ where: { userId: A, type: { not: "debt" } } });
+    await ok(A, "POST", "/api/expenses", { amount: 300, description: "Súper", accountId: account.id, allocationId: groceries.id, date: "2026-11-05" });
+    await ok(A, "POST", "/api/expenses", { amount: 40, description: "Súper", accountId: account.id, allocationId: groceries.id, date: "2026-11-21" });
+
+    const lines = (await ok(A, "GET", "/api/allocations")).allocations as any[];
+    const line = lines.find(l => l.debtId === debt.id);
+    // The purchases are spending in their category: the line adds nothing…
+    assert.equal(line.allocatedAmount, 0);
+    // …and reminds what the Nov 20 statement charges on Nov 28 (not the 40
+    // bought after the cut-off).
+    assert.deepEqual(line.cardStatement, { closesOn: "2026-11-20", dueOn: "2026-11-28", closed: true, dueAmount: 300 });
+    assert.equal(lines.find(l => l.id === groceries.id).cardStatement, undefined);
+
+    // PATCH from Accounts changes the cut-off, and clears it.
+    await ok(A, "PATCH", `/api/accounts/${account.id}`, { type: "card", cardStatementDay: 15 });
+    assert.equal((await prisma.debt.findUniqueOrThrow({ where: { id: debt.id } })).statementDay, 15);
+    await ok(A, "PATCH", `/api/accounts/${account.id}`, { type: "card", cardStatementDay: "" });
+    assert.equal((await prisma.debt.findUniqueOrThrow({ where: { id: debt.id } })).statementDay, null);
+    const after = ((await ok(A, "GET", "/api/allocations")).allocations as any[]).find(l => l.debtId === debt.id);
+    assert.equal(after.cardStatement, null);
   });
 
   it("statementDay is accepted on PATCH, clamped to 1-28 and clearable", async () => {
